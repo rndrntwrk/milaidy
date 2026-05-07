@@ -140,8 +140,9 @@ runs:
       if: ${{ inputs.disable-local-eliza-workspace == 'true' && inputs.prepare-local-eliza-runtime == 'true' }}
       shell: bash
       run: |
-        git submodule sync -- eliza
-        git submodule update --init --depth=1 eliza
+        if [ ! -f eliza/package.json ]; then
+          git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+        fi
 
     - name: Apply Milady eliza CI patches
       shell: bash
@@ -183,6 +184,14 @@ runs:
       if: ${{ inputs.disable-local-eliza-workspace != 'true' && inputs.skip-cloud-submodule != 'true' }}
       shell: bash
       run: |
+        if [ ! -d eliza ]; then
+          echo "eliza checkout absent; skipping nested cloud submodule init"
+          exit 0
+        fi
+        if ! git -C eliza rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          echo "eliza/ is not a git worktree; skipping cloud hydration."
+          exit 0
+        fi
         git -C eliza submodule update --init cloud
         test -d eliza/cloud/packages/sdk
         test -d eliza/cloud/packages/billing
@@ -210,6 +219,32 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
+        clean_bun_install_cache() {
+          node --input-type=module <<'NODE'
+        import fs from "node:fs";
+        import os from "node:os";
+        import path from "node:path";
+
+        const candidates = [
+          path.join(os.homedir(), ".bun", "install", "cache"),
+          process.env.BUN_INSTALL
+            ? path.join(process.env.BUN_INSTALL, "install", "cache")
+            : null,
+          process.env.LOCALAPPDATA
+            ? path.join(process.env.LOCALAPPDATA, "bun", "install", "cache")
+            : null,
+          process.env.XDG_CACHE_HOME
+            ? path.join(process.env.XDG_CACHE_HOME, "bun", "install", "cache")
+            : null,
+        ].filter(Boolean);
+
+        for (const cacheDir of new Set(candidates)) {
+          fs.rmSync(cacheDir, { recursive: true, force: true });
+          console.log(`Removed Bun install cache: ${cacheDir}`);
+        }
+        NODE
+        }
+
         for attempt in 1 2; do
           if ${{ inputs.install-command }}; then
             exit 0
@@ -217,8 +252,8 @@ runs:
           if [ "$attempt" -eq 2 ]; then
             exit 1
           fi
-          echo "Dependency install failed; retrying once after cleaning Bun's install cache."
-          rm -rf ~/.bun/install/cache
+          echo "Dependency install failed; retrying once after cleaning Bun install caches."
+          clean_bun_install_cache
           sleep 5
         done
       env:

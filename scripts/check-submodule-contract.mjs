@@ -44,14 +44,14 @@ function assertEqual(actual, expected, label) {
   if (actual !== expected) {
     throw new Error(
       `${label} must be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.\n` +
-        "Do not point Milady's eliza source checkout at contributor forks. Land eliza changes in milady-ai/eliza develop, then update the checkout target.",
+        "Do not point Milady's eliza source checkout at contributor forks. Land eliza changes on elizaOS/eliza develop, then update the checkout target.",
     );
   }
 }
 
 assertEqual(
   readGitmodulesValue("eliza", "url"),
-  "https://github.com/milady-ai/eliza.git",
+  "https://github.com/elizaOS/eliza.git",
   "submodule.eliza.url",
 );
 assertEqual(
@@ -61,5 +61,5 @@ assertEqual(
 );
 
 console.log(
-  "[submodule-contract] eliza submodule points at milady-ai/eliza develop.",
+  "[submodule-contract] eliza submodule points at elizaOS/eliza develop.",
 );

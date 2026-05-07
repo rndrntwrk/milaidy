@@ -16,7 +16,7 @@ describe("CI bootstrap contract", () => {
 
     expect(setupAction).toContain("skip-local-upstreams-postinstall:");
     expect(ci.match(/skip-local-upstreams-postinstall: "true"/g)).toHaveLength(
-      3,
+      4,
     );
     expect(buildDocker).toContain('MILADY_SKIP_LOCAL_UPSTREAMS: "1"');
   });
@@ -95,6 +95,22 @@ describe("CI bootstrap contract", () => {
     );
     expect(setupAction.indexOf(generateProtobuf)).toBeLessThan(
       setupAction.indexOf(postinstallPatches),
+    );
+  });
+
+  it("hydrates local eliza runtime from the canonical repo in package-mode CI", () => {
+    const setupAction = fs.readFileSync(
+      ".github/actions/setup-bun-workspace/action.yml",
+      "utf8",
+    );
+    const cloneCommand =
+      'git clone --depth=1 --branch "$' +
+      '{MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza';
+
+    expect(setupAction).toContain(cloneCommand);
+    expect(setupAction).not.toContain("git submodule sync -- eliza");
+    expect(setupAction).not.toContain(
+      "git submodule update --init --depth=1 eliza",
     );
   });
 

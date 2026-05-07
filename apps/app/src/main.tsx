@@ -17,7 +17,7 @@ import type { BrandingConfig } from "@elizaos/app-core";
 import {
   type AppBootConfig,
   getBootConfig,
-  MOBILE_LOCAL_AGENT_API_BASE,
+  ANDROID_LOCAL_AGENT_API_BASE,
   MOBILE_RUNTIME_MODE_STORAGE_KEY,
   normalizeMobileRuntimeMode,
   preSeedAndroidLocalRuntimeIfFresh,
@@ -859,7 +859,7 @@ function resolveDeviceBridgeUrl(config: IosRuntimeConfig): string | null {
   // where host-level adb port forwarding can expose another device's agent.
   if (config.mode === "local" && isIOS) return null;
   if (config.mode === "local" && isAndroid) {
-    return apiBaseToDeviceBridgeUrl(MOBILE_LOCAL_AGENT_API_BASE);
+    return apiBaseToDeviceBridgeUrl(ANDROID_LOCAL_AGENT_API_BASE);
   }
   if (config.mode !== "cloud-hybrid" && config.mode !== "local") return null;
   const apiBase = getBootConfig().apiBase?.trim();

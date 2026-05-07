@@ -102,7 +102,10 @@ jobs:
             bun-store-${{ runner.os }}-
 
       - name: Init eliza checkout
-        run: git submodule update --init --depth=1 eliza
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
 
       - name: Init cloud image plugin manifests
         run: |
@@ -120,6 +123,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --ignore-scripts --frozen-lockfile
+
+      - name: Install eliza source dependencies
+        run: bun install --cwd eliza --no-frozen-lockfile
 
       - name: Install published-workspace fallback dependencies
         run: bash scripts/install-published-workspace-fallback-deps.sh
@@ -147,6 +153,7 @@ jobs:
 
       - name: Build @elizaos/core (includes agent-orchestrator)
         run: |
+          export PATH="$GITHUB_WORKSPACE/eliza/node_modules/.bin:$GITHUB_WORKSPACE/eliza/packages/schemas/node_modules/.bin:$PATH"
           cd eliza/packages/schemas
           buf dep update && buf generate
           cd ../core
@@ -260,6 +267,9 @@ jobs:
           if [ ! -e plugins/plugin-selfcontrol ] && [ -d packages/plugin-selfcontrol ]; then
             cp -R packages/plugin-selfcontrol plugins/plugin-selfcontrol
           fi
+          rm -rf cloud-sdk
+          cp -R eliza/cloud/packages/sdk cloud-sdk
+          test -f cloud-sdk/package.json
           # Dockerfile.cloud is shared with the upstream elizaOS layout where
           # the built web app lives at packages/app. Milady's Vite app lives at
           # apps/app, so materialize the expected manifest and dist tree.
@@ -269,6 +279,7 @@ jobs:
           cp -R apps/app/dist packages/app/dist
           test -f packages/app/package.json
           test -d packages/app/dist
+          test -f scripts/cloud-image-prune-deps.mjs
           node <<'NODE'
           const fs = require("fs");
           const path = require("path");
@@ -329,6 +340,10 @@ jobs:
           };
           fs.writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n");
           NODE
+          if [ ! -f bun.lock ]; then
+            git show HEAD:bun.lock > bun.lock
+          fi
+          test -f bun.lock
           for staged_path in patches scripts/docker-entrypoint.sh plugins/plugin-selfcontrol; do
             if [ -e "$staged_path" ]; then
               find "$staged_path" -maxdepth 2 -print | head -20

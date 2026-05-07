@@ -4,109 +4,35 @@ import type {
   VincentStateHookArgs,
   VincentStateHookResult,
 } from "@elizaos/app-core";
-import {
-  DEFAULT_WALLET_RPC_SELECTIONS,
-  normalizeWalletRpcSelections,
-  type WalletConfigStatus,
-  type WalletConfigUpdateRequest,
-  type WalletRpcChain,
-  type WalletRpcCredentialKey,
-  type WalletRpcSelections,
+import type {
+  DropStatus,
+  MintResult,
+  RegistryStatus,
+  WalletExportResult,
+  WhitelistStatus,
+} from "@elizaos/app-core/api";
+import type { InventoryChainFilters } from "@elizaos/app-core/state/types";
+import type {
+  WalletAddresses,
+  WalletBalancesResponse,
+  WalletChainKind,
+  WalletConfigStatus,
+  WalletConfigUpdateRequest,
+  WalletEntry,
+  WalletNftsResponse,
+  WalletPrimaryMap,
+  WalletRpcChain,
+  WalletRpcCredentialKey,
+  WalletRpcSelections,
 } from "@elizaos/shared";
+import type { ComponentType } from "react";
 import * as THREE from "three";
 
-/** Stub that ignores props — optional-app packages resolve here without bundled implementations. */
-function EmptyComponent(_props: object): null {
-  return null;
-}
+const EmptyComponent: ComponentType = () => null;
 
-export const BSC_GAS_READY_THRESHOLD = 0.005;
-export const BSC_GAS_THRESHOLD = 0.005;
-export const HEX_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
-export const PRIMARY_CHAIN_KEYS = [
-  "ethereum",
-  "base",
-  "bsc",
-  "avax",
-  "solana",
-] as const;
-export const CHAIN_CONFIGS = {};
-
-export function isAvaxChainName(chain: string): boolean {
-  const normalized = chain.trim().toLowerCase();
-  return (
-    normalized === "avax" ||
-    normalized === "avalanche" ||
-    normalized === "c-chain" ||
-    normalized === "avalanche c-chain"
-  );
-}
-
-export function isBscChainName(chain: string): boolean {
-  const normalized = chain.trim().toLowerCase();
-  return (
-    normalized === "bsc" ||
-    normalized === "bnb chain" ||
-    normalized === "bnb smart chain"
-  );
-}
-
-export function toNormalizedAddress(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-export function resolveChainKey(chain: string): string | null {
-  const normalized = chain.trim().toLowerCase();
-  return (PRIMARY_CHAIN_KEYS as readonly string[]).includes(normalized)
-    ? normalized
-    : null;
-}
-
-export function getChainConfig(): null {
-  return null;
-}
-
-export function getContractLogoUrl(): null {
-  return null;
-}
-
-export function getExplorerTokenUrl(): null {
-  return null;
-}
-
-export function getExplorerTxUrl(): null {
-  return null;
-}
-
-export function getNativeLogoUrl(): null {
-  return null;
-}
-
-export function getStablecoinAddress(): null {
-  return null;
-}
-
-export function chainKeyToWalletRpcChain(
-  chainFocus: string,
-): "evm" | "bsc" | "solana" | null {
-  if (chainFocus === "bsc" || chainFocus === "solana") return chainFocus;
-  if (
-    chainFocus === "ethereum" ||
-    chainFocus === "base" ||
-    chainFocus === "avax"
-  ) {
-    return "evm";
-  }
-  return null;
-}
-
-/** Matches real `@elizaos/app-companion/ui` — stub satisfies `AppBootConfig.companionShell`. */
 export function CompanionShell(_props: CompanionShellComponentProps): null {
   return null;
 }
-export const ChainIcon = EmptyComponent;
-export const InventoryView = EmptyComponent;
-export const TokenLogo = EmptyComponent;
 export const GlobalEmoteOverlay = EmptyComponent;
 export const InferenceCloudAlertButton = EmptyComponent;
 export const LifeOpsActivitySignalsEffect = EmptyComponent;
@@ -123,38 +49,296 @@ export const CodingAgentTasksPanel = EmptyComponent;
 export const PtyConsoleDrawer = EmptyComponent;
 export const FineTuningView = EmptyComponent;
 
-export function createVectorBrowserRenderer(): Promise<null> {
-  return Promise.resolve(null);
-}
-
-export function useInventoryData(): {
-  balances: null;
-  loading: boolean;
-  error: null;
-  refresh: () => Promise<void>;
-} {
-  return {
-    balances: null,
-    loading: false,
-    error: null,
-    refresh: asyncNoop,
-  };
-}
-
-export const WALLET_STATUS_WIDGET = {
-  id: "wallet.status",
-  pluginId: "wallet",
-  order: 70,
-  defaultEnabled: true,
-  Component: EmptyComponent,
-};
-
+// Restored from before upstream 0a75bd6eb dropped it — main.tsx still imports
+// `prefetchVrmToCache` and registers it on the boot config (used by
+// startup-phase-hydrate to warm the VRM cache before companion mount).
 export function prefetchVrmToCache(_url?: string): Promise<void> {
   return Promise.resolve();
 }
 
+export function createVectorBrowserRenderer(): Promise<null> {
+  return Promise.resolve(null);
+}
+
 export function resolveCompanionInferenceNotice(): null {
   return null;
+}
+
+// Stubs for @elizaos/app-wallet — the canonical wallet UI ships in
+// eliza/plugins/app-wallet, but the host app sometimes aliases the
+// whole package to this no-op stub (Capacitor / minimal builds without
+// wallet surface). Each export below mirrors a real symbol that
+// @elizaos/app-core source files import so typecheck stays green.
+export function buildWalletRpcUpdateRequest(_args: {
+  walletConfig?: unknown;
+  rpcFieldValues: Partial<Record<WalletRpcCredentialKey, string>>;
+  selectedProviders:
+    | WalletRpcSelections
+    | Partial<Record<WalletRpcChain, string | null | undefined>>;
+  selectedNetwork?: "mainnet" | "testnet";
+}): WalletConfigUpdateRequest {
+  return {
+    credentials: {},
+    selections: {},
+  } as WalletConfigUpdateRequest;
+}
+
+export function resolveInitialWalletRpcSelections(
+  _walletConfig?: unknown,
+): WalletRpcSelections {
+  return {} as WalletRpcSelections;
+}
+
+// Inventory constants + helpers
+export const BSC_GAS_THRESHOLD = 0.005;
+export const BSC_GAS_READY_THRESHOLD = 0.005;
+export const HEX_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+
+// Chain config types — minimal shape used by app-core when @elizaos/app-wallet
+// is stubbed. The real plugin enumerates many chains; the stub keeps the
+// type closed but exposes an empty config map at runtime.
+export type ChainKey =
+  | "bsc"
+  | "avax"
+  | "solana"
+  | "ethereum"
+  | "base"
+  | "arbitrum"
+  | "polygon"
+  | "optimism";
+export interface ChainConfig {
+  chainKey: ChainKey;
+  name: string;
+  [key: string]: unknown;
+}
+export const CHAIN_CONFIGS: Record<ChainKey, ChainConfig> = {} as Record<
+  ChainKey,
+  ChainConfig
+>;
+export const PRIMARY_CHAIN_KEYS: readonly ChainKey[] = [];
+
+export function isAvaxChainName(_chain: string): boolean {
+  return false;
+}
+export function isBscChainName(_chain: string): boolean {
+  return false;
+}
+export function toNormalizedAddress(addr: string): string {
+  return addr;
+}
+export function getNativeLogoUrl(_chain: string): string | null {
+  return null;
+}
+export function getStablecoinAddress(_chain: string): string | null {
+  return null;
+}
+export function resolveChainKey(_chain: string): ChainKey | null {
+  return null;
+}
+export function getChainConfig(_chainName: string): ChainConfig | null {
+  return null;
+}
+export function getContractLogoUrl(
+  _chain: string,
+  _address: string,
+): string | null {
+  return null;
+}
+export function getExplorerTokenUrl(
+  _chain: string,
+  _address: string,
+): string | null {
+  return null;
+}
+export function getExplorerTxUrl(
+  _chain: string,
+  _txHash: string,
+): string | null {
+  return null;
+}
+export function chainKeyToWalletRpcChain(
+  _chainKey: ChainKey,
+): WalletRpcChain | null {
+  return null;
+}
+
+export interface TokenRow {
+  chain: string;
+  symbol: string;
+  name: string;
+  contractAddress: string | null;
+  logoUrl: string | null;
+  [key: string]: unknown;
+}
+export interface NftItem {
+  chain: string;
+  name: string;
+  imageUrl: string;
+  collectionName: string;
+  [key: string]: unknown;
+}
+
+export const InventoryView = EmptyComponent;
+export const TokenLogo = EmptyComponent;
+export const ChainIcon = EmptyComponent;
+
+export function useInventoryData(): {
+  tokens: readonly TokenRow[];
+  nfts: readonly NftItem[];
+  loading: boolean;
+} {
+  return { tokens: [], nfts: [], loading: false };
+}
+
+// Wallet sidebar widget. Component prop type comes from
+// @elizaos/app-core/components/chat/widgets/types so the seed registry
+// accepts this stub as a valid ChatSidebarWidgetDefinition.
+import type { ChatSidebarWidgetDefinition } from "@elizaos/app-core/components/chat/widgets/types";
+export const WALLET_STATUS_WIDGET: ChatSidebarWidgetDefinition = {
+  id: "wallet.status",
+  pluginId: "wallet",
+  order: 70,
+  defaultEnabled: false,
+  Component: EmptyComponent as ChatSidebarWidgetDefinition["Component"],
+};
+
+// useWalletState return shape — mirrors the destructure at
+// eliza/packages/app-core/src/state/AppContext.tsx so consumers don't see
+// `unknown` for any field they pull off the hook.
+export interface WalletStateHook {
+  state: {
+    browserEnabled: boolean;
+    computerUseEnabled: boolean;
+    walletEnabled: boolean;
+    walletAddresses: WalletAddresses | null;
+    walletConfig: WalletConfigStatus | null;
+    walletBalances: WalletBalancesResponse | null;
+    walletNfts: WalletNftsResponse | null;
+    walletLoading: boolean;
+    walletNftsLoading: boolean;
+    inventoryView: "tokens" | "nfts";
+    walletExportData: WalletExportResult | null;
+    walletExportVisible: boolean;
+    walletApiKeySaving: boolean;
+    inventorySort: "symbol" | "value" | "chain";
+    inventorySortDirection: "asc" | "desc";
+    inventoryChainFilters: InventoryChainFilters;
+    walletError: string | null;
+    registryStatus: RegistryStatus | null;
+    registryLoading: boolean;
+    registryRegistering: boolean;
+    registryError: string | null;
+    dropStatus: DropStatus | null;
+    dropLoading: boolean;
+    mintInProgress: boolean;
+    mintResult: MintResult | null;
+    mintError: string | null;
+    mintShiny: boolean;
+    whitelistStatus: WhitelistStatus | null;
+    whitelistLoading: boolean;
+    wallets: WalletEntry[];
+    walletPrimary: WalletPrimaryMap | null;
+    walletPrimaryRestarting: Partial<Record<WalletChainKind, boolean>>;
+    walletPrimaryPending: Partial<Record<WalletChainKind, boolean>>;
+    cloudRefreshing: boolean;
+  };
+  setBrowserEnabled: (v: boolean) => void;
+  setComputerUseEnabled: (v: boolean) => void;
+  setWalletEnabled: (v: boolean) => void;
+  setWalletAddresses: (v: WalletAddresses) => void;
+  setInventoryView: (v: "tokens" | "nfts") => void;
+  setInventorySort: (v: "symbol" | "value" | "chain") => void;
+  setInventorySortDirection: (v: "asc" | "desc") => void;
+  setInventoryChainFilters: (v: InventoryChainFilters) => void;
+  loadWalletConfig: () => Promise<void>;
+  loadBalances: () => Promise<void>;
+  loadNfts: () => Promise<void>;
+  handleWalletApiKeySave: (req: WalletConfigUpdateRequest) => Promise<boolean>;
+  handleExportKeys: () => Promise<void>;
+  loadRegistryStatus: () => Promise<void>;
+  registerOnChain: () => Promise<void>;
+  syncRegistryProfile: () => Promise<void>;
+  loadDropStatus: () => Promise<void>;
+  mintFromDrop: () => Promise<void>;
+  loadWhitelistStatus: () => Promise<void>;
+  setPrimary: (chain: string, walletId: string) => Promise<void>;
+  refreshCloud: () => Promise<void>;
+}
+
+const noop = () => {};
+const noopAsync = async () => {};
+
+export function useWalletState(_args: {
+  setActionNotice: (
+    text: string,
+    tone?: "info" | "success" | "error",
+    ttlMs?: number,
+    once?: boolean,
+    busy?: boolean,
+  ) => void;
+  promptModal?: unknown;
+  agentName?: string;
+  characterName?: string;
+}): WalletStateHook {
+  return {
+    state: {
+      browserEnabled: false,
+      computerUseEnabled: false,
+      walletEnabled: false,
+      walletAddresses: null,
+      walletConfig: null,
+      walletBalances: null,
+      walletNfts: null,
+      walletLoading: false,
+      walletNftsLoading: false,
+      inventoryView: "tokens",
+      walletExportData: null,
+      walletExportVisible: false,
+      walletApiKeySaving: false,
+      inventorySort: "symbol",
+      inventorySortDirection: "asc",
+      inventoryChainFilters: {} as InventoryChainFilters,
+      walletError: null,
+      registryStatus: null,
+      registryLoading: false,
+      registryRegistering: false,
+      registryError: null,
+      dropStatus: null,
+      dropLoading: false,
+      mintInProgress: false,
+      mintResult: null,
+      mintError: null,
+      mintShiny: false,
+      whitelistStatus: null,
+      whitelistLoading: false,
+      wallets: [],
+      walletPrimary: null,
+      walletPrimaryRestarting: {},
+      walletPrimaryPending: {},
+      cloudRefreshing: false,
+    },
+    setBrowserEnabled: noop,
+    setComputerUseEnabled: noop,
+    setWalletEnabled: noop,
+    setWalletAddresses: noop,
+    setInventoryView: noop,
+    setInventorySort: noop,
+    setInventorySortDirection: noop,
+    setInventoryChainFilters: noop,
+    loadWalletConfig: noopAsync,
+    loadBalances: noopAsync,
+    loadNfts: noopAsync,
+    handleWalletApiKeySave: async () => true,
+    handleExportKeys: noopAsync,
+    loadRegistryStatus: noopAsync,
+    registerOnChain: noopAsync,
+    syncRegistryProfile: noopAsync,
+    loadDropStatus: noopAsync,
+    mintFromDrop: noopAsync,
+    loadWhitelistStatus: noopAsync,
+    setPrimary: noopAsync,
+    refreshCloud: noopAsync,
+  };
 }
 
 export function useCompanionSceneStatus(): CompanionSceneStatus {
@@ -172,109 +356,6 @@ export function useVincentState(
     handleVincentLogin: async () => {},
     handleVincentDisconnect: async () => {},
     pollVincentStatus: async () => false,
-  };
-}
-
-export function resolveInitialWalletRpcSelections(
-  walletConfig: WalletConfigStatus | null | undefined,
-): WalletRpcSelections {
-  return normalizeWalletRpcSelections(
-    walletConfig?.selectedRpcProviders ?? DEFAULT_WALLET_RPC_SELECTIONS,
-  );
-}
-
-export function buildWalletRpcUpdateRequest(args: {
-  walletConfig?: WalletConfigStatus | null;
-  rpcFieldValues: Partial<Record<WalletRpcCredentialKey, string>>;
-  selectedProviders:
-    | WalletRpcSelections
-    | Partial<Record<WalletRpcChain, string | null | undefined>>;
-  selectedNetwork?: "mainnet" | "testnet";
-}): WalletConfigUpdateRequest {
-  return {
-    selections: normalizeWalletRpcSelections(args.selectedProviders),
-    walletNetwork:
-      args.selectedNetwork ??
-      (args.walletConfig?.walletNetwork === "testnet" ? "testnet" : "mainnet"),
-    credentials: {},
-  };
-}
-
-function noop(): void {}
-
-async function asyncNoop(): Promise<void> {}
-
-export function useWalletState(_args: object) {
-  return {
-    state: {
-      browserEnabled: true,
-      computerUseEnabled: false,
-      walletEnabled: true,
-      walletAddresses: null,
-      walletConfig: null,
-      walletBalances: null,
-      walletNfts: null,
-      walletLoading: false,
-      walletNftsLoading: false,
-      inventoryView: "tokens",
-      walletExportData: null,
-      walletExportVisible: false,
-      walletApiKeySaving: false,
-      wallets: [],
-      walletPrimary: null,
-      walletPrimaryRestarting: {},
-      walletPrimaryPending: {},
-      cloudRefreshing: false,
-      inventorySort: "value",
-      inventorySortDirection: "desc",
-      inventoryChainFilters: {
-        ethereum: true,
-        base: true,
-        bsc: true,
-        avax: true,
-        solana: true,
-      },
-      walletError: null,
-      registryStatus: null,
-      registryLoading: false,
-      registryRegistering: false,
-      registryError: null,
-      dropStatus: null,
-      dropLoading: false,
-      mintInProgress: false,
-      mintResult: null,
-      mintError: null,
-      mintShiny: false,
-      whitelistStatus: null,
-      whitelistLoading: false,
-    },
-    setBrowserEnabled: noop,
-    setComputerUseEnabled: noop,
-    setWalletEnabled: noop,
-    setWalletAddresses: noop,
-    setInventoryView: noop,
-    setInventorySort: noop,
-    setInventorySortDirection: noop,
-    setInventoryChainFilters: noop,
-    setWalletError: noop,
-    setRegistryError: noop,
-    setMintResult: noop,
-    setMintError: noop,
-    loadWalletConfig: asyncNoop,
-    loadBalances: asyncNoop,
-    loadNfts: asyncNoop,
-    handleWalletApiKeySave: async () => false,
-    setWalletPrimary: asyncNoop,
-    setPrimary: asyncNoop,
-    refreshCloud: asyncNoop,
-    refreshCloudWallets: asyncNoop,
-    handleExportKeys: asyncNoop,
-    loadRegistryStatus: asyncNoop,
-    registerOnChain: asyncNoop,
-    syncRegistryProfile: asyncNoop,
-    loadDropStatus: asyncNoop,
-    mintFromDrop: asyncNoop,
-    loadWhitelistStatus: asyncNoop,
   };
 }
 
@@ -411,3 +492,19 @@ export interface TaskCompletionSummary {
 }
 
 export { THREE };
+
+// ── @elizaos/app-wallet/wallet-rpc helpers ─────────────────────────────
+// `buildWalletRpcUpdateRequest` is already declared earlier in this file
+// (typed against WalletRpcCredentialKey/WalletRpcSelections); upstream
+// 49778114a5 accidentally re-added an `_args: unknown` copy that broke the
+// renderer build with "Multiple exports with the same name". The two helpers
+// below are the unique additions from that commit and stay.
+export function normalizeWalletRpcSelections(
+  _selections: unknown,
+): Record<string, never> {
+  return {};
+}
+
+export function collectSelectedCredentialKeys(_selections: unknown): string[] {
+  return [];
+}

@@ -31,6 +31,43 @@ test("canonical release workflow owns channel routing", () => {
   );
 });
 
+test("canonical release workflow default permissions cover release graph", () => {
+  const release = workflow("agent-release.yml");
+
+  assert.match(
+    release,
+    /^permissions:\n\s+contents: write\n\s+issues: write\n\s+packages: write\n\s+id-token: write\n\s+pages: write\n\s+pull-requests: read/m,
+  );
+});
+
+test("canonical release workflow grants reusable workflow permissions", () => {
+  const release = workflow("agent-release.yml");
+
+  for (const jobName of [
+    "build-docker",
+    "build-cloud-image",
+    "push-agent-image",
+    "push-cloud-image",
+  ]) {
+    assert.match(
+      release,
+      new RegExp(
+        `${jobName}:[\\s\\S]*?permissions:\\n\\s+contents: read\\n\\s+packages: write\\n\\s+id-token: write[\\s\\S]*?uses: \\.\\/\\.github\\/workflows\\/(?:build-docker|build-cloud-image)\\.yml`,
+      ),
+    );
+  }
+
+  assert.match(
+    release,
+    /build-electrobun:[\s\S]*?permissions:\n\s+contents: write\n\s+packages: write[\s\S]*?uses: \.\/\.github\/workflows\/release-electrobun\.yml/,
+  );
+
+  assert.match(
+    release,
+    /distribute-release:[\s\S]*?permissions:\n\s+contents: write\n\s+packages: write\n\s+id-token: write\n\s+pages: write[\s\S]*?uses: \.\/\.github\/workflows\/release-orchestrator\.yml/,
+  );
+});
+
 test("distribution workflows consume the canonical channel policy", () => {
   const orchestrator = workflow("release-orchestrator.yml");
   const publishPackages = workflow("publish-packages.yml");
@@ -60,6 +97,25 @@ test("distribution workflows consume the canonical channel policy", () => {
   assert.match(publishNpm, /DIST_TAG="rc"/);
 
   assert.match(electrobun, /channel:\n\s+description: "Release channel/);
+  assert.match(
+    electrobun,
+    /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+  );
+  assert.match(
+    electrobun,
+    /\n\s+build:\n\s+name: Build \$\{\{ matrix\.platform\.name \}\}[\s\S]*?name: Initialize eliza source checkout[\s\S]*?git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza[\s\S]*?name: Initialize tracked workspace submodules/,
+  );
+  assert.match(
+    electrobun,
+    /\$HOME\/\.cache\/eliza\/whisper\/ggml-base\.en\.bin/,
+  );
+  assert.match(electrobun, /node scripts\/align-eliza-agent-package-pins\.mjs/);
+  assert.match(electrobun, /bun install --cwd eliza --no-frozen-lockfile/);
+  assert.match(electrobun, /eliza\/packages\/browser-bridge\/dist\/artifacts/);
+  assert.match(
+    electrobun,
+    /workflow_dispatch:[\s\S]*?tag:\n\s+description: "Release tag \(e\.g\. v2\.0\.0-alpha\.3\)"\n\s+required: true/,
+  );
   assert.match(electrobun, /beta desktop release requires a beta version/);
   assert.match(electrobun, /BUILD_ENV="stable"/);
 });
@@ -69,11 +125,79 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
 
   assert.match(
     cloudImage,
+    /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+  );
+  assert.match(cloudImage, /bun install --cwd eliza --no-frozen-lockfile/);
+  assert.match(
+    cloudImage,
+    /export PATH="\$GITHUB_WORKSPACE\/eliza\/node_modules\/\.bin:\$GITHUB_WORKSPACE\/eliza\/packages\/schemas\/node_modules\/\.bin:\$PATH"/,
+  );
+  assert.match(cloudImage, /node scripts\/apply-eliza-ci-patches\.mjs/);
+  assert.match(cloudImage, /cloud-image-prune-deps\.mjs/);
+  assert.doesNotMatch(cloudImage, /RUN node - <<'EOF'/);
+  assert.match(cloudImage, /git show HEAD:bun\.lock > bun\.lock/);
+  assert.doesNotMatch(
+    cloudImage,
+    /git submodule update --init --depth=1 eliza/,
+  );
+  assert.match(
+    cloudImage,
     /cp apps\/app\/package\.json packages\/app\/package\.json/,
   );
   assert.match(cloudImage, /cp -R apps\/app\/dist packages\/app\/dist/);
   assert.match(cloudImage, /test -f packages\/app\/package\.json/);
   assert.match(cloudImage, /test -d packages\/app\/dist/);
+  assert.match(cloudImage, /cp -R eliza\/cloud\/packages\/sdk cloud-sdk/);
+  assert.match(cloudImage, /test -f cloud-sdk\/package\.json/);
+});
+
+test("eliza CI patches align release source helpers", () => {
+  const patchScript = fs.readFileSync(
+    "scripts/apply-eliza-ci-patches.mjs",
+    "utf8",
+  );
+  const pruneScript = fs.readFileSync(
+    "scripts/cloud-image-prune-deps.mjs",
+    "utf8",
+  );
+
+  assert.match(
+    patchScript,
+    /"@elizaos\/agent\/runtime\/release-plugin-policy\.js"[\s\S]*"@elizaos\/agent\/runtime\/release-plugin-policy"/,
+  );
+  assert.match(
+    patchScript,
+    /COPY scripts\/cloud-image-prune-deps\.mjs \.\/scripts\/cloud-image-prune-deps\.mjs\\nRUN bun scripts\/cloud-image-prune-deps\.mjs/,
+  );
+  assert.match(patchScript, /COPY patches \.\/patches/);
+  assert.match(patchScript, /COPY cloud-sdk \.\/eliza\/cloud\/packages\/sdk/);
+  assert.match(patchScript, /build-patched-electrobun-cli\.mjs/);
+  assert.match(patchScript, /require\.resolve\("rcedit\/package\.json"\)/);
+  assert.match(
+    pruneScript,
+    /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
+  );
+  assert.match(pruneScript, /"@elizaos\/cloud-sdk"/);
+  assert.match(pruneScript, /file:\.\/eliza\/cloud\/packages\/sdk/);
+});
+
+test("release jobs hydrate eliza source without a root eliza gitlink", () => {
+  const release = workflow("agent-release.yml");
+
+  assert.match(
+    release,
+    /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+  );
+  assert.doesNotMatch(release, /git submodule sync -- eliza/);
+  assert.doesNotMatch(release, /git submodule update --init --depth=1 eliza/);
+});
+
+test("release docs validation tracks current eliza docs package layout", () => {
+  const release = workflow("agent-release.yml");
+
+  assert.match(release, /eliza\/packages\/docs\/docs\.json/);
+  assert.match(release, /find eliza\/packages\/docs -name '\*\.md'/);
+  assert.doesNotMatch(release, /eliza\/docs\/docs\.json/);
 });
 
 test("npm release builds generate gitignored eliza i18n data before bundling", () => {
@@ -87,7 +211,11 @@ test("npm release builds generate gitignored eliza i18n data before bundling", (
   for (const content of [release, reusableNpmPublish]) {
     assert.match(
       content,
-      /node eliza\/packages\/app-core\/scripts\/ensure-shared-i18n-data\.mjs[\s\S]*?bunx tsdown/,
+      /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+    );
+    assert.match(
+      content,
+      /node scripts\/run-eliza-app-core-script\.mjs ensure-shared-i18n-data\.mjs[\s\S]*?bunx tsdown/,
     );
   }
   assert.match(
@@ -168,7 +296,7 @@ test("Electrobun macOS release patch signs nested native runtime binaries idempo
   assert.match(patchScript, /find "\$runtime_resources_dir" -type f -print0/);
   assert.match(patchScript, /file "\$candidate_path"/);
   assert.match(patchScript, /Mach-O/);
-  assert.match(patchScript, /result\.text\.includes\('for tarball_pattern in/);
+  assert.match(patchScript, /text\.includes\('for tarball_pattern in/);
 });
 
 test.skipIf(!fs.existsSync(localElectrobunStagerPath))(
@@ -235,12 +363,71 @@ test("Electrobun release has a lightweight PR contract workflow", () => {
   assert.match(workflowText, /MILADY_SKIP_LOCAL_UPSTREAMS: "1"/);
   assert.match(
     workflowText,
+    /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+  );
+  assert.match(
+    workflowText,
     /run: bun run test:regression-matrix:release-contract/,
   );
   assert.match(workflowText, /run: bun run test:release:contract/);
   assert.match(workflowText, /SKIP_AVATAR_CLONE: "1"/);
   assert.match(workflowText, /ELIZA_NO_VISION_DEPS: "1"/);
   assert.match(workflowText, /MILADY_NO_VISION_DEPS: "1"/);
+});
+
+test("Electrobun release workflow root bun scripts are wired", () => {
+  const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+  const scripts = packageJson.scripts ?? {};
+  const requiredScripts = [
+    "test:regression-matrix:release",
+    "test:regression-matrix:release-contract",
+    "test:e2e:heavy",
+    "test:live:cloud",
+    "browser-bridge:package:release",
+    "test:desktop:packaged",
+    "test:desktop:packaged:windows",
+    "test:desktop:playwright",
+  ];
+
+  for (const scriptName of requiredScripts) {
+    assert.ok(scripts[scriptName], `package.json missing ${scriptName}`);
+  }
+  assert.equal(
+    scripts["test:regression-matrix:release-contract"],
+    "node scripts/run-eliza-app-core-script.mjs validate-regression-matrix.mjs --workflow release-contract",
+  );
+});
+
+test("GitHub workflows use the verified Bun runtime", () => {
+  const workflowDir = ".github/workflows";
+  const workflowFiles = fs
+    .readdirSync(workflowDir)
+    .filter((fileName) => fileName.endsWith(".yml"));
+
+  for (const fileName of workflowFiles) {
+    const workflowText = fs.readFileSync(
+      path.join(workflowDir, fileName),
+      "utf8",
+    );
+    assert.doesNotMatch(workflowText, /BUN_VERSION:\s*"1\.3\.1[01]"/);
+    assert.doesNotMatch(workflowText, /bun-version:\s*"?1\.3\.1[01]"?/);
+  }
+});
+
+test("E2E secret rotation workflow points at tracked scripts", () => {
+  const rotate = workflow("rotate-e2e-secrets.yml");
+  const scripts = [
+    "scripts/rotate-e2e-secrets.mjs",
+    "scripts/check-e2e-secrets-expiry.mjs",
+  ];
+
+  for (const scriptPath of scripts) {
+    assert.ok(fs.existsSync(scriptPath), `${scriptPath} missing`);
+    assert.match(rotate, new RegExp(`node ${scriptPath}`));
+  }
+  assert.match(rotate, /id: credentials/);
+  assert.match(rotate, /steps\.credentials\.outputs\.available == 'true'/);
+  assert.doesNotMatch(rotate, /bun run scripts\/(?:rotate|check)-e2e-secrets/);
 });
 
 test("Electrobun Windows smoke validates the public installer", () => {
@@ -250,7 +437,25 @@ test("Electrobun Windows smoke validates the public installer", () => {
   assert.match(electrobun, /Smoke runs through the public installer/);
 });
 
-test("npm package includes package-mode app-core script bridge", () => {
+test("Electrobun unsigned macOS canaries skip Developer ID release checks", () => {
+  const electrobun = workflow("release-electrobun.yml");
+
+  assert.match(
+    electrobun,
+    /Verify macOS signature and notarization[\s\S]*?ELECTROBUN_SKIP_CODESIGN: \$\{\{ steps\.macos-keychain\.outputs\.skip_codesign \}\}/,
+  );
+  assert.match(electrobun, /require_developer_id=0/);
+  assert.match(
+    electrobun,
+    /Unsigned macOS build: Developer ID, Gatekeeper, and stapler checks skipped/,
+  );
+  assert.match(
+    electrobun,
+    /Unsigned macOS build: Developer ID and stapler checks skipped/,
+  );
+});
+
+test("npm package includes release script roots", () => {
   const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
   assert.ok(
@@ -259,5 +464,9 @@ test("npm package includes package-mode app-core script bridge", () => {
   assert.ok(
     packageJson.files.includes("scripts/lib/resolve-eliza-app-core-script.mjs"),
   );
-  assert.ok(!packageJson.files.includes("eliza/packages/app-core/scripts"));
+  assert.ok(
+    packageJson.files.includes("scripts/generate-static-asset-manifest.mjs"),
+  );
+  assert.ok(packageJson.files.includes("scripts/init-submodules.mjs"));
+  assert.ok(packageJson.files.includes("eliza/packages/app-core/scripts"));
 });

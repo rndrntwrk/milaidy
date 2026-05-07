@@ -236,7 +236,6 @@ test("package-mode no longer carries migrated elizaOS package patches", () => {
   const productionBuildScript = read("scripts/run-production-build.mjs");
   const migratedPatchScripts = [
     "patch-elizaos-package-esm-imports.mjs",
-    "patch-elizaos-app-core-mobile-package.mjs",
     "patch-elizaos-capacitor-agent-package.mjs",
   ];
 

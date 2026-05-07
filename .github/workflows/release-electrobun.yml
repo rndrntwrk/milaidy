@@ -66,7 +66,7 @@ on:
     inputs:
       tag:
         description: "Release tag (e.g. v2.0.0-alpha.3)"
-        required: false
+        required: true
         type: string
       channel:
         description: "Release channel"
@@ -241,6 +241,12 @@ jobs:
         with:
           submodules: false
 
+      - name: Initialize eliza source checkout
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
+
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
@@ -274,9 +280,18 @@ jobs:
           export MILADY_WHISPER_MODEL_CACHE_DIR="$HOME/.cache/milady/whisper"
           bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
           mkdir -p .artifacts/whisper-model
-          cp "$HOME/.cache/milady/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
+          for candidate in \
+            "$HOME/.cache/milady/whisper/ggml-base.en.bin" \
+            "$HOME/.cache/eliza/whisper/ggml-base.en.bin" \
+            "$whisper_pkg/lib/whisper.cpp/models/ggml-base.en.bin"; do
+            if [ -f "$candidate" ]; then
+              cp "$candidate" .artifacts/whisper-model/ggml-base.en.bin
+              break
+            fi
+          done
+          test -f .artifacts/whisper-model/ggml-base.en.bin
           mkdir -p eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models
-          cp "$HOME/.cache/milady/whisper/ggml-base.en.bin" eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin
+          cp .artifacts/whisper-model/ggml-base.en.bin eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin
 
       - name: Upload Whisper model artifact
         uses: actions/upload-artifact@v7
@@ -362,6 +377,9 @@ jobs:
           }
           NODE
 
+      - name: Align package-mode agent pins
+        run: node scripts/align-eliza-agent-package-pins.mjs
+
       - name: Release readiness checks
         env:
           ELIZA_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -386,6 +404,12 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: false
+
+      - name: Initialize eliza source checkout
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
@@ -423,10 +447,10 @@ jobs:
         with:
           name: browser-bridge-store-bundles
           path: |
-            eliza/apps/browser-bridge/dist/artifacts/browser-bridge-chrome-v*.zip
-            eliza/apps/browser-bridge/dist/artifacts/browser-bridge-safari-v*.zip
-            eliza/apps/browser-bridge/dist/artifacts/browser-bridge-safari-project-v*.zip
-            eliza/apps/browser-bridge/dist/artifacts/browser-bridge-release-manifest-v*.json
+            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-chrome-v*.zip
+            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-safari-v*.zip
+            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-safari-project-v*.zip
+            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-release-manifest-v*.json
           if-no-files-found: error
           retention-days: 30
 
@@ -470,6 +494,12 @@ jobs:
         with:
           submodules: false
 
+      - name: Initialize eliza source checkout
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
+
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
@@ -506,6 +536,9 @@ jobs:
             echo "bun install failed on attempt ${attempt}; retrying in 15 seconds" >&2
             sleep 15
           done
+
+      - name: Install eliza source dependencies
+        run: bun install --cwd eliza --no-frozen-lockfile
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -565,6 +598,8 @@ jobs:
 
       - name: Generate protobuf types
         run: |
+          workspace_root="$(pwd)"
+          export PATH="$workspace_root/eliza/node_modules/.bin:$workspace_root/eliza/packages/schemas/node_modules/.bin:$PATH"
           node eliza/packages/shared/scripts/generate-keywords.mjs --target ts
           test -f eliza/packages/shared/src/i18n/generated/validation-keyword-data.js
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ]; then
@@ -585,6 +620,9 @@ jobs:
           fi
           test -f eliza/packages/core/src/types/generated/eliza/v1/agent_pb.ts
           test -f eliza/packages/core/src/types/generated/eliza/v1/components_pb.ts
+
+      - name: Align package-mode agent pins
+        run: node scripts/align-eliza-agent-package-pins.mjs
 
       - name: Stage desktop bundle inputs
         run: |
@@ -1382,8 +1420,15 @@ jobs:
 
       - name: Verify macOS signature and notarization
         if: matrix.platform.os == 'macos' && steps.build-electrobun-app.outputs.fallback != 'true'
+        env:
+          ELECTROBUN_SKIP_CODESIGN: ${{ steps.macos-keychain.outputs.skip_codesign }}
         run: |
           shopt -s nullglob
+          require_developer_id=1
+          if [ "${ELECTROBUN_SKIP_CODESIGN:-0}" = "1" ]; then
+            require_developer_id=0
+            echo "Skipping Developer ID and notarization checks for unsigned macOS build."
+          fi
 
           retry_stapler_validate() {
             local target="$1"
@@ -1445,35 +1490,43 @@ jobs:
           for app in "${apps[@]}"; do
             echo "Verifying: $app"
             codesign --verify --deep --strict --verbose=2 "$app"
-            info="$(codesign -dv --verbose=4 "$app" 2>&1 || true)"
-            echo "$info" | grep -q "Authority=Developer ID Application" || {
-              echo "::error::Missing Developer ID Application signature on $app"
-              exit 1
-            }
-            # Gatekeeper can reject the standalone staging copy on Intel even
-            # when the notarized DMG is valid; treat as advisory.
-            if ! spctl -a -vv --type exec "$app"; then
-              echo "::warning::Gatekeeper rejected staged app bundle $app; continuing because the notarized DMG is the release artifact."
+            if [ "$require_developer_id" = "1" ]; then
+              info="$(codesign -dv --verbose=4 "$app" 2>&1 || true)"
+              echo "$info" | grep -q "Authority=Developer ID Application" || {
+                echo "::error::Missing Developer ID Application signature on $app"
+                exit 1
+              }
+              # Gatekeeper can reject the standalone staging copy on Intel even
+              # when the notarized DMG is valid; treat as advisory.
+              if ! spctl -a -vv --type exec "$app"; then
+                echo "::warning::Gatekeeper rejected staged app bundle $app; continuing because the notarized DMG is the release artifact."
+              fi
+              retry_stapler_validate "$app" 3 10 || echo "::warning::Stapler validation failed (may be expected for .app; DMG stapling is the norm)"
+            else
+              echo "Unsigned macOS build: Developer ID, Gatekeeper, and stapler checks skipped for $app"
             fi
-            retry_stapler_validate "$app" 3 10 || echo "::warning::Stapler validation failed (may be expected for .app; DMG stapling is the norm)"
           done
           found_dmg=0
           while IFS= read -r dmg; do
             [[ -z "$dmg" ]] && continue
             found_dmg=1
             echo "Verifying installer: $dmg"
-            dmg_info="$(codesign -dv --verbose=4 "$dmg" 2>&1 || true)"
-            echo "$dmg_info"
-            echo "$dmg_info" | grep -q "Authority=Developer ID Application" || {
-              echo "::error::Missing Developer ID Application signature on $dmg"
-              exit 1
-            }
-            if ! retry_stapler_validate "$dmg"; then
-              if [ "${ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" = "1" ]; then
-                echo "::error::Stapler validation failed for $dmg"
+            if [ "$require_developer_id" = "1" ]; then
+              dmg_info="$(codesign -dv --verbose=4 "$dmg" 2>&1 || true)"
+              echo "$dmg_info"
+              echo "$dmg_info" | grep -q "Authority=Developer ID Application" || {
+                echo "::error::Missing Developer ID Application signature on $dmg"
                 exit 1
+              }
+              if ! retry_stapler_validate "$dmg"; then
+                if [ "${ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" = "1" ]; then
+                  echo "::error::Stapler validation failed for $dmg"
+                  exit 1
+                fi
+                echo "::warning::Stapler validation failed for $dmg after notarization acceptance; continuing without stapled DMG"
               fi
-              echo "::warning::Stapler validation failed for $dmg after notarization acceptance; continuing without stapled DMG"
+            else
+              echo "Unsigned macOS build: Developer ID and stapler checks skipped for $dmg"
             fi
           done < <(find -L eliza/packages/app-core/platforms/electrobun/artifacts -maxdepth 1 -type f -name "*.dmg" | sort)
           if [ "$found_dmg" -eq 0 ]; then
