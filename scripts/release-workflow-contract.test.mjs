@@ -110,7 +110,10 @@ test("distribution workflows consume the canonical channel policy", () => {
     /\$HOME\/\.cache\/eliza\/whisper\/ggml-base\.en\.bin/,
   );
   assert.match(electrobun, /node scripts\/align-eliza-agent-package-pins\.mjs/);
-  assert.match(electrobun, /bun install --cwd eliza --no-frozen-lockfile/);
+  assert.match(
+    electrobun,
+    /bun install --cwd eliza --no-frozen-lockfile --ignore-scripts/,
+  );
   assert.match(electrobun, /eliza\/packages\/browser-bridge\/dist\/artifacts/);
   assert.match(
     electrobun,
@@ -127,7 +130,10 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
     cloudImage,
     /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
   );
-  assert.match(cloudImage, /bun install --cwd eliza --no-frozen-lockfile/);
+  assert.match(
+    cloudImage,
+    /bun install --cwd eliza --no-frozen-lockfile --ignore-scripts/,
+  );
   assert.match(
     cloudImage,
     /export PATH="\$GITHUB_WORKSPACE\/eliza\/node_modules\/\.bin:\$GITHUB_WORKSPACE\/eliza\/packages\/schemas\/node_modules\/\.bin:\$PATH"/,
@@ -149,6 +155,24 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
   assert.match(cloudImage, /test -d packages\/app\/dist/);
   assert.match(cloudImage, /cp -R eliza\/cloud\/packages\/sdk cloud-sdk/);
   assert.match(cloudImage, /test -f cloud-sdk\/package\.json/);
+});
+
+test("release workflows skip eliza install lifecycle scripts", () => {
+  for (const name of [
+    "build-cloud-image.yml",
+    "build-docker.yml",
+    "release-electrobun.yml",
+  ]) {
+    const text = workflow(name);
+    assert.match(
+      text,
+      /bun install --cwd eliza --no-frozen-lockfile --ignore-scripts/,
+    );
+    assert.doesNotMatch(
+      text,
+      /bun install --cwd eliza --no-frozen-lockfile(?! --ignore-scripts)/,
+    );
+  }
 });
 
 test("eliza CI patches align release source helpers", () => {
