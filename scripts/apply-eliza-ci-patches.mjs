@@ -136,7 +136,8 @@ function patchCloudDockerfile(raw) {
 }
 
 function patchElectrobunCliPatchScript(raw) {
-  return raw.replace(
+  const normalized = raw.replace(/\r\n/g, "\n");
+  const next = normalized.replace(
     `  const replacements = patched.match(
     /const rcedit = \\(await import\\("rcedit"\\)\\)\\.default;/g,
   );
@@ -162,6 +163,7 @@ function patchElectrobunCliPatchScript(raw) {
   }
 `,
   );
+  return next === normalized ? raw : next;
 }
 
 function applyMiladyReleaseSourcePatches() {
