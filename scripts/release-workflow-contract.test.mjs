@@ -437,6 +437,24 @@ test("Electrobun Windows smoke validates the public installer", () => {
   assert.match(electrobun, /Smoke runs through the public installer/);
 });
 
+test("Electrobun unsigned macOS canaries skip Developer ID release checks", () => {
+  const electrobun = workflow("release-electrobun.yml");
+
+  assert.match(
+    electrobun,
+    /Verify macOS signature and notarization[\s\S]*?ELECTROBUN_SKIP_CODESIGN: \$\{\{ steps\.macos-keychain\.outputs\.skip_codesign \}\}/,
+  );
+  assert.match(electrobun, /require_developer_id=0/);
+  assert.match(
+    electrobun,
+    /Unsigned macOS build: Developer ID, Gatekeeper, and stapler checks skipped/,
+  );
+  assert.match(
+    electrobun,
+    /Unsigned macOS build: Developer ID and stapler checks skipped/,
+  );
+});
+
 test("npm package includes release script roots", () => {
   const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 

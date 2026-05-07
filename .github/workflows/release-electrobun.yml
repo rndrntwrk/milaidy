@@ -1420,8 +1420,15 @@ jobs:
 
       - name: Verify macOS signature and notarization
         if: matrix.platform.os == 'macos' && steps.build-electrobun-app.outputs.fallback != 'true'
+        env:
+          ELECTROBUN_SKIP_CODESIGN: ${{ steps.macos-keychain.outputs.skip_codesign }}
         run: |
           shopt -s nullglob
+          require_developer_id=1
+          if [ "${ELECTROBUN_SKIP_CODESIGN:-0}" = "1" ]; then
+            require_developer_id=0
+            echo "Skipping Developer ID and notarization checks for unsigned macOS build."
+          fi
 
           retry_stapler_validate() {
             local target="$1"
@@ -1483,35 +1490,43 @@ jobs:
           for app in "${apps[@]}"; do
             echo "Verifying: $app"
             codesign --verify --deep --strict --verbose=2 "$app"
-            info="$(codesign -dv --verbose=4 "$app" 2>&1 || true)"
-            echo "$info" | grep -q "Authority=Developer ID Application" || {
-              echo "::error::Missing Developer ID Application signature on $app"
-              exit 1
-            }
-            # Gatekeeper can reject the standalone staging copy on Intel even
-            # when the notarized DMG is valid; treat as advisory.
-            if ! spctl -a -vv --type exec "$app"; then
-              echo "::warning::Gatekeeper rejected staged app bundle $app; continuing because the notarized DMG is the release artifact."
+            if [ "$require_developer_id" = "1" ]; then
+              info="$(codesign -dv --verbose=4 "$app" 2>&1 || true)"
+              echo "$info" | grep -q "Authority=Developer ID Application" || {
+                echo "::error::Missing Developer ID Application signature on $app"
+                exit 1
+              }
+              # Gatekeeper can reject the standalone staging copy on Intel even
+              # when the notarized DMG is valid; treat as advisory.
+              if ! spctl -a -vv --type exec "$app"; then
+                echo "::warning::Gatekeeper rejected staged app bundle $app; continuing because the notarized DMG is the release artifact."
+              fi
+              retry_stapler_validate "$app" 3 10 || echo "::warning::Stapler validation failed (may be expected for .app; DMG stapling is the norm)"
+            else
+              echo "Unsigned macOS build: Developer ID, Gatekeeper, and stapler checks skipped for $app"
             fi
-            retry_stapler_validate "$app" 3 10 || echo "::warning::Stapler validation failed (may be expected for .app; DMG stapling is the norm)"
           done
           found_dmg=0
           while IFS= read -r dmg; do
             [[ -z "$dmg" ]] && continue
             found_dmg=1
             echo "Verifying installer: $dmg"
-            dmg_info="$(codesign -dv --verbose=4 "$dmg" 2>&1 || true)"
-            echo "$dmg_info"
-            echo "$dmg_info" | grep -q "Authority=Developer ID Application" || {
-              echo "::error::Missing Developer ID Application signature on $dmg"
-              exit 1
-            }
-            if ! retry_stapler_validate "$dmg"; then
-              if [ "${ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" = "1" ]; then
-                echo "::error::Stapler validation failed for $dmg"
+            if [ "$require_developer_id" = "1" ]; then
+              dmg_info="$(codesign -dv --verbose=4 "$dmg" 2>&1 || true)"
+              echo "$dmg_info"
+              echo "$dmg_info" | grep -q "Authority=Developer ID Application" || {
+                echo "::error::Missing Developer ID Application signature on $dmg"
                 exit 1
+              }
+              if ! retry_stapler_validate "$dmg"; then
+                if [ "${ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" = "1" ]; then
+                  echo "::error::Stapler validation failed for $dmg"
+                  exit 1
+                fi
+                echo "::warning::Stapler validation failed for $dmg after notarization acceptance; continuing without stapled DMG"
               fi
-              echo "::warning::Stapler validation failed for $dmg after notarization acceptance; continuing without stapled DMG"
+            else
+              echo "Unsigned macOS build: Developer ID and stapler checks skipped for $dmg"
             fi
           done < <(find -L eliza/packages/app-core/platforms/electrobun/artifacts -maxdepth 1 -type f -name "*.dmg" | sort)
           if [ "$found_dmg" -eq 0 ]; then
