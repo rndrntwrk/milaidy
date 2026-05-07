@@ -208,6 +208,15 @@ test("elizaOS package channel is configurable instead of alpha-only", () => {
   assert.doesNotMatch(setupScript, /FALLBACK_TAG = "alpha"/);
   assert.match(fallbackDeps, /ELIZAOS_PACKAGE_SPECIFIER/);
   assert.doesNotMatch(fallbackDeps, /@alpha/);
+  assert.notEqual(
+    fallbackDeps.indexOf('if [[ "$package_name" == @elizaos/* ]]; then'),
+    -1,
+  );
+  assert.notEqual(fallbackDeps.indexOf('for manifest in "$@"; do'), -1);
+  assert.ok(
+    fallbackDeps.indexOf('if [[ "$package_name" == @elizaos/* ]]; then') <
+      fallbackDeps.indexOf('for manifest in "$@"; do'),
+  );
 });
 
 test("local eliza source clone target remains explicit and configurable", () => {
