@@ -245,6 +245,9 @@ test("eliza CI patches align release source helpers", () => {
     pruneScript,
     /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
   );
+  assert.match(pruneScript, /PUBLISHED_RELEASE_DEPS/);
+  assert.match(pruneScript, /"@elizaos\/plugin-elizacloud"/);
+  assert.match(pruneScript, /ELIZAOS_PACKAGE_SPECIFIER/);
   assert.match(pruneScript, /"@elizaos\/cloud-sdk"/);
   assert.match(pruneScript, /file:\.\/eliza\/cloud\/packages\/sdk/);
 });
