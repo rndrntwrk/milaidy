@@ -117,6 +117,14 @@ test("distribution workflows consume the canonical channel policy", () => {
   assert.match(electrobun, /eliza\/packages\/browser-bridge\/dist\/artifacts/);
   assert.match(
     electrobun,
+    /name: Package Agent Browser Bridge release bundles[\s\S]*?bun run browser-bridge:package:release[\s\S]*?packaged=true/,
+  );
+  assert.doesNotMatch(
+    electrobun,
+    /Agent Browser Bridge packaging failed|continue without browser companion bundles/,
+  );
+  assert.match(
+    electrobun,
     /workflow_dispatch:[\s\S]*?tag:\n\s+description: "Release tag \(e\.g\. v2\.0\.0-alpha\.3\)"\n\s+required: true/,
   );
   assert.match(electrobun, /beta desktop release requires a beta version/);
@@ -245,7 +253,9 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /alpha\|beta\|rc\|nightly/);
   assert.match(patchScript, /browser bridge canary release versions/);
   assert.match(patchScript, /Agent-Browser-Bridge/);
+  assert.ok(patchScript.includes("Agent-Browser-Bridge\\\\.Extension"));
   assert.match(patchScript, /browser bridge Safari bundle identifiers/);
+  assert.match(patchScript, /app-core release browser bridge hard gate/);
   assert.match(patchScript, /nestedElizaPackageJson/);
   assert.match(patchScript, /collectWorkspaceMaps\(\s*elizaRoot/);
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);

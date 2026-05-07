@@ -230,9 +230,8 @@ function patchBrowserBridgeReleaseVersion(raw) {
 function patchBrowserBridgeSafariPackage(raw) {
   const bundleIdentifierMarker =
     "PRODUCT_BUNDLE_IDENTIFIER = $" + "{bundleIdentifier}";
-  if (raw.includes(bundleIdentifierMarker)) {
-    return raw;
-  }
+  const extensionBundleIdentifierMarker =
+    "PRODUCT_BUNDLE_IDENTIFIER = $" + "{bundleIdentifier}.Extension";
   const currentProjectVersionPatch = `${[
     "  source = source.replace(",
     "    /CURRENT_PROJECT_VERSION = [^;]+;/g,",
@@ -245,10 +244,45 @@ function patchBrowserBridgeSafariPackage(raw) {
     "    `PRODUCT_BUNDLE_IDENTIFIER = $" + "{bundleIdentifier};`,",
     "  );",
   ].join("\n")}\n`;
-  return raw.replace(
-    currentProjectVersionPatch,
-    currentProjectVersionPatch + safariBundlePatch,
-  );
+  const safariExtensionBundlePatch = `${[
+    "  source = source.replace(",
+    '    /PRODUCT_BUNDLE_IDENTIFIER = "ai\\.elizaos\\.browserbridge\\.Agent-Browser-Bridge\\.Extension";/g,',
+    "    `PRODUCT_BUNDLE_IDENTIFIER = $" + "{bundleIdentifier}.Extension;`,",
+    "  );",
+  ].join("\n")}\n`;
+  let patched = raw;
+  if (!patched.includes(bundleIdentifierMarker)) {
+    patched = patched.replace(
+      currentProjectVersionPatch,
+      currentProjectVersionPatch + safariBundlePatch,
+    );
+  }
+  if (!patched.includes(extensionBundleIdentifierMarker)) {
+    const insertionAnchor = patched.includes(safariBundlePatch)
+      ? safariBundlePatch
+      : currentProjectVersionPatch;
+    patched = patched.replace(
+      insertionAnchor,
+      insertionAnchor + safariExtensionBundlePatch,
+    );
+  }
+  return patched;
+}
+
+function patchAppCoreReleaseCheck(raw) {
+  return raw
+    .replace(
+      '  "if bun run browser-bridge:package:release; then",\n',
+      '  "bun run browser-bridge:package:release",\n',
+    )
+    .replace(
+      '  "Agent Browser Bridge packaging failed; desktop release will continue without browser companion bundles.",\n',
+      "",
+    )
+    .replace(
+      "release-check: release workflow is missing notary wrapper wiring:",
+      "release-check: release workflow is missing required release wiring:",
+    );
 }
 
 function patchWorkspaceDistRelinkScript(raw) {
@@ -385,6 +419,12 @@ function applyReleaseSourcePatches() {
     ),
     patchBrowserBridgeSafariPackage,
     "browser bridge Safari bundle identifiers",
+  );
+
+  replaceFileText(
+    path.join(elizaDir, "packages", "app-core", "scripts", "release-check.ts"),
+    patchAppCoreReleaseCheck,
+    "app-core release browser bridge hard gate",
   );
 
   replaceFileText(
