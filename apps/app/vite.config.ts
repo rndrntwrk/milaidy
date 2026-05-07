@@ -59,12 +59,20 @@ function buildWorkspaceExportAliases(
   const aliases: Array<{ find: RegExp; replacement: string }> = [];
 
   for (const [key, value] of Object.entries(packageJson.exports || {})) {
-    if (typeof value !== "string") continue;
+    const exportTarget =
+      typeof value === "string"
+        ? value
+        : typeof value.import === "string"
+          ? value.import
+          : typeof value.default === "string"
+            ? value.default
+            : null;
+    if (!exportTarget) continue;
 
     const aliasKey =
       key === "." ? packageName : `${packageName}/${key.replace(/^\.\//, "")}`;
     const wildcardCount = (aliasKey.match(/\*/g) || []).length;
-    const replacement = path.resolve(packageDir, value);
+    const replacement = path.resolve(packageDir, exportTarget);
 
     if (wildcardCount > 0) {
       let captureIndex = 0;
@@ -1317,11 +1325,16 @@ export default defineConfig({
           miladyRoot,
           "packages/shared/package.json",
         );
+        const appWalletPkgPath = path.resolve(
+          miladyRoot,
+          "eliza/plugins/app-wallet/package.json",
+        );
 
         const generatedAliases = [
           ...buildWorkspaceExportAliases("@miladyai/app-core", appCorePkgPath),
           ...buildWorkspaceExportAliases("@miladyai/agent", agentPkgPath),
           ...buildWorkspaceExportAliases("@miladyai/shared", sharedPkgPath),
+          ...buildWorkspaceExportAliases("@elizaos/app-wallet", appWalletPkgPath),
         ];
 
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");
