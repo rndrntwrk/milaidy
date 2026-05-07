@@ -370,6 +370,12 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   assert.match(hydrateScript, /@elizaos\/core/);
   assert.match(hydrateScript, /@elizaos\/plugin-sql/);
   assert.match(hydrateScript, /plugins", "plugin-sql/);
+  assert.match(hydrateScript, /sqlPluginTypescriptPath = path\.join/);
+  assert.match(hydrateScript, /sqlPluginPath,\s*"typescript"/);
+  assert.match(hydrateScript, /copy: true/);
+  assert.match(hydrateScript, /assertPathExists/);
+  assert.match(hydrateScript, /dist",\s*"index\.node\.js"/);
+  assert.match(hydrateScript, /dist",\s*"node",\s*"index\.node\.js"/);
   assert.match(hydrateScript, /linkElizaPackage/);
   assert.match(hydrateScript, /linkScopedPackage/);
   assert.match(hydrateScript, /symlinkSync/);
