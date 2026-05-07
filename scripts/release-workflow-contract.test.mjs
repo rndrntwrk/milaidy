@@ -604,6 +604,11 @@ test("GitHub workflows and composite actions use current Node action majors", ()
     assert.doesNotMatch(workflowText, /actions\/github-script@v[1-8]\b/);
     assert.doesNotMatch(workflowText, /actions\/cache@v[1-4]\b/);
     assert.doesNotMatch(workflowText, /actions\/setup-python@v[1-5]\b/);
+    assert.doesNotMatch(workflowText, /docker\/setup-buildx-action@v[1-3]\b/);
+    assert.doesNotMatch(workflowText, /docker\/login-action@v[1-3]\b/);
+    assert.doesNotMatch(workflowText, /docker\/metadata-action@v[1-5]\b/);
+    assert.doesNotMatch(workflowText, /docker\/build-push-action@v[1-6]\b/);
+    assert.doesNotMatch(workflowText, /bufbuild\/buf-setup-action@/);
   }
 });
 
