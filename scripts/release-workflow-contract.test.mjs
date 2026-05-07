@@ -229,7 +229,7 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /replace\(\/\\r\\n\/g, "\\n"\)/);
   assert.match(patchScript, /smoke-test-windows\.ps1/);
   assert.match(patchScript, /smoke-test\.sh/);
-  assert.match(patchScript, /milady-1/);
+  assert.doesNotMatch(patchScript, /milady-1/);
   assert.match(
     patchScript,
     /type StructuredResponseFormat = "JSON";[\s\S]*type StructuredResponseFormat = "JSON" \| "TOON";/,
@@ -237,10 +237,8 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /nestedElizaPackageJson/);
   assert.match(patchScript, /collectWorkspaceMaps\(\s*elizaRoot/);
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);
-  assert.match(
-    patchScript,
-    /\/DEFAULT_AVATAR_ASSET_SLUGS=\\\(\\s\*eliza-1\\s\*\\\)/,
-  );
+  assert.match(patchScript, /DEFAULT_AVATAR_ASSET_SLUGS=\\\(\[\^\)\]\*\\\)/);
+  assert.match(patchScript, /DEFAULT_AVATAR_ASSET_SLUGS=\(eliza-1\)/);
   assert.match(
     pruneScript,
     /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
@@ -344,6 +342,10 @@ test("Electrobun release applies elizaOS source overlay before manual build setu
 test("Electrobun Windows release runs packaged Playwright check after disk cleanup", () => {
   const electrobun = workflow("release-electrobun.yml");
   const rootPackage = JSON.parse(fs.readFileSync("package.json", "utf8"));
+  const hydrateScript = fs.readFileSync(
+    "scripts/hydrate-windows-playwright-deps.mjs",
+    "utf8",
+  );
 
   assert.match(
     electrobun,
@@ -351,11 +353,22 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   );
   assert.match(
     electrobun,
+    /node scripts\/ensure-eliza-renderer-avatar-assets\.mjs[\s\S]*?test -f apps\/app\/dist\/vrms\/eliza-1\.vrm\.gz -o -f apps\/app\/dist\/vrms\/eliza-1\.vrm/,
+  );
+  assert.match(
+    electrobun,
     /name: Run Windows packaged renderer bootstrap check[\s\S]*?run: bun run test:desktop:playwright:windows/,
   );
   assert.match(
     rootPackage.scripts["test:desktop:playwright:windows"],
-    /bun add --no-save --dev --ignore-scripts @playwright\/test@1\.59\.1 && bunx playwright test/,
+    /node scripts\/hydrate-windows-playwright-deps\.mjs && cd apps\/app &&/,
+  );
+  assert.match(hydrateScript, /@playwright\/test@1\.59\.1/);
+  assert.match(hydrateScript, /@elizaos\/plugin-elizacloud/);
+  assert.match(hydrateScript, /MILADY_ELIZAOS_DIST_TAG/);
+  assert.match(
+    rootPackage.scripts["test:desktop:playwright:windows"],
+    /bunx playwright test --config playwright\.electrobun\.packaged\.config\.ts/,
   );
   assert.match(
     electrobun,

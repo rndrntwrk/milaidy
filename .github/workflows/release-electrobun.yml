@@ -630,10 +630,14 @@ jobs:
       - name: Stage desktop bundle inputs
         run: |
           node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
+          node scripts/ensure-eliza-renderer-avatar-assets.mjs
           mkdir -p dist/node_modules/@elizaos/shared/src/i18n/generated
           cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.ts dist/node_modules/@elizaos/shared/src/i18n/generated/
           cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.js dist/node_modules/@elizaos/shared/src/i18n/generated/
           test -f dist/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js
+          test -f apps/app/dist/vrms/eliza-1.vrm.gz -o -f apps/app/dist/vrms/eliza-1.vrm
+          test -f apps/app/dist/vrms/previews/eliza-1.png
+          test -f apps/app/dist/vrms/backgrounds/eliza-1.png
 
       - name: Validate Electrobun runtime copy contract
         env:
