@@ -175,6 +175,20 @@ test("release workflows skip eliza install lifecycle scripts", () => {
   }
 });
 
+test("release workflows hydrate eliza Bun after ignored nested install", () => {
+  for (const name of [
+    "build-cloud-image.yml",
+    "build-docker.yml",
+    "release-electrobun.yml",
+  ]) {
+    const text = workflow(name);
+    assert.match(
+      text,
+      /name: Install eliza source dependencies[\s\S]*?run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts[\s\S]*?name: Hydrate eliza Bun package postinstall[\s\S]*?run: cd eliza\/node_modules\/bun && node install\.js/,
+    );
+  }
+});
+
 test("eliza CI patches align release source helpers", () => {
   const patchScript = fs.readFileSync(
     "scripts/apply-eliza-ci-patches.mjs",

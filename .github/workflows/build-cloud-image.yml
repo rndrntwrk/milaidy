@@ -127,6 +127,9 @@ jobs:
       - name: Install eliza source dependencies
         run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
 
+      - name: Hydrate eliza Bun package postinstall
+        run: cd eliza/node_modules/bun && node install.js
+
       - name: Install published-workspace fallback dependencies
         run: bash scripts/install-published-workspace-fallback-deps.sh
 
