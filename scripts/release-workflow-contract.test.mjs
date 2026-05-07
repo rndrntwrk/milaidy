@@ -234,6 +234,8 @@ test("eliza CI patches align release source helpers", () => {
     patchScript,
     /type StructuredResponseFormat = "JSON";[\s\S]*type StructuredResponseFormat = "JSON" \| "TOON";/,
   );
+  assert.match(patchScript, /nestedElizaPackageJson/);
+  assert.match(patchScript, /collectWorkspaceMaps\(\s*elizaRoot/);
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);
   assert.match(
     patchScript,

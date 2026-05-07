@@ -185,6 +185,43 @@ function patchCoreRuntimeTypes(raw) {
   );
 }
 
+function patchWorkspaceDistRelinkScript(raw) {
+  if (raw.includes("nestedElizaPackageJson")) return raw;
+  return raw.replace(
+    `const rootPkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+const { workspaceDirs, nameToDir } = collectWorkspaceMaps(
+  root,
+  rootPkg.workspaces ?? [],
+);
+const candidateBases = [root, ...workspaceDirs];
+`,
+    `const rootPkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+const rootWorkspaceMaps = collectWorkspaceMaps(root, rootPkg.workspaces ?? []);
+const workspaceDirs = [...rootWorkspaceMaps.workspaceDirs];
+const nameToDir = new Map(rootWorkspaceMaps.nameToDir);
+
+const nestedElizaPackageJson = join(root, "eliza", "package.json");
+if (existsSync(nestedElizaPackageJson)) {
+  const elizaRoot = join(root, "eliza");
+  const elizaPkg = JSON.parse(readFileSync(nestedElizaPackageJson, "utf8"));
+  const elizaWorkspaceMaps = collectWorkspaceMaps(
+    elizaRoot,
+    elizaPkg.workspaces ?? [],
+  );
+  for (const dir of elizaWorkspaceMaps.workspaceDirs) {
+    workspaceDirs.push(dir);
+  }
+  for (const [name, dir] of elizaWorkspaceMaps.nameToDir) {
+    if (!nameToDir.has(name)) {
+      nameToDir.set(name, dir);
+    }
+  }
+}
+const candidateBases = [root, ...workspaceDirs];
+`,
+  );
+}
+
 function applyReleaseSourcePatches() {
   replaceFileText(
     path.join(
@@ -240,6 +277,18 @@ function applyReleaseSourcePatches() {
     path.join(elizaDir, "packages", "core", "src", "runtime.ts"),
     patchCoreRuntimeTypes,
     "core structured response format type",
+  );
+
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "app-core",
+      "scripts",
+      "relink-workspace-packages-to-dist.mjs",
+    ),
+    patchWorkspaceDistRelinkScript,
+    "workspace dist relink nested eliza discovery",
   );
 }
 
