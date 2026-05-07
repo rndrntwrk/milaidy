@@ -278,6 +278,27 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   );
 });
 
+test("package-mode production build reapplies native app-core patch before Vite", () => {
+  const productionBuild = fs.readFileSync(
+    "scripts/run-production-build.mjs",
+    "utf8",
+  );
+  const nativePatch = fs.readFileSync(
+    "scripts/patch-elizaos-app-core-native-browser-package.mjs",
+    "utf8",
+  );
+
+  assert.match(
+    productionBuild,
+    /tsdownCli[\s\S]*patch-elizaos-app-core-native-browser-package\.mjs[\s\S]*viteCli/,
+  );
+  assert.match(nativePatch, /node_modules", "\.bun"/);
+  assert.match(nativePatch, /entry\.startsWith\("@elizaos\+app-core@"/);
+  assert.match(nativePatch, /app-shell-components/);
+  assert.match(nativePatch, /registerAppShellPage/);
+  assert.match(nativePatch, /eliza",\s*"packages",\s*"app-core"/);
+});
+
 test("Electrobun macOS release keeps one command path for both CPU architectures", () => {
   const electrobun = workflow("release-electrobun.yml");
 

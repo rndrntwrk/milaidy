@@ -55,6 +55,9 @@ if (!isLocalElizaDisabled()) {
     "scripts/patch-elizaos-plugin-browser-bridge-package.mjs",
   ]);
   await run(process.execPath, [tsdownCli, "--fail-on-warn", "false"]);
+  await run(process.execPath, [
+    "scripts/patch-elizaos-app-core-native-browser-package.mjs",
+  ]);
   await run(
     process.execPath,
     [viteCli, "build"],

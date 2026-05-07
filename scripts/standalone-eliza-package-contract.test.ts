@@ -99,7 +99,7 @@ test("package manifests default to published elizaOS alpha packages", () => {
   ]) {
     assert.equal(
       appPackage.dependencies[packageName],
-      "alpha",
+      "1.0.0",
       `${packageName} must resolve from npm for Capacitor package mode`,
     );
   }
@@ -113,7 +113,11 @@ test("root build resolves app-core entries from packages by default", () => {
 
   assert.match(helper, /DEFAULT_ELIZA_SOURCE_MODE = "packages"/);
   assert.match(read("scripts/run-app-web-build.mjs"), /isLocalElizaDisabled/);
-  assert.match(read("scripts/run-app-web-build.mjs"), /build:web/);
+  assert.match(
+    read("scripts/run-app-web-build.mjs"),
+    /patch-elizaos-app-core-native-browser-package\.mjs/,
+  );
+  assert.match(read("scripts/run-app-web-build.mjs"), /vite\.js", "build"/);
   assert.match(resolver, /preferLocal && existsSync/);
   assert.match(tsdownConfig, /"packages"/);
   assert.match(tsdownConfig, /require\.resolve\(packageSubpath\)/);
