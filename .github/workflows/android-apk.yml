@@ -1,0 +1,56 @@
+name: Android APK build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or SHA to build"
+        required: false
+        default: develop
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "false"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+          preserve-android-sdk: "true"
+          skip-cloud-submodule: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Install Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.13113456"
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build APK
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apps/app/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: error

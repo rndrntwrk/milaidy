@@ -9,13 +9,15 @@
     "prebuild": "node ../../scripts/write-homepage-release-data.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "bunx @biomejs/biome check src vite.config.ts vitest.config.ts package.json",
+    "lint": "bunx @biomejs/biome check src test vite.config.ts vitest.config.ts playwright.config.ts package.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@elizaos/shared": "workspace:*",
-    "@elizaos/app-core": "workspace:*",
+    "@elizaos/shared": "alpha",
+    "@elizaos/app-core": "alpha",
+    "@elizaos/ui": "alpha",
     "dompurify": "^3.4.0",
     "mermaid": "^11.14.0",
     "react": "^19.0.0",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@mdx-js/react": "^3.1.1",
     "@mdx-js/rollup": "^3.1.1",
+    "@playwright/test": "^1.59.1",
     "@shikijs/rehype": "^4.0.2",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.18",
@@ -36,6 +39,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react-swc": "^4.2.1",
     "jsdom": "^29.0.0",
+    "playwright": "^1.59.1",
     "rehype-autolink-headings": "^7.1.0",
     "rehype-slug": "^6.0.0",
     "remark-gfm": "^4.0.1",

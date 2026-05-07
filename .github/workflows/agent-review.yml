@@ -50,9 +50,9 @@ jobs:
             const allPathsMatch = (regex) => hasFiles && paths.every((path) => regex.test(path));
             const anyPathMatch = (regex) => paths.some((path) => regex.test(path));
 
-            const isDocsOnly = allPathsMatch(/(^docs\/)|(^|\/)readme\.md$|\.mdx?$/);
+            const isDocsOnly = allPathsMatch(/(^docs\/)|(^eliza\/docs\/)|(^|\/)readme\.md$|\.mdx?$/);
             const isCiOnly = allPathsMatch(/^\.github\/(workflows|actions)\//);
-            const isTestsOnly = allPathsMatch(/(^test\/)|(\.test\.[tj]sx?$)|(\.spec\.[tj]sx?$)|vitest.*config/);
+            const isTestsOnly = allPathsMatch(/(^test\/)|(^eliza\/test\/)|(\.test\.[tj]sx?$)|(\.spec\.[tj]sx?$)|vitest.*config/);
 
             const securityPatterns = ['security', 'vulnerability', 'cve', 'injection', 'xss', 'csrf', 'sqli', 'auth bypass'];
             const docsPatterns = ['docs:', 'documentation', 'readme', 'changelog'];
@@ -139,7 +139,38 @@ jobs:
           run-postinstall: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          skip-local-upstreams-postinstall: "true"
           prepare-local-eliza-runtime: "true"
+
+      - name: Align nested eliza package resolution
+        run: node scripts/align-eliza-ci-node-modules.mjs
+
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -f eliza/packages/core/src/types/generated/eliza/v1/agent_pb.ts ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
+      - name: Build local eliza runtime plugins
+        run: |
+          if [ ! -d eliza/packages/core ]; then
+            echo "eliza app-core checkout absent; skipping local runtime plugin builds"
+            exit 0
+          fi
+          if [ ! -f eliza/packages/core/dist/index.node.js ] || [ ! -f eliza/packages/core/dist/index.d.ts ]; then
+            (cd eliza/packages/core && bun run build)
+          fi
+          if [ -f eliza/plugins/plugin-agent-skills/package.json ] && [ ! -f eliza/plugins/plugin-agent-skills/dist/index.js ]; then
+            (cd eliza/plugins/plugin-agent-skills && bun run build)
+          fi
+          if [ -f eliza/plugins/plugin-pdf/package.json ] && [ ! -f eliza/plugins/plugin-pdf/dist/node/index.node.js ]; then
+            (cd eliza/plugins/plugin-pdf && bun run build)
+          fi
+          if [ -f eliza/plugins/plugin-sql/package.json ] && [ ! -f eliza/plugins/plugin-sql/typescript/dist/index.js ]; then
+            (cd eliza/plugins/plugin-sql && bun run build)
+          fi
 
       - name: Run auth test suite
         run: bun run test:auth

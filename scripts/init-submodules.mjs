@@ -8,16 +8,21 @@
  *   node scripts/init-submodules.mjs
  */
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  getElizaosPackageSpecifier,
+  isLocalElizaDisabled,
+} from "./lib/eliza-package-mode.mjs";
 
 const scriptFile = fileURLToPath(import.meta.url);
 const __dirname = dirname(scriptFile);
 const root = resolve(__dirname, "..");
-const skipLocalUpstreams =
-  process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
-  process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+const skipLocalUpstreams = isLocalElizaDisabled();
+const skipCloudSubmodule =
+  process.env.MILADY_SKIP_CLOUD_SUBMODULE === "1" ||
+  process.env.ELIZA_SKIP_CLOUD_SUBMODULE === "1";
 const SUBMODULE_READINESS_MARKERS = {
   cloud: ["package.json"],
   eliza: ["package.json", "packages/typescript/package.json"],
@@ -45,7 +50,7 @@ const SKIP_SUBMODULES = new Set([
 
 function getSubmoduleSkipReason(
   submodulePath,
-  { skipLocal = skipLocalUpstreams } = {},
+  { skipLocal = skipLocalUpstreams, skipCloud = skipCloudSubmodule } = {},
 ) {
   if (SKIP_SUBMODULES.has(submodulePath)) {
     return "it is in the explicit skip list";
@@ -53,14 +58,191 @@ function getSubmoduleSkipReason(
   if (skipLocal && submodulePath === "eliza") {
     return "local upstreams are disabled";
   }
+  if (
+    skipCloud &&
+    (submodulePath === "cloud" || submodulePath === "eliza/cloud")
+  ) {
+    return "cloud submodule is disabled";
+  }
+  if (skipCloud && SKIPPED_CLOUD_COUPLED_SUBMODULE_PATHS.has(submodulePath)) {
+    return "cloud-coupled plugin workspace is disabled";
+  }
   return null;
 }
 
 export function shouldSkipSubmoduleInit(
   submodulePath,
-  { skipLocal = skipLocalUpstreams } = {},
+  { skipLocal = skipLocalUpstreams, skipCloud = skipCloudSubmodule } = {},
 ) {
-  return getSubmoduleSkipReason(submodulePath, { skipLocal }) !== null;
+  return (
+    getSubmoduleSkipReason(submodulePath, { skipLocal, skipCloud }) !== null
+  );
+}
+
+function isStringArray(value) {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function getPackageWorkspaces(pkg) {
+  if (isStringArray(pkg.workspaces)) {
+    return pkg.workspaces;
+  }
+  if (
+    pkg.workspaces &&
+    typeof pkg.workspaces === "object" &&
+    isStringArray(pkg.workspaces.packages)
+  ) {
+    return pkg.workspaces.packages;
+  }
+  return null;
+}
+
+function setPackageWorkspaces(pkg, workspaces) {
+  if (Array.isArray(pkg.workspaces)) {
+    pkg.workspaces = workspaces;
+    return;
+  }
+  pkg.workspaces.packages = workspaces;
+}
+
+function rewriteSkippedCloudDependencies(pkg, { env = process.env } = {}) {
+  let changed = false;
+  for (const field of PACKAGE_DEPENDENCY_FIELDS) {
+    const deps = pkg[field];
+    if (!deps || typeof deps !== "object" || Array.isArray(deps)) {
+      continue;
+    }
+    for (const [name, version] of Object.entries(
+      getSkippedCloudDependencyFallbacks(env),
+    )) {
+      if (deps[name] === "workspace:*") {
+        deps[name] = version;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+export function pruneSkippedCloudWorkspace({
+  rootDir = root,
+  exists = existsSync,
+  readFile = readFileSync,
+  writeFile = writeFileSync,
+  remove = rmSync,
+  log = console.log,
+  skipCloud = skipCloudSubmodule,
+} = {}) {
+  if (!skipCloud) {
+    return [];
+  }
+
+  if (exists(resolve(rootDir, "eliza/cloud/packages/sdk/package.json"))) {
+    return [];
+  }
+
+  const changed = [];
+  for (const entry of SKIPPED_CLOUD_WORKSPACE_ENTRIES) {
+    const packageJsonPath = resolve(rootDir, entry.packageJson);
+    if (!exists(packageJsonPath)) {
+      continue;
+    }
+
+    const raw = readFile(packageJsonPath, "utf8");
+    const pkg = JSON.parse(raw);
+    const workspaces = getPackageWorkspaces(pkg);
+    let packageChanged = false;
+
+    if (workspaces) {
+      const nextWorkspaces = workspaces.filter(
+        (workspaceEntry) => !entry.workspaces.includes(workspaceEntry),
+      );
+      if (nextWorkspaces.length !== workspaces.length) {
+        setPackageWorkspaces(pkg, nextWorkspaces);
+        packageChanged = true;
+      }
+    }
+
+    if (rewriteSkippedCloudDependencies(pkg)) {
+      packageChanged = true;
+    }
+
+    if (!packageChanged) {
+      continue;
+    }
+
+    const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
+    writeFile(packageJsonPath, `${JSON.stringify(pkg, null, indent)}\n`);
+    changed.push(entry.packageJson);
+    log(
+      `[init-submodules] Applied skipped cloud workspace fallbacks to ${entry.packageJson}`,
+    );
+  }
+
+  if (changed.length > 0) {
+    for (const lockfile of SKIPPED_CLOUD_LOCKFILES) {
+      const lockfilePath = resolve(rootDir, lockfile);
+      if (!exists(lockfilePath)) {
+        continue;
+      }
+      remove(lockfilePath, { force: true });
+      log(
+        `[init-submodules] Removed ${lockfile} so Bun regenerates without skipped cloud workspaces`,
+      );
+    }
+  }
+
+  return changed;
+}
+
+export function pruneDuplicateLegacyElizaPluginWorkspaces({
+  rootDir = root,
+  exists = existsSync,
+  readFile = readFileSync,
+  writeFile = writeFileSync,
+  log = console.log,
+} = {}) {
+  const packageJsonPath = resolve(rootDir, "eliza", "package.json");
+  if (!exists(packageJsonPath)) {
+    return [];
+  }
+
+  const raw = readFile(packageJsonPath, "utf8");
+  const pkg = JSON.parse(raw);
+  const workspaces = getPackageWorkspaces(pkg);
+  if (!workspaces) {
+    return [];
+  }
+
+  const duplicateLegacyEntries = LEGACY_ELIZA_PLUGIN_WORKSPACE_ENTRIES.filter(
+    ({ canonicalEntry, legacyEntry }) => {
+      return (
+        workspaces.includes(legacyEntry) &&
+        exists(resolve(rootDir, "eliza", canonicalEntry, "package.json")) &&
+        exists(resolve(rootDir, "eliza", legacyEntry, "package.json"))
+      );
+    },
+  ).map(({ legacyEntry }) => legacyEntry);
+
+  if (duplicateLegacyEntries.length === 0) {
+    return [];
+  }
+
+  setPackageWorkspaces(
+    pkg,
+    workspaces.filter(
+      (workspaceEntry) => !duplicateLegacyEntries.includes(workspaceEntry),
+    ),
+  );
+  const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
+  writeFile(packageJsonPath, `${JSON.stringify(pkg, null, indent)}\n`);
+  log(
+    `[init-submodules] Removed duplicate legacy eliza plugin workspace entries (${duplicateLegacyEntries.join(", ")})`,
+  );
+
+  return duplicateLegacyEntries;
 }
 
 export function parseTrackedSubmodules(configOutput) {
@@ -128,33 +310,36 @@ export function runInitSubmodules({
   const gitDir = resolve(rootDir, ".git");
   if (!exists(gitDir)) {
     log("[init-submodules] Not a git repository — skipping");
-    return { initialized: 0, alreadyInitialized: 0, failed: 0, submodules: [] };
+    return emptyInitSubmodulesResult();
   }
 
   const gitmodulesPath = resolve(rootDir, ".gitmodules");
   if (!exists(gitmodulesPath)) {
     log("[init-submodules] No .gitmodules found — skipping");
-    return { initialized: 0, alreadyInitialized: 0, failed: 0, submodules: [] };
+    return emptyInitSubmodulesResult();
   }
 
   const submodules = loadTrackedSubmodules({ exec, cwd: rootDir });
   if (submodules.length === 0) {
     log("[init-submodules] No tracked submodules found — skipping");
-    return { initialized: 0, alreadyInitialized: 0, failed: 0, submodules: [] };
+    return emptyInitSubmodulesResult();
   }
 
   let initialized = 0;
   let alreadyInitialized = 0;
   let failed = 0;
 
-  for (const submodule of submodules) {
-    const skipReason = getSubmoduleSkipReason(submodule.path);
-    if (shouldSkipSubmodule(submodule.path)) {
-      log(
-        `[init-submodules] Skipping ${submodule.name} (${submodule.path}) because ${skipReason ?? "local upstreams are disabled"}`,
-      );
-      continue;
-    }
+  logInitSubmodulesSummary({ ...result, log, logError });
+  pruneSkippedCloudWorkspace({
+    rootDir,
+    exists,
+    log,
+  });
+  pruneDuplicateLegacyElizaPluginWorkspaces({
+    rootDir,
+    exists,
+    log,
+  });
 
     const checkoutReady = isSubmoduleCheckoutReady(submodule.path, {
       rootDir,
@@ -260,5 +445,8 @@ const isDirectRun =
   process.argv[1] && resolve(process.argv[1]) === resolve(scriptFile);
 
 if (isDirectRun) {
-  runInitSubmodules();
+  const result = runInitSubmodules();
+  if (process.env.CI === "true" && result.failed > 0) {
+    process.exit(1);
+  }
 }

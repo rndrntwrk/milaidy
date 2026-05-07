@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import {
   getAppCoreSourceRoot,
@@ -45,7 +44,6 @@ function appCoreBridgeStubPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [appCoreBridgeStubPlugin()],
   resolve: {
     alias: [
       {
@@ -215,6 +213,15 @@ export default defineConfig({
     },
     testTimeout: 30000,
     globals: true,
+    setupFiles: [path.join(here, "test", "setup.ts")],
+    include: ["test/**/*.test.{ts,tsx}"],
+    exclude: [
+      "node_modules/**",
+      "dist/**",
+      "test/**/*.e2e.*",
+      "test/ui-smoke/**",
+      "test/design-review/**",
+    ],
     server: {
       deps: {
         inline: ["@miladyai/app-core"],

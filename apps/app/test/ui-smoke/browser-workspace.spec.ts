@@ -678,6 +678,7 @@ async function startBrowserWorkspaceFixture(): Promise<BrowserWorkspaceFixture> 
 test.beforeEach(async ({ page }) => {
   await installDefaultAppMocks(page);
   await seedAppStorage(page);
+  await installDefaultAppRoutes(page);
 });
 
 test("browser workspace keeps live website tabs mounted while switching between them", async ({

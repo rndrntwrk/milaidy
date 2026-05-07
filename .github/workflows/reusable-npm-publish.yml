@@ -52,10 +52,19 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
+      - name: Initialize eliza source checkout
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
+          fi
+
       - name: Set version in package.json
         run: node eliza/packages/app-core/scripts/set-package-version.mjs
         env:
           RELEASE_VERSION: ${{ inputs.version }}
+
+      - name: Generate eliza i18n keyword data
+        run: node scripts/run-eliza-app-core-script.mjs ensure-shared-i18n-data.mjs
 
       - name: Build
         run: |
@@ -64,7 +73,7 @@ jobs:
           echo '{"type":"module"}' > dist/package.json
 
       - name: Sanitize npm package metadata
-        run: node scripts/sanitize-npm-package-metadata.mjs
+        run: node "$GITHUB_WORKSPACE/eliza/packages/app-core/scripts/sanitize-npm-package-metadata.mjs"
 
       - name: Validate package
         if: inputs.run_validation

@@ -2,6 +2,22 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  parseAllowedHostEnv,
+  toViteAllowedHosts,
+} from "@elizaos/app-core/config/allowed-hosts";
+import { colorizeDevSettingsStartupBanner } from "@elizaos/shared/dev-settings-banner-style";
+import { prependDevSubsystemFigletHeading } from "@elizaos/shared/dev-settings-figlet-heading";
+import {
+  type DevSettingsRow,
+  formatDevSettingsTable,
+} from "@elizaos/shared/dev-settings-table";
+import {
+  resolveDesktopApiPort,
+  resolveDesktopApiPortPreference,
+  resolveDesktopUiPort,
+  resolveDesktopUiPortPreference,
+} from "@elizaos/shared/runtime-env";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import type { Plugin } from "vite";
@@ -398,6 +414,9 @@ function miladyDevSettingsBannerPlugin(): Plugin {
 }
 
 function desktopCorsPlugin(): Plugin {
+  const accessControlAllowHeaders =
+    "Content-Type, Authorization, X-API-Token, X-Api-Key, X-ElizaOS-Client-Id, X-ElizaOS-UI-Language, X-ElizaOS-Token, X-Eliza-Export-Token, X-Eliza-Terminal-Token, X-Milady-CSRF";
+
   return {
     name: "desktop-cors",
     configureServer(server) {
@@ -406,13 +425,14 @@ function desktopCorsPlugin(): Plugin {
         if (!origin || !req.url?.startsWith("/api")) return next();
 
         res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
         res.setHeader(
           "Access-Control-Allow-Methods",
           "GET, POST, PUT, DELETE, OPTIONS",
         );
         res.setHeader(
           "Access-Control-Allow-Headers",
-          "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token, X-Milady-Client-Id, X-Milady-Terminal-Token, X-Milady-UI-Language",
+          accessControlAllowHeaders,
         );
 
         if (req.method === "OPTIONS") {
@@ -532,6 +552,326 @@ function generateNodeBuiltinStub(moduleId: string, req = _require): string {
   }
 
   return lines.join("\n");
+}
+
+const SQL_TABLE_EXPORT_NAMES = [
+  "agentTable",
+  "approvalRequestTable",
+  "authAuditEventTable",
+  "authBootstrapJtiSeenTable",
+  "authIdentityCreatedAtDefault",
+  "authIdentityTable",
+  "authOwnerBindingTable",
+  "authOwnerLoginTokenTable",
+  "authSessionTable",
+  "cacheTable",
+  "channelTable",
+  "channelParticipantsTable",
+  "componentTable",
+  "embeddingTable",
+  "entityTable",
+  "entityIdentityTable",
+  "entityMergeCandidateTable",
+  "factCandidateTable",
+  "logTable",
+  "longTermMemories",
+  "memoryTable",
+  "memoryAccessLogs",
+  "messageTable",
+  "messageServerTable",
+  "messageServerAgentsTable",
+  "pairingAllowlistTable",
+  "pairingRequestTable",
+  "participantTable",
+  "relationshipTable",
+  "roomTable",
+  "serverTable",
+  "sessionSummaries",
+  "taskTable",
+  "worldTable",
+];
+
+function generatePluginSqlStub(strippedId: string): string | null {
+  if (
+    strippedId !== "@elizaos/plugin-sql/schema" &&
+    strippedId !== "@elizaos/plugin-sql"
+  ) {
+    return null;
+  }
+
+  return [
+    "const handler = { get: () => table, apply: () => table };",
+    "const table = new Proxy(function table() {}, handler);",
+    ...SQL_TABLE_EXPORT_NAMES.map((name) => `export const ${name} = table;`),
+    ...(strippedId === "@elizaos/plugin-sql"
+      ? [
+          "export const PGLITE_ERROR_CODES = Object.freeze({ ACTIVE_LOCK: 'ACTIVE_LOCK', CORRUPT_DATA: 'CORRUPT_DATA', MANUAL_RESET_REQUIRED: 'MANUAL_RESET_REQUIRED' });",
+          "export const getPgliteErrorCode = () => null;",
+          "export const createPgliteInitError = (_code, message) => new Error(message);",
+          "export const plugin = table;",
+        ]
+      : []),
+    "export default table;",
+  ].join("\n");
+}
+
+function generateNodeLlamaCppStub(): string {
+  return [
+    "const handler = { get: (_, p) => (p === Symbol.toPrimitive ? () => 0 : typeof p === 'string' ? (() => {}) : undefined) };",
+    "const stub = new Proxy({}, handler);",
+    "export default stub;",
+    "export const getLlama = () => Promise.resolve(stub);",
+    "export const LlamaLogLevel = Object.freeze({ error: 0, warn: 1, info: 2, debug: 3 });",
+    "export const Llama = stub;",
+    "export const LlamaModel = stub;",
+    "export const LlamaEmbeddingContext = stub;",
+    "export const LlamaContext = stub;",
+    "export const LlamaChatSession = stub;",
+    "export const LlamaGrammar = stub;",
+    "export const LlamaJsonSchemaGrammar = stub;",
+  ].join("\n");
+}
+
+function generateFsExtraStub(): string {
+  return [
+    "const noop = () => {};",
+    "const stub = new Proxy({}, { get: () => noop });",
+    "export default stub;",
+    ...[
+      "copy",
+      "copySync",
+      "move",
+      "moveSync",
+      "remove",
+      "removeSync",
+      "ensureDir",
+      "ensureDirSync",
+      "ensureFile",
+      "ensureFileSync",
+      "mkdirs",
+      "mkdirsSync",
+      "readJson",
+      "readJsonSync",
+      "writeJson",
+      "writeJsonSync",
+      "pathExists",
+      "pathExistsSync",
+      "outputFile",
+      "outputFileSync",
+      "outputJson",
+      "outputJsonSync",
+      "emptyDir",
+      "emptyDirSync",
+    ].map((n) => `export const ${n} = noop;`),
+  ].join("\n");
+}
+
+function generateTelegramStub(strippedId: string): string {
+  if (strippedId.startsWith("telegram/sessions")) {
+    return [
+      "export class StringSession { constructor(value = '') { this.value = value; } }",
+      "export default { StringSession };",
+    ].join("\n");
+  }
+
+  return [
+    "const noop = () => {};",
+    "class SignIn { constructor(input = {}) { Object.assign(this, input); } }",
+    "class Authorization { constructor(input = {}) { Object.assign(this, input); } }",
+    "const Api = Object.freeze({ auth: Object.freeze({ SignIn, Authorization }) });",
+    "class TelegramClient {}",
+    "export { Api, TelegramClient };",
+    "export default { Api, TelegramClient, noop };",
+  ].join("\n");
+}
+
+function generateEventsStub(): string {
+  return [
+    "function EventEmitter() {}",
+    "EventEmitter.prototype.on = function() { return this; };",
+    "EventEmitter.prototype.off = function() { return this; };",
+    "EventEmitter.prototype.emit = function() { return false; };",
+    "EventEmitter.prototype.addListener = EventEmitter.prototype.on;",
+    "EventEmitter.prototype.removeListener = EventEmitter.prototype.off;",
+    "export { EventEmitter };",
+    "export default EventEmitter;",
+  ].join("\n");
+}
+
+function generateUndiciStub(): string {
+  return [
+    "export const fetch = globalThis.fetch;",
+    "export const Request = globalThis.Request;",
+    "export const Response = globalThis.Response;",
+    "export const Headers = globalThis.Headers;",
+    "export const FormData = globalThis.FormData;",
+    "export const WebSocket = globalThis.WebSocket;",
+    "export const EventSource = globalThis.EventSource || class {};",
+    "export const AbortController = globalThis.AbortController;",
+    "export const File = globalThis.File;",
+    "export const Blob = globalThis.Blob;",
+    "export class Agent {}",
+    "export class Pool {}",
+    "export class Client {}",
+    "export class Dispatcher {}",
+    "export const setGlobalDispatcher = () => {};",
+    "export const getGlobalDispatcher = () => ({});",
+    "export default { fetch, Request, Response, Headers, WebSocket };",
+  ].join("\n");
+}
+
+function generateAsyncHooksStub(): string {
+  return [
+    "function AsyncLocalStorage() {} AsyncLocalStorage.prototype.getStore = function() { return undefined; }; AsyncLocalStorage.prototype.run = function(store, fn) { return fn.apply(void 0, [].slice.call(arguments, 2)); }; AsyncLocalStorage.prototype.enterWith = function() {}; AsyncLocalStorage.prototype.disable = function() {};",
+    "export { AsyncLocalStorage };",
+    "export function executionAsyncId() { return 0; }",
+    "export function triggerAsyncId() { return 0; }",
+    "export function executionAsyncResource() { return {}; }",
+    "function AsyncResource() {} AsyncResource.prototype.runInAsyncScope = function(fn) { return fn.apply(void 0, [].slice.call(arguments, 1)); }; AsyncResource.prototype.emitDestroy = function() { return this; }; AsyncResource.prototype.asyncId = function() { return 0; }; AsyncResource.prototype.triggerAsyncId = function() { return 0; };",
+    "export { AsyncResource };",
+    "export function createHook() { return { enable: function(){}, disable: function(){} }; }",
+    "export default { AsyncLocalStorage: AsyncLocalStorage, AsyncResource: AsyncResource, executionAsyncId: executionAsyncId, triggerAsyncId: triggerAsyncId, executionAsyncResource: executionAsyncResource, createHook: createHook };",
+  ].join("\n");
+}
+
+function generateSharpStub(): string {
+  return [
+    "function mk() {",
+    "  const c = {",
+    "    rotate() { return c; },",
+    "    resize() { return c; },",
+    "    greyscale() { return c; },",
+    "    png() { return c; },",
+    "    jpeg() { return c; },",
+    "    async toBuffer() { return new Uint8Array(0); },",
+    "    async raw() { return { data: new Uint8Array(0), info: { width: 1, height: 1, channels: 1 } }; },",
+    "  };",
+    "  return c;",
+    "}",
+    "export default function sharp() { return mk(); }",
+  ].join("\n");
+}
+
+function generatePluginSqlDrizzleStub(): string {
+  return [
+    "const expr = {};",
+    "export const and = () => expr;",
+    "export const desc = () => expr;",
+    "export const eq = () => expr;",
+    "export const isNull = () => expr;",
+    "export const lte = () => expr;",
+    "export const ne = () => expr;",
+    "export default expr;",
+  ].join("\n");
+}
+
+function generateCapacitorHapticsStub(): string {
+  return [
+    "const noop = () => {};const noopObj = new Proxy({}, { get: () => noop });",
+    "export const Haptics = noopObj;",
+    "export const ImpactStyle = Object.freeze({ Heavy: 'HEAVY', Medium: 'MEDIUM', Light: 'LIGHT' });",
+    "export const NotificationType = Object.freeze({ Success: 'SUCCESS', Warning: 'WARNING', Error: 'ERROR' });",
+    "export default noopObj;",
+  ].join("\n");
+}
+
+function generateCapacitorKeyboardStub(): string {
+  return [
+    "const noop = () => {};const noopObj = new Proxy({}, { get: () => noop });",
+    "export const Keyboard = noopObj;",
+    "export default noopObj;",
+  ].join("\n");
+}
+
+function generateCapacitorPreferencesStub(): string {
+  return [
+    "const noop = () => Promise.resolve({ value: null });const noopObj = new Proxy({}, { get: () => noop });",
+    "export const Preferences = noopObj;",
+    "export default noopObj;",
+  ].join("\n");
+}
+
+function generateCapacitorPushNotificationsStub(): string {
+  return [
+    "const asyncNoop = async () => {};",
+    "const listenerHandle = { remove: asyncNoop };",
+    "export const PushNotifications = {",
+    "  requestPermissions: async () => ({ receive: 'denied' }),",
+    "  addListener: async () => listenerHandle,",
+    "  register: asyncNoop,",
+    "  removeAllListeners: asyncNoop,",
+    "};",
+    "export default PushNotifications;",
+  ].join("\n");
+}
+
+function generateCapacitorBarcodeScannerStub(): string {
+  return [
+    "const asyncNoop = async () => ({ ScanResult: '' });",
+    "export const CapacitorBarcodeScanner = { scanBarcode: asyncNoop };",
+    "export const CapacitorBarcodeScannerTypeHint = Object.freeze({ QR_CODE: 'QR_CODE' });",
+    "export default CapacitorBarcodeScanner;",
+  ].join("\n");
+}
+
+const CAPACITOR_NATIVE_STUB_GENERATORS = new Map<string, () => string>([
+  ["@capacitor/haptics", generateCapacitorHapticsStub],
+  ["@capacitor/keyboard", generateCapacitorKeyboardStub],
+  ["@capacitor/preferences", generateCapacitorPreferencesStub],
+  ["@capacitor/push-notifications", generateCapacitorPushNotificationsStub],
+  ["@capacitor/barcode-scanner", generateCapacitorBarcodeScannerStub],
+]);
+
+function generateCapacitorNativeStub(strippedId: string): string {
+  const capPkg = strippedId.split("/").slice(0, 2).join("/");
+  const stubGenerator = CAPACITOR_NATIVE_STUB_GENERATORS.get(capPkg);
+  if (stubGenerator) return stubGenerator();
+
+  return [
+    "const noop = () => {};const stub = new Proxy({}, { get: () => noop });",
+    "export default stub;",
+  ].join("\n");
+}
+
+const NATIVE_MODULE_STUB_GENERATORS = new Map<
+  string,
+  (strippedId: string) => string
+>([
+  ["node-llama-cpp", generateNodeLlamaCppStub],
+  ["fs-extra", generateFsExtraStub],
+  ["telegram", generateTelegramStub],
+  ["events", generateEventsStub],
+  ["undici", generateUndiciStub],
+  ["node:async_hooks", generateAsyncHooksStub],
+  ["async_hooks", generateAsyncHooksStub],
+]);
+
+function isSharpStubId(strippedId: string): boolean {
+  return (
+    strippedId === "sharp" ||
+    strippedId.startsWith("sharp/") ||
+    strippedId.startsWith("@img/sharp")
+  );
+}
+
+function generateNativeModuleStub(
+  strippedId: string,
+  capacitorNativeScopeRe: RegExp,
+): string {
+  const modName = strippedId.split("/")[0];
+  const stubGenerator = NATIVE_MODULE_STUB_GENERATORS.get(modName);
+  if (stubGenerator) return stubGenerator(strippedId);
+  if (modName.startsWith("node:")) return generateNodeBuiltinStub(strippedId);
+  if (isSharpStubId(strippedId)) return generateSharpStub();
+  if (strippedId === "@elizaos/plugin-sql/drizzle")
+    return generatePluginSqlDrizzleStub();
+
+  const pluginSqlStub = generatePluginSqlStub(strippedId);
+  if (pluginSqlStub) return pluginSqlStub;
+  if (capacitorNativeScopeRe.test(strippedId))
+    return generateCapacitorNativeStub(strippedId);
+
+  return "export default {};\n";
 }
 
 /**
@@ -748,7 +1088,7 @@ function nativeModuleStubPlugin(): Plugin {
       const normId = id.split(path.sep).join("/");
       const isCorePackagePath =
         normId.includes("/node_modules/@elizaos/core/") ||
-        normId.includes("packages/typescript/dist/");
+        normId.includes("packages/core/dist/");
       if (!isCoreDistFile || !isCorePackagePath) return null;
 
       // Fix AsyncLocalStorage: the browser entry has a try/catch that does
@@ -760,7 +1100,7 @@ function nativeModuleStubPlugin(): Plugin {
         /\(\(\)\s*=>\s*\{\s*throw\s+new\s+Error\(\s*"Cannot require module "\s*\+\s*"node:async_hooks"\s*\)\s*;\s*\}\)\(\)/g,
         "(function(){function A(){} A.prototype.getStore=function(){return undefined};A.prototype.run=function(s,fn){return fn.apply(void 0,[].slice.call(arguments,2))};A.prototype.enterWith=function(){};A.prototype.disable=function(){};return{AsyncLocalStorage:A}})()",
       );
-      // Names that downstream plugins (plugin-secrets-manager, agent runtime)
+      // Names that downstream plugins and the agent runtime
       // import from @elizaos/core but that are missing from the browser entry.
       const missingExports: Record<string, string> = {
         resolveSecretKeyAlias: "function(k){return k}",
@@ -1105,6 +1445,8 @@ export default defineConfig({
       "undici",
       // Native LLM embedding — uses node-llama-cpp, never runs in browser
       "@elizaos/plugin-local-embedding",
+      // OS keychain binding is desktop/server-only and pulls native .node assets.
+      "@napi-rs/keyring",
     ],
   },
   build: {
@@ -1136,7 +1478,12 @@ export default defineConfig({
           ].includes(id)
         )
           return true;
+        // OS keychain native addon. Renderer never calls keyring directly —
+        // it goes through the API. Externalize the umbrella + platform
+        // binaries so Rollup doesn't try to bundle the .node files.
+        if (/^@napi-rs\/keyring(-.+)?$/.test(id)) return true;
         if (/^@node-llama-cpp\//.test(id)) return true;
+        if (/^@napi-rs\/keyring/.test(id)) return true;
         return false;
       },
       input: {

@@ -13,8 +13,6 @@
   },
   "license": "MIT",
   "files": [
-    "dist",
-    "milady.mjs",
     "apps/app/dist",
     "scripts/rt.mjs",
     "scripts/rt.sh",
@@ -151,6 +149,9 @@
     "publish:plugins:next": "cd plugins && bun run publish:next",
     "release:check": "bun scripts/run-node-tsx.mjs scripts/release-check.ts",
     "setup:upstreams": "node scripts/setup-upstreams.mjs",
+    "eliza:local": "node scripts/eliza-source-mode.mjs local --install",
+    "eliza:packages": "node scripts/eliza-source-mode.mjs packages --install",
+    "eliza:packages:alpha": "node scripts/eliza-source-mode.mjs packages --tag alpha --install",
     "desktop:stack-status": "node scripts/desktop-stack-status.mjs",
     "smoke:api-status": "node scripts/smoke-api-status.mjs",
     "smoke:api-status:prod": "node scripts/smoke-api-status.mjs https://milady.ai https://app.milady.ai",
@@ -295,6 +296,7 @@
     "ethers": "^6.16.0",
     "glob": "^13.0.6",
     "json5": "^2.2.3",
+    "jose": "^6.1.0",
     "lucide-react": "^0.577.0",
     "node-llama-cpp": "^3.18.1",
     "node-pty": "^1.1.0",
@@ -309,7 +311,9 @@
     "whatwg-url": "7.1.0",
     "whisper-node": "^1.1.1",
     "ws": "^8.19.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@elizaos/shared": "workspace:*",
+    "@elizaos/ui": "workspace:*"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.7",
