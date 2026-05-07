@@ -49,6 +49,7 @@
     "eliza/plugins/app-phone",
     "eliza/plugins/app-task-coordinator",
     "eliza/plugins/app-training",
+    "eliza/plugins/app-wallet",
     "eliza/plugins/app-wifi",
     "eliza/plugins/plugin-agent-orchestrator",
     "eliza/plugins/plugin-agent-skills",
