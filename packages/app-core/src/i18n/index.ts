@@ -38,6 +38,8 @@ export function normalizeLanguage(input: unknown): UiLanguage {
   if (lower.startsWith("ko")) return "ko";
   if (lower.startsWith("es")) return "es";
   if (lower.startsWith("pt")) return "pt";
+  if (lower.startsWith("vi")) return "vi";
+  if (lower.startsWith("tl") || lower.startsWith("fil")) return "tl";
   return DEFAULT_UI_LANGUAGE;
 }
 
@@ -53,7 +55,11 @@ export function t(
   const normalized = normalizeLanguage(lang);
   const localized = messageForLanguage(normalized);
   const english = messageForLanguage("en");
-  const template = localized[key] ?? english[key] ?? key;
+  const defaultValue =
+    typeof vars?.defaultValue === "string" && vars.defaultValue.trim()
+      ? vars.defaultValue
+      : undefined;
+  const template = localized[key] ?? english[key] ?? defaultValue ?? key;
   return interpolate(template, vars);
 }
 
@@ -66,7 +72,7 @@ export function createTranslator(lang: UiLanguage | string | null | undefined) {
 export {
   DEFAULT_UI_LANGUAGE,
   MESSAGES,
-  UI_LANGUAGES,
   type MessageDict,
+  UI_LANGUAGES,
   type UiLanguage,
 };

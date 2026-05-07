@@ -32,13 +32,19 @@ COHERE_API_KEY                 → @elizaos/plugin-cohere
 PERPLEXITY_API_KEY             → @elizaos/plugin-perplexity
 ELIZAOS_CLOUD_API_KEY          → @elizaos/plugin-elizacloud
 ELIZAOS_CLOUD_ENABLED          → @elizaos/plugin-elizacloud
+ELIZA_USE_PI_AI                → @elizaos/plugin-pi-ai
+CUA_API_KEY                    → @elizaos/plugin-cua
+CUA_HOST                       → @elizaos/plugin-cua
+OBSIDIAN_VAULT_PATH            → @elizaos/plugin-obsidian
+REPOPROMPT_CLI_PATH            → @elizaos/plugin-repoprompt
+CLAUDE_CODE_WORKBENCH_ENABLED  → @elizaos/plugin-claude-code-workbench
 ```
 
 When multiple providers are configured, all are loaded. The `MODEL_PROVIDER` runtime setting (set from `agents.defaults.model.primary`) tells the agent which one to use for generation.
 
-### ElizaCloud Mode
+### Eliza Cloud Mode
 
-When ElizaCloud is active (`cloud.enabled: true` or `cloud.apiKey` is set), all direct AI provider plugins are removed from the load set. ElizaCloud handles all model calls through its gateway:
+When Eliza Cloud is active (`cloud.enabled: true` or `cloud.apiKey` is set), all direct AI provider plugins are removed from the load set. Eliza Cloud handles all model calls through its gateway:
 
 ```typescript
 if (cloudEffectivelyEnabled) {
@@ -71,7 +77,7 @@ The primary model is stored in `agents.defaults.model.primary` as a `"provider/m
 
 ## Cloud Model Defaults
 
-When ElizaCloud is enabled and no explicit model is set:
+When Eliza Cloud is enabled and no explicit model is set:
 
 ```typescript
 const small = models?.small || "openai/gpt-5-mini";

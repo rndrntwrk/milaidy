@@ -1,23 +1,58 @@
-/**
- * Milady Desktop App — Electrobun Main Entry
- *
- * Creates the main BrowserWindow, wires up RPC handlers,
- * sets up system tray, application menu, and starts the agent.
- */
-
 import fs from "node:fs";
 import { createServer as createNetServer } from "node:net";
+import os from "node:os";
 import path from "node:path";
+import {
+  resolveApiToken,
+  resolveDesktopApiPort,
+} from "@miladyai/shared/runtime-env";
 import Electrobun, {
   ApplicationMenu,
+  BrowserView,
   BrowserWindow,
+  BuildConfig,
   Updater,
   Utils,
   WGPU,
   webgpu,
 } from "electrobun/bun";
-import { pushApiBaseToRenderer, resolveExternalApiBase } from "./api-base";
-import { getAgentManager } from "./native/agent";
+import {
+  pushApiBaseToRenderer,
+  resolveDesktopRuntimeMode,
+  resolveExternalApiBase,
+  resolveInitialApiBase,
+  resolveRendererFacingApiBase,
+} from "./api-base";
+import {
+  buildApplicationMenu,
+  EMPTY_HEARTBEAT_MENU_SNAPSHOT,
+  type HeartbeatMenuSnapshot,
+  parseSettingsWindowAction,
+} from "./application-menu";
+import { showBackgroundNoticeOnce } from "./background-notice";
+import { startBrowserWorkspaceBridgeServer } from "./browser-workspace-bridge-server";
+import { readNavigationEventUrl } from "./cloud-auth-window";
+import { scheduleDevtoolsLayoutRefresh } from "./devtools-layout";
+import { getFloatingChatManager } from "./floating-chat-window";
+import {
+  resolveBootstrapShellRenderer,
+  resolveBootstrapViewRenderer,
+  resolveMainWindowPartition,
+  shouldForceMainWindowCef,
+} from "./main-window-session";
+import {
+  buildMainMenuResetApiCandidates,
+  pickReachableMenuResetApiBase,
+  runMainMenuResetAfterApiBaseResolved,
+} from "./menu-reset-from-main";
+import {
+  configureDesktopLocalApiAuth,
+  getAgentManager,
+  getDiagnosticLogPath,
+  getStartupDiagnosticLogTail,
+  getStartupDiagnosticsSnapshot,
+  getStartupStatusPath,
+} from "./native/agent";
 import { getDesktopManager } from "./native/desktop";
 import { disposeNativeModules, initializeNativeModules } from "./native/index";
 import {
@@ -27,93 +62,411 @@ import {
   setTrafficLightsPosition,
 } from "./native/mac-window-effects";
 import { getPermissionManager } from "./native/permissions";
+import { checkWebGpuSupport } from "./native/webgpu-browser-support";
+import { printElectrobunDevSettingsBanner } from "./print-electrobun-dev-settings-banner";
+import { resolveRendererAsset } from "./renderer-static";
 import { registerRpcHandlers } from "./rpc-handlers";
-import { PUSH_CHANNEL_TO_RPC_MESSAGE } from "./rpc-schema";
+import {
+  readResolvedPreloadScript,
+  resolveRendererAssetDir,
+} from "./runtime-layout";
+import { mergeRuntimePermissionStates } from "./runtime-permissions";
+import { startScreenshotDevServer } from "./screenshot-dev-server";
+import { recordStartupPhase, resolveStartupBundlePath } from "./startup-trace";
+import {
+  isDetachedSurface,
+  type ManagedWindowLike,
+  SurfaceWindowManager,
+} from "./surface-windows";
+import type { SendToWebview } from "./types.js";
+import {
+  resolveDesktopBundleVersion,
+  shouldResetWindowsCefProfile,
+  shouldWriteWindowsCefProfileMarker,
+} from "./windows-cef-profile";
 
-type SendToWebview = (message: string, payload?: unknown) => void;
+type HeartbeatMenuTriggerSummary = {
+  enabled: boolean;
+  nextRunAtMs?: number;
+  lastRunAtIso?: string;
+};
 
-// ============================================================================
-// App Menu
-// ============================================================================
+type HeartbeatMenuHealthResponse = {
+  activeTriggers?: number;
+  totalExecutions?: number;
+  totalFailures?: number;
+  lastExecutionAt?: number;
+};
+
+const HEARTBEAT_MENU_REFRESH_MS = 30_000;
+const CONFIG_EXPORT_FILE_NAME = "milady-config.json";
+const STARTUP_CRASH_REPORT_FILE = "startup-crash-report-latest.md";
+const STARTUP_CRASH_PROMPT_MARKER_FILE = "startup-crash-last-prompted.txt";
+let heartbeatMenuSnapshot: HeartbeatMenuSnapshot =
+  EMPTY_HEARTBEAT_MENU_SNAPSHOT;
+let heartbeatMenuRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
+import {
+  isAgentReady,
+  onAgentReadyChange,
+  setAgentReady,
+} from "./agent-ready-state";
+import {
+  isStewardLocalEnabled,
+  onStewardStatusChange,
+  resetSteward,
+  restartSteward,
+  setStewardSendToWebview,
+  startSteward,
+  stopSteward,
+} from "./native/steward";
+
+function resolveDesktopAppIconPath(): string {
+  return path.join(
+    import.meta.dir,
+    process.platform === "win32"
+      ? "../assets/appIcon.ico"
+      : "../assets/appIcon.png",
+  );
+}
+
+function shouldUseBrowserDevtoolsFallback(): boolean {
+  return false;
+}
 
 function setupApplicationMenu(): void {
   const isMac = process.platform === "darwin";
-  ApplicationMenu.setApplicationMenu([
-    {
-      label: "Milady",
-      submenu: [
-        { role: "about" },
-        { type: "separator" as const },
-        { label: "Show Milady", action: "show" },
-        { label: "Check for Updates", action: "check-for-updates" },
-        { label: "Restart Agent", action: "restart-agent" },
-        { type: "separator" as const },
-        // services, hide, hideOthers, unhide are macOS-only menu roles
-        ...(isMac
-          ? [
-              { role: "services" },
-              { type: "separator" as const },
-              { role: "hide" },
-              { role: "hideOthers" },
-              { role: "unhide" },
-              { type: "separator" as const },
-            ]
-          : []),
-        { role: "quit" },
-      ],
-    },
-    {
-      label: "Edit",
-      submenu: [
-        { role: "undo" },
-        { role: "redo" },
-        { type: "separator" as const },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
-      ],
-    },
-    {
-      label: "View",
-      submenu: [
-        { role: "reload" },
-        { role: "forceReload" },
-        { role: "toggleDevTools" },
-        { type: "separator" as const },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
-        { type: "separator" as const },
-        { role: "togglefullscreen" },
-      ],
-    },
-    {
-      label: "Window",
-      submenu: [
-        { role: "minimize" },
-        // zoom and front are macOS-only Window menu roles
-        ...(isMac
-          ? [
-              { role: "zoom" },
-              { type: "separator" as const },
-              { role: "front" },
-            ]
-          : []),
-      ],
-    },
-  ]);
+  const menu = buildApplicationMenu({
+    isMac,
+    browserEnabled: false,
+    heartbeatSnapshot: heartbeatMenuSnapshot,
+    detachedWindows: surfaceWindowManager?.listWindows() ?? [],
+    agentReady: isAgentReady(),
+  });
+  ApplicationMenu.setApplicationMenu(
+    menu as unknown as Parameters<typeof ApplicationMenu.setApplicationMenu>[0],
+  );
 }
 
-// ============================================================================
-// macOS Native Window Effects (vibrancy, shadow, traffic lights, drag region)
-// ============================================================================
+onAgentReadyChange(() => setupApplicationMenu());
+
+function summarizeDesktopActionError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : fallback;
+  const trimmed = message.trim();
+  if (!trimmed) return fallback;
+  return trimmed.length > 80 ? `${trimmed.slice(0, 77)}...` : trimmed;
+}
+
+function summarizeHeartbeatMenuError(error: unknown): string {
+  return summarizeDesktopActionError(error, "Heartbeat status unavailable");
+}
+
+function buildApiRequestHeaders(contentType?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (contentType) {
+    headers["Content-Type"] = contentType;
+  }
+  let apiToken = resolveApiToken(process.env);
+  if (!apiToken) {
+    const rt = resolveDesktopRuntimeMode(
+      process.env as Record<string, string | undefined>,
+    );
+    if (rt.mode === "local") {
+      apiToken = configureDesktopLocalApiAuth().trim();
+    }
+  }
+  if (apiToken) {
+    headers.Authorization = `Bearer ${apiToken}`;
+  }
+  return headers;
+}
+
+function resolveHeartbeatMenuApiBase(): string | null {
+  const port = getAgentManager().getStatus().port;
+  if (typeof port === "number" && port > 0) {
+    return `http://127.0.0.1:${port}`;
+  }
+  return resolveInitialApiBase(process.env);
+}
+
+/**
+ * Picks a loopback API base the main process can actually reach.
+ *
+ * **WHY:** `resolveHeartbeatMenuApiBase()` falls back to `resolveInitialApiBase`,
+ * which in **external** mode is `MILADY_DESKTOP_API_BASE` (often :31337). If that
+ * dev server is down but the **embedded** agent is still running on a dynamic
+ * port, menu Reset must not blindly POST to the dead env URL.
+ */
+async function resolveReachableApiBaseForMainReset(): Promise<string | null> {
+  const candidates = buildMainMenuResetApiCandidates({
+    embeddedPort: getAgentManager().getStatus().port,
+    configuredBase: resolveInitialApiBase(process.env),
+  });
+  if (candidates.length === 0) {
+    return null;
+  }
+  const base = await pickReachableMenuResetApiBase({
+    candidates,
+    fetchImpl: fetch,
+    buildHeaders: buildApiRequestHeaders,
+  });
+  if (base) {
+    console.info("[Main][reset] Using reachable API base", {
+      base,
+      tried: candidates,
+    });
+  } else {
+    console.warn("[Main][reset] No reachable API base among candidates", {
+      tried: candidates,
+    });
+  }
+  return base;
+}
+
+/**
+ * App menu "Reset Milady…" — confirm + HTTP reset + restart in the **main process**.
+ *
+ * **WHY not renderer `fetch`:** after native `showMessageBox`, WKWebView may not run
+ * network/bridge work on the same turn, so reset appeared hung. **WHY push
+ * `menu-reset-milady-applied`:** renderer must still run the same local wipe as
+ * Settings (`completeResetLocalStateAfterServerWipe`); main only supplies a fresh
+ * `/api/status` snapshot as `agentStatus`. Orchestration core: `menu-reset-from-main.ts`.
+ *
+ * @see `docs/apps/desktop-main-process-reset.md`
+ */
+async function resetMiladyFromApplicationMenu(): Promise<void> {
+  console.info(
+    "[Main][reset] App menu: Reset Milady — confirm + POST /api/agent/reset + restart (main process)",
+  );
+  await getDesktopManager()
+    .showWindow()
+    .catch((err: unknown) => {
+      console.warn(
+        "[Main][reset] showWindow failed (continuing):",
+        err instanceof Error ? err.message : err,
+      );
+    });
+
+  const box = await Utils.showMessageBox({
+    type: "warning",
+    title: "Reset Agent",
+    message:
+      "This will reset the agent: config, cloud keys, and local agent database (conversations / memory).",
+    detail:
+      "Downloaded GGUF embedding models are kept. You will return to the onboarding wizard.",
+    buttons: ["Reset", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  const response =
+    box && typeof box === "object" && "response" in box
+      ? (box as { response: number }).response
+      : typeof box === "number"
+        ? box
+        : 1;
+  if (response !== 0) {
+    console.info("[Main][reset] User cancelled native confirm");
+    return;
+  }
+
+  const apiBase = await resolveReachableApiBaseForMainReset();
+  if (!apiBase) {
+    Utils.showNotification({
+      title: "Reset Failed",
+      body: "Could not reach the Milady API (tried embedded port and MILADY_DESKTOP_API_BASE / defaults). Start the agent or dev server, or fix your API base env.",
+    });
+    return;
+  }
+
+  try {
+    const runtimeMode = resolveDesktopRuntimeMode(
+      process.env as Record<string, string | undefined>,
+    );
+
+    await runMainMenuResetAfterApiBaseResolved({
+      apiBase,
+      fetchImpl: fetch,
+      buildHeaders: buildApiRequestHeaders,
+      useEmbeddedRestart: runtimeMode.mode === "local",
+      restartEmbeddedClearingLocalDb: async () => {
+        const status = await getAgentManager().restartClearingLocalDb();
+        return { port: status.port ?? undefined };
+      },
+      pushEmbeddedApiBaseToRenderer: (port, apiToken) => {
+        if (currentWindow) {
+          const base = port
+            ? resolveRendererFacingApiBase(
+                process.env as Record<string, string | undefined>,
+                port,
+              )
+            : resolveInitialApiBase(process.env);
+          if (base) {
+            // Route through pushRendererApiBase so the renderer stays
+            // on rendererSelfBase in packaged mode after a reset —
+            // otherwise a raw push here would overwrite __MILADY_API_BASE__
+            // with the new agent port and break same-origin /api/* proxying.
+            pushRendererApiBase(currentWindow, base, apiToken);
+          }
+        }
+      },
+      getLocalApiAuthToken: () => configureDesktopLocalApiAuth(),
+      postExternalAgentRestart: async () => {
+        try {
+          await fetch(`${apiBase}/api/agent/restart`, {
+            method: "POST",
+            headers: buildApiRequestHeaders(),
+          });
+        } catch {
+          /* 409 / race while restarting — poll below */
+        }
+      },
+      resolveApiBaseForStatusPoll: () =>
+        resolveHeartbeatMenuApiBase() ?? apiBase,
+      sendMenuResetAppliedToRenderer: (payload) => {
+        sendToActiveRenderer("desktopTrayMenuClick", payload);
+      },
+    });
+    console.info(
+      "[Main][reset] Pushed menu-reset-milady-applied to renderer with /api/status snapshot",
+    );
+  } catch (err) {
+    console.error("[Main][reset] Main-process reset failed:", err);
+    Utils.showNotification({
+      title: "Reset Failed",
+      body: summarizeDesktopActionError(err, "Reset failed"),
+    });
+  }
+}
+
+async function fetchHeartbeatMenuSnapshot(
+  apiBase: string,
+): Promise<HeartbeatMenuSnapshot> {
+  const headers = buildApiRequestHeaders();
+
+  const [triggersResponse, healthResponse] = await Promise.all([
+    fetch(`${apiBase}/api/triggers`, { headers }),
+    fetch(`${apiBase}/api/triggers/health`, { headers }),
+  ]);
+
+  if (!triggersResponse.ok) {
+    throw new Error(`Trigger list failed (${triggersResponse.status})`);
+  }
+  if (!healthResponse.ok) {
+    throw new Error(`Trigger health failed (${healthResponse.status})`);
+  }
+
+  const triggersPayload = (await triggersResponse.json()) as {
+    triggers?: HeartbeatMenuTriggerSummary[];
+  };
+  const healthPayload =
+    (await healthResponse.json()) as HeartbeatMenuHealthResponse;
+
+  const triggers = Array.isArray(triggersPayload.triggers)
+    ? triggersPayload.triggers
+    : [];
+  const enabledTriggers = triggers.filter((trigger) => trigger.enabled);
+
+  const nextRunCandidates = enabledTriggers
+    .map((trigger) =>
+      typeof trigger.nextRunAtMs === "number" ? trigger.nextRunAtMs : null,
+    )
+    .filter((value): value is number => typeof value === "number");
+
+  const lastRunCandidates = triggers
+    .map((trigger) => {
+      if (!trigger.lastRunAtIso) return null;
+      const parsed = Date.parse(trigger.lastRunAtIso);
+      return Number.isNaN(parsed) ? null : parsed;
+    })
+    .filter((value): value is number => typeof value === "number");
+
+  return {
+    loading: false,
+    error: null,
+    totalHeartbeats: triggers.length,
+    activeHeartbeats:
+      typeof healthPayload.activeTriggers === "number"
+        ? healthPayload.activeTriggers
+        : enabledTriggers.length,
+    totalExecutions:
+      typeof healthPayload.totalExecutions === "number"
+        ? healthPayload.totalExecutions
+        : 0,
+    totalFailures:
+      typeof healthPayload.totalFailures === "number"
+        ? healthPayload.totalFailures
+        : 0,
+    lastRunAtMs:
+      typeof healthPayload.lastExecutionAt === "number"
+        ? healthPayload.lastExecutionAt
+        : lastRunCandidates.length > 0
+          ? Math.max(...lastRunCandidates)
+          : null,
+    nextRunAtMs:
+      nextRunCandidates.length > 0 ? Math.min(...nextRunCandidates) : null,
+  };
+}
+let heartbeatRefreshInProgress = false;
+
+async function refreshHeartbeatMenuSnapshot(): Promise<void> {
+  if (heartbeatRefreshInProgress) {
+    return;
+  }
+  heartbeatRefreshInProgress = true;
+
+  try {
+    const apiBase = resolveHeartbeatMenuApiBase();
+    if (!apiBase) {
+      heartbeatMenuSnapshot = {
+        ...heartbeatMenuSnapshot,
+        loading: false,
+        error: "Agent unavailable",
+      };
+      setupApplicationMenu();
+      return;
+    }
+
+    try {
+      heartbeatMenuSnapshot = await fetchHeartbeatMenuSnapshot(apiBase);
+    } catch (error) {
+      heartbeatMenuSnapshot = {
+        ...heartbeatMenuSnapshot,
+        loading: false,
+        error: summarizeHeartbeatMenuError(error),
+      };
+    }
+
+    setupApplicationMenu();
+  } finally {
+    heartbeatRefreshInProgress = false;
+  }
+}
+
+function startHeartbeatMenuRefresh(): void {
+  if (heartbeatMenuRefreshTimer) return;
+  void refreshHeartbeatMenuSnapshot();
+  heartbeatMenuRefreshTimer = setInterval(() => {
+    void refreshHeartbeatMenuSnapshot();
+  }, HEARTBEAT_MENU_REFRESH_MS);
+}
 
 const MAC_TRAFFIC_LIGHTS_X = 14;
 const MAC_TRAFFIC_LIGHTS_Y = 12;
+/** Left inset of the drag strip so it clears the traffic lights. */
 const MAC_NATIVE_DRAG_REGION_X = 92;
-const MAC_NATIVE_DRAG_REGION_HEIGHT = 40;
+/**
+ * Top drag strip height == right/bottom/BR overlay thickness (points).
+ * `0` → native derives depth from `window.screen` (HiDPI / ultrawide); positive pins.
+ */
+const MAC_NATIVE_DRAG_REGION_HEIGHT = 0;
 
+/**
+ * Vibrancy, shadow, traffic lights, and native chrome layout. Re-calls native
+ * layout whenever the window or webview subtree may have reordered so the drag
+ * view stays above WKWebView.
+ */
 function applyMacOSWindowEffects(win: BrowserWindow): void {
   if (process.platform !== "darwin") return;
 
@@ -139,24 +492,30 @@ function applyMacOSWindowEffects(win: BrowserWindow): void {
       MAC_NATIVE_DRAG_REGION_HEIGHT,
     );
 
-  alignButtons();
-  alignDragRegion();
-  setTimeout(() => {
+  const alignChrome = () => {
     alignButtons();
     alignDragRegion();
-  }, 120);
+  };
 
-  win.on("resize", () => {
-    alignButtons();
-    alignDragRegion();
-  });
+  alignChrome();
+  setTimeout(alignChrome, 120);
 
-  console.log("[MacEffects] Native macOS window effects applied");
+  win.on("resize", alignChrome);
+  // Display (NSScreen) changes without a resize edge case — depth uses window.screen.
+  win.on("move", alignChrome);
+
+  // WKWebView is often inserted or reordered after first layout; restack native
+  // views so drag/resize strips stay hit-testable above the page.
+  try {
+    win.webview.on("dom-ready", () => {
+      alignChrome();
+      setTimeout(alignChrome, 50);
+      setTimeout(alignChrome, 300);
+    });
+  } catch {
+    // webview may not accept listeners yet in some embed paths
+  }
 }
-
-// ============================================================================
-// Window State Persistence
-// ============================================================================
 
 interface WindowState {
   x: number;
@@ -165,25 +524,59 @@ interface WindowState {
   height: number;
 }
 
+/**
+ * Fresh-install default: a generous 1440x900 window centered-ish
+ * near the top-left of the primary display. Maximize-on-launch (see
+ * createMainWindow) then expands this to fill the screen on every
+ * boot, so this default only matters for brand-new installs on
+ * systems where maximize() hasn't registered yet.
+ */
 const DEFAULT_WINDOW_STATE: WindowState = {
-  x: 100,
-  y: 100,
-  width: 1200,
-  height: 800,
+  x: 60,
+  y: 60,
+  width: 1440,
+  height: 900,
 };
 
-function loadWindowState(statePath: string): WindowState {
+/**
+ * Marker value we stamp into the saved state when we'd like the next
+ * launch to open maximized. Kept as a synthetic "pending-maximize" flag
+ * rather than a real bool so it piggybacks on the existing
+ * width/height/x/y schema without a migration.
+ */
+const MAXIMIZE_ON_LAUNCH_SENTINEL = 1;
+
+interface PersistedWindowState extends WindowState {
+  /** When truthy, call win.maximize() right after creation. */
+  shouldMaximize?: number;
+}
+
+function loadWindowState(statePath: string): PersistedWindowState {
   try {
     if (fs.existsSync(statePath)) {
       const data = JSON.parse(fs.readFileSync(statePath, "utf8"));
       if (typeof data.width === "number" && typeof data.height === "number") {
-        return { ...DEFAULT_WINDOW_STATE, ...data };
+        const state = { ...DEFAULT_WINDOW_STATE, ...data };
+        // Discard state saved while the window was minimized.  On Windows,
+        // minimized windows report position (-32000, -32000) and a tiny
+        // size, which makes the window invisible on next launch.
+        if (state.width < 200 || state.height < 200 || state.x < -16000) {
+          return {
+            ...DEFAULT_WINDOW_STATE,
+            shouldMaximize: MAXIMIZE_ON_LAUNCH_SENTINEL,
+          };
+        }
+        return state;
       }
     }
-  } catch {
-    // Ignore parse/read errors — return default
-  }
-  return DEFAULT_WINDOW_STATE;
+  } catch {}
+  // No saved state → first launch. Open maximized so the user gets a
+  // usable workspace immediately instead of a small window in the
+  // corner they have to resize themselves.
+  return {
+    ...DEFAULT_WINDOW_STATE,
+    shouldMaximize: MAXIMIZE_ON_LAUNCH_SENTINEL,
+  };
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -194,6 +587,10 @@ function scheduleStateSave(statePath: string, win: BrowserWindow): void {
     try {
       const { x, y } = win.getPosition();
       const { width, height } = win.getSize();
+      // Skip saving when the window is minimized — Windows reports
+      // position (-32000, -32000) and a collapsed size, which would make
+      // the window invisible on next launch.
+      if (width < 200 || height < 200 || x < -16000) return;
       const dir = path.dirname(statePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(
@@ -201,29 +598,153 @@ function scheduleStateSave(statePath: string, win: BrowserWindow): void {
         JSON.stringify({ x, y, width, height }),
         "utf8",
       );
-    } catch {
-      // Ignore save errors
-    }
+    } catch {}
   }, 500);
 }
 
-// ============================================================================
-// Main Window
-// ============================================================================
-
 let currentWindow: BrowserWindow | null = null;
 let currentSendToWebview: SendToWebview | null = null;
+let surfaceWindowManager: SurfaceWindowManager | null = null;
 let rendererUrlPromise: Promise<string> | null = null;
 let backgroundWindowPromise: Promise<void> | null = null;
 let isQuitting = false;
 
-function sendToActiveRenderer(message: string, payload?: unknown): void {
-  currentSendToWebview?.(message, payload);
+function requestAppQuit(): void {
+  isQuitting = true;
+  Utils.quit();
 }
 
-// ============================================================================
-// Renderer Static Server
-// ============================================================================
+const cleanupFns: Array<() => void | Promise<void>> = [];
+let lastFocusedWindow: ManagedWindowLike | null = null;
+const macOpenedDevtoolsWindowIds = new Set<number>();
+
+async function openBrowserDevtoolsFallback(
+  targetWindow: ManagedWindowLike | BrowserWindow | null,
+): Promise<void> {
+  const currentUrl = (
+    targetWindow?.webview as { url?: string | null } | undefined
+  )?.url;
+  const url = currentUrl?.trim() || (await resolveRendererUrl());
+
+  if (!/^https?:\/\//i.test(url)) {
+    Utils.showNotification({
+      title: "Developer Tools Unavailable",
+      body: "Native macOS Electrobun devtools are disabled, and the renderer URL is not browser-openable.",
+    });
+    return;
+  }
+
+  Utils.openExternal(url);
+  Utils.showNotification({
+    title: "Opened Renderer in Browser",
+    body: "Native macOS Electrobun devtools are disabled due to a WKWebView crash/layout bug. Use browser devtools instead.",
+  });
+}
+
+function sendToActiveRenderer(message: string, payload?: unknown): void {
+  currentSendToWebview?.(message, payload);
+  if (!currentSendToWebview) {
+    const level =
+      message === "desktopTrayMenuClick" ? console.warn : console.debug;
+    level.call(
+      console,
+      "[Main] Dropped renderer message (no window):",
+      message,
+    );
+  }
+}
+
+/**
+ * Module-scope renderer self-base — set by startRendererServer() when the
+ * electrobun shell serves its own static dist (packaged builds and dev runs
+ * that don't have MILADY_RENDERER_URL / VITE_DEV_SERVER_URL pointing at
+ * Vite). While set, pushRendererApiBase() prefers this over the raw agent
+ * URL so the renderer stays on a single origin and WKWebView doesn't block
+ * /api/* requests — the reverse proxy in the Bun.serve handler below
+ * forwards those requests to the real agent.
+ *
+ * Null in Vite dev mode (alice's dev-platform.mjs sets MILADY_RENDERER_URL,
+ * so startRendererServer is never called — Vite's own proxy handles /api).
+ */
+let rendererSelfBase: string | null = null;
+
+/**
+ * True when the given base URL lives on loopback (127.0.0.1, ::1,
+ * localhost). The reverse-proxy same-origin strategy only works for
+ * loopback because the Bun.serve forwarder dials 127.0.0.1:<port>; a
+ * remote API base has to stay cross-origin and rely on CORS.
+ */
+function isLoopbackBase(base: string): boolean {
+  try {
+    const host = new URL(base).hostname.toLowerCase();
+    return (
+      host === "127.0.0.1" ||
+      host === "localhost" ||
+      host === "::1" ||
+      host === "[::1]"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Centralised wrapper for pushApiBaseToRenderer that enforces the
+ * same-origin rendererSelfBase override. Every code path that wants to
+ * push a new API base to the renderer (agent start, reset, restart,
+ * window-create, SKIP_AGENT short-circuit) MUST go through here —
+ * otherwise an agent-port push via apiBaseUpdate will overwrite
+ * window.__MILADY_API_BASE__ and put the renderer back on cross-origin
+ * fetches, defeating the reverse-proxy fix.
+ *
+ * Rules:
+ *   - rendererSelfBase unset (Vite dev mode, file://): push realBase as-is
+ *   - realBase is non-loopback (remote external API): push realBase (the
+ *     Bun.serve proxy only dials 127.0.0.1; remote APIs must handle CORS)
+ *   - rendererSelfBase set AND realBase is loopback: push selfBase so the
+ *     reverse-proxy routes /api/* through the same origin
+ */
+function pushRendererApiBase(
+  win: BrowserWindow,
+  realBase: string,
+  apiToken?: string,
+): void {
+  const base =
+    rendererSelfBase && isLoopbackBase(realBase) ? rendererSelfBase : realBase;
+  pushApiBaseToRenderer(win, base, apiToken);
+}
+
+/**
+ * Standard WebSocket.send() (used by the upstream client in the /ws
+ * reverse proxy) expects `string | ArrayBufferLike | Blob |
+ * ArrayBufferView`. Bun's ServerWebSocket message handler delivers
+ * messages as `string | Buffer` (Buffer extends Uint8Array). Newer
+ * TypeScript narrows Uint8Array's backing buffer to `ArrayBufferLike`
+ * (not `ArrayBuffer`), which trips WebSocket.send's strict
+ * ArrayBufferView<ArrayBuffer> parameter. This helper normalizes
+ * Uint8Array to a fresh ArrayBuffer slice so the runtime-correct
+ * send passes the typechecker too.
+ */
+function sendToUpstreamWs(
+  upstream: WebSocket,
+  msg: string | ArrayBuffer | Uint8Array,
+): void {
+  if (typeof msg === "string") {
+    upstream.send(msg);
+    return;
+  }
+  if (msg instanceof ArrayBuffer) {
+    upstream.send(msg);
+    return;
+  }
+  // Uint8Array (possibly a Node Buffer). Slice the underlying buffer so
+  // we only send the view's window, not the whole backing store.
+  const copy = msg.buffer.slice(
+    msg.byteOffset,
+    msg.byteOffset + msg.byteLength,
+  ) as ArrayBuffer;
+  upstream.send(copy);
+}
 
 /**
  * Serve the renderer dist over HTTP so WKWebView can load it without
@@ -231,7 +752,7 @@ function sendToActiveRenderer(message: string, payload?: unknown): void {
  * Returns the base URL e.g. "http://localhost:5174".
  */
 async function startRendererServer(): Promise<string> {
-  const rendererDir = path.resolve(import.meta.dir, "../renderer");
+  const rendererDir = resolveRendererAssetDir(import.meta.dir);
   if (!fs.existsSync(rendererDir)) {
     console.warn("[Renderer] renderer dir not found:", rendererDir);
     return "";
@@ -260,24 +781,39 @@ async function startRendererServer(): Promise<string> {
     ".svg": "image/svg+xml",
     ".ico": "image/x-icon",
     ".json": "application/json",
+    ".gz": "application/octet-stream",
     ".wasm": "application/wasm",
     ".glb": "model/gltf-binary",
     ".gltf": "model/gltf+json",
+    ".vrm": "model/gltf-binary",
   };
 
-  // Determine the expected agent API base URL so we can inject it into the
-  // HTML before the renderer JS runs. This prevents a 404 fatal-error loop
-  // where the renderer fetches /api/auth/status relative to the static server.
-  // If the agent falls back to a dynamic port, apiBaseUpdate messages will
-  // update window.__MILADY_API_BASE__ and the client will pick it up lazily.
-  const agentPort = Number(process.env.MILADY_PORT) || 2138;
-  // Use 127.0.0.1 explicitly: on Windows 11, "localhost" resolves to ::1 (IPv6)
-  // by default, but the agent server binds to 127.0.0.1 (IPv4), causing ECONNREFUSED.
-  const agentApiBase = `http://127.0.0.1:${agentPort}`;
+  // The renderer server now reverse-proxies /api/* and /ws to the agent
+  // backend (see the Bun.serve fetch handler below), so the frontend can
+  // use relative paths on a single origin. We inject window.__MILADY_API_BASE__
+  // pointing at the renderer itself so legacy code that reads the global
+  // keeps working — every /api/* fetch off that base still lands on the
+  // proxy, which forwards to the real agent. Keeping the API base same-origin
+  // avoids the WKWebView 404 fatal-error loop on /api/auth/status.
+  //
+  // We also stash selfBase on a module-scope binding so injectApiBase(win)
+  // can prefer it over the raw agent URL later in the startup flow — without
+  // that, the real agent base gets pushed via apiBaseUpdate and overwrites
+  // __MILADY_API_BASE__, putting the renderer back on cross-origin fetches.
+  //
+  // Alice's resolveInitialApiBase is still called in heartbeat-menu and
+  // launch-config paths above; it is intentionally no longer used here.
+  const selfBase = `http://127.0.0.1:${port}`;
+  rendererSelfBase = selfBase;
+  const initialApiToken =
+    resolveDesktopRuntimeMode(process.env as Record<string, string | undefined>)
+      .mode === "local"
+      ? configureDesktopLocalApiAuth()
+      : (resolveApiToken(process.env) ?? "");
 
   // Inject the API base into index.html so it's available before React mounts.
   function injectApiBaseIntoHtml(html: string): string {
-    const script = `<script>window.__MILADY_API_BASE__=${JSON.stringify(agentApiBase)};</script>`;
+    const script = `<script>window.__MILADY_API_BASE__=${JSON.stringify(selfBase)};${initialApiToken ? `Object.defineProperty(window,"__MILADY_API_TOKEN__",{value:${JSON.stringify(initialApiToken)},configurable:true,writable:true,enumerable:false});` : ""}</script>`;
     // Inject before </head> if present, otherwise before <body>
     if (html.includes("</head>")) {
       return html.replace("</head>", `${script}</head>`);
@@ -288,46 +824,311 @@ async function startRendererServer(): Promise<string> {
     return script + html;
   }
 
+  const resolveRendererCacheControl = (
+    pathname: string,
+    mimeExt: string,
+  ): string => {
+    if (pathname.startsWith("/assets/")) {
+      return "public, max-age=31536000, immutable";
+    }
+    if (
+      mimeExt === ".vrm" ||
+      pathname.endsWith(".vrm.gz") ||
+      pathname.startsWith("/vrms/previews/") ||
+      pathname.startsWith("/vrms/backgrounds/") ||
+      [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".avif",
+        ".svg",
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".m4a",
+        ".aac",
+        ".flac",
+        ".glb",
+      ].includes(mimeExt)
+    ) {
+      return "public, max-age=86400";
+    }
+    return "public, max-age=0, must-revalidate";
+  };
+
+  // Reverse-proxy target for /api/* and /ws so the renderer and the agent
+  // share the same origin (WKWebView will block cross-origin fetches that
+  // don't explicitly opt in).
+  //
+  // Alice convention: MILADY_PORT = UI dev port (Vite), MILADY_API_PORT /
+  // ELIZA_API_PORT / ELIZA_PORT = API server port. resolveDesktopApiPort
+  // reads the API-port env precedence — falling back to DEFAULT_API_PORT
+  // when none are set (packaged-agent default). This is the opposite of
+  // main's assumption where MILADY_PORT meant API port; that would route
+  // the proxy to Vite on alice and break everything.
+  //
+  // Resolve per-request (not captured at setup time) so agent restarts on
+  // a new port (alice's AgentManager can reallocate) still route correctly.
+  // Precedence: live AgentManager.getPort() → external API base from env →
+  // resolveDesktopApiPort default.
+  const resolveAgentBase = (): string => {
+    try {
+      const livePort = getAgentManager().getPort();
+      if (livePort) return `http://127.0.0.1:${livePort}`;
+    } catch {
+      /* agent manager not initialised yet */
+    }
+    const external = resolveExternalApiBase(
+      process.env as Record<string, string | undefined>,
+    ).base;
+    if (external && isLoopbackBase(external)) {
+      return external;
+    }
+    return `http://127.0.0.1:${resolveDesktopApiPort(process.env)}`;
+  };
+
   Bun.serve({
     port,
     hostname: "127.0.0.1",
-    fetch(req) {
-      const urlPath =
-        new URL(req.url).pathname.replace(/^\//, "") || "index.html";
-      let filePath = path.join(rendererDir, urlPath);
-      // Path traversal guard: ensure resolved path stays within rendererDir
-      if (
-        !filePath.startsWith(rendererDir + path.sep) &&
-        filePath !== rendererDir
-      ) {
-        filePath = path.join(rendererDir, "index.html");
+    async fetch(req, server) {
+      const url = new URL(req.url);
+
+      // WebSocket upgrade for /ws — alice's api/client-base.ts and
+      // api/client.ts both build `ws://${host}/ws?clientId=…` off the
+      // current __MILADY_API_BASE__. Because that base is now selfBase
+      // in packaged builds, the renderer WS handshake lands here instead
+      // of on the real agent. We upgrade the incoming request to a
+      // ServerWebSocket and open an upstream WebSocket to the agent —
+      // see the `websocket` handler below for the pipe logic.
+      //
+      // We stash the original search string on ws.data so the upstream
+      // URL preserves the clientId query param (alice's client relies on
+      // it for session correlation).
+      if (url.pathname === "/ws") {
+        const upgraded = server.upgrade(req, {
+          data: {
+            search: url.search,
+            upstream: null as WebSocket | null,
+            queue: [] as (string | ArrayBuffer | Uint8Array)[],
+          } satisfies RendererWsData,
+        });
+        if (upgraded) {
+          return undefined;
+        }
+        return new Response("WebSocket upgrade required", { status: 426 });
       }
-      // SPA fallback — serve index.html for unknown paths
-      if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-        filePath = path.join(rendererDir, "index.html");
+
+      // Reverse-proxy /api/* to the agent backend as a plain HTTP
+      // forward. Alice still uses the pushApiBaseToRenderer /
+      // apiBaseUpdate channel for dynamic base updates; this proxy is
+      // only for renderer-side relative fetches against
+      // window.__MILADY_API_BASE__ which now equals selfBase.
+      if (url.pathname.startsWith("/api/")) {
+        try {
+          const target = `${resolveAgentBase()}${url.pathname}${url.search}`;
+          const proxyRes = await fetch(target, {
+            method: req.method,
+            headers: req.headers,
+            body:
+              req.method !== "GET" && req.method !== "HEAD"
+                ? req.body
+                : undefined,
+            redirect: "manual",
+          });
+          const resHeaders = new Headers(proxyRes.headers);
+          resHeaders.set("Access-Control-Allow-Origin", "*");
+          return new Response(proxyRes.body, {
+            status: proxyRes.status,
+            statusText: proxyRes.statusText,
+            headers: resHeaders,
+          });
+        } catch {
+          return new Response(JSON.stringify({ error: "Agent unavailable" }), {
+            status: 502,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
       }
+
+      // Handle CORS preflight for /api/* so renderer code that accidentally
+      // fires a cross-origin request (e.g., an explicit origin override)
+      // still gets a sane response.
+      if (req.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers":
+              "Content-Type, Authorization, X-Milady-Token, X-Api-Key",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+
+      const { filePath, isGzipped, mimeExt } = resolveRendererAsset({
+        rendererDir,
+        urlPath: url.pathname,
+        existsSync: fs.existsSync,
+        statSync: fs.statSync,
+      });
+
       try {
         const content = fs.readFileSync(filePath);
-        const ext = path.extname(filePath);
         // Inject API base into HTML responses
-        if (ext === ".html" || filePath.endsWith("index.html")) {
+        if (mimeExt === ".html" || filePath.endsWith("index.html")) {
           const html = injectApiBaseIntoHtml(content.toString("utf8"));
           return new Response(html, {
             headers: {
               "Content-Type": "text/html; charset=utf-8",
               "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=0, must-revalidate",
             },
           });
         }
-        return new Response(content, {
-          headers: {
-            "Content-Type": mimeTypes[ext] ?? "application/octet-stream",
-            "Access-Control-Allow-Origin": "*",
-          },
-        });
+
+        const headers: Record<string, string> = {
+          "Content-Type": mimeTypes[mimeExt] ?? "application/octet-stream",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": resolveRendererCacheControl(url.pathname, mimeExt),
+        };
+
+        if (isGzipped) {
+          headers["Content-Encoding"] = "gzip";
+        }
+
+        return new Response(content, { headers });
       } catch {
         return new Response("Not found", { status: 404 });
       }
+    },
+    // WebSocket proxy handlers — piped to the real agent /ws endpoint.
+    // Every upgrade goes through fetch() above, which opens a
+    // ServerWebSocket here in `open()`, connects to the upstream agent
+    // via a client WebSocket, and then forwards messages in both
+    // directions. Closes propagate either way, and messages that arrive
+    // before the upstream is OPEN get buffered.
+    websocket: {
+      // TypeScript: this shape types ws.data across all lifecycle hooks.
+      // The actual object comes from server.upgrade(req, { data: ... }).
+      data: {} as RendererWsData,
+      open(ws) {
+        const agentHttpBase = resolveAgentBase();
+        let upstreamUrl: string;
+        try {
+          const parsed = new URL(agentHttpBase);
+          const wsProto = parsed.protocol === "https:" ? "wss:" : "ws:";
+          upstreamUrl = `${wsProto}//${parsed.host}/ws${ws.data.search}`;
+        } catch {
+          console.warn(
+            `[RendererWs] invalid agent base: ${agentHttpBase}`,
+          );
+          try {
+            ws.close(1011, "upstream-base-invalid");
+          } catch {
+            /* already closed */
+          }
+          return;
+        }
+
+        let upstream: WebSocket;
+        try {
+          upstream = new WebSocket(upstreamUrl);
+        } catch (err) {
+          console.warn(`[RendererWs] failed to open upstream:`, err);
+          try {
+            ws.close(1011, "upstream-connect-failed");
+          } catch {
+            /* already closed */
+          }
+          return;
+        }
+        ws.data.upstream = upstream;
+
+        upstream.addEventListener("open", () => {
+          // Flush messages that arrived from the renderer before the
+          // upstream socket reached OPEN — alice's client sends its
+          // {type:"auth",token:…} immediately in onopen, so this buffer
+          // is load-bearing for auth handshake correctness.
+          const pending = ws.data.queue;
+          ws.data.queue = [];
+          for (const msg of pending) {
+            try {
+              sendToUpstreamWs(upstream, msg);
+            } catch (err) {
+              console.warn(`[RendererWs] drain send failed:`, err);
+            }
+          }
+        });
+
+        upstream.addEventListener("message", (ev) => {
+          const payload = ev.data;
+          try {
+            if (typeof payload === "string") {
+              ws.send(payload);
+            } else if (payload instanceof ArrayBuffer) {
+              ws.send(payload);
+            } else if (payload instanceof Uint8Array) {
+              ws.send(payload);
+            } else if (payload && typeof (payload as Blob).arrayBuffer === "function") {
+              // Blob (rare in Node runtime, but `WebSocket` spec permits it)
+              (payload as Blob)
+                .arrayBuffer()
+                .then((buf) => ws.send(buf))
+                .catch((err) =>
+                  console.warn(`[RendererWs] blob forward failed:`, err),
+                );
+            }
+          } catch (err) {
+            console.warn(`[RendererWs] downstream send failed:`, err);
+          }
+        });
+
+        upstream.addEventListener("close", (ev) => {
+          try {
+            ws.close(ev.code || 1000, ev.reason || "");
+          } catch {
+            /* already closed */
+          }
+        });
+
+        upstream.addEventListener("error", (err) => {
+          console.warn(`[RendererWs] upstream error:`, err);
+          try {
+            ws.close(1011, "upstream-error");
+          } catch {
+            /* already closed */
+          }
+        });
+      },
+      message(ws, message) {
+        const upstream = ws.data.upstream;
+        if (!upstream) return;
+        // WebSocket.OPEN === 1. If the upstream isn't ready yet, buffer
+        // the message for the `open` handler to flush. Discard on CLOSING
+        // or CLOSED to avoid exceptions — the client will see the close
+        // event the upstream already propagated.
+        if (upstream.readyState === WebSocket.OPEN) {
+          try {
+            sendToUpstreamWs(upstream, message);
+          } catch (err) {
+            console.warn(`[RendererWs] upstream send failed:`, err);
+          }
+        } else if (upstream.readyState === WebSocket.CONNECTING) {
+          ws.data.queue.push(message);
+        }
+      },
+      close(ws) {
+        try {
+          ws.data.upstream?.close();
+        } catch {
+          /* already closed */
+        }
+        ws.data.upstream = null;
+        ws.data.queue = [];
+      },
     },
   });
 
@@ -335,8 +1136,27 @@ async function startRendererServer(): Promise<string> {
   return `http://127.0.0.1:${port}`;
 }
 
+/**
+ * Per-connection state for the /ws reverse proxy ServerWebSocket.
+ *   - search: the original query string from the renderer's upgrade
+ *     request (e.g. `?clientId=…`), appended verbatim to the upstream
+ *     agent WebSocket URL so session correlation works.
+ *   - upstream: the client-side WebSocket connected to the agent. Null
+ *     until the upgrade handler installs one (and between failed
+ *     connections + close).
+ *   - queue: messages received from the renderer while `upstream` is
+ *     still CONNECTING — flushed once `open` fires on the upstream.
+ */
+interface RendererWsData {
+  search: string;
+  upstream: WebSocket | null;
+  queue: (string | ArrayBuffer | Uint8Array)[];
+}
+
 async function resolveRendererUrl(): Promise<string> {
-  // Resolve the renderer URL — prefer env override (dev HMR), then built-in static server
+  // Prefer MILADY_RENDERER_URL / VITE_DEV_SERVER_URL when set (e.g. dev-platform.mjs watch mode).
+  // Why: Vite HMR only works against the dev server; serving pre-built dist from this static
+  // server would force a full rebuild for every UI change.
   let rendererUrl =
     process.env.MILADY_RENDERER_URL ?? process.env.VITE_DEV_SERVER_URL ?? "";
 
@@ -347,7 +1167,7 @@ async function resolveRendererUrl(): Promise<string> {
 
   if (!rendererUrl) {
     // Last resort: file:// (may have CORS issues with crossorigin module scripts)
-    rendererUrl = `file://${path.resolve(import.meta.dir, "../renderer/index.html")}`;
+    rendererUrl = `file://${path.join(resolveRendererAssetDir(import.meta.dir), "index.html")}`;
     console.warn(
       "[Main] Falling back to file:// renderer URL — CORS issues possible",
     );
@@ -358,49 +1178,116 @@ async function resolveRendererUrl(): Promise<string> {
 
 async function createMainWindow(): Promise<BrowserWindow> {
   const rendererUrl = await resolveRendererUrl();
-
-  // Load persisted window state
-  const statePath = path.join(Utils.paths.userData, "window-state.json");
-  const state = loadWindowState(statePath);
-
-  // Read the pre-built webview bridge preload (built by `bun run build:preload`).
-  // The preload runs in the webview context after Electrobun's built-in preload,
-  // setting up window.electron as a compatibility shim over the Electrobun RPC.
-  const preloadPath = path.join(import.meta.dir, "preload.js");
-  const preload = fs.existsSync(preloadPath)
-    ? fs.readFileSync(preloadPath, "utf8")
-    : null;
-
-  if (!preload) {
-    console.warn(
-      "[Main] preload.js not found — run `bun run build:preload` first. window.electron will be unavailable.",
+  const mainWindowPartition = resolveMainWindowPartition(process.env);
+  if (mainWindowPartition) {
+    console.log(
+      `[Main] Using isolated main window partition ${mainWindowPartition}`,
     );
   }
 
-  const win = new BrowserWindow({
-    title: "Milady",
-    url: rendererUrl,
-    preload,
-    frame: {
-      width: state.width,
-      height: state.height,
-      x: state.x,
-      y: state.y,
-    },
-    // hiddenInset hides the title bar and insets traffic lights — macOS only.
-    // On Windows/Linux use the default title bar so the window remains draggable.
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // Transparent background for vibrancy — macOS only.
-    // On Windows/Linux a solid background prevents rendering artifacts.
-    transparent: process.platform === "darwin",
-  });
+  const statePath = path.join(Utils.paths.userData, "window-state.json");
+  const state = loadWindowState(statePath);
 
-  // Apply native macOS vibrancy, shadow, and traffic light positioning
+  let preload: string;
+  try {
+    preload = readResolvedPreloadScript(import.meta.dir);
+  } catch (err) {
+    console.error("[Main] Failed to read preload script:", err);
+    preload = "// preload unavailable";
+  }
+
+  const windowFrame = {
+    width: state.width,
+    height: state.height,
+    x: state.x,
+    y: state.y,
+  };
+  const titleBarStyle =
+    process.platform === "darwin" ? "hiddenInset" : "default";
+  const transparent = process.platform === "darwin";
+  const buildInfo = await BuildConfig.get();
+  const forceMainWindowCef = shouldForceMainWindowCef(process.env);
+  const canUseCefView = buildInfo.availableRenderers.includes("cef");
+  const useIsolatedMainView =
+    (process.platform === "win32" && mainWindowPartition) ||
+    (forceMainWindowCef && canUseCefView && !!mainWindowPartition);
+
+  if (forceMainWindowCef && !canUseCefView) {
+    console.warn(
+      "[Main] MILADY_DESKTOP_FORCE_CEF=1 requested, but this Electrobun build does not bundle the CEF renderer. Falling back to the native renderer.",
+    );
+  }
+
+  let win: BrowserWindow;
+  if (useIsolatedMainView) {
+    win = new BrowserWindow({
+      title: "Milady",
+      // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
+      icon: resolveDesktopAppIconPath(),
+      url: null,
+      preload: null,
+      frame: windowFrame,
+      renderer: resolveBootstrapShellRenderer(buildInfo),
+      titleBarStyle,
+      transparent,
+    });
+    win.webview.remove();
+    const mainView = new BrowserView({
+      url: rendererUrl,
+      // @ts-expect-error: BrowserView preload exists at runtime but is not typed yet.
+      preload,
+      renderer: forceMainWindowCef
+        ? "cef"
+        : resolveBootstrapViewRenderer(buildInfo),
+      partition: mainWindowPartition,
+      frame: {
+        x: 0,
+        y: 0,
+        width: state.width,
+        height: state.height,
+      },
+      windowId: win.id,
+    });
+    win.webviewId = mainView.id;
+    if (forceMainWindowCef) {
+      console.log(
+        `[Main] Using CEF main-window workaround with persistent partition ${mainWindowPartition}`,
+      );
+    }
+  } else {
+    win = new BrowserWindow({
+      title: "Milady",
+      // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
+      icon: resolveDesktopAppIconPath(),
+      url: rendererUrl,
+      preload,
+      frame: windowFrame,
+      titleBarStyle,
+      transparent,
+    });
+  }
+
   applyMacOSWindowEffects(win);
-
-  // Persist window state on resize and move
   win.on("resize", () => scheduleStateSave(statePath, win));
   win.on("move", () => scheduleStateSave(statePath, win));
+
+  // First-launch ergonomics: when there's no saved state (or the
+  // saved state was garbage and we're falling back to defaults), open
+  // the window maximized so the user gets a full workspace instead of
+  // a 1440x900 rectangle in the corner they have to resize by hand.
+  // Subsequent launches skip this because loadWindowState returns the
+  // real persisted dimensions without the shouldMaximize sentinel.
+  if (state.shouldMaximize === MAXIMIZE_ON_LAUNCH_SENTINEL) {
+    try {
+      (win as unknown as { maximize?: () => void }).maximize?.();
+    } catch (err) {
+      // Non-fatal — if maximize() isn't available on this electrobun
+      // build, the window still opens at the default dimensions.
+      console.warn(
+        `[main-window] maximize() failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   return win;
 }
@@ -409,6 +1296,7 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
   const sendToWebview = wireRpcAndModules(win);
   currentWindow = win;
   currentSendToWebview = sendToWebview;
+  trackFocusedWindow(win);
 
   win.webview.on("dom-ready", () => {
     injectApiBase(win);
@@ -417,35 +1305,44 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
   // Prevent the main webview from navigating to external URLs.
   // The renderer is always served from localhost — any other navigation
   // (e.g. from a compromised plugin) should open in the default browser.
-  win.webview.on(
-    "will-navigate",
-    (e: { url?: string; preventDefault?: () => void }) => {
-      const url = e.url ?? "";
-      try {
-        const parsed = new URL(url);
-        const isAllowed =
-          parsed.protocol === "file:" ||
-          parsed.hostname === "localhost" ||
-          parsed.hostname === "127.0.0.1" ||
-          parsed.protocol === "views:";
-        if (!isAllowed) {
-          e.preventDefault?.();
-          void import("electrobun/bun").then(({ Utils }) => {
-            Utils.openExternal(url).catch(() => {});
-          });
-        }
-      } catch {
-        // Unparseable URL — block it.
+  win.webview.on("will-navigate", (event: unknown) => {
+    const e = event as {
+      url?: string;
+      data?: { detail?: string };
+      preventDefault?: () => void;
+    };
+    const url = readNavigationEventUrl(e);
+    try {
+      const parsed = new URL(url);
+      const isAllowed =
+        parsed.protocol === "file:" ||
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.protocol === "views:";
+      if (!isAllowed) {
         e.preventDefault?.();
+        void import("electrobun/bun")
+          .then(({ Utils }) => {
+            try {
+              Utils.openExternal(url);
+            } catch {
+              // Ignore external open failures during navigation blocking.
+            }
+          })
+          .catch(() => {});
       }
-    },
-  );
+    } catch {
+      // Unparseable URL — block it.
+      e.preventDefault?.();
+    }
+  });
 
   win.on("close", () => {
     if (currentWindow?.id === win.id) {
       currentWindow = null;
       currentSendToWebview = null;
     }
+    getDesktopManager().clearMainWindow(win);
 
     if (!isQuitting) {
       void ensureBackgroundWindow();
@@ -456,31 +1353,229 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
 }
 
 async function ensureBackgroundWindow(): Promise<void> {
-  if (isQuitting || currentWindow || backgroundWindowPromise) {
+  if (isQuitting || currentWindow) {
     return;
   }
 
-  backgroundWindowPromise = (async () => {
-    const replacementWindow = attachMainWindow(await createMainWindow());
+  // Don't recreate the window — just keep the process alive in the
+  // background (exitOnLastWindowClosed is false in electrobun.config.ts).
+  // The dock icon click fires the "reopen" event which restores the window.
+  console.log("[Main] Window closed — agent continues in background");
+  showBackgroundRunNoticeOnce();
+}
+
+/** Restore or recreate the main window (called on dock icon click). */
+async function restoreWindow(): Promise<void> {
+  if (currentWindow) {
     try {
-      replacementWindow.minimize();
-      console.log("[Main] Recreated minimized window after close");
-    } catch (err) {
-      console.warn("[Main] Failed to minimize background window:", err);
+      currentWindow.unminimize();
+      currentWindow.focus();
+    } catch {
+      // unminimize/focus may not be available
     }
-    injectApiBase(replacementWindow);
+    return;
+  }
+  if (backgroundWindowPromise) {
+    await backgroundWindowPromise;
+    return;
+  }
+  backgroundWindowPromise = (async () => {
+    const win = attachMainWindow(await createMainWindow());
+    injectApiBase(win);
+    console.log("[Main] Restored window from dock click");
   })().finally(() => {
     backgroundWindowPromise = null;
   });
-
   await backgroundWindowPromise;
 }
 
-// ============================================================================
-// RPC + Native Module Wiring
-// ============================================================================
+function showBackgroundRunNoticeOnce(): void {
+  try {
+    showBackgroundNoticeOnce({
+      fileSystem: fs,
+      userDataDir: Utils.paths.userData,
+      showNotification: (options) => {
+        Utils.showNotification(options);
+      },
+    });
+  } catch (error) {
+    console.warn("[Main] Failed to persist background notice marker:", error);
+  }
+}
 
-// Type alias for the untyped rpc send proxy (used at runtime for push messages)
+async function createSettingsWindow(tabHint?: string): Promise<void> {
+  if (!surfaceWindowManager) return;
+  await surfaceWindowManager.openSettingsWindow(tabHint);
+}
+
+async function showMainSurface(surface: string): Promise<void> {
+  if (!currentWindow) {
+    await restoreWindow();
+  }
+  void getDesktopManager().showWindow();
+  sendToActiveRenderer("desktopTrayMenuClick", {
+    itemId: `show-main:${surface}`,
+  });
+}
+
+function resolveDefaultDialogPath(): string {
+  const downloadsPath = path.join(os.homedir(), "Downloads");
+  return fs.existsSync(downloadsPath) ? downloadsPath : os.homedir();
+}
+
+async function exportConfigFromMenu(): Promise<void> {
+  const apiBase = resolveHeartbeatMenuApiBase();
+  if (!apiBase) {
+    Utils.showNotification({
+      title: "Config Export Failed",
+      body: "Agent unavailable",
+    });
+    return;
+  }
+
+  try {
+    const response = await fetch(`${apiBase}/api/config`, {
+      headers: buildApiRequestHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Config fetch failed (${response.status})`);
+    }
+
+    const config = await response.json();
+    const dialog = await getDesktopManager().showSaveDialog({
+      defaultPath: resolveDefaultDialogPath(),
+      allowedFileTypes: "json",
+    });
+    if (dialog.canceled || dialog.filePaths.length === 0) {
+      return;
+    }
+
+    const outputPath = path.join(dialog.filePaths[0], CONFIG_EXPORT_FILE_NAME);
+    fs.writeFileSync(
+      outputPath,
+      `${JSON.stringify(config, null, 2)}\n`,
+      "utf8",
+    );
+
+    Utils.showNotification({
+      title: "Config Exported",
+      body: `Saved to ${outputPath}`,
+    });
+  } catch (error) {
+    Utils.showNotification({
+      title: "Config Export Failed",
+      body: summarizeDesktopActionError(error, "Config export failed"),
+    });
+  }
+}
+
+async function importConfigFromMenu(): Promise<void> {
+  const apiBase = resolveHeartbeatMenuApiBase();
+  if (!apiBase) {
+    Utils.showNotification({
+      title: "Config Import Failed",
+      body: "Agent unavailable",
+    });
+    return;
+  }
+
+  try {
+    const dialog = await getDesktopManager().showOpenDialog({
+      defaultPath: resolveDefaultDialogPath(),
+      allowedFileTypes: "json",
+      canChooseFiles: true,
+      canChooseDirectory: false,
+      allowsMultipleSelection: false,
+    });
+    if (dialog.canceled || dialog.filePaths.length === 0) {
+      return;
+    }
+
+    const inputPath = dialog.filePaths[0];
+    const rawConfig = fs.readFileSync(inputPath, "utf8");
+    const parsedConfig = JSON.parse(rawConfig) as unknown;
+    if (
+      typeof parsedConfig !== "object" ||
+      parsedConfig === null ||
+      Array.isArray(parsedConfig)
+    ) {
+      throw new Error("Config file must contain a JSON object");
+    }
+
+    const response = await fetch(`${apiBase}/api/config`, {
+      method: "PUT",
+      headers: buildApiRequestHeaders("application/json"),
+      body: JSON.stringify(parsedConfig),
+    });
+    if (!response.ok) {
+      throw new Error(`Config import failed (${response.status})`);
+    }
+
+    Utils.showNotification({
+      title: "Config Imported",
+      body: `Loaded ${path.basename(inputPath)}`,
+    });
+  } catch (error) {
+    Utils.showNotification({
+      title: "Config Import Failed",
+      body: summarizeDesktopActionError(error, "Config import failed"),
+    });
+  }
+}
+
+function trackFocusedWindow(window: ManagedWindowLike): void {
+  lastFocusedWindow = window;
+  window.on("focus", () => {
+    lastFocusedWindow = window;
+    const windowId = (window as { id?: number }).id;
+    if (
+      process.platform === "darwin" &&
+      typeof windowId === "number" &&
+      macOpenedDevtoolsWindowIds.has(windowId)
+    ) {
+      scheduleDevtoolsLayoutRefresh(window);
+    }
+  });
+  window.on("close", () => {
+    const windowId = (window as { id?: number }).id;
+    if (typeof windowId === "number") {
+      macOpenedDevtoolsWindowIds.delete(windowId);
+    }
+  });
+}
+
+function toggleFocusedWindowDevTools(): void {
+  const targetWindow = lastFocusedWindow ?? currentWindow;
+  const webview = targetWindow?.webview as
+    | {
+        toggleDevTools?: () => void;
+        openDevTools?: () => void;
+      }
+    | undefined;
+
+  if (shouldUseBrowserDevtoolsFallback()) {
+    void openBrowserDevtoolsFallback(targetWindow);
+    return;
+  }
+
+  if (typeof webview?.toggleDevTools === "function") {
+    webview.toggleDevTools();
+    scheduleDevtoolsLayoutRefresh(targetWindow);
+    return;
+  }
+
+  if (typeof webview?.openDevTools === "function") {
+    webview.openDevTools();
+    scheduleDevtoolsLayoutRefresh(targetWindow);
+    return;
+  }
+
+  Utils.showNotification({
+    title: "Developer Tools Unavailable",
+    body: "The focused window does not expose Electrobun devtools controls.",
+  });
+}
+
 type RpcSendProxy = Record<string, ((payload: unknown) => void) | undefined>;
 
 /**
@@ -503,17 +1598,11 @@ type ElectrobunRpcInstance = {
 function wireRpcAndModules(
   win: BrowserWindow,
 ): (message: string, payload?: unknown) => void {
-  // Access the rpc instance from the webview (set during window creation)
-  const rpc = win.webview.rpc as unknown as ElectrobunRpcInstance | undefined;
+  const rpc = win.webview.rpc as ElectrobunRpcInstance | undefined;
 
-  // Create the sendToWebview callback that native modules use to push events.
-  // Uses typed RPC push messages instead of JS evaluation.
   const sendToWebview = (message: string, payload?: unknown): void => {
-    // Resolve via map (Electron-style colon format) or use message directly
-    // as the RPC method name (Electrobun camelCase format).
-    const rpcMessage = PUSH_CHANNEL_TO_RPC_MESSAGE[message] ?? message;
     if (rpc?.send) {
-      const sender = rpc?.send?.[rpcMessage];
+      const sender = rpc?.send?.[message];
       if (sender) {
         sender(payload ?? null);
         return;
@@ -522,47 +1611,76 @@ function wireRpcAndModules(
     console.warn(`[sendToWebview] No RPC method for message: ${message}`);
   };
 
-  // Initialize native modules with window + sendToWebview
   initializeNativeModules(win, sendToWebview);
-
-  // Register RPC handlers
+  setStewardSendToWebview(sendToWebview);
   registerRpcHandlers(rpc, sendToWebview);
 
   return sendToWebview;
 }
 
-// ============================================================================
-// API Base Injection
-// ============================================================================
+/**
+ * Wire RPC handlers on a secondary window (e.g. settings) without calling
+ * initializeNativeModules — avoids overwriting the main window reference on
+ * DesktopManager and other singletons.
+ */
+function wireSettingsRpc(win: BrowserWindow): void {
+  const rpc = win.webview.rpc as unknown as ElectrobunRpcInstance | undefined;
+
+  const sendToWebview = (message: string, payload?: unknown): void => {
+    if (rpc?.send) {
+      const sender = rpc?.send?.[message];
+      if (sender) {
+        sender(payload ?? null);
+        return;
+      }
+    }
+    console.warn(
+      `[sendToWebview:settings] No RPC method for message: ${message}`,
+    );
+  };
+
+  // Register request handlers on the settings window's RPC — reuses the same
+  // handler registry but does not touch native module singletons.
+  registerRpcHandlers(rpc, sendToWebview);
+}
 
 function injectApiBase(win: BrowserWindow): void {
-  const resolution = resolveExternalApiBase(
+  const runtimeResolution = resolveDesktopRuntimeMode(
     process.env as Record<string, string | undefined>,
   );
 
-  if (resolution.invalidSources.length > 0) {
+  if (runtimeResolution.externalApi.invalidSources.length > 0) {
     console.warn(
-      `[Main] Invalid API base env vars: ${resolution.invalidSources.join(", ")}`,
+      `[Main] Invalid API base env vars: ${runtimeResolution.externalApi.invalidSources.join(", ")}`,
     );
   }
 
-  // If we have an external API base, push it to the renderer.
-  if (resolution.base) {
-    pushApiBaseToRenderer(win, resolution.base, process.env.MILADY_API_TOKEN);
+  if (
+    runtimeResolution.mode === "external" &&
+    runtimeResolution.externalApi.base
+  ) {
+    pushRendererApiBase(
+      win,
+      runtimeResolution.externalApi.base,
+      resolveApiToken(process.env) ?? undefined,
+    );
+    setAgentReady(true);
     return;
   }
 
-  // Otherwise fall back to the agent's local server URL.
   const agent = getAgentManager();
-  const port = agent.getPort();
-  if (port) {
-    pushApiBaseToRenderer(win, `http://127.0.0.1:${port}`);
-  }
+  const port = agent.getPort() ?? resolveDesktopApiPort(process.env);
+  const apiToken = configureDesktopLocalApiAuth();
+  pushRendererApiBase(
+    win,
+    resolveRendererFacingApiBase(
+      process.env as Record<string, string | undefined>,
+      port,
+    ),
+    apiToken,
+  );
+  setAgentReady(true);
 }
-
-// ============================================================================
-// Agent Startup
-// ============================================================================
 
 /**
  * Push real OS permission states into the agent REST API so the renderer's
@@ -573,7 +1691,10 @@ async function syncPermissionsToRestApi(
   startup = false,
 ): Promise<void> {
   try {
-    const permissions = await getPermissionManager().checkAllPermissions();
+    const permissions = await mergeRuntimePermissionStates(
+      port,
+      await getPermissionManager().checkAllPermissions(),
+    );
     await fetch(`http://127.0.0.1:${port}/api/permissions/state`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -584,21 +1705,47 @@ async function syncPermissionsToRestApi(
   }
 }
 
-async function startAgent(win: BrowserWindow): Promise<void> {
+async function _startAgent(win: BrowserWindow): Promise<void> {
+  const runtimeResolution = resolveDesktopRuntimeMode(
+    process.env as Record<string, string | undefined>,
+  );
+
+  if (runtimeResolution.mode !== "local") {
+    console.log(
+      `[Main] Skipping embedded agent startup (${runtimeResolution.mode} mode)`,
+    );
+    injectApiBase(win);
+    return;
+  }
+
   const agent = getAgentManager();
+  recordStartupPhase("autostart_requested", {
+    pid: process.pid,
+    exec_path: process.execPath,
+    bundle_path: resolveStartupBundlePath(process.execPath),
+  });
 
   try {
     const status = await agent.start();
 
-    // If agent started and no external API base is configured,
-    // push the agent's local API base to the renderer.
     if (status.state === "running" && status.port) {
-      const resolution = resolveExternalApiBase(
-        process.env as Record<string, string | undefined>,
+      const apiToken = resolveApiToken(process.env) ?? undefined;
+      // Route through pushRendererApiBase so the same-origin override
+      // still applies after the embedded agent starts. Without this
+      // wrapper, the raw agent port would be pushed to the renderer
+      // via apiBaseUpdate, overwriting __MILADY_API_BASE__ and putting
+      // every subsequent /api/* fetch back on the cross-origin path
+      // that WKWebView blocks — exactly the 404 fatal-error loop the
+      // reverse-proxy fix was meant to prevent.
+      pushRendererApiBase(
+        win,
+        resolveRendererFacingApiBase(
+          process.env as Record<string, string | undefined>,
+          status.port,
+        ),
+        apiToken,
       );
-      if (!resolution.base) {
-        pushApiBaseToRenderer(win, `http://127.0.0.1:${status.port}`);
-      }
+      setAgentReady(true);
       // Sync real OS permission states to the REST API so the renderer
       // can display them and capability toggles can unlock.
       // Pass startup=true so the backend skips scheduling a restart for
@@ -610,13 +1757,26 @@ async function startAgent(win: BrowserWindow): Promise<void> {
   }
 }
 
-// ============================================================================
-// Auto-Updater
-// ============================================================================
-
 async function setupUpdater(): Promise<void> {
   const runUpdateCheck = async (notifyOnNoUpdate = false): Promise<void> => {
     try {
+      const updaterState = await getDesktopManager().getUpdaterState();
+      if (!updaterState.canAutoUpdate) {
+        if (updaterState.autoUpdateDisabledReason) {
+          console.info(
+            "[Updater] Skipping auto-update check:",
+            updaterState.autoUpdateDisabledReason,
+          );
+          if (notifyOnNoUpdate) {
+            Utils.showNotification({
+              title: "Updates Unavailable",
+              body: updaterState.autoUpdateDisabledReason,
+            });
+          }
+        }
+        return;
+      }
+
       const updateResult = await Updater.checkForUpdate();
       if (updateResult?.updateAvailable) {
         Updater.downloadUpdate().catch((err: unknown) => {
@@ -664,14 +1824,108 @@ async function setupUpdater(): Promise<void> {
     });
 
     const triggerManualUpdateCheck = () => {
+      Utils.showNotification({
+        title: "Checking for Updates",
+        body: "Milady is checking for a newer release.",
+      });
       void runUpdateCheck(true);
     };
 
     Electrobun.events.on(
       "application-menu-clicked",
-      (e: { data?: { action?: string } }) => {
-        if (e?.data?.action === "check-for-updates") {
+      async (e: { data?: { action?: string } }) => {
+        const action = e?.data?.action;
+
+        // If the main window is gone and the action targets it, restore first.
+        if (!currentWindow && action && !action.startsWith("focus-window:")) {
+          await restoreWindow();
+        }
+        if (action === "check-for-updates") {
           triggerManualUpdateCheck();
+        } else if (action === "open-about") {
+          const updaterState = await getDesktopManager().getUpdaterState();
+          const version = updaterState.currentVersion || "unknown";
+          Utils.showNotification({
+            title: "About Milady",
+            body: `Version ${version} (${process.platform}/${process.arch})`,
+          });
+          void createSettingsWindow("updates");
+        } else if (action === "export-config") {
+          void exportConfigFromMenu();
+        } else if (action === "import-config") {
+          void importConfigFromMenu();
+        } else if (action === "toggle-devtools") {
+          toggleFocusedWindowDevTools();
+        } else if (action === "refresh-heartbeats") {
+          void refreshHeartbeatMenuSnapshot();
+        } else if (action === "relaunch") {
+          void getDesktopManager().relaunch();
+        } else if (action === "reset-milady") {
+          void resetMiladyFromApplicationMenu();
+        } else if (
+          action === "open-settings" ||
+          action?.startsWith("open-settings-")
+        ) {
+          void createSettingsWindow(parseSettingsWindowAction(action));
+        } else if (action?.startsWith("new-window:")) {
+          const surface = action.slice("new-window:".length);
+          if (surfaceWindowManager && isDetachedSurface(surface)) {
+            void surfaceWindowManager.openSurfaceWindow(surface);
+          }
+        } else if (action?.startsWith("focus-window:")) {
+          const windowId = action.slice("focus-window:".length);
+          surfaceWindowManager?.focusWindow(windowId);
+        } else if (action?.startsWith("show-main:")) {
+          const surface = action.slice("show-main:".length);
+          showMainSurface(surface);
+        } else if (action === "focus-main-window") {
+          void getDesktopManager().focusWindow();
+        } else if (action === "hide-main-window") {
+          void getDesktopManager().hideWindow();
+        } else if (action === "maximize-main-window") {
+          void getDesktopManager().maximizeWindow();
+        } else if (action === "restore-main-window") {
+          void getDesktopManager().unmaximizeWindow();
+        } else if (action === "desktop-notify") {
+          void getDesktopManager().showNotification({
+            title: "Milady Desktop",
+            body: "Native application menu actions are wired and responding.",
+            urgency: "normal",
+          });
+        } else if (action === "restart-steward") {
+          if (isStewardLocalEnabled()) {
+            restartSteward().catch((err: unknown) => {
+              console.error("[Main] Steward restart failed:", err);
+              Utils.showNotification({
+                title: "Steward Restart Failed",
+                body: err instanceof Error ? err.message : "Unknown error",
+              });
+            });
+          }
+        } else if (action === "reset-steward") {
+          if (isStewardLocalEnabled()) {
+            resetSteward().catch((err: unknown) => {
+              console.error("[Main] Steward reset failed:", err);
+              Utils.showNotification({
+                title: "Steward Reset Failed",
+                body: err instanceof Error ? err.message : "Unknown error",
+              });
+            });
+          }
+        } else if (action === "restart-agent") {
+          getAgentManager()
+            .restart()
+            .catch((err: unknown) => {
+              console.error("[Main] Agent restart failed:", err);
+            });
+        } else if (action === "quit") {
+          void getDesktopManager().quit();
+        } else if (action === "show") {
+          void getDesktopManager().showWindow();
+        } else if (action?.startsWith("navigate-")) {
+          // Show main window + push tab change to renderer
+          void getDesktopManager().showWindow();
+          sendToActiveRenderer("desktopTrayMenuClick", { itemId: action });
         }
       },
     );
@@ -679,6 +1933,10 @@ async function setupUpdater(): Promise<void> {
     Electrobun.events.on("context-menu-clicked", (action: string) => {
       if (action === "check-for-updates") {
         triggerManualUpdateCheck();
+      } else if (action === "refresh-heartbeats") {
+        void refreshHeartbeatMenuSnapshot();
+      } else if (action === "relaunch") {
+        void getDesktopManager().relaunch();
       }
     });
 
@@ -688,36 +1946,73 @@ async function setupUpdater(): Promise<void> {
   }
 }
 
-// ============================================================================
-// Deep Link Handling
-// ============================================================================
-
 function setupDeepLinks(): void {
-  // Electrobun handles urlSchemes from config automatically.
-  // Listen for open-url events to route deep links to the renderer.
   Electrobun.events.on("open-url", (url: string) => {
     sendToActiveRenderer("shareTargetReceived", { url });
   });
 }
 
-// ============================================================================
-// Shutdown
-// ============================================================================
-
-function setupShutdown(cleanupFns: Array<() => void>): void {
-  Electrobun.events.on("before-quit", () => {
-    isQuitting = true;
-    console.log("[Main] App quitting, disposing native modules...");
-    for (const cleanupFn of cleanupFns) {
-      cleanupFn();
-    }
-    disposeNativeModules();
+function setupDockReopen(): void {
+  Electrobun.events.on("reopen", () => {
+    void restoreWindow();
   });
 }
 
-// ============================================================================
-// Bootstrap
-// ============================================================================
+async function runShutdownCleanup(reason: string): Promise<void> {
+  console.log(`[Main] App quitting (${reason}), disposing native modules...`);
+  isQuitting = true;
+  sendToActiveRenderer("desktopShutdownStarted", { reason });
+  for (const cleanupFn of cleanupFns) {
+    await Promise.resolve(cleanupFn());
+  }
+  await disposeNativeModules();
+}
+
+function setupShutdown(): void {
+  Electrobun.events.on("before-quit", () => {
+    void runShutdownCleanup("before-quit");
+  });
+}
+
+/**
+ * Load repo-root and ~/.eliza/.env into `process.env` (non-destructive) so the
+ * main process can send the same `MILADY_API_TOKEN` as `dev-server.ts` when
+ * calling loopback APIs (app menu reset, export, etc.). The dev API child
+ * already loads dotenv; Electrobun did not until this ran.
+ *
+ * Packaged desktop builds must not load these files. On machines that also
+ * have a Milady/Eliza dev checkout, ~/.eliza/.env can contain
+ * MILADY_DESKTOP_API_BASE and related overrides that switch the packaged app
+ * into external mode and make launcher startup appear dead.
+ */
+async function loadMiladyEnvFilesForMain(): Promise<void> {
+  const normalizedModuleDir = import.meta.dir.replaceAll("\\", "/");
+  const isPackagedBuild = !normalizedModuleDir.includes("/src/");
+  if (isPackagedBuild) {
+    return;
+  }
+
+  try {
+    const { config } = await import("dotenv");
+    const repoRootGuess = path.resolve(
+      normalizedModuleDir,
+      "..",
+      "..",
+      "..",
+      "..",
+    );
+    for (const envPath of [
+      path.join(repoRootGuess, ".env"),
+      path.join(os.homedir(), ".eliza", ".env"),
+    ]) {
+      if (fs.existsSync(envPath)) {
+        config({ path: envPath, override: false });
+      }
+    }
+  } catch {
+    /* dotenv may be unavailable in minimal installs */
+  }
+}
 
 function initializeBundledWebGPU(): void {
   if (!WGPU.native.available) {
@@ -731,23 +2026,135 @@ function initializeBundledWebGPU(): void {
   console.log(`[WebGPU] Native Dawn runtime ready at ${WGPU.native.path}`);
 }
 
+/**
+ * Check WebGPU availability in the webview browser and push status to renderer.
+ *
+ * **WHY not inline `os.release() - 9`:** that was wrong on macOS 26 (Darwin 25);
+ * see `checkWebGpuSupport` / `getMacOSMajorVersion` in `webgpu-browser-support.ts`
+ * and `docs/apps/electrobun-darwin-macos-webgpu-version.md`.
+ *
+ * On macOS 26+ with native renderer, WebGPU is expected via WKWebView.
+ * On Linux/Windows with CEF, upstream Electrobun flag support is still needed.
+ */
+function checkWebGpuBrowserSupport(): void {
+  const status = checkWebGpuSupport();
+  if (status.available) {
+    console.log(`[WebGPU Browser] ${status.reason}`);
+  } else {
+    console.warn(`[WebGPU Browser] ${status.reason}`);
+    if (status.chromeBetaPath) {
+      console.log(
+        `[WebGPU Browser] Chrome Beta found at: ${status.chromeBetaPath}`,
+      );
+    } else if (status.downloadUrl) {
+      console.log(
+        `[WebGPU Browser] Download Chrome Beta: ${status.downloadUrl}`,
+      );
+    }
+  }
+
+  // Push status to renderer after a short delay to allow window creation.
+  setTimeout(() => {
+    sendToActiveRenderer("webgpu:browserStatus", status);
+  }, 2000);
+}
+
 async function main(): Promise<void> {
-  console.log("[Main] Starting Milady (Electrobun)...");
+  recordStartupPhase("main_start", {
+    pid: process.pid,
+    exec_path: process.execPath,
+    bundle_path: resolveStartupBundlePath(process.execPath),
+  });
+  await loadMiladyEnvFilesForMain();
+  console.log("[Main] Starting Milady (Electrobun)");
   const normalizedModuleDir = import.meta.dir.replaceAll("\\", "/");
+  const runtimeResolution = resolveDesktopRuntimeMode(
+    process.env as Record<string, string | undefined>,
+  );
   // Structured startup environment block — visible in CI logs and milady-startup.log
   console.log(
     `[Env] platform=${process.platform} arch=${process.arch} bun=${Bun.version} ` +
       `execPath=${process.execPath} cwd=${process.cwd()} moduleDir=${import.meta.dir} ` +
       `packaged=${!normalizedModuleDir.includes("/src/")} argv=${process.argv.slice(1).join(" ")}`,
   );
-  initializeBundledWebGPU();
-  const cleanupFns: Array<() => void> = [];
+  console.log(
+    `[Env] desktopRuntimeMode=${runtimeResolution.mode} externalApi=${runtimeResolution.externalApi.base ?? "none"}`,
+  );
 
+  printElectrobunDevSettingsBanner(
+    process.env as Record<string, string | undefined>,
+  );
+
+  await maybePromptStartupCrashReport();
+  // On Windows (CEF renderer), clear stale CEF profile data when the app
+  // version changes.  A leftover Partitions/default profile from a previous
+  // install causes "Cannot create profile at path" errors that cascade into
+  // GPU process crashes, rendering the UI unusable.  Clearing the CEF cache
+  // is safe — it only contains browser session state (cookies, caches,
+  // LevelDB stores) that CEF recreates on next launch.
+  if (process.platform === "win32") {
+    try {
+      const cefDir = path.join(Utils.paths.userData, "CEF");
+      const cefVersionMarker = path.join(cefDir, ".milady-version");
+      const currentVersion =
+        resolveDesktopBundleVersion(import.meta.dir) ?? "unknown";
+      let previousVersion: string | null = null;
+      try {
+        previousVersion = fs.readFileSync(cefVersionMarker, "utf-8").trim();
+      } catch {
+        // No marker — first run or pre-fix install.
+      }
+      if (
+        shouldResetWindowsCefProfile({
+          currentVersion,
+          previousVersion,
+          cefDirExists: fs.existsSync(cefDir),
+        })
+      ) {
+        console.log(
+          `[Main] CEF version mismatch (${previousVersion ?? "none"} → ${currentVersion}), clearing stale CEF profile`,
+        );
+        // Remove everything except the version marker we're about to write.
+        for (const entry of fs.readdirSync(cefDir)) {
+          if (entry === ".milady-version") continue;
+          const entryPath = path.join(cefDir, entry);
+          try {
+            fs.rmSync(entryPath, { recursive: true, force: true });
+          } catch (err) {
+            console.warn(`[Main] Could not remove ${entryPath}:`, err);
+          }
+        }
+      }
+      // Write/update version marker so we don't clear again on next launch.
+      if (shouldWriteWindowsCefProfileMarker(currentVersion)) {
+        fs.mkdirSync(cefDir, { recursive: true });
+        fs.writeFileSync(cefVersionMarker, currentVersion);
+      }
+    } catch (err) {
+      console.warn("[Main] CEF profile cleanup failed (non-fatal):", err);
+    }
+  }
+
+  initializeBundledWebGPU();
+  checkWebGpuBrowserSupport();
+  cleanupFns.length = 0;
+  cleanupFns.push(await startBrowserWorkspaceBridgeServer());
+
+  // WHY push API base on every status tick with a port: embedded startup can
+  // settle on a different loopback port than env/static HTML (allocation + stdout).
+  // Detached surfaces must not keep a stale __MILADY_API_BASE__ while the main
+  // window was already updated—menu reset, chat, and settings each own a webview.
   cleanupFns.push(
     getAgentManager().onStatusChange((status) => {
-      if (currentWindow && status.port) {
-        injectApiBase(currentWindow);
+      if (status.port) {
+        if (currentWindow) {
+          injectApiBase(currentWindow);
+        }
+        surfaceWindowManager?.forEachWindow((w) => {
+          injectApiBase(w as BrowserWindow);
+        });
       }
+      void refreshHeartbeatMenuSnapshot();
     }),
   );
 
@@ -755,9 +2162,63 @@ async function main(): Promise<void> {
   // running before any synchronous FFI calls like setApplicationMenu().
   // Calling setupApplicationMenu() before createMainWindow() deadlocks.
   const mainWin = attachMainWindow(await createMainWindow());
+  recordStartupPhase("window_ready", {
+    pid: process.pid,
+  });
 
+  // Configure the floating chat manager now that the renderer URL is resolved.
+  // This must run after createMainWindow() so rendererUrlPromise is already set.
+  void resolveRendererUrl().then((url) => {
+    let preload = "";
+    try {
+      preload = readResolvedPreloadScript(import.meta.dir);
+    } catch {
+      /* non-fatal */
+    }
+    getFloatingChatManager().configure(url, preload);
+  });
+
+  surfaceWindowManager = new SurfaceWindowManager({
+    createWindow: (options) =>
+      new BrowserWindow(options) as unknown as ManagedWindowLike,
+    resolveRendererUrl,
+    readPreload: () => readResolvedPreloadScript(import.meta.dir),
+    wireRpc: (window) => wireSettingsRpc(window as unknown as BrowserWindow),
+    injectApiBase: (window) =>
+      injectApiBase(window as unknown as BrowserWindow),
+    onWindowFocused: (window) => {
+      lastFocusedWindow = window;
+    },
+    onRegistryChanged: () => setupApplicationMenu(),
+  });
   // Set up app menu after the window (and its message loop) exists.
   setupApplicationMenu();
+  const stopScreenshotDevServer = startScreenshotDevServer();
+  if (stopScreenshotDevServer) {
+    cleanupFns.push(stopScreenshotDevServer);
+  }
+  startHeartbeatMenuRefresh();
+  cleanupFns.push(() => {
+    if (heartbeatMenuRefreshTimer) {
+      clearInterval(heartbeatMenuRefreshTimer);
+      heartbeatMenuRefreshTimer = null;
+    }
+  });
+
+  // Wire detached window callbacks so menus and RPC can open them.
+  getDesktopManager().setOpenSettingsCallback((tabHint) => {
+    void createSettingsWindow(tabHint);
+  });
+  getDesktopManager().setRestoreMainWindowCallback(() => restoreWindow());
+  getDesktopManager().setRequestQuitCallback(() => {
+    requestAppQuit();
+  });
+  getDesktopManager().setOpenSurfaceWindowCallback((surface, browse) => {
+    if (!surfaceWindowManager) {
+      return;
+    }
+    void surfaceWindowManager.openSurfaceWindow(surface, browse);
+  });
 
   // If launched with --hidden (e.g. auto-launch with openAsHidden), minimize immediately.
   if (process.argv.includes("--hidden")) {
@@ -771,22 +2232,57 @@ async function main(): Promise<void> {
     }
   }
 
-  // Set up deep link handling
   setupDeepLinks();
+  setupDockReopen();
 
-  // Set up system tray with default icon
   const desktop = getDesktopManager();
   try {
     await desktop.createTray({
-      icon: path.join(import.meta.dir, "../assets/appIcon.png"),
+      icon: resolveDesktopAppIconPath(),
       tooltip: "Milady",
       title: "Milady",
       menu: [
-        { id: "show", label: "Show Milady", type: "normal" },
+        { id: "tray-open-chat", label: "Open Chat", type: "normal" },
+        { id: "tray-open-plugins", label: "Open Plugins", type: "normal" },
+        {
+          id: "tray-open-desktop-workspace",
+          label: "Open Desktop Workspace",
+          type: "normal",
+        },
+        {
+          id: "tray-open-voice-controls",
+          label: "Open Voice Controls",
+          type: "normal",
+        },
+        {
+          id: "tray-open-media-controls",
+          label: "Open Media Controls",
+          type: "normal",
+        },
         { id: "sep1", type: "separator" },
-        { id: "check-for-updates", label: "Check for Updates", type: "normal" },
+        {
+          id: "tray-toggle-lifecycle",
+          label: "Start/Stop Agent",
+          type: "normal",
+        },
+        {
+          id: "tray-restart",
+          label: "Restart Agent",
+          type: "normal",
+        },
+        {
+          id: "tray-notify",
+          label: "Send Test Notification",
+          type: "normal",
+        },
         { id: "sep2", type: "separator" },
-        { id: "restart-agent", label: "Restart Agent", type: "normal" },
+        { id: "tray-show-window", label: "Show Window", type: "normal" },
+        { id: "tray-hide-window", label: "Hide Window", type: "normal" },
+        {
+          id: "tray-floating-chat",
+          label: "Floating Chat",
+          type: "normal",
+        },
         { id: "sep3", type: "separator" },
         { id: "quit", label: "Quit", type: "normal" },
       ],
@@ -795,21 +2291,287 @@ async function main(): Promise<void> {
     console.warn("[Main] Tray creation failed:", err);
   }
 
-  // Start agent in background
-  if (currentWindow) {
-    void startAgent(currentWindow);
+  // ── Steward sidecar startup (must happen BEFORE agent) ────────────
+  // When STEWARD_LOCAL=true, start the steward sidecar first so it can
+  // set STEWARD_API_URL / STEWARD_AGENT_TOKEN env vars. The Milady agent's
+  // steward-bridge.ts reads these on boot to discover local steward.
+  if (isStewardLocalEnabled()) {
+    console.log("[Main] STEWARD_LOCAL=true — starting steward sidecar...");
+    cleanupFns.push(() => stopSteward());
+
+    // Listen for steward status changes and push to renderer
+    cleanupFns.push(
+      onStewardStatusChange((status) => {
+        sendToActiveRenderer("stewardStatusUpdate", status);
+      }),
+    );
+
+    try {
+      const stewardResult = await startSteward();
+      if (stewardResult.state === "running") {
+        console.log(
+          `[Main] Steward sidecar ready on port ${stewardResult.port}, wallet: ${stewardResult.walletAddress ?? "pending"}`,
+        );
+      } else {
+        console.warn(
+          `[Main] Steward sidecar in state "${stewardResult.state}": ${stewardResult.error ?? "unknown"}`,
+        );
+        sendToActiveRenderer("stewardStartupFailed", {
+          error: stewardResult.error ?? "Steward failed to start",
+          canRetry: true,
+        });
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.error("[Main] Steward sidecar startup failed:", error);
+      sendToActiveRenderer("stewardStartupFailed", {
+        error,
+        canRetry: true,
+      });
+      // Don't block agent startup — steward is optional
+    }
   }
 
-  // Check for updates
+  // Agent startup: in external mode, push the API base via injectApiBase
+  // (the agent is already running externally). In local mode, start the
+  // embedded agent first — injectApiBaseIntoHtml already set the initial
+  // window.__MILADY_API_BASE__ but _startAgent will push the actual port
+  // once the agent reports it.
+  //
+  // MILADY_DESKTOP_SKIP_AGENT=1 is a defensive panic-button override for
+  // cases where an external API server is running but the normal
+  // detection path (MILADY_DESKTOP_API_BASE / MILADY_API_BASE_URL /
+  // resolveDesktopRuntimeMode → "external") didn't fire. In practice
+  // alice's dev-platform.mjs already sets MILADY_DESKTOP_API_BASE, which
+  // makes runtime mode "external" and takes the injectApiBase path below,
+  // so this short-circuit is typically unused on alice. Kept so scripts
+  // that set only MILADY_DESKTOP_SKIP_AGENT (main's convention) still
+  // Do The Right Thing.
+  if (currentWindow) {
+    if (process.env.MILADY_DESKTOP_SKIP_AGENT === "1") {
+      const apiPort = resolveDesktopApiPort(process.env);
+      console.log(
+        `[Main] Skipping embedded agent (MILADY_DESKTOP_SKIP_AGENT=1), using external API on port ${apiPort}`,
+      );
+      pushRendererApiBase(
+        currentWindow,
+        `http://127.0.0.1:${apiPort}`,
+      );
+    } else {
+      const rt = resolveDesktopRuntimeMode(
+        process.env as Record<string, string | undefined>,
+      );
+      if (rt.mode === "external") {
+        injectApiBase(currentWindow);
+      } else if (rt.mode === "local") {
+        console.log("[Main] Starting embedded agent (local mode).");
+        _startAgent(currentWindow).catch((err) => {
+          console.error("[Main] Agent auto-start failed:", err);
+          const error = err instanceof Error ? err.message : String(err);
+          sendToActiveRenderer("agentStartupFailed", { error });
+          console.error('title: "Milady startup failed"');
+        });
+      }
+    }
+  }
+
   void setupUpdater();
+  cleanupFns.push(() => getAgentManager().stop());
+  setupShutdown();
+}
 
-  // Set up clean shutdown
-  setupShutdown(cleanupFns);
+function resolveStartupCrashReportPath(): string {
+  return path.join(
+    path.dirname(getDiagnosticLogPath()),
+    STARTUP_CRASH_REPORT_FILE,
+  );
+}
 
-  console.log("[Main] Milady started successfully");
+function resolveStartupCrashPromptMarkerPath(): string {
+  return path.join(
+    path.dirname(getDiagnosticLogPath()),
+    STARTUP_CRASH_PROMPT_MARKER_FILE,
+  );
+}
+
+function buildStartupCrashDiscordReport(options: {
+  source: "startup-recovery" | "fatal-startup";
+  error: string | null;
+}): string {
+  const diagnostics = getStartupDiagnosticsSnapshot();
+  const startupLogTail = getStartupDiagnosticLogTail(8_000).trim();
+  const appVersion = process.env.npm_package_version?.trim() || "unknown";
+  const appRuntime = `electrobun/${Bun.version}`;
+  const reportLines = [
+    "Milady startup crash report",
+    "",
+    "Share this report in Discord and ping @iono.",
+    "",
+    `Source: ${options.source}`,
+    `Timestamp: ${new Date().toISOString()}`,
+    `App Version: ${appVersion}`,
+    `Runtime: ${appRuntime}`,
+    `Platform: ${process.platform} ${process.arch}`,
+    `State: ${diagnostics.state}`,
+    `Phase: ${diagnostics.phase}`,
+    `Last Error: ${options.error ?? diagnostics.lastError ?? "unknown"}`,
+    `Updated At: ${diagnostics.updatedAt}`,
+    `Log Path: ${diagnostics.logPath}`,
+    `Status Path: ${diagnostics.statusPath}`,
+    "",
+    startupLogTail ? "Startup Log Tail:" : "Startup Log Tail: unavailable",
+  ];
+
+  if (startupLogTail) {
+    reportLines.push("```");
+    reportLines.push(startupLogTail);
+    reportLines.push("```");
+  }
+  return `${reportLines.join("\n")}\n`;
+}
+
+function persistStartupCrashReport(options: {
+  source: "startup-recovery" | "fatal-startup";
+  error: string | null;
+}): { report: string; reportPath: string } {
+  const report = buildStartupCrashDiscordReport(options);
+  const primaryReportPath = resolveStartupCrashReportPath();
+  const fallbackReportPath = path.join(os.tmpdir(), STARTUP_CRASH_REPORT_FILE);
+  let reportPath = primaryReportPath;
+  try {
+    fs.mkdirSync(path.dirname(primaryReportPath), { recursive: true });
+    fs.writeFileSync(primaryReportPath, report, "utf8");
+  } catch (err) {
+    console.warn("[Main] Failed to write startup crash report:", err);
+    try {
+      fs.mkdirSync(path.dirname(fallbackReportPath), { recursive: true });
+      fs.writeFileSync(fallbackReportPath, report, "utf8");
+      reportPath = fallbackReportPath;
+    } catch (fallbackErr) {
+      console.warn(
+        "[Main] Failed to write fallback startup crash report:",
+        fallbackErr,
+      );
+    }
+  }
+  return { report, reportPath };
+}
+
+function wasStartupCrashAlreadyPrompted(updatedAt: string): boolean {
+  try {
+    const markerPath = resolveStartupCrashPromptMarkerPath();
+    return fs.readFileSync(markerPath, "utf8").trim() === updatedAt;
+  } catch {
+    return false;
+  }
+}
+
+function markStartupCrashPrompted(updatedAt: string): void {
+  try {
+    fs.writeFileSync(resolveStartupCrashPromptMarkerPath(), updatedAt, "utf8");
+  } catch {}
+}
+
+async function maybePromptStartupCrashReport(): Promise<void> {
+  const diagnostics = getStartupDiagnosticsSnapshot();
+  const looksLikeStartupFailure =
+    diagnostics.state === "error" &&
+    diagnostics.phase !== "ready" &&
+    diagnostics.phase !== "stopped";
+  if (!looksLikeStartupFailure) {
+    return;
+  }
+  if (wasStartupCrashAlreadyPrompted(diagnostics.updatedAt)) {
+    return;
+  }
+
+  const { report, reportPath } = persistStartupCrashReport({
+    source: "startup-recovery",
+    error: diagnostics.lastError,
+  });
+  markStartupCrashPrompted(diagnostics.updatedAt);
+
+  const dialog = await Utils.showMessageBox({
+    type: "warning",
+    title: "Milady recovered after a startup failure",
+    message:
+      "The previous launch failed. A crash report is ready to share with support.",
+    detail:
+      "Choose Copy Report, paste into Discord, and ping @iono. You can also open logs.",
+    buttons: ["Copy Report", "Open Logs Folder", "Continue"],
+    defaultId: 0,
+    cancelId: 2,
+  });
+  const response =
+    dialog && typeof dialog === "object" && "response" in dialog
+      ? (dialog as { response: number }).response
+      : typeof dialog === "number"
+        ? dialog
+        : 2;
+
+  if (response === 0) {
+    try {
+      Utils.clipboardWriteText(report);
+      Utils.showNotification({
+        title: "Crash report copied",
+        body: "Paste in Discord and ping @iono.",
+      });
+    } catch (err) {
+      console.warn("[Main] Failed to copy startup crash report:", err);
+    }
+  } else if (response === 1) {
+    try {
+      Utils.openPath(path.dirname(reportPath));
+    } catch (err) {
+      console.warn("[Main] Failed to open startup logs folder:", err);
+    }
+  }
 }
 
 main().catch((err) => {
-  console.error("[Main] Fatal error during startup:", err);
-  process.exit(1);
+  const msg = `[Main] Fatal error during startup: ${err?.stack ?? err}`;
+  console.error(msg);
+  recordStartupPhase("fatal", {
+    pid: process.pid,
+    exec_path: process.execPath,
+    bundle_path: resolveStartupBundlePath(process.execPath),
+    error: err instanceof Error ? err.stack || err.message : String(err),
+  });
+  persistStartupCrashReport({
+    source: "fatal-startup",
+    error: msg,
+  });
+  recordStartupPhase("fatal", {
+    pid: process.pid,
+    exec_path: process.execPath,
+    bundle_path: resolveStartupBundlePath(process.execPath),
+    error: err instanceof Error ? err.stack || err.message : String(err),
+  });
+  // Write to startup log so it's visible even without a console
+  try {
+    const logPath = getDiagnosticLogPath();
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`);
+    fs.writeFileSync(
+      getStartupStatusPath(),
+      `${JSON.stringify(
+        {
+          state: "error",
+          phase: "fatal_startup",
+          updatedAt: new Date().toISOString(),
+          lastError: msg,
+          platform: process.platform,
+          arch: process.arch,
+          logPath,
+          statusPath: getStartupStatusPath(),
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+  } catch {}
+  void runShutdownCleanup("fatal-startup").finally(() => {
+    process.exit(1);
+  });
 });

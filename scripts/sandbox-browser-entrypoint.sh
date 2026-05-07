@@ -2,32 +2,17 @@
 set -euo pipefail
 
 export DISPLAY=:1
-export MILAIDY_BROWSER_STATE_PATH="${MILAIDY_BROWSER_STATE_PATH:-/tmp/milaidy-browser}"
-export HOME="${MILAIDY_BROWSER_HOME:-${MILAIDY_BROWSER_STATE_PATH}/home}"
+export HOME=/tmp/eliza-home
 export XDG_CONFIG_HOME="${HOME}/.config"
 export XDG_CACHE_HOME="${HOME}/.cache"
-export MILAIDY_BROWSER_HOME="${HOME}"
 
-CDP_PORT="${MILADY_BROWSER_CDP_PORT:-9222}"
-VNC_PORT="${MILADY_BROWSER_VNC_PORT:-5900}"
-NOVNC_PORT="${MILADY_BROWSER_NOVNC_PORT:-6080}"
-ENABLE_NOVNC="${MILADY_BROWSER_ENABLE_NOVNC:-1}"
-HEADLESS="${MILADY_BROWSER_HEADLESS:-0}"
+CDP_PORT="${ELIZA_BROWSER_CDP_PORT:-9222}"
+VNC_PORT="${ELIZA_BROWSER_VNC_PORT:-5900}"
+NOVNC_PORT="${ELIZA_BROWSER_NOVNC_PORT:-6080}"
+ENABLE_NOVNC="${ELIZA_BROWSER_ENABLE_NOVNC:-1}"
+HEADLESS="${ELIZA_BROWSER_HEADLESS:-0}"
 
 mkdir -p "${HOME}" "${HOME}/.chrome" "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}"
-
-if [[ -f "${HOME}/.chrome/SingletonLock" ]]; then
-  rm -f "${HOME}/.chrome/SingletonLock"
-fi
-if [[ -f "${HOME}/.chrome/SingletonSocket" ]]; then
-  rm -f "${HOME}/.chrome/SingletonSocket"
-fi
-if [[ -f "${HOME}/.chrome/SingletonCookie" ]]; then
-  rm -f "${HOME}/.chrome/SingletonCookie"
-fi
-if [[ -f "${HOME}/.chrome/Preferences" ]] && [[ ! -s "${HOME}/.chrome/Preferences" ]]; then
-  rm -f "${HOME}/.chrome/Preferences"
-fi
 
 Xvfb :1 -screen 0 1280x800x24 -ac -nolisten tcp &
 

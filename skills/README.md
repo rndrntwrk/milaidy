@@ -1,18 +1,24 @@
-# Milady Skills (Repo-Local)
+# Skills
 
-This folder contains repo-specific skills derived from recently merged PRs.
+Default skills shipped with Milady. Additional skills are available from the
+[Milady Skills Registry](https://github.com/milady-ai/skills) and can be
+installed via the Skills marketplace tab in the UI or:
 
-## Skills
+```bash
+npx skills add milady-ai/skills/<skill-name>
+```
 
-- `coding-agent-swarm`
-- `workspace-pr-flow`
-- `repoprompt-secure-runner`
-- `pi-ai-credential-bridge`
-- `provider-setup-e2e`
-- `retake-stream-orchestration`
-- `terminal-client-scoping`
-- `knowledge-import-guardrails`
-- `elevenlabs-proxy-guard`
-- `pre-review-no-diff-approve`
-- `electron-tutorial-examples`
-- `integration-dod-map`
+## Directory Layout
+
+```
+skills/
+  eliza-cloud/           Eliza Cloud backend, apps, monetization, containers
+  elizaos/               elizaOS runtime and plugin abstractions
+  milady/                Milady product and repo architecture
+  milady-development/    Repo-specific Milady development workflow
+  .cache/                Runtime catalog cache (gitignored)
+```
+
+The agent runtime reads skills from `~/.milady/skills/` (user state dir).
+`scripts/ensure-skills.mjs` seeds all shipped skills on first run without
+overwriting an existing user-customized skill.

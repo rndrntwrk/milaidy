@@ -19,10 +19,6 @@ on:
         description: "Publish to Snap Store"
         type: boolean
         default: true
-      homebrew:
-        description: "Update Homebrew tap"
-        type: boolean
-        default: true
       flatpak:
         description: "Publish Flatpak"
         type: boolean
@@ -43,7 +39,7 @@ jobs:
   # ── Prepare version info ───────────────────────────────────────────────
   prepare:
     name: Prepare
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.ver.outputs.version }}
       npm_version: ${{ steps.ver.outputs.npm_version }}
@@ -91,7 +87,7 @@ jobs:
     if: |
       (github.event_name == 'release') ||
       (github.event_name == 'workflow_dispatch' && inputs.pypi)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       id-token: write  # OIDC trusted publishing
     environment:
@@ -145,54 +141,13 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: packaging/pypi/dist/
+          # Falls back to API token when OIDC trusted publishing is not
+          # configured (e.g. first publish before the project exists on PyPI).
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
   # ── Homebrew ───────────────────────────────────────────────────────────
-  update-homebrew:
-    name: Update Homebrew Tap
-    needs: prepare
-    if: |
-      (github.event_name == 'release' && needs.prepare.outputs.is_prerelease == 'false') ||
-      (github.event_name == 'workflow_dispatch' && inputs.homebrew)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Update Homebrew formula
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          VERSION="${{ needs.prepare.outputs.npm_version }}"
-          URL="https://registry.npmjs.org/miladyai/-/miladyai-${VERSION}.tgz"
-
-          echo "Fetching tarball SHA256 for $URL ..."
-          SHA256=$(curl -fsSL "$URL" | sha256sum | cut -d' ' -f1)
-          echo "SHA256: $SHA256"
-
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/milady-ai/homebrew-tap.git" /tmp/homebrew-tap
-          cd /tmp/homebrew-tap
-
-          # Ensure Formula directory exists
-          mkdir -p Formula
-
-          # Copy base formula if Formula/milady.rb doesn't exist yet
-          if [[ ! -f Formula/milady.rb ]]; then
-            cp "$GITHUB_WORKSPACE/packaging/homebrew/milady.rb" Formula/milady.rb
-          fi
-
-          # Update version, URL, and SHA256
-          sed -i "s|url \".*\"|url \"${URL}\"|" Formula/milady.rb
-          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/milady.rb
-
-          echo "Updated formula:"
-          grep -E "url|sha256" Formula/milady.rb
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/milady.rb
-          git diff --cached --quiet && echo "No changes" && exit 0
-          git commit -m "Update milady to ${VERSION}"
-          git push
+  # NOTE: Homebrew tap updates are handled by the standalone update-homebrew.yml
+  # workflow, which triggers via repository_dispatch. Do not duplicate here.
 
   # ── Snap ───────────────────────────────────────────────────────────────
   publish-snap:
@@ -201,7 +156,7 @@ jobs:
     if: |
       (github.event_name == 'release') ||
       (github.event_name == 'workflow_dispatch' && inputs.snap)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -239,7 +194,7 @@ jobs:
     if: |
       (github.event_name == 'release') ||
       (github.event_name == 'workflow_dispatch' && inputs.apt)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: write  # gh release upload
     steps:
@@ -256,7 +211,7 @@ jobs:
 
       - name: Setup Bun
         run: |
-          curl -fsSL https://bun.sh/install | bash
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
           echo "$HOME/.bun/bin" >> $GITHUB_PATH
           export PATH="$HOME/.bun/bin:$PATH"
           bun --version
@@ -276,8 +231,12 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y debhelper devscripts fakeroot
+          for attempt in 1 2 3; do
+            sudo apt-get update && \
+            sudo apt-get install -y debhelper devscripts fakeroot && break
+            echo "apt-get attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
 
       - name: Build .deb package
         run: |
@@ -345,7 +304,7 @@ jobs:
     if: |
       (github.event_name == 'release' && needs.prepare.outputs.is_prerelease == 'false') ||
       (github.event_name == 'workflow_dispatch' && inputs.flatpak)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: write  # gh release upload
     steps:
@@ -390,9 +349,9 @@ jobs:
   # ── Summary ────────────────────────────────────────────────────────────
   publish-summary:
     name: Publish Summary
-    needs: [prepare, publish-pypi, update-homebrew, publish-snap, build-deb, build-flatpak]
+    needs: [prepare, publish-pypi, publish-snap, build-deb, build-flatpak]
     if: always()
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Summary
         run: |
@@ -403,7 +362,7 @@ jobs:
           echo "| Package | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| PyPI (milady ${{ needs.prepare.outputs.pypi_version }}) | ${{ needs.publish-pypi.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Homebrew | ${{ needs.update-homebrew.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Homebrew | handled by update-homebrew.yml |" >> $GITHUB_STEP_SUMMARY
           echo "| Snap | ${{ needs.publish-snap.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Debian (.deb) | ${{ needs.build-deb.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Flatpak | ${{ needs.build-flatpak.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY

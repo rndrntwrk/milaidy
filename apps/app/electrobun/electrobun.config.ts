@@ -1,10 +1,20 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ElectrobunConfig } from "electrobun";
+
+const electrobunDir = path.dirname(fileURLToPath(import.meta.url));
+const libMacWindowEffectsDylib = path.join(
+  electrobunDir,
+  "src",
+  "libMacWindowEffects.dylib",
+);
 
 export default {
   app: {
     name: "Milady",
     identifier: "com.miladyai.milady",
-    version: "2.0.0-alpha.76",
+    version: "2.0.0-alpha.87",
     description: "Cute AI agents for the desktop",
     urlSchemes: ["milady"],
   },
@@ -25,7 +35,7 @@ export default {
     views: {},
     // Watch these extra dirs in dev --watch mode so changes to the Vite
     // renderer build or shared types trigger a bun-side rebuild + relaunch.
-    watch: ["../dist", "src/shared/"],
+    watch: ["../dist", "src/shared/", "src/bridge/"],
     // Ignore test files and build artifacts from watch triggers.
     watchIgnore: [
       "src/**/*.test.ts",
@@ -43,20 +53,35 @@ export default {
     copy: {
       "../dist": "renderer",
       "src/preload.js": "bun/preload.js",
-      // ElizaOS backend server bundle (tsdown output from repo root dist/).
-      // agent.ts walks up from import.meta.dir looking for milady-dist/ to spawn eliza.js.
+      // elizaOS backend server bundle (tsdown output from repo root dist/).
+      // agent.ts walks up from import.meta.dir looking for milady-dist/ to spawn
+      // the canonical runtime entry (`entry.js start`).
       // Paths are relative to apps/app/electrobun/ (where electrobun build is run).
       "../../../dist": "milady-dist",
-      // libMacWindowEffects.dylib is macOS-only — only copy when building on macOS.
-      // On Windows/Linux this file does not exist and the copy would fail the build.
-      ...(process.platform === "darwin"
+      // plugins.json lives at repo root, not in dist/. Without it,
+      // findOwnPackageRoot() can't locate the manifest and
+      // discoverPluginsFromManifest() returns an empty array.
+      "../../../plugins.json": "milady-dist/plugins.json",
+      // package.json is needed so findOwnPackageRoot() can match on the
+      // "milady" package name. dist/package.json only has {"type":"module"}.
+      "../../../package.json": "milady-dist/package.json",
+      // Runtime window + tray icons are loaded via path.join(import.meta.dir, "../assets/appIcon.*").
+      // import.meta.dir resolves to app/bun/ in the packaged bundle, so these
+      // destinations place the assets at app/assets/appIcon.*.
+      "assets/appIcon.png": "assets/appIcon.png",
+      "assets/appIcon.ico": "assets/appIcon.ico",
+      // Optional native blur (run build:native-effects locally). Omit when missing to avoid noisy copy errors in dev.
+      ...(process.platform === "darwin" &&
+      fs.existsSync(libMacWindowEffectsDylib)
         ? { "src/libMacWindowEffects.dylib": "libMacWindowEffects.dylib" }
         : {}),
     },
     mac: {
       bundleWGPU: true,
       codesign: process.env.ELECTROBUN_SKIP_CODESIGN !== "1",
-      notarize: process.env.ELECTROBUN_SKIP_CODESIGN !== "1",
+      notarize:
+        process.env.ELECTROBUN_SKIP_CODESIGN !== "1" &&
+        process.env.MILADY_ELECTROBUN_NOTARIZE !== "0",
       defaultRenderer: "native",
       icons: "assets/appIcon.iconset",
       entitlements: {
@@ -75,7 +100,7 @@ export default {
         // Hardware device access
         "com.apple.security.device.camera": true,
         "com.apple.security.device.microphone": true,
-        // Screen recording (screencapture, retake/computer-use)
+        // Screen recording (screencapture)
         "com.apple.security.device.screen-recording": true,
       },
     },
@@ -84,12 +109,45 @@ export default {
       bundleWGPU: true,
       defaultRenderer: "cef",
       icon: "assets/appIcon.png",
+      // Enable WebGPU in CEF. The Electrobun Linux defaults disable GPU for VM
+      // compatibility; override those with `false` so the GPU pipeline stays active
+      // and WebGPU can be used via navigator.gpu.
+      // Note: The native C++ code supports `false` to skip default flags, but
+      // the published TypeScript types only allow `string | true`. Cast needed
+      // until upstream fixes the type definition.
+      chromiumFlags: {
+        "enable-unsafe-webgpu": true,
+        "enable-features": "Vulkan",
+        // Override Linux defaults that disable GPU
+        "disable-gpu": false,
+        "disable-gpu-compositing": false,
+        "disable-gpu-sandbox": false,
+        "enable-software-rasterizer": false,
+        "force-software-rasterizer": false,
+        "disable-accelerated-2d-canvas": false,
+        "disable-accelerated-video-decode": false,
+        "disable-accelerated-video-encode": false,
+        "disable-gpu-memory-buffer-video-frames": false,
+      } as unknown as Record<string, string | true>,
     },
     win: {
       bundleCEF: true,
       bundleWGPU: true,
       defaultRenderer: "cef",
       icon: "assets/appIcon.ico",
+      // Enable WebGPU in CEF on Windows.
+      // The GPU process sandbox causes STATUS_BREAKPOINT crashes
+      // (exit code -2147483645) on Windows during GPU initialization,
+      // cascading into a fully broken UI.  Running the GPU in-process
+      // with the sandbox disabled avoids the crash while keeping
+      // hardware-accelerated rendering active.
+      chromiumFlags: {
+        "enable-unsafe-webgpu": true,
+        "enable-features": "Vulkan",
+        "in-process-gpu": true,
+        "disable-gpu-sandbox": true,
+        "no-sandbox": true,
+      } as unknown as Record<string, string | true>,
     },
   },
   release: {

@@ -17,6 +17,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.getcapacitor.JSObject
+import com.getcapacitor.PermissionState
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
@@ -31,6 +32,7 @@ import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
+import org.json.JSONObject
 
 @CapacitorPlugin(
     name = "TalkMode",
@@ -80,6 +82,7 @@ class TalkModePlugin : Plugin() {
 
     // Audio focus
     private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioManager.OnAudioFocusChangeListener? = null
 
     // Config
     private var apiKey: String? = null
@@ -237,7 +240,7 @@ class TalkModePlugin : Plugin() {
             return
         }
 
-        if (!hasPermission(Manifest.permission.RECORD_AUDIO)) {
+        if (getPermissionState("microphone") != PermissionState.GRANTED) {
             requestPermissionForAlias("microphone", call, "handleStartPermission")
             return
         }
@@ -247,7 +250,7 @@ class TalkModePlugin : Plugin() {
 
     @PermissionCallback
     private fun handleStartPermission(call: PluginCall) {
-        if (hasPermission(Manifest.permission.RECORD_AUDIO)) {
+        if (getPermissionState("microphone") == PermissionState.GRANTED) {
             startInternal(call)
         } else {
             call.resolve(JSObject().apply {
@@ -387,13 +390,13 @@ class TalkModePlugin : Plugin() {
     }
 
     @PluginMethod
-    fun checkPermissions(call: PluginCall) {
+    override fun checkPermissions(call: PluginCall) {
         call.resolve(buildPermissionResult())
     }
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
-        if (!hasPermission(Manifest.permission.RECORD_AUDIO)) {
+    override fun requestPermissions(call: PluginCall) {
+        if (!isPermissionGranted(Manifest.permission.RECORD_AUDIO)) {
             requestPermissionForAlias("microphone", call, "handlePermissionResult")
         } else {
             call.resolve(buildPermissionResult())
@@ -410,10 +413,10 @@ class TalkModePlugin : Plugin() {
     private fun applyConfig(config: JSObject) {
         val tts = config.optJSONObject("tts")
         if (tts != null) {
-            tts.optString("apiKey", null)?.takeIf { it.isNotEmpty() }?.let { apiKey = it }
-            tts.optString("voiceId", null)?.takeIf { it.isNotEmpty() }?.let { voiceId = it }
-            tts.optString("modelId", null)?.takeIf { it.isNotEmpty() }?.let { modelId = it }
-            tts.optString("outputFormat", null)?.takeIf { it.isNotEmpty() }?.let {
+            tts.stringOrNull("apiKey")?.takeIf { it.isNotEmpty() }?.let { apiKey = it }
+            tts.stringOrNull("voiceId")?.takeIf { it.isNotEmpty() }?.let { voiceId = it }
+            tts.stringOrNull("modelId")?.takeIf { it.isNotEmpty() }?.let { modelId = it }
+            tts.stringOrNull("outputFormat")?.takeIf { it.isNotEmpty() }?.let {
                 outputFormat = validatedOutputFormat(it) ?: outputFormat
             }
             if (tts.has("interruptOnSpeech")) {
@@ -424,7 +427,7 @@ class TalkModePlugin : Plugin() {
             if (aliases != null) {
                 val map = mutableMapOf<String, String>()
                 aliases.keys().forEach { key ->
-                    val value = aliases.optString(key)?.trim()
+                    val value = aliases.stringOrNull(key)?.trim()
                     if (!value.isNullOrEmpty()) {
                         map[key.trim().lowercase()] = value
                     }
@@ -435,12 +438,12 @@ class TalkModePlugin : Plugin() {
 
         val stt = config.optJSONObject("stt")
         if (stt != null) {
-            stt.optString("language", null)?.takeIf { it.isNotEmpty() }?.let {
+            stt.stringOrNull("language")?.takeIf { it.isNotEmpty() }?.let {
                 sttLanguage = validatedLanguage(it)
             }
         }
 
-        config.optString("sessionKey", null)?.takeIf { it.isNotEmpty() }?.let { sessionKey = it }
+        config.stringOrNull("sessionKey")?.takeIf { it.isNotEmpty() }?.let { sessionKey = it }
 
         if (config.has("silenceWindowMs")) {
             // silenceWindowMs is final for stability; log but don't change
@@ -595,9 +598,7 @@ class TalkModePlugin : Plugin() {
         pcmStopRequested.set(false)
         setState("speaking", "Speaking")
 
-        val effectiveVoiceId = directive?.optString("voiceId", null)
-            ?.let { resolveVoiceAlias(it) }
-            ?: voiceId
+        val effectiveVoiceId = directive.stringOrNull("voiceId")?.let(::resolveVoiceAlias) ?: voiceId
         val effectiveApiKey = apiKey
 
         notifyListeners("speaking", JSObject().apply {
@@ -688,10 +689,11 @@ class TalkModePlugin : Plugin() {
      * applying all validation from the classic TalkModeRuntime.
      */
     private fun buildElevenLabsRequest(text: String, directive: JSObject?): ElevenLabsRequest {
-        val effectiveModelId = directive?.optString("modelId", null)?.takeIf { it.isNotEmpty() }
-            ?: modelId ?: DEFAULT_MODEL_ID
+        val effectiveModelId = directive.stringOrNull("modelId")?.takeIf { it.isNotEmpty() }
+            ?: modelId
+            ?: DEFAULT_MODEL_ID
         val effectiveFormat = validatedOutputFormat(
-            directive?.optString("outputFormat", null) ?: outputFormat
+            directive.stringOrNull("outputFormat") ?: outputFormat
         ) ?: DEFAULT_OUTPUT_FORMAT
 
         val rawSpeed = directive?.optDouble("speed", -1.0)?.takeIf { it > 0 }
@@ -714,10 +716,10 @@ class TalkModePlugin : Plugin() {
         val rawSeed = directive?.optLong("seed", -1)?.takeIf { it >= 0 }
         val seed = validatedSeed(rawSeed)
 
-        val rawNormalize = directive?.optString("normalize", null)
+        val rawNormalize = directive.stringOrNull("normalize")
         val normalize = validatedNormalize(rawNormalize)
 
-        val rawLanguage = directive?.optString("language", null)
+        val rawLanguage = directive.stringOrNull("language")
         val language = validatedLanguage(rawLanguage)
 
         val rawLatencyTier = directive?.optInt("latencyTier", -1)?.takeIf { it >= 0 }
@@ -737,6 +739,18 @@ class TalkModePlugin : Plugin() {
             language = language,
             latencyTier = latencyTier
         )
+    }
+
+    private fun JSObject?.stringOrNull(key: String): String? {
+        if (this == null || !has(key) || isNull(key)) return null
+        val value = opt(key)
+        return if (value == null || value === JSONObject.NULL) null else value.toString()
+    }
+
+    private fun JSONObject?.stringOrNull(key: String): String? {
+        if (this == null || !has(key) || isNull(key)) return null
+        val value = opt(key)
+        return if (value == null || value === JSONObject.NULL) null else value.toString()
     }
 
     /**
@@ -1134,7 +1148,7 @@ class TalkModePlugin : Plugin() {
     }
 
     private fun buildPermissionResult(): JSObject {
-        val micGranted = hasPermission(Manifest.permission.RECORD_AUDIO)
+        val micGranted = isPermissionGranted(Manifest.permission.RECORD_AUDIO)
         val speechAvailable = SpeechRecognizer.isRecognitionAvailable(context)
 
         return JSObject().apply {
@@ -1147,7 +1161,7 @@ class TalkModePlugin : Plugin() {
         }
     }
 
-    private fun hasPermission(permission: String): Boolean {
+    private fun isPermissionGranted(permission: String): Boolean {
         return getPermissionState(permission) == com.getcapacitor.PermissionState.GRANTED
     }
 

@@ -14,14 +14,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { SendToWebview } from "../types.js";
 import type { WhisperResult } from "./whisper";
 import {
   isWhisperBinaryAvailable,
   transcribeBunSpawn,
   writeWavFile,
 } from "./whisper";
-
-type SendToWebview = (message: string, payload?: unknown) => void;
 
 // ============================================================================
 // Types
@@ -35,7 +34,7 @@ interface SwabbleConfig {
 }
 
 // ============================================================================
-// WakeWordGate — ported from apps/app/electron/src/native/swabble.ts
+// WakeWordGate — processes wake-word phrase matching from Whisper transcripts.
 // ============================================================================
 
 class WakeWordGate {
@@ -299,6 +298,17 @@ export class SwabbleManager {
 
       if (!result) return;
 
+      this.sendToWebview?.("swabble:transcript", {
+        transcript: result.text,
+        segments: result.segments.map((segment) => ({
+          text: segment.text,
+          start: segment.start,
+          duration: Math.max(0, segment.end - segment.start),
+          isFinal: true,
+        })),
+        isFinal: true,
+      });
+
       // Check for wake word
       const match = this.wakeGate.match(result);
       if (match) {
@@ -310,6 +320,11 @@ export class SwabbleManager {
         });
       }
     } catch (err) {
+      this.sendToWebview?.("swabble:error", {
+        code: "transcription_failed",
+        message: err instanceof Error ? err.message : String(err),
+        recoverable: true,
+      });
       console.error("[Swabble] processBuffer error:", err);
     } finally {
       this.processing = false;

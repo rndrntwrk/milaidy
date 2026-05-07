@@ -3,45 +3,77 @@
  *
  * Maps each RPC request method from MiladyRPCSchema.bun.requests
  * to the corresponding native module method. This is the Bun-side
- * equivalent of Electron's ipcMain.handle() registration.
+ * equivalent of main-process request handler registration.
  *
  * Called once during app startup after the BrowserView is created.
  */
 
-import { Updater } from "electrobun/bun";
+import * as fs from "node:fs";
+import { Utils } from "electrobun/bun";
+import { setAgentReady } from "./agent-ready-state";
+import { resolveDesktopRuntimeMode } from "./api-base";
+import { showBackgroundNoticeOnce } from "./background-notice";
+import { postCloudDisconnectFromMain } from "./cloud-disconnect-from-main";
+import { getFloatingChatManager } from "./floating-chat-window";
 import { getAgentManager } from "./native/agent";
 import { getCameraManager } from "./native/camera";
 import { getCanvasManager } from "./native/canvas";
+import {
+  scanAndValidateProviderCredentials,
+  scanProviderCredentials,
+} from "./native/credentials";
 import { getDesktopManager } from "./native/desktop";
+import type { NativeEditorId } from "./native/editor-bridge";
+import { getEditorBridge } from "./native/editor-bridge";
+import { getFileWatcher } from "./native/file-watcher";
 import { getGatewayDiscovery } from "./native/gateway";
 import { getGpuWindowManager } from "./native/gpu-window";
 import { getLocationManager } from "./native/location";
+import { getMusicPlayerManager } from "./native/music-player";
 import { getPermissionManager } from "./native/permissions";
+import type { AllPermissionsState } from "./native/permissions-shared";
 import { getScreenCaptureManager } from "./native/screencapture";
+import {
+  getStewardStatus,
+  isStewardLocalEnabled,
+  resetSteward,
+  restartSteward,
+  startSteward,
+} from "./native/steward";
 import { getSwabbleManager } from "./native/swabble";
 import { getTalkModeManager } from "./native/talkmode";
-import type { PipState } from "./rpc-schema";
-
-// PiP state (simple in-memory store — no dedicated manager needed)
-let pipState: PipState = { enabled: false };
+import {
+  buildRuntimePermissionUnavailableState,
+  fetchRuntimePermissionState,
+  isRuntimePermissionId,
+  mergeRuntimePermissionStates,
+} from "./runtime-permissions";
+import { isDetachedSurface } from "./surface-windows";
+import type { SendToWebview } from "./types.js";
 
 /** Push current OS permission states to the agent REST API in-process. */
-async function syncPermissionsToRestApi(): Promise<void> {
-  const port = getAgentManager().getPort();
+async function syncPermissionsToRestApi(
+  portOverride?: number | null,
+  nativePermissions?: AllPermissionsState,
+): Promise<void> {
+  const port = portOverride ?? getAgentManager().getPort();
   if (!port) return;
   try {
-    const permissions = await getPermissionManager().checkAllPermissions();
+    const permissions = await mergeRuntimePermissionStates(
+      port,
+      nativePermissions ?? (await getPermissionManager().checkAllPermissions()),
+    );
     await fetch(`http://127.0.0.1:${port}/api/permissions/state`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ permissions }),
     });
-  } catch {
-    // non-fatal — renderer will still get data via IPC response
+  } catch (error) {
+    console.warn(
+      `[Permissions] Failed to sync permission state to runtime: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
-
-type SendToWebview = (message: string, payload?: unknown) => void;
 
 /**
  * Structural type for the Electrobun RPC instance used in rpc-handlers.
@@ -76,6 +108,9 @@ export function registerRpcHandlers(
   const camera = getCameraManager();
   const canvas = getCanvasManager();
   const desktop = getDesktopManager();
+  const editorBridge = getEditorBridge();
+  const fileWatcher = getFileWatcher();
+  const floatingChat = getFloatingChatManager();
   const gateway = getGatewayDiscovery();
   const gpuWindow = getGpuWindowManager();
   const location = getLocationManager();
@@ -83,16 +118,138 @@ export function registerRpcHandlers(
   const screencapture = getScreenCaptureManager();
   const swabble = getSwabbleManager();
   const talkmode = getTalkModeManager();
+  const musicPlayer = getMusicPlayerManager();
 
   rpc?.setRequestHandler?.({
     // ---- Agent ----
-    agentStart: async () => agent.start(),
+    agentStart: async () => {
+      const status = await agent.start();
+      if (status.state === "running") {
+        setAgentReady(true);
+      }
+      return status;
+    },
     agentStop: async () => {
       await agent.stop();
+      setAgentReady(false);
       return { ok: true };
     },
-    agentRestart: async () => agent.restart(),
+    agentRestart: async () => {
+      const status = await agent.restart();
+      setAgentReady(status.state === "running");
+      return status;
+    },
+    agentRestartClearLocalDb: async () => {
+      console.log("[RPC][reset] agentRestartClearLocalDb invoked");
+      try {
+        const status = await agent.restartClearingLocalDb();
+        console.log("[RPC][reset] agentRestartClearLocalDb done", {
+          state: status.state,
+          port: status.port,
+        });
+        setAgentReady(status.state === "running");
+        return status;
+      } catch (err) {
+        console.error("[RPC][reset] agentRestartClearLocalDb failed", err);
+        throw err;
+      }
+    },
     agentStatus: async () => agent.getStatus(),
+    agentInspectExistingInstall: async () => agent.inspectExistingInstall(),
+    /** Renderer `fetch` after native dialogs can stall; main POST matches menu reset pattern. */
+    agentPostCloudDisconnect: async (
+      params?: { apiBase?: string; bearerToken?: string } | null,
+    ) => {
+      try {
+        return await postCloudDisconnectFromMain({
+          apiBaseOverride: params?.apiBase ?? null,
+          bearerTokenOverride: params?.bearerToken ?? null,
+        });
+      } catch (err) {
+        console.error("[RPC] agentPostCloudDisconnect failed", err);
+        throw err;
+      }
+    },
+    /** Native confirm + main-process POST (renderer bridge/fetch can stall after a sheet). */
+    agentCloudDisconnectWithConfirm: async (
+      params?: { apiBase?: string; bearerToken?: string } | null,
+    ) => {
+      const box = await desktop.showMessageBox({
+        type: "warning",
+        title: "Disconnect from Eliza Cloud",
+        message: "The agent will need a local AI provider to continue working.",
+        buttons: ["Disconnect", "Cancel"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      const raw =
+        box && typeof box === "object" && "response" in box
+          ? (box as { response: unknown }).response
+          : box;
+      const response =
+        typeof raw === "number" && Number.isFinite(raw)
+          ? raw
+          : typeof raw === "bigint"
+            ? Number(raw)
+            : 1;
+      if (response !== 0) {
+        return { cancelled: true as const };
+      }
+      try {
+        return await postCloudDisconnectFromMain({
+          apiBaseOverride: params?.apiBase ?? null,
+          bearerTokenOverride: params?.bearerToken ?? null,
+        });
+      } catch (err) {
+        console.error("[RPC] agentCloudDisconnectWithConfirm failed", err);
+        throw err;
+      }
+    },
+
+    desktopGetRuntimeMode: async () => {
+      const runtimeMode = resolveDesktopRuntimeMode(
+        process.env as Record<string, string | undefined>,
+      );
+      return {
+        mode: runtimeMode.mode,
+        externalApiBase: runtimeMode.externalApi.base,
+        externalApiSource: runtimeMode.externalApi.source,
+      };
+    },
+
+    // ---- Renderer diagnostics ----
+    rendererReportDiagnostic: async (
+      params?: {
+        level?: "log" | "info" | "warn" | "error";
+        source?: string;
+        message?: string;
+        details?: unknown;
+      } | null,
+    ) => {
+      const level = params?.level ?? "log";
+      const source = params?.source ?? "renderer";
+      const message = params?.message?.trim() || "(no message)";
+      const details =
+        typeof params?.details === "undefined"
+          ? ""
+          : ` ${JSON.stringify(params.details)}`;
+      const line = `[Renderer:${source}] ${message}${details}`;
+      switch (level) {
+        case "error":
+          console.error(line);
+          break;
+        case "warn":
+          console.warn(line);
+          break;
+        case "info":
+          console.info(line);
+          break;
+        default:
+          console.log(line);
+          break;
+      }
+      return { ok: true };
+    },
 
     // ---- Desktop: Tray ----
     desktopCreateTray: async (
@@ -161,6 +318,15 @@ export function registerRpcHandlers(
     desktopCloseNotification: async (
       params: Parameters<typeof desktop.closeNotification>[0],
     ) => desktop.closeNotification(params),
+    desktopShowBackgroundNotice: async () => ({
+      shown: showBackgroundNoticeOnce({
+        fileSystem: fs,
+        userDataDir: Utils.paths.userData,
+        showNotification: (options) => {
+          Utils.showNotification(options);
+        },
+      }),
+    }),
 
     // ---- Desktop: Power ----
     desktopGetPowerState: async () => desktop.getPowerState(),
@@ -168,14 +334,61 @@ export function registerRpcHandlers(
     // ---- Desktop: App ----
     desktopQuit: async () => desktop.quit(),
     desktopRelaunch: async () => desktop.relaunch(),
-    desktopApplyUpdate: async () => {
-      Updater.applyUpdate();
-    },
+    desktopApplyUpdate: async () => desktop.applyUpdate(),
+    desktopCheckForUpdates: async () => desktop.checkForUpdates(),
+    desktopGetUpdaterState: async () => desktop.getUpdaterState(),
     desktopGetVersion: async () => desktop.getVersion(),
+    desktopGetBuildInfo: async () => desktop.getBuildInfo(),
     desktopIsPackaged: async () => desktop.isPackaged(),
+    desktopGetDockIconVisibility: async () => desktop.getDockIconVisibility(),
+    desktopSetDockIconVisibility: async (
+      params: Parameters<typeof desktop.setDockIconVisibility>[0],
+    ) => desktop.setDockIconVisibility(params),
     desktopGetPath: async (params: Parameters<typeof desktop.getPath>[0]) =>
       desktop.getPath(params),
+    desktopGetStartupDiagnostics: async () => desktop.getStartupDiagnostics(),
+    desktopOpenLogsFolder: async () => desktop.openLogsFolder(),
+    desktopCreateBugReportBundle: async (
+      params: Parameters<typeof desktop.createBugReportBundle>[0],
+    ) => desktop.createBugReportBundle(params),
     desktopBeep: async () => desktop.beep(),
+    desktopShowSelectionContextMenu: async (
+      params: Parameters<typeof desktop.showSelectionContextMenu>[0],
+    ) => desktop.showSelectionContextMenu(params),
+    desktopGetSessionSnapshot: async (
+      params: Parameters<typeof desktop.getSessionSnapshot>[0],
+    ) => desktop.getSessionSnapshot(params),
+    desktopClearSessionData: async (
+      params: Parameters<typeof desktop.clearSessionData>[0],
+    ) => desktop.clearSessionData(params),
+    desktopGetWebGpuBrowserStatus: async () => desktop.getWebGpuBrowserStatus(),
+    desktopOpenReleaseNotesWindow: async (
+      params: Parameters<typeof desktop.openReleaseNotesWindow>[0],
+    ) => desktop.openReleaseNotesWindow(params),
+    desktopOpenSettingsWindow: async (
+      params: { tabHint?: string } | undefined,
+    ) => {
+      desktop.openSettings(params?.tabHint);
+    },
+    desktopOpenSurfaceWindow: async (params: {
+      surface:
+        | "chat"
+        | "browser"
+        | "release"
+        | "triggers"
+        | "plugins"
+        | "connectors"
+        | "cloud";
+      browse?: string;
+    }) => {
+      if (!isDetachedSurface(params.surface)) {
+        return;
+      }
+      desktop.openSurfaceWindow(
+        params.surface,
+        params.surface === "browser" ? params.browse : undefined,
+      );
+    },
 
     // ---- Desktop: Screen ----
     desktopGetPrimaryDisplay: async () => desktop.getPrimaryDisplay(),
@@ -230,24 +443,74 @@ export function registerRpcHandlers(
     permissionsCheck: async (params: {
       id: Parameters<typeof permissions.checkPermission>[0];
       forceRefresh?: boolean;
-    }) => permissions.checkPermission(params.id, params.forceRefresh),
+    }) => {
+      if (isRuntimePermissionId(params.id)) {
+        const runtimePermission = await fetchRuntimePermissionState(
+          agent.getPort(),
+          params.id,
+        );
+        return (
+          runtimePermission ??
+          buildRuntimePermissionUnavailableState(
+            params.id,
+            "Milady runtime is unavailable, so website blocking permission cannot be checked from desktop right now.",
+          )
+        );
+      }
+      return permissions.checkPermission(params.id, params.forceRefresh);
+    },
     permissionsCheckFeature: async (params: {
       featureId: Parameters<typeof permissions.checkFeaturePermissions>[0];
-    }) => permissions.checkFeaturePermissions(params.featureId),
+    }) => {
+      if (params.featureId === "website-blocker") {
+        const runtimePermission = await fetchRuntimePermissionState(
+          agent.getPort(),
+          "website-blocking",
+        );
+        const granted =
+          runtimePermission?.status === "granted" ||
+          runtimePermission?.status === "not-applicable";
+        return {
+          granted,
+          missing: granted ? [] : ["website-blocking"],
+        };
+      }
+      return permissions.checkFeaturePermissions(params.featureId);
+    },
     permissionsRequest: async (params: {
       id: Parameters<typeof permissions.requestPermission>[0];
     }) => {
+      if (isRuntimePermissionId(params.id)) {
+        const runtimePermission = await fetchRuntimePermissionState(
+          agent.getPort(),
+          params.id,
+          "request",
+        );
+        const nextPermissions = await permissions.checkAllPermissions();
+        await syncPermissionsToRestApi(agent.getPort(), nextPermissions);
+        return (
+          runtimePermission ??
+          buildRuntimePermissionUnavailableState(
+            params.id,
+            "Milady runtime is unavailable, so website blocking permission cannot be requested from desktop right now.",
+          )
+        );
+      }
       const result = await permissions.requestPermission(params.id);
-      syncPermissionsToRestApi();
+      await syncPermissionsToRestApi(
+        agent.getPort(),
+        await permissions.checkAllPermissions(),
+      );
       return result;
     },
     permissionsGetAll: async (
       params: { forceRefresh?: boolean } | undefined,
     ) => {
-      const result = await permissions.checkAllPermissions(
-        params?.forceRefresh,
+      const result = await mergeRuntimePermissionStates(
+        agent.getPort(),
+        await permissions.checkAllPermissions(params?.forceRefresh),
       );
-      syncPermissionsToRestApi();
+      await syncPermissionsToRestApi(agent.getPort(), result);
       return result;
     },
     permissionsGetPlatform: async () => process.platform,
@@ -259,7 +522,22 @@ export function registerRpcHandlers(
     permissionsClearCache: async () => permissions.clearCache(),
     permissionsOpenSettings: async (params: {
       id: Parameters<typeof permissions.openSettings>[0];
-    }) => permissions.openSettings(params.id),
+    }) => {
+      if (isRuntimePermissionId(params.id)) {
+        const runtimePermission = await fetchRuntimePermissionState(
+          agent.getPort(),
+          params.id,
+          "open-settings",
+        );
+        if (runtimePermission) {
+          return;
+        }
+        throw new Error(
+          "Milady runtime is unavailable, so website blocking permission help could not be opened from desktop.",
+        );
+      }
+      return permissions.openSettings(params.id);
+    },
 
     // ---- Location ----
     locationGetCurrentPosition: async () => location.getCurrentPosition(),
@@ -348,8 +626,8 @@ export function registerRpcHandlers(
       params: Parameters<typeof screencapture.switchSource>[0],
     ) => screencapture.switchSource(params),
     screencaptureSetCaptureTarget: async (_params: unknown) => {
-      // Revert to main webview. Popout windows call setCaptureTarget(win.webview)
-      // directly on the Bun side when they open.
+      // Legacy compatibility hook. Native frame capture now targets the app
+      // window directly, so renderer-side capture target overrides are inert.
       screencapture.setCaptureTarget(null);
       return { available: true };
     },
@@ -386,6 +664,9 @@ export function registerRpcHandlers(
       params: Parameters<typeof talkmode.audioChunk>[0],
     ) => talkmode.audioChunk(params),
 
+    musicPlayerGetDesktopPlaybackUrls: async (params?: { guildId?: string }) =>
+      musicPlayer.getDesktopPlaybackUrls(params),
+
     // ---- Context Menu ----
     // These forward text selections from the renderer context menu to the agent.
     contextMenuAskAgent: async (params: { text: string }) => {
@@ -401,15 +682,24 @@ export function registerRpcHandlers(
       sendToWebview("contextMenu:saveAsCommand", { text: params.text });
     },
 
-    // ---- LIFO (PiP) ----
-    lifoGetPipState: async () => pipState,
-    lifoSetPip: async (params: PipState) => {
-      pipState = params;
-      if (params.enabled) {
-        desktop.setAlwaysOnTop({ flag: true });
-      } else {
-        desktop.setAlwaysOnTop({ flag: false });
+    // ---- Credentials Auto-Detection ----
+    credentialsScanProviders: async (params?: { context?: string }) => {
+      if (
+        !params?.context ||
+        !["onboarding", "tray-refresh"].includes(params.context)
+      ) {
+        throw new Error("credentials:scanProviders requires a valid context");
       }
+      return { providers: await scanProviderCredentials() };
+    },
+    credentialsScanAndValidate: async (params?: { context?: string }) => {
+      if (
+        !params?.context ||
+        !["onboarding", "tray-refresh"].includes(params.context)
+      ) {
+        throw new Error("credentialsScanAndValidate requires a valid context");
+      }
+      return { providers: await scanAndValidateProviderCredentials() };
     },
 
     // ---- GPU Window ----
@@ -449,6 +739,99 @@ export function registerRpcHandlers(
       params: Parameters<typeof gpuWindow.getViewNativeHandle>[0],
     ) => gpuWindow.getViewNativeHandle(params),
     gpuViewList: async () => gpuWindow.listViews(),
+
+    // ---- Steward Sidecar ----
+    stewardGetStatus: async () => getStewardStatus(),
+    stewardIsLocalEnabled: async () => ({ enabled: isStewardLocalEnabled() }),
+    stewardStart: async () => {
+      if (!isStewardLocalEnabled()) {
+        return {
+          state: "stopped" as const,
+          error: "STEWARD_LOCAL not enabled",
+        };
+      }
+      return startSteward();
+    },
+    stewardRestart: async () => {
+      if (!isStewardLocalEnabled()) {
+        return {
+          state: "stopped" as const,
+          error: "STEWARD_LOCAL not enabled",
+        };
+      }
+      return restartSteward();
+    },
+    stewardReset: async () => {
+      if (!isStewardLocalEnabled()) {
+        return {
+          state: "stopped" as const,
+          error: "STEWARD_LOCAL not enabled",
+        };
+      }
+      return resetSteward();
+    },
+
+    // ---- Native Editor Bridge ----
+    editorBridgeListEditors: async () => ({
+      editors: editorBridge.listInstalledEditors(),
+    }),
+    editorBridgeOpenInEditor: async (params: {
+      editorId: NativeEditorId;
+      workspacePath: string;
+    }) => {
+      const session = editorBridge.openInEditor(
+        params.editorId,
+        params.workspacePath,
+      );
+      sendToWebview("editorBridge:sessionChanged", session);
+      return session;
+    },
+    editorBridgeGetSession: async () => editorBridge.getActiveEditorSession(),
+    editorBridgeClearSession: async () => {
+      editorBridge.clearActiveEditorSession();
+      sendToWebview("editorBridge:sessionChanged", null);
+    },
+
+    // ---- Workspace File Watcher ----
+    fileWatcherStart: async (params: { watchPath: string }) => {
+      const watchId = fileWatcher.startWatch(params.watchPath, (event) => {
+        sendToWebview("fileWatcher:fileChanged", event);
+      });
+      return { watchId };
+    },
+    fileWatcherStop: async (params: { watchId: string }) => ({
+      stopped: fileWatcher.stopWatch(params.watchId),
+    }),
+    fileWatcherStopAll: async () => {
+      fileWatcher.stopAll();
+    },
+    fileWatcherList: async () => ({ watches: fileWatcher.listWatches() }),
+    fileWatcherGetStatus: async (params: { watchId: string }) =>
+      fileWatcher.getWatch(params.watchId),
+
+    // ---- Floating Chat Window ----
+    floatingChatOpen: async (
+      params: { contextId?: string; x?: number; y?: number } | undefined,
+    ) => {
+      return floatingChat.open(params ?? {});
+    },
+    floatingChatShow: async () => {
+      floatingChat.show();
+      return floatingChat.getStatus();
+    },
+    floatingChatHide: async () => {
+      floatingChat.hide();
+      return floatingChat.getStatus();
+    },
+    floatingChatClose: async () => {
+      floatingChat.close();
+      return floatingChat.getStatus();
+    },
+    floatingChatSetContext: async (params: { contextId: string | null }) => {
+      floatingChat.setContextId(params.contextId);
+      return floatingChat.getStatus();
+    },
+    floatingChatGetStatus: async () => floatingChat.getStatus(),
   });
 
   console.log("[RPC] All handlers registered");

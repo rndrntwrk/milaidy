@@ -1,23 +1,15 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { CAPACITOR_PLUGIN_NAMES } from "./capacitor-plugin-names.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.resolve(__dirname, "..");
 const pluginsDir = path.join(appDir, "plugins");
-const pluginNames = [
-  "gateway",
-  "swabble",
-  "camera",
-  "screencapture",
-  "canvas",
-  "desktop",
-  "location",
-  "talkmode",
-  "agent",
-];
+const pluginNames = CAPACITOR_PLUGIN_NAMES;
 
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
@@ -40,14 +32,14 @@ function run(command, args, cwd) {
   });
 }
 
-const npmCommand =
-  process.platform === "win32" ? process.env.ComSpec || "cmd.exe" : "npm";
-const npmArgs =
-  process.platform === "win32"
-    ? ["/d", "/s", "/c", "npm", "run", "build"]
-    : ["run", "build"];
+const npmCommand = "bun";
+const npmArgs = ["run", "build"];
 
-for (const name of pluginNames) {
-  console.log(`[plugin:${name}] building...`);
-  await run(npmCommand, npmArgs, path.join(pluginsDir, name));
-}
+// Plugins have no inter-dependencies — build in parallel
+await Promise.all(
+  pluginNames.map(async (name) => {
+    console.log(`[plugin:${name}] building...`);
+    await run(npmCommand, npmArgs, path.join(pluginsDir, name));
+    console.log(`[plugin:${name}] done`);
+  }),
+);

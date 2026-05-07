@@ -27,7 +27,7 @@ function fail(message) {
   process.exit(1);
 }
 
-if (!REPO_SLUG || !REPO_SLUG.includes("/")) {
+if (!REPO_SLUG?.includes("/")) {
   fail("GITHUB_REPOSITORY must be set (owner/repo).");
 }
 if (!DRY_RUN && !TOKEN) {
@@ -76,7 +76,7 @@ async function listAll(path) {
 
 async function ensureLabels(labels) {
   const existing = await listAll(`/repos/${owner}/${repo}/labels`);
-  const existingSet = new Set(existing.map((l) => l.name));
+  const existingSet = new Set(existing.map((label) => label.name));
 
   for (const label of labels) {
     if (existingSet.has(label)) continue;
@@ -93,9 +93,9 @@ async function ensureLabels(labels) {
       });
       existingSet.add(label);
       console.log(`created label: ${label}`);
-    } catch (err) {
+    } catch (error) {
       console.warn(
-        `warning: failed to create label "${label}": ${err.message}`,
+        `warning: failed to create label "${label}": ${error.message}`,
       );
     }
   }
@@ -107,7 +107,7 @@ async function main() {
   const drafts = parseIssueDrafts(markdown, REPORT_PATH);
   console.log(`parsed ${drafts.length} gap drafts from ${REPORT_PATH}`);
 
-  const requiredLabels = drafts.flatMap((d) => labelsForDraft(d));
+  const requiredLabels = drafts.flatMap((draft) => labelsForDraft(draft));
   const labelSet = await ensureLabels([...new Set(requiredLabels)]);
 
   const openManagedIssues = (
@@ -213,4 +213,6 @@ async function main() {
   }
 }
 
-main().catch((err) => fail(err instanceof Error ? err.message : String(err)));
+main().catch((error) =>
+  fail(error instanceof Error ? error.message : String(error)),
+);

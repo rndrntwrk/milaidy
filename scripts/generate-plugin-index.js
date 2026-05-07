@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * Generate plugins.json — a static manifest of all available plugins
- * that ships with the milady package.
+ * that ships with the eliza package.
  *
  * Fetches plugin metadata from the elizaos-plugins registry and writes
- * plugins.json to the milady package root.
+ * plugins.json to the eliza package root.
  *
- * Run from the milady package directory:
+ * Run from the eliza package directory:
  *   node scripts/generate-plugin-index.js
  */
 import fs from "node:fs";
@@ -18,6 +18,7 @@ const __dirname = path.dirname(__filename);
 
 const packageRoot = path.resolve(__dirname, "..");
 const outputPath = path.join(packageRoot, "plugins.json");
+const overridesPath = path.join(__dirname, "plugin-metadata-overrides.json");
 
 // Registry URL
 const GENERATED_REGISTRY_URL =
@@ -49,7 +50,6 @@ const AI_PROVIDERS = new Set([
 
 export const STREAMING_DESTINATIONS = new Set([
   "streaming-base",
-  "retake",
   "custom-rtmp",
   "youtube-streaming",
   "twitch-streaming",
@@ -65,7 +65,6 @@ const CONNECTORS = new Set([
   "whatsapp",
   "signal",
   "imessage",
-  "bluebubbles",
   "farcaster",
   "bluesky",
   "matrix",
@@ -81,12 +80,48 @@ const CONNECTORS = new Set([
   "twitch",
   "nextcloud-talk",
   "instagram",
+  "wechat",
+]);
+
+const SOCIAL_CHAT_CONNECTORS = new Set([
+  "telegram",
+  "discord",
+  "slack",
+  "whatsapp",
+  "signal",
+  "imessage",
+  "matrix",
+  "mattermost",
+  "msteams",
+  "google-chat",
+  "feishu",
+  "line",
+  "zalo",
+  "zalouser",
+  "tlon",
+  "nextcloud-talk",
+  "blooio",
+  "twilio",
+  "twitch",
+]);
+
+const SOCIAL_FEED_CONNECTORS = new Set([
+  "twitter",
+  "bluesky",
+  "farcaster",
+  "instagram",
+  "nostr",
 ]);
 
 const DATABASES = new Set(["sql", "localdb", "inmemorydb"]);
+const NATIVE_RUNTIME_FEATURE_PLUGIN_IDS = new Set([
+  "knowledge",
+  "relationships",
+  "trajectories",
+]);
 
 export const PLUGIN_SETUP_GUIDE_ROOT =
-  "https://docs.milady.ai/plugin-setup-guide";
+  "https://docs.eliza.ai/plugin-setup-guide";
 
 const SETUP_GUIDE_ANCHORS = {
   openai: "#openai",
@@ -99,7 +134,7 @@ const SETUP_GUIDE_ANCHORS = {
   "local-ai": "#local-ai",
   "vercel-ai-gateway": "#vercel-ai-gateway",
   discord: "#discord",
-  telegram: "#telegram",
+  telegram: "https://docs.milady.ai/guides/tutorial-telegram-bot",
   twitter: "#twitter--x",
   slack: "#slack",
   whatsapp: "#whatsapp",
@@ -114,7 +149,6 @@ const SETUP_GUIDE_ANCHORS = {
   "google-chat": "#google-chat",
   signal: "#signal",
   imessage: "#imessage-macos-only",
-  bluebubbles: "#bluebubbles-imessage-from-any-platform",
   blooio: "#blooio-sms-via-api",
   nostr: "#nostr",
   line: "#line",
@@ -124,11 +158,11 @@ const SETUP_GUIDE_ANCHORS = {
   tlon: "#tlon-urbit",
   zalo: "#zalo-vietnam-messaging",
   zalouser: "#zalo-user-personal",
+  wechat: "#wechat",
   acp: "#acp-agent-communication-protocol",
   mcp: "#mcp-model-context-protocol",
   iq: "#iq-solana-on-chain",
   "gmail-watch": "#gmail-watch",
-  retake: "#retaketv",
   "streaming-base": "#enable-streaming-streaming-base",
   "twitch-streaming": "#twitch-streaming",
   "youtube-streaming": "#youtube-streaming",
@@ -138,6 +172,44 @@ const SETUP_GUIDE_ANCHORS = {
 };
 
 const MILADY_REPO_ROOT = "https://github.com/milady-ai/milady";
+const TAG_STOPWORDS = new Set([
+  "plugin",
+  "plugins",
+  "eliza",
+  "elizaos",
+  "elizaos-plugin",
+  "elizaos-plugins",
+  "feature",
+]);
+const TAG_ALIASES = new Map([
+  ["ai", "llm"],
+  ["ai-agents", "agents"],
+  ["computer-vision", "vision"],
+  ["issue-tracking", "project-management"],
+  ["project-management", "project-management"],
+  ["text-to-speech", "text-to-speech"],
+  ["tts", "text-to-speech"],
+  ["voice-synthesis", "text-to-speech"],
+  ["speech-to-text", "speech-to-text"],
+  ["stt", "speech-to-text"],
+  ["file-storage", "storage"],
+  ["long-term-memory", "memory"],
+  ["short-term-memory", "memory"],
+  ["multi-agent", "orchestration"],
+  ["command-line", "developer-tools"],
+]);
+const CATEGORY_TAGS = {
+  "ai-provider": ["ai-provider", "llm"],
+  connector: ["connector"],
+  streaming: ["streaming", "broadcast"],
+  database: ["database", "storage"],
+  app: ["app", "interactive"],
+  feature: [],
+};
+
+const metadataOverrides = fs.existsSync(overridesPath)
+  ? JSON.parse(fs.readFileSync(overridesPath, "utf8"))
+  : {};
 
 export function categorize(id) {
   if (AI_PROVIDERS.has(id)) return "ai-provider";
@@ -149,7 +221,11 @@ export function categorize(id) {
 
 export function resolveSetupGuideUrl(id) {
   const anchor = SETUP_GUIDE_ANCHORS[id];
-  return anchor ? `${PLUGIN_SETUP_GUIDE_ROOT}${anchor}` : undefined;
+  if (!anchor) return undefined;
+  // Full URLs are used as-is; anchors are appended to the default root
+  return anchor.startsWith("http")
+    ? anchor
+    : `${PLUGIN_SETUP_GUIDE_ROOT}${anchor}`;
 }
 
 export function normalizeRepositoryUrl(repository) {
@@ -172,28 +248,305 @@ export function normalizeRepositoryUrl(repository) {
 }
 
 function deriveMiladyRepositoryUrl(npmName, dirName) {
-  if (!npmName?.startsWith("@milady/")) return undefined;
+  if (!npmName?.startsWith("@elizaai/") && !npmName?.startsWith("@miladyai/")) {
+    return undefined;
+  }
   if (!dirName?.startsWith("plugin-")) return undefined;
   return `${MILADY_REPO_ROOT}/tree/main/packages/${dirName}`;
 }
 
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function inferSensitiveKey(key) {
+  const upper = key.toUpperCase();
+  return (
+    upper.includes("_API_KEY") ||
+    upper.includes("_SECRET") ||
+    upper.includes("_TOKEN") ||
+    upper.includes("_PASSWORD") ||
+    upper.includes("_PRIVATE_KEY") ||
+    upper.includes("_SIGNING_") ||
+    upper.includes("ENCRYPTION_")
+  );
+}
+
+function normalizePluginParameters(rawParameters) {
+  if (!isRecord(rawParameters)) {
+    return undefined;
+  }
+
+  const normalized = {};
+  for (const [key, definition] of Object.entries(rawParameters)) {
+    if (!isRecord(definition)) continue;
+
+    const normalizedDefinition = {
+      type: typeof definition.type === "string" ? definition.type : "string",
+      description:
+        typeof definition.description === "string" && definition.description
+          ? definition.description
+          : inferKeyDescription(key),
+      required:
+        definition.required === true ||
+        (definition.optional === false && definition.required !== false),
+      sensitive: definition.sensitive === true || inferSensitiveKey(key),
+    };
+
+    if (definition.default !== undefined) {
+      normalizedDefinition.default = String(definition.default);
+    }
+    if (Array.isArray(definition.options)) {
+      const options = definition.options.filter(
+        (value) => typeof value === "string",
+      );
+      if (options.length > 0) {
+        normalizedDefinition.options = options;
+      }
+    }
+
+    normalized[key] = normalizedDefinition;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeConfigUiHints(rawHints) {
+  if (!isRecord(rawHints)) return undefined;
+  const normalized = Object.fromEntries(
+    Object.entries(rawHints).filter(([, value]) => isRecord(value)),
+  );
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function extractPackageMetadata(pkg, dirName, npmName) {
+  const pluginParameters = normalizePluginParameters(
+    pkg.agentConfig?.pluginParameters,
+  );
+  const configKeys =
+    Array.isArray(pkg.elizaos?.configKeys) &&
+    pkg.elizaos.configKeys.every((value) => typeof value === "string")
+      ? [...pkg.elizaos.configKeys]
+      : pluginParameters
+        ? Object.keys(pluginParameters)
+        : [];
+
+  return {
+    description: typeof pkg.description === "string" ? pkg.description : "",
+    homepage: typeof pkg.homepage === "string" ? pkg.homepage : undefined,
+    repository:
+      normalizeRepositoryUrl(pkg.repository) ??
+      deriveMiladyRepositoryUrl(npmName, dirName),
+    icon: pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? undefined,
+    tags: normalizeTags(pkg.keywords ?? []),
+    configKeys,
+    pluginParameters,
+    configUiHints:
+      normalizeConfigUiHints(pkg.agentConfig?.configUiHints) ??
+      normalizeConfigUiHints(pkg.elizaos?.configUiHints),
+  };
+}
+
+function mergePackageMetadata(base, next) {
+  return {
+    description: base.description || next.description || "",
+    homepage: base.homepage || next.homepage,
+    repository: base.repository || next.repository,
+    icon: base.icon || next.icon,
+    tags: base.tags?.length ? base.tags : next.tags,
+    configKeys: base.configKeys?.length ? base.configKeys : next.configKeys,
+    pluginParameters: base.pluginParameters || next.pluginParameters,
+    configUiHints: base.configUiHints || next.configUiHints,
+  };
+}
+
 function readLocalPackageMetadata(dirName, npmName) {
   if (!dirName) return {};
-  const pkgPath = path.join(packageRoot, "packages", dirName, "package.json");
-  if (!fs.existsSync(pkgPath)) {
-    return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
+  const candidates = [
+    path.join(packageRoot, "packages", dirName, "package.json"),
+    path.join(packageRoot, "plugins", dirName, "typescript", "package.json"),
+    path.join(packageRoot, "plugins", dirName, "package.json"),
+  ];
+
+  let metadata = {
+    repository: deriveMiladyRepositoryUrl(npmName, dirName),
+    tags: [],
+    configKeys: [],
+  };
+
+  for (const pkgPath of candidates) {
+    if (!fs.existsSync(pkgPath)) continue;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      metadata = mergePackageMetadata(
+        metadata,
+        extractPackageMetadata(pkg, dirName, npmName),
+      );
+    } catch {
+      // Ignore malformed package.json files and continue.
+    }
   }
+
+  return metadata;
+}
+
+async function fetchPublishedPackageManifest(packageName, version) {
+  if (!packageName) return {};
+
+  const dirName = `plugin-${
+    packageName
+      .split("/")
+      .pop()
+      ?.replace(/^plugin-/, "") ?? ""
+  }`;
+  const fetchVersionMetadata = async (candidateVersion) => {
+    if (!candidateVersion) return {};
+    try {
+      const response = await fetch(
+        `https://registry.npmjs.org/${encodeURIComponent(packageName)}/${encodeURIComponent(candidateVersion)}`,
+      );
+      if (!response.ok) return {};
+      const pkg = await response.json();
+      return extractPackageMetadata(pkg, dirName, packageName);
+    } catch {
+      return {};
+    }
+  };
+
+  const hasConfigMetadata = (metadata) =>
+    Array.isArray(metadata?.configKeys) && metadata.configKeys.length > 0;
+
+  let metadata = await fetchVersionMetadata(version);
+  if (hasConfigMetadata(metadata)) {
+    return metadata;
+  }
+
   try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-    return {
-      homepage: typeof pkg.homepage === "string" ? pkg.homepage : undefined,
-      repository:
-        normalizeRepositoryUrl(pkg.repository) ??
-        deriveMiladyRepositoryUrl(npmName, dirName),
-      icon: pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? undefined,
-    };
+    const response = await fetch(
+      `https://registry.npmjs.org/${encodeURIComponent(packageName)}`,
+    );
+    if (!response.ok) return metadata;
+    const packument = await response.json();
+    const tags = packument["dist-tags"] ?? {};
+    const fallbackVersions = [
+      tags.next,
+      tags.alpha,
+      tags.latest,
+      version,
+    ].filter(Boolean);
+
+    const seen = new Set();
+    for (const candidateVersion of fallbackVersions) {
+      if (!candidateVersion || seen.has(candidateVersion)) continue;
+      seen.add(candidateVersion);
+      const candidateMetadata = await fetchVersionMetadata(candidateVersion);
+      metadata = mergePackageMetadata(metadata, candidateMetadata);
+      if (hasConfigMetadata(metadata)) {
+        return metadata;
+      }
+    }
   } catch {
-    return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
+    // Ignore packument fallback failures and return the best metadata we found.
+  }
+
+  return metadata;
+}
+
+async function fetchPublishedPackageManifestMap(packages) {
+  const uniquePackages = [];
+  const seen = new Set();
+  for (const entry of packages) {
+    if (!entry?.name || !entry?.version) continue;
+    const key = `${entry.name}@${entry.version}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniquePackages.push(entry);
+  }
+
+  const results = new Map();
+  let index = 0;
+  const workerCount = Math.min(8, uniquePackages.length);
+
+  async function worker() {
+    while (index < uniquePackages.length) {
+      const current = uniquePackages[index];
+      index += 1;
+      results.set(
+        current.name,
+        await fetchPublishedPackageManifest(current.name, current.version),
+      );
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+function normalizeTag(tag) {
+  if (typeof tag !== "string") return null;
+  const normalized = tag
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!normalized || TAG_STOPWORDS.has(normalized)) return null;
+  return TAG_ALIASES.get(normalized) ?? normalized;
+}
+
+function normalizeTags(values) {
+  const tags = [];
+  const seen = new Set();
+  for (const value of values ?? []) {
+    const normalized = normalizeTag(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    tags.push(normalized);
+  }
+  return tags;
+}
+
+function idTags(id) {
+  const parts = id.split("-").filter(Boolean);
+  return normalizeTags([id, ...parts]);
+}
+
+function mergeTags(...sources) {
+  return normalizeTags(
+    sources.flatMap((source) => (Array.isArray(source) ? source : [])),
+  );
+}
+
+export function connectorTags(id) {
+  if (SOCIAL_CHAT_CONNECTORS.has(id)) {
+    return ["social", "social-chat", "messaging"];
+  }
+  if (SOCIAL_FEED_CONNECTORS.has(id)) {
+    return ["social", "social-feed"];
+  }
+  return ["integration"];
+}
+
+export function inferDescription(id, name, category) {
+  switch (category) {
+    case "ai-provider":
+      return `${name} model provider for chat and inference workloads.`;
+    case "connector":
+      if (SOCIAL_CHAT_CONNECTORS.has(id)) {
+        return `${name} connector for chatting with your agent.`;
+      }
+      if (SOCIAL_FEED_CONNECTORS.has(id)) {
+        return `${name} social connector for connecting your agent to ${name}.`;
+      }
+      return `${name} connector for integrating external workflows with Milady agents.`;
+    case "streaming":
+      return `${name} streaming destination for broadcasting live agent output.`;
+    case "database":
+      return `${name} database adapter for persistent agent state and memory.`;
+    case "app":
+      return `${name} interactive app for Milady agents.`;
+    default:
+      return `${name} plugin for ${id.replace(/-/g, " ")} workflows.`;
   }
 }
 
@@ -334,10 +687,11 @@ function inferPluginParameters(configKeys) {
       : isNumberKey(key)
         ? "number"
         : "string";
+    // Do not infer required=true from _API_KEY — many plugins expose optional
+    // third-party enrichers (e.g. music metadata) where any subset may be set.
     const required =
       sensitive &&
-      (key.toUpperCase().endsWith("_API_KEY") ||
-        key.toUpperCase().endsWith("_BOT_TOKEN") ||
+      (key.toUpperCase().endsWith("_BOT_TOKEN") ||
         key.toUpperCase().endsWith("_TOKEN") ||
         key.toUpperCase().endsWith("_PRIVATE_KEY"));
     params[key] = {
@@ -400,6 +754,21 @@ async function main() {
 
   // Registry format: { registry: { "@elizaos/plugin-xxx": { ... } } }
   const packages = registry.registry || {};
+  const publishedPackageMetadata = await fetchPublishedPackageManifestMap(
+    Object.entries(packages)
+      .filter(
+        ([npmName, pkgInfo]) =>
+          npmName.startsWith("@elizaos/plugin-") &&
+          pkgInfo.supports?.v2 &&
+          !NATIVE_RUNTIME_FEATURE_PLUGIN_IDS.has(
+            npmName.replace("@elizaos/plugin-", ""),
+          ),
+      )
+      .map(([npmName, pkgInfo]) => ({
+        name: npmName,
+        version: pkgInfo.npm?.v2,
+      })),
+  );
 
   for (const [npmName, pkgInfo] of Object.entries(packages)) {
     // Only process @elizaos/plugin-* packages
@@ -409,14 +778,16 @@ async function main() {
     if (!pkgInfo.supports?.v2) continue;
 
     const id = npmName.replace("@elizaos/plugin-", "");
+    if (NATIVE_RUNTIME_FEATURE_PLUGIN_IDS.has(id)) continue;
     const dirName = `plugin-${id}`;
-    const description = pkgInfo.description || "";
     // Use v2 npm version (next/alpha)
     const version = pkgInfo.npm?.v2 || undefined;
 
     // Get existing entry to preserve hand-authored metadata
     const existingEntry = existingManifest.get(id);
     const localMeta = readLocalPackageMetadata(dirName, npmName);
+    const override = metadataOverrides[id] ?? {};
+    const publishedMeta = publishedPackageMetadata.get(npmName) ?? {};
 
     // Preserve existing category if the inferred one is just "feature" (default)
     const inferredCategory = categorize(id);
@@ -424,16 +795,45 @@ async function main() {
       inferredCategory === "feature" && existingEntry?.category
         ? existingEntry.category
         : inferredCategory;
+    const name = existingEntry?.name || formatName(id);
+    const description =
+      override.description ||
+      pkgInfo.description ||
+      localMeta.description ||
+      publishedMeta.description ||
+      existingEntry?.description ||
+      inferDescription(id, name, category);
+    const tags = mergeTags(
+      override.tags,
+      localMeta.tags,
+      pkgInfo.topics,
+      publishedMeta.tags,
+      CATEGORY_TAGS[category] ?? [],
+      category === "connector" ? connectorTags(id) : [],
+      idTags(id),
+      existingEntry?.tags,
+    );
 
-    // Preserve configKeys from existing manifest
-    const configKeys = existingEntry?.configKeys || [];
+    // Preserve existing manifest config when present, otherwise hydrate from
+    // local or published package metadata.
+    const configKeys =
+      existingEntry?.configKeys?.length > 0
+        ? existingEntry.configKeys
+        : localMeta.configKeys?.length > 0
+          ? localMeta.configKeys
+          : (publishedMeta.configKeys ?? []);
     const envKey = findEnvKey(configKeys);
 
     // Preserve pluginDeps from existing manifest
     const pluginDeps = existingEntry?.pluginDeps;
 
-    // Preserve pluginParameters from existing manifest, or infer from configKeys
-    let finalPluginParams = existingEntry?.pluginParameters;
+    // Preserve pluginParameters from existing manifest when present, otherwise
+    // hydrate them from package metadata before falling back to key inference.
+    let finalPluginParams =
+      existingEntry?.pluginParameters &&
+      Object.keys(existingEntry.pluginParameters).length > 0
+        ? existingEntry.pluginParameters
+        : localMeta.pluginParameters || publishedMeta.pluginParameters;
     if (!finalPluginParams && configKeys.length > 0) {
       finalPluginParams = inferPluginParameters(configKeys);
     }
@@ -441,19 +841,36 @@ async function main() {
     entries.push({
       id,
       dirName,
-      name: formatName(id),
+      name,
       npmName,
       description,
+      tags,
       category,
       envKey,
       configKeys,
       version: version || undefined,
       pluginDeps: pluginDeps?.length > 0 ? pluginDeps : undefined,
       pluginParameters: finalPluginParams,
-      ...(pkgInfo.homepage || existingEntry?.homepage || localMeta.homepage
+      ...(existingEntry?.configUiHints ||
+      localMeta.configUiHints ||
+      publishedMeta.configUiHints
+        ? {
+            configUiHints:
+              existingEntry?.configUiHints ||
+              localMeta.configUiHints ||
+              publishedMeta.configUiHints,
+          }
+        : {}),
+      ...(pkgInfo.homepage ||
+      existingEntry?.homepage ||
+      localMeta.homepage ||
+      publishedMeta.homepage
         ? {
             homepage:
-              pkgInfo.homepage || existingEntry?.homepage || localMeta.homepage,
+              pkgInfo.homepage ||
+              existingEntry?.homepage ||
+              localMeta.homepage ||
+              publishedMeta.homepage,
           }
         : {}),
       ...(() => {
@@ -462,7 +879,8 @@ async function main() {
             pkgInfo.gitRepo ? `https://github.com/${pkgInfo.gitRepo}` : "",
           ) ??
           existingEntry?.repository ??
-          localMeta.repository;
+          localMeta.repository ??
+          publishedMeta.repository;
         return repository ? { repository } : {};
       })(),
       ...(() => {
@@ -470,18 +888,98 @@ async function main() {
           resolveSetupGuideUrl(id) ?? existingEntry?.setupGuideUrl;
         return setupGuideUrl ? { setupGuideUrl } : {};
       })(),
-      ...(existingEntry?.icon || localMeta.icon
-        ? { icon: existingEntry?.icon ?? localMeta.icon }
+      ...(existingEntry?.icon || localMeta.icon || publishedMeta.icon
+        ? { icon: existingEntry?.icon ?? localMeta.icon ?? publishedMeta.icon }
         : {}),
     });
   }
 
+  // Milady-vendored @elizaos plugins not yet in elizaos-plugins/registry.
+  const localAdditionsPath = path.join(
+    __dirname,
+    "plugin-index-local-additions.json",
+  );
+  if (fs.existsSync(localAdditionsPath)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(localAdditionsPath, "utf8"));
+      const list = Array.isArray(raw) ? raw : raw.plugins || [];
+      for (const base of list) {
+        if (!base?.id || entries.some((e) => e.id === base.id)) continue;
+        const id = base.id;
+        if (NATIVE_RUNTIME_FEATURE_PLUGIN_IDS.has(id)) continue;
+        const dirName = base.dirName || `plugin-${id}`;
+        const npmName = base.npmName || `@elizaos/plugin-${id}`;
+        const localMeta = readLocalPackageMetadata(dirName, npmName);
+        const override = metadataOverrides[id] ?? {};
+        const inferredCategory = categorize(id);
+        const category =
+          inferredCategory === "feature" && base.category
+            ? base.category
+            : inferredCategory;
+        const configKeys =
+          Array.isArray(override.configKeys) && override.configKeys.length > 0
+            ? override.configKeys
+            : Array.isArray(base.configKeys)
+              ? base.configKeys
+              : [];
+        const envKey =
+          typeof base.envKey === "string"
+            ? base.envKey
+            : findEnvKey(configKeys);
+        const description =
+          override.description ||
+          localMeta.description ||
+          base.description ||
+          inferDescription(id, base.name || formatName(id), category);
+        const tags = mergeTags(
+          override.tags,
+          localMeta.tags,
+          CATEGORY_TAGS[category] ?? [],
+          category === "connector" ? connectorTags(id) : [],
+          idTags(id),
+          base.tags,
+        );
+        let finalPluginParams = base.pluginParameters;
+        if (!finalPluginParams && configKeys.length > 0) {
+          finalPluginParams = inferPluginParameters(configKeys);
+        }
+        entries.push({
+          id,
+          dirName,
+          name: base.name || formatName(id),
+          npmName,
+          description,
+          tags,
+          category,
+          envKey,
+          configKeys,
+          version: base.version || undefined,
+          pluginDeps:
+            Array.isArray(base.pluginDeps) && base.pluginDeps.length > 0
+              ? base.pluginDeps
+              : undefined,
+          pluginParameters: finalPluginParams,
+          ...(base.repository || localMeta.repository
+            ? { repository: base.repository ?? localMeta.repository }
+            : {}),
+          ...(base.homepage || localMeta.homepage
+            ? { homepage: base.homepage ?? localMeta.homepage }
+            : {}),
+        });
+      }
+    } catch (err) {
+      console.warn(`[generate-plugin-index] local additions: ${err.message}`);
+    }
+  }
+
   for (const [id, existingEntry] of existingManifest.entries()) {
     if (entries.some((entry) => entry.id === id)) continue;
+    if (NATIVE_RUNTIME_FEATURE_PLUGIN_IDS.has(id)) continue;
 
     const dirName = existingEntry.dirName || `plugin-${id}`;
     const npmName = existingEntry.npmName;
     const localMeta = readLocalPackageMetadata(dirName, npmName);
+    const override = metadataOverrides[id] ?? {};
     const inferredCategory = categorize(id);
     const category =
       inferredCategory === "feature" && existingEntry?.category
@@ -492,11 +990,26 @@ async function main() {
     const homepage = existingEntry.homepage ?? localMeta.homepage ?? undefined;
     const setupGuideUrl =
       existingEntry.setupGuideUrl ?? resolveSetupGuideUrl(id) ?? undefined;
+    const tags = mergeTags(
+      override.tags,
+      localMeta.tags,
+      CATEGORY_TAGS[category] ?? [],
+      category === "connector" ? connectorTags(id) : [],
+      idTags(id),
+      existingEntry.tags,
+    );
+    const description =
+      override.description ||
+      existingEntry.description ||
+      localMeta.description ||
+      inferDescription(id, existingEntry.name || formatName(id), category);
 
     entries.push({
       ...existingEntry,
       id,
       dirName,
+      description,
+      tags,
       category,
       ...(repository ? { repository } : {}),
       ...(homepage ? { homepage } : {}),

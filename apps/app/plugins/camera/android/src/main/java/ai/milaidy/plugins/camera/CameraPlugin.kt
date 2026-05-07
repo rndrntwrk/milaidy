@@ -16,8 +16,9 @@ import android.provider.MediaStore
 import android.util.Base64
 import android.util.Size
 import android.view.ViewGroup
-import android.webkit.WebView
 import androidx.camera.core.*
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.core.content.ContextCompat
@@ -38,6 +39,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.coroutines.resume
 
 @CapacitorPlugin(
     name = "MiladyCamera",
@@ -174,7 +176,7 @@ class CameraPlugin : Plugin() {
         }
     }
 
-    private fun hasRequiredPermissions(): Boolean {
+    override fun hasRequiredPermissions(): Boolean {
         return getPermissionState("camera") == com.getcapacitor.PermissionState.GRANTED
     }
 
@@ -212,12 +214,21 @@ class CameraPlugin : Plugin() {
                     }
 
                     // Insert preview behind the WebView.
-                    val webView = bridge.webView as? WebView
+                    val webView = bridge.webView
                     val parent = webView?.parent as? ViewGroup
                     parent?.let { viewGroup ->
                         viewGroup.addView(previewView, 0)
                         webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     }
+
+                    val resolutionSelector = ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                Size(width, height),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                            )
+                        )
+                        .build()
 
                     currentDirection = direction
                     currentCameraSelector = if (direction == "front") {
@@ -227,16 +238,16 @@ class CameraPlugin : Plugin() {
                     }
 
                     preview = Preview.Builder()
-                        .setTargetResolution(Size(width, height))
+                        .setResolutionSelector(resolutionSelector)
                         .build()
                         .also {
-                            it.surfaceProvider = previewView?.surfaceProvider
+                            it.setSurfaceProvider(previewView?.surfaceProvider)
                         }
 
                     // Build ImageCapture with flash mode from current settings.
                     imageCapture = ImageCapture.Builder()
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                        .setTargetResolution(Size(width, height))
+                        .setResolutionSelector(resolutionSelector)
                         .setFlashMode(flashModeFromSetting(currentSettings["flash"] as? String ?: "off"))
                         .build()
 
@@ -561,7 +572,7 @@ class CameraPlugin : Plugin() {
             return
         }
 
-        val videoCapture = this.videoCapture ?: run {
+        this.videoCapture ?: run {
             call.reject("Camera not ready")
             return
         }
@@ -602,7 +613,7 @@ class CameraPlugin : Plugin() {
 
         currentRecordingSaveToGallery = saveToGallery
 
-        val outputOptions = if (saveToGallery && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val pendingRecording = if (saveToGallery && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val contentValues = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
@@ -612,18 +623,17 @@ class CameraPlugin : Plugin() {
                 )
             }
             currentRecordingFile = null
-            MediaStoreOutputOptions.Builder(
+            val options = MediaStoreOutputOptions.Builder(
                 context.contentResolver,
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI
             ).setContentValues(contentValues).build()
+            videoCapture.output.prepareRecording(context, options)
         } else {
             val file = File(context.cacheDir, fileName)
             currentRecordingFile = file
-            FileOutputOptions.Builder(file).build()
+            val options = FileOutputOptions.Builder(file).build()
+            videoCapture.output.prepareRecording(context, options)
         }
-
-        val pendingRecording = videoCapture.output
-            .prepareRecording(context, outputOptions)
 
         if (includeAudio) {
             pendingRecording.withAudioEnabled()
@@ -633,7 +643,7 @@ class CameraPlugin : Plugin() {
         recordingStartTime = System.currentTimeMillis()
 
         currentRecording =
-            pendingRecording.start(ContextCompat.getMainExecutor(context)) { recordEvent ->
+            pendingRecording.start(ContextCompat.getMainExecutor(context)) { recordEvent: VideoRecordEvent ->
                 when (recordEvent) {
                     is VideoRecordEvent.Start -> {
                         notifyListeners("recordingState", JSObject().apply {
@@ -737,7 +747,7 @@ class CameraPlugin : Plugin() {
                 put("height", currentPreviewHeight)
                 put("fileSize", fileSize)
                 put("mimeType", "video/mp4")
-            }, null)
+            })
         }
     }
 
@@ -946,7 +956,7 @@ class CameraPlugin : Plugin() {
     // ---- Permissions ----
 
     @PluginMethod
-    fun checkPermissions(call: PluginCall) {
+    override fun checkPermissions(call: PluginCall) {
         val cameraStatus = getPermissionState("camera")
         val micStatus = getPermissionState("microphone")
 
@@ -958,7 +968,7 @@ class CameraPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    override fun requestPermissions(call: PluginCall) {
         requestAllPermissions(call, "handleAllPermissionsResult")
     }
 

@@ -93,8 +93,6 @@ export OPENAI_API_KEY=sk-...
 |-------------------|-------------|
 | `TEXT_SMALL` | `gpt-4o-mini` |
 | `TEXT_LARGE` | `gpt-4o` |
-| `TEXT_REASONING_SMALL` | `o1-mini` |
-| `TEXT_REASONING_LARGE` | `o1` |
 | `TEXT_EMBEDDING` | `text-embedding-3-small` |
 | `IMAGE` | `dall-e-3` |
 | `TRANSCRIPTION` | `whisper-1` |
@@ -130,4 +128,4 @@ Pricing: [openai.com/pricing](https://openai.com/pricing)
 
 - [Anthropic Plugin](/plugin-registry/llm/anthropic) — Claude model family
 - [OpenRouter Plugin](/plugin-registry/llm/openrouter) — Route between providers
-- [Model Providers Guide](/model-providers) — Compare all providers
+- [Model Providers](/runtime/models) — Compare all providers

@@ -1,10 +1,15 @@
 import type {
   AgentStartupDiagnostics,
   AgentStatus,
+  ContentBlock,
   ConversationMessage,
   CustomActionDef,
   StreamEventEnvelope,
 } from "../api/client";
+import {
+  computeStreamingDelta as computeStreamingDeltaInternal,
+  mergeStreamingText,
+} from "../utils/streaming-text";
 import {
   AGENT_STATES,
   type ApiLikeError,
@@ -42,6 +47,29 @@ export function parseAgentStatusEvent(
   };
 }
 
+/**
+ * Parses `agentStatus` from a `desktopTrayMenuClick` payload when the main
+ * process finishes menu reset (`itemId === "menu-reset-milady-applied"`).
+ */
+export function parseAgentStatusFromMainMenuResetPayload(
+  payload: unknown,
+): AgentStatus | null {
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload) ||
+    !("agentStatus" in payload)
+  ) {
+    return null;
+  }
+  const as = (payload as { agentStatus?: Record<string, unknown> | null })
+    .agentStatus;
+  if (!as || typeof as !== "object" || Array.isArray(as)) {
+    return null;
+  }
+  return parseAgentStatusEvent(as);
+}
+
 export function parseAgentStartupDiagnostics(
   value: unknown,
 ): AgentStartupDiagnostics | undefined {
@@ -57,6 +85,22 @@ export function parseAgentStartupDiagnostics(
     startup.lastErrorAt = value.lastErrorAt;
   if (typeof value.nextRetryAt === "number")
     startup.nextRetryAt = value.nextRetryAt;
+  const embPhase = value.embeddingPhase;
+  if (
+    embPhase === "checking" ||
+    embPhase === "downloading" ||
+    embPhase === "loading" ||
+    embPhase === "ready"
+  ) {
+    startup.embeddingPhase = embPhase;
+  }
+  if (typeof value.embeddingDetail === "string") {
+    startup.embeddingDetail = value.embeddingDetail;
+  }
+  const embPct = value.embeddingProgressPct;
+  if (typeof embPct === "number" && Number.isFinite(embPct)) {
+    startup.embeddingProgressPct = Math.max(0, Math.min(100, embPct));
+  }
   return startup;
 }
 
@@ -105,6 +149,12 @@ export function parseConversationMessageEvent(
   const timestamp = value.timestamp;
   const source = value.source;
   const from = value.from;
+  const fromUserName = value.fromUserName;
+  const avatarUrl = value.avatarUrl;
+  const replyToMessageId = value.replyToMessageId;
+  const replyToSenderName = value.replyToSenderName;
+  const replyToSenderUserName = value.replyToSenderUserName;
+  const reactions = value.reactions;
   if (
     typeof id !== "string" ||
     (role !== "user" && role !== "assistant") ||
@@ -114,11 +164,81 @@ export function parseConversationMessageEvent(
     return null;
   }
   const parsed: ConversationMessage = { id, role, text, timestamp };
+  const blocks = parseContentBlocks(value.blocks);
+  if (blocks) {
+    parsed.blocks = blocks;
+  }
   if (typeof source === "string" && source.length > 0) {
     parsed.source = source;
   }
   if (typeof from === "string" && from.length > 0) {
     parsed.from = from;
+  }
+  if (typeof fromUserName === "string" && fromUserName.length > 0) {
+    parsed.fromUserName = fromUserName;
+  }
+  if (typeof avatarUrl === "string" && avatarUrl.length > 0) {
+    parsed.avatarUrl = avatarUrl;
+  }
+  if (typeof replyToMessageId === "string" && replyToMessageId.length > 0) {
+    parsed.replyToMessageId = replyToMessageId;
+  }
+  if (typeof replyToSenderName === "string" && replyToSenderName.length > 0) {
+    parsed.replyToSenderName = replyToSenderName;
+  }
+  if (
+    typeof replyToSenderUserName === "string" &&
+    replyToSenderUserName.length > 0
+  ) {
+    parsed.replyToSenderUserName = replyToSenderUserName;
+  }
+  if (Array.isArray(reactions)) {
+    const parsedReactions = reactions
+      .map((reaction) => {
+        if (!isRecord(reaction)) return null;
+        const emoji = reaction.emoji;
+        const count = reaction.count;
+        const users = reaction.users;
+        if (
+          typeof emoji !== "string" ||
+          emoji.length === 0 ||
+          typeof count !== "number" ||
+          !Number.isFinite(count) ||
+          count <= 0
+        ) {
+          return null;
+        }
+        const parsedReaction: {
+          emoji: string;
+          count: number;
+          users?: string[];
+        } = {
+          emoji,
+          count,
+        };
+        if (Array.isArray(users)) {
+          const parsedUsers = users.filter(
+            (user): user is string =>
+              typeof user === "string" && user.length > 0,
+          );
+          if (parsedUsers.length > 0) {
+            parsedReaction.users = parsedUsers;
+          }
+        }
+        return parsedReaction;
+      })
+      .filter(
+        (
+          reaction,
+        ): reaction is {
+          emoji: string;
+          count: number;
+          users?: string[];
+        } => reaction !== null,
+      );
+    if (parsedReactions.length > 0) {
+      parsed.reactions = parsedReactions;
+    }
   }
   return parsed;
 }
@@ -133,29 +253,73 @@ export function parseProactiveMessageEvent(
   return { conversationId, message };
 }
 
+function parseContentBlock(value: unknown): ContentBlock | null {
+  if (!isRecord(value) || typeof value.type !== "string") return null;
+
+  if (value.type === "text" && typeof value.text === "string") {
+    return { type: "text", text: value.text };
+  }
+
+  if (
+    value.type === "config-form" &&
+    typeof value.pluginId === "string" &&
+    isRecord(value.schema)
+  ) {
+    return {
+      type: "config-form",
+      pluginId: value.pluginId,
+      ...(typeof value.pluginName === "string"
+        ? { pluginName: value.pluginName }
+        : {}),
+      schema: value.schema,
+      ...(isRecord(value.hints) ? { hints: value.hints } : {}),
+      ...(isRecord(value.values) ? { values: value.values } : {}),
+    };
+  }
+
+  if (value.type === "ui-spec" && isRecord(value.spec)) {
+    return {
+      type: "ui-spec",
+      spec: value.spec,
+      ...(typeof value.raw === "string" ? { raw: value.raw } : {}),
+    };
+  }
+
+  if (
+    value.type === "action-pill" &&
+    typeof value.label === "string" &&
+    (value.kind === "stream" ||
+      value.kind === "avatar" ||
+      value.kind === "launch")
+  ) {
+    return {
+      type: "action-pill",
+      label: value.label,
+      kind: value.kind,
+      ...(typeof value.detail === "string" && value.detail.trim().length > 0
+        ? { detail: value.detail.trim() }
+        : {}),
+    };
+  }
+
+  return null;
+}
+
+function parseContentBlocks(value: unknown): ContentBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const next = value
+    .map((entry) => parseContentBlock(entry))
+    .filter((entry): entry is ContentBlock => entry != null);
+  return next.length > 0 ? next : undefined;
+}
+
+export { mergeStreamingText };
+
 export function computeStreamingDelta(
   existing: string,
   incoming: string,
 ): string {
-  if (!incoming) return "";
-  if (!existing) return incoming;
-  if (incoming === existing) return "";
-  if (incoming.startsWith(existing)) return incoming.slice(existing.length);
-  if (existing.startsWith(incoming)) return "";
-
-  // Small chunks are usually raw token deltas; keep them even if they
-  // duplicate suffix characters (e.g., "l" + "l" in "Hello").
-  if (incoming.length <= 3) return incoming;
-
-  const maxOverlap = Math.min(existing.length, incoming.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    if (existing.endsWith(incoming.slice(0, overlap))) {
-      const delta = incoming.slice(overlap);
-      if (!delta && overlap === incoming.length) return "";
-      return delta;
-    }
-  }
-  return incoming;
+  return computeStreamingDeltaInternal(existing, incoming);
 }
 
 export function normalizeStreamComparisonText(text: string): string {
@@ -183,11 +347,12 @@ function normalizeSlashCommandName(name: string): string {
 
 // A simple utility to split command arguments, equivalent to chat-commands splitCommandArgs
 function splitCommandArgs(text: string): string[] {
-  const parts = [];
+  const parts: string[] = [];
   const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
+  let match: RegExpExecArray | null = regex.exec(text);
+  while (match !== null) {
     parts.push(match[1] || match[2] || match[0]);
+    match = regex.exec(text);
   }
   return parts;
 }
@@ -280,6 +445,7 @@ export function parseCustomActionParams(
   return { params, missingRequired };
 }
 
+/** Plain-text variant of formatSearchBullet (uses `- ` bullets, no bold). */
 export function formatSearchBullet(label: string, items: string[]): string {
   if (items.length === 0) return `${label}: none`;
   return `${label}:\n${items.map((item) => `- ${item}`).join("\n")}`;
@@ -304,6 +470,7 @@ export function asApiLikeError(err: unknown): ApiLikeError | null {
   };
 }
 
+/** API-error-aware variant that extracts path/status/message from structured errors. */
 export function formatStartupErrorDetail(err: unknown): string | undefined {
   const apiErr = asApiLikeError(err);
   if (apiErr) {

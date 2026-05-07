@@ -1,10 +1,10 @@
 ---
 title: "Testing Plugins"
 sidebarTitle: "Testing"
-description: "Unit, integration, and E2E testing patterns for ElizaOS plugins using Vitest."
+description: "Unit, integration, and E2E testing patterns for elizaOS plugins using Vitest."
 ---
 
-This guide covers testing patterns for ElizaOS plugins — from unit testing individual actions and providers to integration testing with the runtime, and embedding test suites in your plugin.
+This guide covers testing patterns for elizaOS plugins — from unit testing individual actions and providers to integration testing with the runtime, and embedding test suites in your plugin.
 
 ## Setup
 
@@ -414,11 +414,18 @@ E2E tests start the agent, load the plugin, and verify behavior through the chat
 // cypress/e2e/plugin.cy.ts
 describe('Weather Plugin E2E', () => {
   it('responds to weather queries', () => {
-    cy.request('POST', 'http://localhost:18789/api/chat', {
-      message: 'What is the weather in London?',
-    }).then((response) => {
-      expect(response.status).to.eq(200);
-      expect(response.body.text).to.include('London');
+    cy.request('POST', 'http://localhost:18789/api/conversations', {
+      title: 'Weather Plugin Test',
+    }).then(({ body }) => {
+      const conversationId = body.conversation.id;
+      cy.request(
+        'POST',
+        `http://localhost:18789/api/conversations/${conversationId}/messages`,
+        { text: 'What is the weather in London?' },
+      ).then((response) => {
+        expect(response.status).to.eq(200);
+        expect(response.body.text).to.include('London');
+      });
     });
   });
 });

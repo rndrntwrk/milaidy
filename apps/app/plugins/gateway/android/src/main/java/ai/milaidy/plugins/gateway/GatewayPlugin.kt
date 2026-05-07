@@ -108,6 +108,7 @@ class GatewayPlugin : Plugin() {
         return "${serviceType}|${domain}|${serviceName.trim().lowercase()}"
     }
 
+    @Suppress("DEPRECATION")
     private fun resolveService(serviceInfo: NsdServiceInfo) {
         nsdManager?.resolveService(serviceInfo, object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -375,7 +376,7 @@ class GatewayPlugin : Plugin() {
         val clientName = options.getString("clientName") ?: "milady-capacitor-android"
         val clientVersion = options.getString("clientVersion") ?: "1.0.0"
         val roleParam = options.getString("role") ?: "operator"
-        val scopesParam = options.getJSONArray("scopes")?.let { arr ->
+        val scopesParam = options.optJSONArray("scopes")?.let { arr ->
             (0 until arr.length()).map { arr.getString(it) }
         } ?: listOf("operator.admin")
 

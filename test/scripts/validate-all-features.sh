@@ -43,7 +43,7 @@ BOLD='\033[1m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MILADY_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ELIZA_ROOT="$MILADY_ROOT/eliza"
-PLUGINS_ROOT="$(cd "$MILADY_ROOT/../plugins" 2>/dev/null && pwd || echo "")"
+PLUGINS_ROOT="$(cd "$MILADY_ROOT/plugins" 2>/dev/null && pwd || echo "")"
 
 # Results tracking
 declare -A TEST_RESULTS

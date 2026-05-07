@@ -32,11 +32,6 @@ vi.mock("node:os", () => ({
   tmpdir: vi.fn(() => "/tmp"),
 }));
 
-vi.mock("node:path", async () => {
-  const actual = await vi.importActual<typeof import("node:path")>("node:path");
-  return { default: actual, ...actual };
-});
-
 import { SwabbleManager } from "../swabble";
 // ---------------------------------------------------------------------------
 // Module under test (and typed refs to mocked fns)
@@ -280,6 +275,23 @@ describe("SwabbleManager", () => {
 
       await manager.audioChunk({ data: makeBase64Chunk(CHUNK_BYTES) });
 
+      const transcriptMsg = webviewMessages.find(
+        (m) => m.message === "swabble:transcript",
+      );
+      expect(transcriptMsg).toBeDefined();
+      expect(transcriptMsg?.payload).toEqual({
+        transcript: "milady what time is it",
+        segments: [
+          {
+            text: "milady what time is it",
+            start: 0,
+            duration: 3,
+            isFinal: true,
+          },
+        ],
+        isFinal: true,
+      });
+
       const wakeMsg = webviewMessages.find(
         (m) => m.message === "swabble:wakeWord",
       );
@@ -319,6 +331,15 @@ describe("SwabbleManager", () => {
       await expect(
         manager.audioChunk({ data: makeBase64Chunk(CHUNK_BYTES) }),
       ).resolves.toBeUndefined();
+
+      expect(webviewMessages).toContainEqual({
+        message: "swabble:error",
+        payload: {
+          code: "transcription_failed",
+          message: "whisper crashed",
+          recoverable: true,
+        },
+      });
     });
   });
 

@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
 import type {
   AgentStatus,
+  AppRunSummary,
+  AppSessionState,
   AppViewerAuthMessage,
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
@@ -36,6 +38,10 @@ import type {
   SkillInfo,
   SkillMarketplaceResult,
   SkillScanReportSummary,
+  StewardApprovalActionResponse,
+  StewardHistoryResponse,
+  StewardPendingResponse,
+  StewardStatusResponse,
   StreamEventEnvelope,
   SystemPermissionId,
   TriggerHealthSnapshot,
@@ -46,6 +52,7 @@ import type {
   WalletAddresses,
   WalletBalancesResponse,
   WalletConfigStatus,
+  WalletConfigUpdateRequest,
   WalletExportResult,
   WalletNftsResponse,
   WalletTradingProfileResponse,
@@ -56,16 +63,55 @@ import type {
 } from "../api/client";
 import type { UiLanguage } from "../i18n";
 import type { Tab } from "../navigation";
+import type { OnboardingServerTarget } from "../onboarding/server-target";
+import type { UiShellMode, UiTheme } from "./ui-preferences";
 
-export type UiShellMode = "companion" | "native";
+export type { UiShellMode } from "./ui-preferences";
+
+/** 3D companion render power: full quality, OS/battery-aware default, or always efficient. */
+export type CompanionVrmPowerMode = "quality" | "balanced" | "efficiency";
+
+/** When to cap the companion VRM loop at ~half the display refresh rate. */
+export type CompanionHalfFramerateMode = "off" | "when_saving_power" | "always";
+export type ShellView = "companion" | "character" | "desktop";
+export type OnboardingHandoffPhase =
+  | "idle"
+  | "fading"
+  | "provisioning"
+  | "starting-backend"
+  | "saving"
+  | "restarting"
+  | "bootstrapping"
+  | "error";
+
+/** Emitted after each tab/shell-related layout commit (see `navigation` on app context). */
+export interface TabCommittedDetail {
+  tab: Tab;
+  previousTab: Tab | null;
+  uiShellMode: UiShellMode;
+}
+
+/** Tab commit subscription + deferred work (for multi-step navigation). */
+export interface NavigationEventsApi {
+  subscribeTabCommitted: (
+    listener: (detail: TabCommittedDetail) => void,
+  ) => () => void;
+  /**
+   * Run `fn` after the next layout commit where `tab` has been applied.
+   * Use to chain `switchShellView` → `setTab` without the second call losing
+   * to batched `setTab(lastNativeTab)`.
+   */
+  scheduleAfterTabCommit: (fn: () => void) => void;
+}
 
 export type OnboardingStep =
-  | "wakeUp"
-  | "language"
+  | "cloud_login"
   | "identity"
-  | "connection"
-  | "senses"
-  | "activate";
+  | "hosting"
+  | "providers"
+  | "voice"
+  | "permissions"
+  | "launch";
 
 export interface OnboardingStepMeta {
   id: OnboardingStep;
@@ -73,17 +119,53 @@ export interface OnboardingStepMeta {
   subtitle: string;
 }
 
+/** Unified 7-step onboarding flow — cloud check is first, identity is second. */
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
-  { id: "wakeUp", name: "Initialize", subtitle: "System boot" },
-  { id: "language", name: "Language", subtitle: "Communication" },
-  { id: "identity", name: "Identity", subtitle: "Designation" },
-  { id: "connection", name: "Connect", subtitle: "Neural link" },
-  { id: "senses", name: "Access", subtitle: "System permissions" },
-  { id: "activate", name: "Launch", subtitle: "Ready" },
+  {
+    id: "cloud_login",
+    name: "onboarding.stepName.cloudLogin",
+    subtitle: "onboarding.stepSub.cloudLogin",
+  },
+  {
+    id: "identity",
+    name: "onboarding.stepName.identity",
+    subtitle: "onboarding.stepSub.identity",
+  },
+  {
+    id: "hosting",
+    name: "onboarding.stepName.hosting",
+    subtitle: "onboarding.stepSub.hosting",
+  },
+  {
+    id: "providers",
+    name: "onboarding.stepName.providers",
+    subtitle: "onboarding.stepSub.providers",
+  },
+  {
+    id: "voice",
+    name: "onboarding.stepName.voice",
+    subtitle: "onboarding.stepSub.voice",
+  },
+  {
+    id: "permissions",
+    name: "onboarding.stepName.permissions",
+    subtitle: "onboarding.stepSub.permissions",
+  },
+  {
+    id: "launch",
+    name: "onboarding.stepName.launch",
+    subtitle: "onboarding.stepSub.launch",
+  },
 ];
+
+export type OnboardingMode = "basic" | "advanced" | "elizacloudonly";
+
+export type FlaminaGuideTopic = "provider" | "rpc" | "permissions" | "voice";
 
 export interface OnboardingNextOptions {
   allowPermissionBypass?: boolean;
+  omitRuntimeProvider?: boolean;
+  skipTask?: string;
 }
 
 export const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> =
@@ -98,15 +180,11 @@ export const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> =
 export interface ActionNotice {
   tone: string;
   text: string;
+  /** When true, ShellOverlays shows an indeterminate spinner (long-running work). */
+  busy?: boolean;
 }
 
-export type LifecycleAction =
-  | "start"
-  | "stop"
-  | "pause"
-  | "resume"
-  | "restart"
-  | "reset";
+export type LifecycleAction = "start" | "stop" | "restart" | "reset";
 
 export const LIFECYCLE_MESSAGES: Record<
   LifecycleAction,
@@ -129,18 +207,7 @@ export const LIFECYCLE_MESSAGES: Record<
     success: "Agent stopped.",
     verb: "stop",
   },
-  pause: {
-    inProgress: "pausing",
-    progress: "Pausing agent...",
-    success: "Agent paused.",
-    verb: "pause",
-  },
-  resume: {
-    inProgress: "resuming",
-    progress: "Resuming agent...",
-    success: "Agent resumed.",
-    verb: "resume",
-  },
+
   restart: {
     inProgress: "restarting",
     progress: "Restarting agent...",
@@ -149,7 +216,8 @@ export const LIFECYCLE_MESSAGES: Record<
   },
   reset: {
     inProgress: "resetting",
-    progress: "Resetting agent...",
+    progress:
+      "Resetting agent (server wipe + restart). This can take 1–2 minutes — keep the app open.",
     success: "Agent reset. Returning to onboarding.",
     verb: "reset",
   },
@@ -161,7 +229,6 @@ export const AGENT_STATES: ReadonlySet<AgentStatus["state"]> = new Set([
   "not_started",
   "starting",
   "running",
-  "paused",
   "stopped",
   "restarting",
   "error",
@@ -178,7 +245,8 @@ export type StartupErrorReason =
   | "backend-timeout"
   | "backend-unreachable"
   | "agent-timeout"
-  | "agent-error";
+  | "agent-error"
+  | "asset-missing";
 
 export interface StartupErrorState {
   reason: StartupErrorReason;
@@ -202,17 +270,45 @@ export interface ChatTurnUsage extends ChatTokenUsage {
 
 // ── Context value type ─────────────────────────────────────────────────
 
+/** One toggle per primary chain in the wallet inventory filter strip. */
+export type InventoryChainFilters = {
+  ethereum: boolean;
+  base: boolean;
+  bsc: boolean;
+  avax: boolean;
+  solana: boolean;
+};
+
 export interface AppState {
   // Core
   tab: Tab;
   uiShellMode: UiShellMode;
   uiLanguage: UiLanguage;
+  uiTheme: UiTheme;
+  /** Active visual theme ID (e.g. "bsc-gold", "neon-cyber") */
+  themeId: string;
+  ownerName: string | null;
+  /** VRM quality vs GPU use: always full quality, battery-aware (default), or always efficient. */
+  companionVrmPowerMode: CompanionVrmPowerMode;
+  /**
+   * When true and the document is hidden, keep the VRM render loop alive
+   * but hide the 3D environment (lower GPU than full scene).
+   */
+  companionAnimateWhenHidden: boolean;
+  /** When to cap companion at ~half display Hz (independent of DPR/shadows). */
+  companionHalfFramerateMode: CompanionHalfFramerateMode;
   connected: boolean;
   agentStatus: AgentStatus | null;
   onboardingComplete: boolean;
+  /** Incremented on agent reset so onboarding UI shows immediately (not stuck behind VRM reveal). */
+  onboardingUiRevealNonce: number;
   onboardingLoading: boolean;
+  onboardingHandoffPhase: OnboardingHandoffPhase;
+  onboardingHandoffError: string | null;
   startupPhase: StartupPhase;
   startupError: StartupErrorState | null;
+  /** StartupCoordinator handle — the sole startup authority. */
+  startupCoordinator: import("./useStartupCoordinator").StartupCoordinatorHandle;
   authRequired: boolean;
   actionNotice: ActionNotice | null;
   lifecycleBusy: boolean;
@@ -246,6 +342,7 @@ export interface AppState {
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
+  chatAwaitingGreeting: boolean;
   chatLastUsage: ChatTurnUsage | null;
   chatAvatarVisible: boolean;
   chatAgentVoiceMuted: boolean;
@@ -253,9 +350,11 @@ export interface AppState {
   chatAvatarSpeaking: boolean;
   conversations: Conversation[];
   activeConversationId: string | null;
+  companionMessageCutoffTs: number;
   conversationMessages: ConversationMessage[];
   autonomousEvents: StreamEventEnvelope[];
   autonomousLatestEventId: string | null;
+  // biome-ignore lint/suspicious/noExplicitAny: app-core keeps this app-owned replay map structural without importing app-local types.
   autonomousRunHealthByRunId: Record<string, any>; // defined in autonomy-events.ts in app
   /** Active PTY coding agent sessions from the SwarmCoordinator. */
   ptySessions: CodingAgentSession[];
@@ -264,6 +363,7 @@ export interface AppState {
 
   // Triggers
   triggers: TriggerSummary[];
+  triggersLoaded: boolean;
   triggersLoading: boolean;
   triggersSaving: boolean;
   triggerRunsById: Record<string, TriggerRunRecord[]>;
@@ -305,8 +405,13 @@ export interface AppState {
   logTagFilter: string;
   logLevelFilter: string;
   logSourceFilter: string;
+  logLoadError: string | null;
+
+  // Capabilities (feature toggles)
+  browserEnabled: boolean;
 
   // Wallet / Inventory
+  walletEnabled: boolean;
   walletAddresses: WalletAddresses | null;
   walletConfig: WalletConfigStatus | null;
   walletBalances: WalletBalancesResponse | null;
@@ -318,7 +423,9 @@ export interface AppState {
   walletExportVisible: boolean;
   walletApiKeySaving: boolean;
   inventorySort: "chain" | "symbol" | "value";
-  inventoryChainFocus: string;
+  /** Ascending vs descending for the active `inventorySort` key. */
+  inventorySortDirection: "asc" | "desc";
+  inventoryChainFilters: InventoryChainFilters;
   walletError: string | null;
 
   // ERC-8004 Registry
@@ -335,9 +442,10 @@ export interface AppState {
   mintError: string | null;
   mintShiny: boolean;
 
-  // Whitelist
   whitelistStatus: WhitelistStatus | null;
   whitelistLoading: boolean;
+
+  // Twitter verification
   twitterVerifyMessage: string | null;
   twitterVerifyUrl: string;
   twitterVerifying: boolean;
@@ -351,19 +459,40 @@ export interface AppState {
   characterDraft: CharacterData;
   selectedVrmIndex: number;
   customVrmUrl: string;
+  customVrmPreviewUrl: string;
   customBackgroundUrl: string;
+  /** Active content pack ID, or null if no pack is selected. */
+  activePackId: string | null;
+  /** Active content pack custom catchphrase for voice preview override. */
+  customCatchphrase: string;
+  /** Active content pack voice preset ID override. */
+  customVoicePresetId: string;
+  /** Custom companion world URL from content pack (overrides day/night default). */
+  customWorldUrl: string;
 
-  // Milady Cloud
-  miladyCloudEnabled: boolean;
-  miladyCloudConnected: boolean;
-  miladyCloudCredits: number | null;
-  miladyCloudCreditsLow: boolean;
-  miladyCloudCreditsCritical: boolean;
-  miladyCloudTopUpUrl: string;
-  miladyCloudUserId: string | null;
-  miladyCloudLoginBusy: boolean;
-  miladyCloudLoginError: string | null;
-  miladyCloudDisconnecting: boolean;
+  // Eliza Cloud
+  elizaCloudEnabled: boolean;
+  elizaCloudVoiceProxyAvailable: boolean;
+  elizaCloudConnected: boolean;
+  elizaCloudHasPersistedKey: boolean;
+  elizaCloudCredits: number | null;
+  elizaCloudCreditsLow: boolean;
+  elizaCloudCreditsCritical: boolean;
+  /** Eliza Cloud returned 401 on balance check — inference will fail until the key is fixed. */
+  elizaCloudAuthRejected: boolean;
+  /** Non-fatal credits/API message from Eliza Cloud (e.g. unexpected response, network). */
+  elizaCloudCreditsError: string | null;
+  elizaCloudTopUpUrl: string;
+  elizaCloudUserId: string | null;
+  /** Last `reason` from GET /api/cloud/status (e.g. API-key-only vs OAuth). */
+  elizaCloudStatusReason: string | null;
+  cloudDashboardView: "billing" | "agents";
+  elizaCloudLoginBusy: boolean;
+  elizaCloudLoginError: string | null;
+  elizaCloudDisconnecting: boolean;
+
+  // Multi-agent profiles
+  activeAgentProfile: import("./agent-profiles").AgentProfile | null;
 
   // Updates
   updateStatus: UpdateStatus | null;
@@ -417,18 +546,43 @@ export interface AppState {
   importError: string | null;
   importSuccess: string | null;
 
+  // Startup
+  startupStatus: string | null;
+
   // Onboarding
   onboardingStep: OnboardingStep;
+  onboardingMode: OnboardingMode;
+  onboardingActiveGuide: string | null;
+  onboardingDeferredTasks: string[];
+  postOnboardingChecklistDismissed: boolean;
   onboardingOptions: OnboardingOptions | null;
   onboardingName: string;
   onboardingOwnerName: string;
   onboardingStyle: string;
-  onboardingRunMode: "local-rawdog" | "local-sandbox" | "cloud" | "";
+  onboardingRunMode: "local" | "cloud" | "";
   onboardingCloudProvider: string;
+  onboardingServerTarget: OnboardingServerTarget;
+  onboardingCloudApiKey: string;
   onboardingSmallModel: string;
   onboardingLargeModel: string;
   onboardingProvider: string;
   onboardingApiKey: string;
+  onboardingVoiceProvider: string;
+  onboardingVoiceApiKey: string;
+  onboardingExistingInstallDetected: boolean;
+  onboardingDetectedProviders: Array<{
+    id: string;
+    source: string;
+    apiKey?: string;
+    authMode?: string;
+    status?: "valid" | "invalid" | "unchecked" | "error";
+    cliInstalled: boolean;
+  }>;
+  onboardingRemoteApiBase: string;
+  onboardingRemoteToken: string;
+  onboardingRemoteConnecting: boolean;
+  onboardingRemoteError: string | null;
+  onboardingRemoteConnected: boolean;
   onboardingOpenRouterModel: string;
   onboardingPrimaryModel: string;
   onboardingTelegramToken: string;
@@ -441,7 +595,7 @@ export interface AppState {
   onboardingBlooioPhoneNumber: string;
   onboardingGithubToken: string;
   onboardingSubscriptionTab: "token" | "oauth";
-  onboardingMiladyCloudTab: "login" | "apikey";
+  onboardingElizaCloudTab: "login" | "apikey";
   onboardingSelectedChains: Set<string>;
   onboardingRpcSelections: Record<string, string>;
   onboardingRpcKeys: Record<string, string>;
@@ -477,21 +631,49 @@ export interface AppState {
   chatPendingImages: ImageAttachment[];
 
   // Game
+  appRuns: AppRunSummary[];
+  activeGameRunId: string;
   activeGameApp: string;
   activeGameDisplayName: string;
   activeGameViewerUrl: string;
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: GamePostMessageAuthPayload | null;
+  activeGameSession: AppSessionState | null;
 
   /** When true, the game iframe persists as a floating overlay across all tabs. */
   gameOverlayEnabled: boolean;
 
+  /** When true, the companion app is actively running (full-screen VRM scene). */
+  companionAppRunning: boolean;
+  /** Name of the active full-screen overlay app, or null if none. */
+  activeOverlayApp: string | null;
+
+  /**
+   * Currently-selected connector chat in the unified messages sidebar.
+   * When non-null, the Chat view swaps its main panel out for a
+   * read-only view of that room's inbox messages. Mutually exclusive
+   * with an active dashboard conversation.
+   */
+  activeInboxChat: {
+    avatarUrl?: string;
+    canSend?: boolean;
+    id: string;
+    source: string;
+    transportSource?: string;
+    title: string;
+    worldId?: string;
+    worldLabel?: string;
+  } | null;
+
   // Sub-tabs
-  appsSubTab: "browse" | "games";
+  appsSubTab: "browse" | "running" | "games";
   agentSubTab: "character" | "inventory" | "knowledge";
   pluginsSubTab: "features" | "connectors" | "plugins";
   databaseSubTab: "tables" | "media" | "vectors";
+
+  // Favorite apps
+  favoriteApps: string[];
 
   // Config text
   configRaw: Record<string, unknown>;
@@ -503,22 +685,34 @@ export type LoadConversationMessagesResult =
   | { ok: false; status?: number; message: string };
 
 export const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
-export const AGENT_READY_TIMEOUT_MS = 90_000;
+export const AGENT_READY_TIMEOUT_MS = 120_000;
 
 export interface AppActions {
   // Navigation
   setTab: (tab: Tab) => void;
   setUiShellMode: (mode: UiShellMode) => void;
+  switchUiShellMode: (mode: UiShellMode) => void;
+  switchShellView: (view: ShellView) => void;
+  navigation: NavigationEventsApi;
   setUiLanguage: (language: UiLanguage) => void;
+  setUiTheme: (theme: UiTheme) => void;
+  setThemeId: (themeId: string) => void;
+  setCompanionVrmPowerMode: (mode: CompanionVrmPowerMode) => void;
+  setCompanionAnimateWhenHidden: (enabled: boolean) => void;
+  setCompanionHalfFramerateMode: (mode: CompanionHalfFramerateMode) => void;
 
   // Lifecycle
   handleStart: () => Promise<void>;
   handleStop: () => Promise<void>;
-  handlePauseResume: () => Promise<void>;
+
   handleRestart: () => Promise<void>;
   handleReset: () => Promise<void>;
+  /** After main-process app-menu reset (Electrobun): sync local React state + client. */
+  handleResetAppliedFromMain: (payload: unknown) => Promise<void>;
   retryStartup: () => void;
   dismissRestartBanner: () => void;
+  showRestartBanner: () => void;
+  relaunchDesktop: () => Promise<void>;
   triggerRestart: () => Promise<void>;
   dismissBackendDisconnectedBanner: () => void;
   retryBackendConnection: () => void;
@@ -529,17 +723,39 @@ export interface AppActions {
   handleChatSend: (channelType?: ConversationChannelType) => Promise<void>;
   handleChatStop: () => void;
   handleChatRetry: (assistantMsgId: string) => void;
+  handleChatEdit: (messageId: string, text: string) => Promise<boolean>;
   handleChatClear: () => Promise<void>;
+  handleStartDraftConversation: () => Promise<void>;
   handleNewConversation: (title?: string) => Promise<void>;
   setChatPendingImages: Dispatch<SetStateAction<ImageAttachment[]>>;
   handleSelectConversation: (id: string) => Promise<void>;
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;
+  /** LLM title from recent messages; persists on the server and updates local list. */
+  suggestConversationTitle: (id: string) => Promise<string | null>;
   /** Send a programmatic message (e.g. from a UiSpec action) without touching chatInput. */
   sendActionMessage: (text: string) => Promise<void>;
+  /** Send a chat message with optional metadata (e.g. task creation intent). */
+  sendChatText: (
+    rawInput: string,
+    options?: {
+      channelType?: ConversationChannelType;
+      conversationId?: string | null;
+      images?: ImageAttachment[];
+      metadata?: Record<string, unknown>;
+    },
+  ) => Promise<void>;
+  /** Log an Alice operator action into the active conversation feed. */
+  logConversationOperatorAction: (payload: {
+    label: string;
+    kind: "stream" | "avatar" | "launch";
+    detail?: string;
+    fallbackText?: string;
+  }) => Promise<boolean>;
 
   // Triggers
-  loadTriggers: () => Promise<void>;
+  loadTriggers: (options?: { silent?: boolean }) => Promise<void>;
+  ensureTriggersLoaded: () => Promise<void>;
   createTrigger: (
     request: CreateTriggerRequest,
   ) => Promise<TriggerSummary | null>;
@@ -556,7 +772,8 @@ export interface AppActions {
   handlePairingSubmit: () => Promise<void>;
 
   // Plugins
-  loadPlugins: () => Promise<void>;
+  loadPlugins: (options?: { silent?: boolean }) => Promise<void>;
+  ensurePluginsLoaded: () => Promise<void>;
   handlePluginToggle: (pluginId: string, enabled: boolean) => Promise<void>;
   handlePluginConfigSave: (
     pluginId: string,
@@ -597,11 +814,28 @@ export interface AppActions {
     request: BscTradeQuoteRequest,
   ) => Promise<BscTradeQuoteResponse>;
   getBscTradeTxStatus: (hash: string) => Promise<BscTradeTxStatusResponse>;
+  getStewardStatus: () => Promise<StewardStatusResponse>;
+  getStewardHistory: (opts?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) => Promise<{
+    records: StewardHistoryResponse;
+    total: number;
+    offset: number;
+    limit: number;
+  }>;
+  getStewardPending: () => Promise<StewardPendingResponse>;
+  approveStewardTx: (txId: string) => Promise<StewardApprovalActionResponse>;
+  rejectStewardTx: (
+    txId: string,
+    reason?: string,
+  ) => Promise<StewardApprovalActionResponse>;
   loadWalletTradingProfile: (
     window?: WalletTradingProfileWindow,
     source?: WalletTradingProfileSourceFilter,
   ) => Promise<WalletTradingProfileResponse>;
-  handleWalletApiKeySave: (config: Record<string, string>) => Promise<void>;
+  handleWalletApiKeySave: (config: WalletConfigUpdateRequest) => Promise<void>;
   handleExportKeys: () => Promise<void>;
 
   // Registry / Drop
@@ -620,7 +854,7 @@ export interface AppActions {
     value: CharacterData[K],
   ) => void;
   handleCharacterArrayInput: (
-    field: "adjectives" | "topics" | "postExamples",
+    field: "adjectives" | "postExamples",
     value: string,
   ) => void;
   handleCharacterStyleInput: (
@@ -632,10 +866,29 @@ export interface AppActions {
   // Onboarding
   handleOnboardingNext: (options?: OnboardingNextOptions) => Promise<void>;
   handleOnboardingBack: () => void;
+  retryOnboardingHandoff: () => Promise<void>;
+  cancelOnboardingHandoff: () => void;
+  /** Jump to an earlier step in the active track (sidebar); backward-only. */
+  handleOnboardingJumpToStep: (step: OnboardingStep) => void;
+  /** Set onboarding step and sync Flamina guide (e.g. welcome → connection). */
+  goToOnboardingStep: (step: OnboardingStep) => void;
+  handleOnboardingRemoteConnect: () => Promise<void>;
+  handleOnboardingUseLocalBackend: () => void;
 
   // Cloud
   handleCloudLogin: () => Promise<void>;
   handleCloudDisconnect: () => Promise<void>;
+
+  // Multi-agent
+  switchAgentProfile: (profileId: string) => void;
+  handleCloudOnboardingFinish: () => Promise<void>;
+
+  // Vincent
+  vincentConnected: boolean;
+  vincentLoginBusy: boolean;
+  vincentLoginError: string | null;
+  handleVincentLogin: () => Promise<void>;
+  handleVincentDisconnect: () => Promise<void>;
 
   // Updates
   loadUpdateStatus: (force?: boolean) => Promise<void>;
@@ -660,6 +913,8 @@ export interface AppActions {
     text: string,
     tone?: "info" | "success" | "error",
     ttlMs?: number,
+    once?: boolean,
+    busy?: boolean,
   ) => void;
 
   // Generic state setter
@@ -669,6 +924,7 @@ export interface AppActions {
   copyToClipboard: (text: string) => Promise<void>;
 
   // Translations
+  // biome-ignore lint/suspicious/noExplicitAny: translation interpolation values are intentionally open-ended.
   t: (key: string, values?: Record<string, any>) => string;
 }
 

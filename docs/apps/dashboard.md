@@ -14,9 +14,12 @@ The dashboard runs as a web application served by the Milady agent runtime.
 |--------|---------|
 | **Default URL** | `http://localhost:2138` |
 | **CLI shortcut** | Run `milady dashboard` to open the dashboard in your default browser |
-| **Desktop app** | The Electron desktop app embeds the dashboard directly (no browser required) |
+| **Desktop app** | The Electrobun desktop app embeds the dashboard directly (no browser required) |
 
-On first launch you will see the **Onboarding Wizard**, which walks you through initial agent setup. If authentication is required you will see the **Pairing View** before reaching the main dashboard.
+On first launch you will see the server chooser / startup flow. If the selected
+server still needs setup, Milady continues into onboarding for that server
+before you reach the main dashboard. If authentication is required you will see
+the **Pairing View** before reaching the main dashboard.
 
 <Info>
 The dashboard port defaults to `2138`. If this port is already in use, the runtime will log the actual port it binds to. Check the startup logs for the exact URL.
@@ -35,7 +38,7 @@ The header displays across all tabs and includes:
 - **Agent name** -- the name of the currently running agent, pulled from `agentStatus.agentName`.
 - **Agent status indicator** -- a color-coded dot showing the agent's runtime state (see [Agent Status Indicator](#agent-status-indicator) below).
 - **Wallet addresses** -- truncated EVM and Solana addresses with copy-to-clipboard functionality.
-- **Cloud credits** -- if Milady Cloud is enabled, the header shows credit balance with color-coded thresholds (green for OK, yellow for low, red for critical), along with a top-up link.
+- **Cloud credits** -- if Eliza Cloud is enabled, the header shows credit balance with color-coded thresholds (green for OK, yellow for low, red for critical), along with a top-up link.
 - **Lifecycle controls** -- Pause/Resume and Restart buttons for the agent runtime. These are disabled during state transitions (starting, restarting).
 - **Drop / Mint status** -- when a public mint is active and the user has not yet minted, a mint button appears.
 
@@ -53,7 +56,7 @@ The `ConversationsSidebar` and `AutonomousPanel` components both accept a `mobil
 
 ## Tabs
 
-The navigation is organized into primary tabs and an Advanced group. Tabs are defined in `apps/app/src/navigation.ts` with the following structure:
+The navigation is organized into primary tabs and an Advanced group:
 
 | Tab Group | Tabs | URL Path |
 |-----------|------|----------|
@@ -133,7 +136,7 @@ The active theme is highlighted. Theme selection is persisted to local storage a
 
 Provider selection and model configuration via the `ProviderSwitcher` component. This section supports:
 
-- **Milady Cloud** -- if cloud is enabled, shows connection status, credit balance (with low/critical thresholds), and a login/disconnect flow.
+- **Eliza Cloud** -- if cloud is enabled, shows connection status, credit balance (with low/critical thresholds), and a login/disconnect flow.
 - **Local/third-party providers** -- toggle AI provider plugins (e.g., Anthropic, OpenAI) and configure their API keys and model settings.
 - **Plugin config save** -- each provider plugin's settings can be saved independently.
 
@@ -160,7 +163,7 @@ The `VoiceConfigView` component configures:
 
 #### 6. Permissions & Capabilities
 
-The `PermissionsSection` component manages system permission grants for native platforms (Electron desktop app). Controls access to features like file system, microphone, camera, and notifications.
+The `PermissionsSection` component manages system permission grants for native platforms (Electrobun desktop app). Controls access to features like file system, microphone, camera, and notifications.
 
 #### 7. Software Updates
 
@@ -174,7 +177,7 @@ The `PermissionsSection` component manages system permission grants for native p
 
 - **Relay server status** -- shows whether the WebSocket relay at `ws://127.0.0.1:{port}/extension` is reachable, with a green/red indicator.
 - **Check Connection** button to re-test relay status.
-- **Installation instructions** -- step-by-step guide to load the unpacked Chrome extension from `apps/chrome-extension/` in Developer mode.
+- **Release status** -- links to the Browser Relay status page, which explains that the extension is not shipped in release `the current release` and must be sourced separately if needed.
 - **Extension path** display when available.
 
 #### 9. Agent Export / Import

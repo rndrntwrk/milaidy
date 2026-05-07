@@ -1,31 +1,58 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import React from "react";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "../components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 
-const meta: Meta<typeof Tabs> = { title: "Molecules/Tabs", component: Tabs };
+const meta = {
+  title: "UI/Tabs",
+  component: Tabs,
+  tags: ["autodocs"],
+} satisfies Meta<typeof Tabs>;
+
 export default meta;
+type Story = StoryObj<typeof meta>;
 
-export const Default: StoryObj = {
+export const Default: Story = {
   render: () => (
-    <Tabs defaultValue="chat" className="w-96">
+    <Tabs defaultValue="tab1" className="w-[400px]">
       <TabsList>
-        <TabsTrigger value="chat">Chat</TabsTrigger>
-        <TabsTrigger value="voice">Voice</TabsTrigger>
-        <TabsTrigger value="logs">Logs</TabsTrigger>
+        <TabsTrigger value="tab1">Account</TabsTrigger>
+        <TabsTrigger value="tab2">Password</TabsTrigger>
+        <TabsTrigger value="tab3">Settings</TabsTrigger>
       </TabsList>
-      <TabsContent value="chat" className="p-4 text-sm">
-        Live agent chat interface.
+      <TabsContent value="tab1">
+        <p className="text-sm text-muted p-4">
+          Manage your account settings and preferences.
+        </p>
       </TabsContent>
-      <TabsContent value="voice" className="p-4 text-sm">
-        Voice call controls.
+      <TabsContent value="tab2">
+        <p className="text-sm text-muted p-4">
+          Change your password and security options.
+        </p>
       </TabsContent>
-      <TabsContent value="logs" className="p-4 text-sm">
-        Activity stream.
+      <TabsContent value="tab3">
+        <p className="text-sm text-muted p-4">
+          Configure application settings.
+        </p>
+      </TabsContent>
+    </Tabs>
+  ),
+};
+
+export const SecondTabActive: Story = {
+  render: () => (
+    <Tabs defaultValue="tab2" className="w-[400px]">
+      <TabsList>
+        <TabsTrigger value="tab1">Overview</TabsTrigger>
+        <TabsTrigger value="tab2">Analytics</TabsTrigger>
+        <TabsTrigger value="tab3">Reports</TabsTrigger>
+      </TabsList>
+      <TabsContent value="tab1">
+        <p className="text-sm text-muted p-4">Overview content.</p>
+      </TabsContent>
+      <TabsContent value="tab2">
+        <p className="text-sm text-muted p-4">Analytics content.</p>
+      </TabsContent>
+      <TabsContent value="tab3">
+        <p className="text-sm text-muted p-4">Reports content.</p>
       </TabsContent>
     </Tabs>
   ),

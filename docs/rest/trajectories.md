@@ -6,7 +6,7 @@ description: "REST API endpoints for browsing, exporting, and managing agent tra
 
 Trajectories are structured records of the agent's autonomous activity: each trajectory captures LLM calls, provider accesses, token usage, and timing for one agent reasoning session. They form the raw data for fine-tuning and performance analysis.
 
-Trajectory data is provided by the `@elizaos/plugin-trajectory-logger` service. The agent must be running with this plugin loaded for trajectory endpoints to function.
+Trajectory data is provided by the native `trajectories` service. The agent must be running with trajectories enabled for these endpoints to function.
 
 ## Endpoints
 

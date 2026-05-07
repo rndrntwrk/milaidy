@@ -12,6 +12,12 @@
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const bunGlobal = globalThis as typeof globalThis & {
+  Bun?: { spawn: ReturnType<typeof vi.fn> };
+};
+bunGlobal.Bun ??= { spawn: vi.fn() };
+const bunRuntime = bunGlobal.Bun;
+
 // ---------------------------------------------------------------------------
 // vi.hoisted runs before ANY module import (earlier than vi.mock factories).
 // Set env vars here so resolveWhisperPath() uses them on module load and never
@@ -37,13 +43,15 @@ vi.mock("node:fs", () => {
   };
 });
 
-vi.stubGlobal("Bun", { spawn: vi.fn() });
+// Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+bunRuntime.spawn = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Module under test — imported after mocks so module-level code sees them.
 // ---------------------------------------------------------------------------
 import * as nodeFs from "node:fs";
 import {
+  _resetWhisperCache,
   getWhisperModule,
   isWhisperAvailable,
   isWhisperBinaryAvailable,
@@ -53,10 +61,8 @@ import {
 } from "../whisper";
 
 // Typed references to the mocked functions
-const existsSyncFn = nodeFs.existsSync as unknown as ReturnType<typeof vi.fn>;
-const writeFileSyncFn = nodeFs.writeFileSync as unknown as ReturnType<
-  typeof vi.fn
->;
+const existsSyncFn = nodeFs.existsSync as ReturnType<typeof vi.fn>;
+const writeFileSyncFn = nodeFs.writeFileSync as ReturnType<typeof vi.fn>;
 const mockSpawn = (
   globalThis as unknown as { Bun: { spawn: ReturnType<typeof vi.fn> } }
 ).Bun.spawn;
@@ -233,7 +239,10 @@ describe("writeWavFile", () => {
 // ---------------------------------------------------------------------------
 
 describe("isWhisperBinaryAvailable", () => {
-  beforeEach(() => existsSyncFn.mockReset());
+  beforeEach(() => {
+    existsSyncFn.mockReset();
+    _resetWhisperCache();
+  });
 
   it("returns true when both bin and model exist", () => {
     existsSyncFn.mockReturnValue(true);
@@ -265,7 +274,10 @@ describe("isWhisperBinaryAvailable", () => {
 // ---------------------------------------------------------------------------
 
 describe("isWhisperAvailable", () => {
-  beforeEach(() => existsSyncFn.mockReset());
+  beforeEach(() => {
+    existsSyncFn.mockReset();
+    _resetWhisperCache();
+  });
 
   it("returns true when binary is available", () => {
     existsSyncFn.mockReturnValue(true);
@@ -285,6 +297,7 @@ describe("isWhisperAvailable", () => {
 describe("transcribeBunSpawn", () => {
   beforeEach(() => {
     existsSyncFn.mockReset();
+    _resetWhisperCache();
     mockSpawn.mockReset();
   });
 

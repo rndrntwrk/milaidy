@@ -15,9 +15,10 @@ Eliza Cloud provides remote agent hosting and provisioning. The Milady cloud int
 5. [Cloud Proxy](#cloud-proxy)
 6. [Backup Scheduler](#backup-scheduler)
 7. [Connection Monitor](#connection-monitor)
-8. [Cloud Status and Credits](#cloud-status-and-credits)
-9. [Credits and Billing](#credits-and-billing)
-10. [API Endpoints](#api-endpoints)
+8. [Granular Cloud Service Toggles](#granular-cloud-service-toggles)
+9. [Cloud Status and Credits](#cloud-status-and-credits)
+10. [Credits and Billing](#credits-and-billing)
+11. [API Endpoints](#api-endpoints)
 
 ---
 
@@ -84,7 +85,7 @@ Response:
   "hasApiKey": true,
   "userId": "user-123",
   "organizationId": "org-456",
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 
@@ -253,6 +254,28 @@ When `maxFailures` consecutive heartbeat failures occur:
 
 ---
 
+## Granular cloud service routing
+
+Eliza Cloud linkage and Eliza Cloud service use are separate.
+
+Once an Eliza Cloud account is linked, the connected server can route individual capabilities through Eliza Cloud without forcing every capability onto the cloud path. The canonical runtime config expresses that through `serviceRouting`, for example:
+
+- `serviceRouting.llmText` for chat inference
+- `serviceRouting.tts` for text-to-speech
+- `serviceRouting.media` for image/video generation
+- `serviceRouting.embeddings` for embeddings
+- `serviceRouting.rpc` for wallet / blockchain RPC
+
+That means a server can:
+
+- run locally while using Eliza Cloud only for inference
+- run on Eliza Cloud while still using OpenAI, Anthropic, or Ollama for inference
+- keep Eliza Cloud linked for RPC or media while `llmText` uses another provider
+
+Provider switching updates the canonical route for the selected capability. The current Milady app treats `llmText` as the main inference route; additional capabilities are expected to move onto the same `serviceRouting` contract instead of legacy `cloud.services.*` flags.
+
+---
+
 ## Cloud Status and Credits
 
 ### Status Endpoint
@@ -266,7 +289,7 @@ When `maxFailures` consecutive heartbeat failures occur:
   "hasApiKey": true,
   "userId": "...",
   "organizationId": "...",
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 
@@ -282,7 +305,7 @@ When not connected, the response includes a `reason` field: `"not_authenticated"
   "balance": 15.50,
   "low": false,
   "critical": false,
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 
@@ -306,7 +329,7 @@ Response:
   "balance": 12.50,
   "low": false,
   "critical": false,
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 

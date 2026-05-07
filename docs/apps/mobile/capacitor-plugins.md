@@ -28,18 +28,18 @@ if (isFeatureAvailable("gateway")) {
 
 | Key | Plugin |
 |-----|--------|
-| `gateway` | `@milady/capacitor-gateway` |
-| `voiceWake` | `@milady/capacitor-swabble` |
-| `talkMode` | `@milady/capacitor-talkmode` |
-| `camera` | `@milady/capacitor-camera` |
-| `location` | `@milady/capacitor-location` |
-| `screenCapture` | `@milady/capacitor-screencapture` |
-| `canvas` | `@milady/capacitor-canvas` |
-| `desktop` | `@milady/capacitor-desktop` |
+| `gateway` | `@miladyai/capacitor-gateway` |
+| `voiceWake` | `@miladyai/capacitor-swabble` |
+| `talkMode` | `@miladyai/capacitor-talkmode` |
+| `camera` | `@miladyai/capacitor-camera` |
+| `location` | `@miladyai/capacitor-location` |
+| `screenCapture` | `@miladyai/capacitor-screencapture` |
+| `canvas` | `@miladyai/capacitor-canvas` |
+| `desktop` | `@miladyai/capacitor-desktop` |
 
 ---
 
-## @milady/capacitor-gateway
+## @miladyai/capacitor-gateway
 
 WebSocket RPC connection to a Milady gateway with mDNS/Bonjour discovery of local gateways on the same network. Handles token or password authentication, automatic reconnection, and session continuity via session keys.
 
@@ -67,7 +67,7 @@ WebSocket RPC connection to a Milady gateway with mDNS/Bonjour discovery of loca
 
 ---
 
-## @milady/capacitor-swabble
+## @miladyai/capacitor-swabble
 
 Continuous background wake-word detection. Uses the native Speech framework on iOS, `SpeechRecognizer` on Android, or Whisper.cpp on desktop. Falls back to the Web Speech API in browser environments.
 
@@ -97,7 +97,7 @@ Continuous background wake-word detection. Uses the native Speech framework on i
 
 ---
 
-## @milady/capacitor-talkmode
+## @miladyai/capacitor-talkmode
 
 Full speech pipeline integrating STT, chat relay to the agent, and TTS output. STT uses native recognition or Whisper; TTS uses ElevenLabs streaming or native speech synthesis. The pipeline is stateful — only one phase is active at a time.
 
@@ -128,7 +128,7 @@ Full speech pipeline integrating STT, chat relay to the agent, and TTS output. S
 
 ---
 
-## @milady/capacitor-camera
+## @miladyai/capacitor-camera
 
 Camera enumeration, live preview rendering into an HTML element, photo capture, video recording, and manual controls. On web, falls back to `getUserMedia`.
 
@@ -162,7 +162,7 @@ Camera enumeration, live preview rendering into an HTML element, photo capture, 
 
 ---
 
-## @milady/capacitor-location
+## @miladyai/capacitor-location
 
 GPS and network-based geolocation with configurable accuracy, position watching, and background location support on iOS and Android.
 
@@ -185,7 +185,7 @@ GPS and network-based geolocation with configurable accuracy, position watching,
 
 ---
 
-## @milady/capacitor-screencapture
+## @miladyai/capacitor-screencapture
 
 Screenshots and screen recording with pause/resume support. On web, falls back to `getDisplayMedia` for screen recording.
 
@@ -212,7 +212,7 @@ Screenshots and screen recording with pause/resume support. On web, falls back t
 
 ---
 
-## @milady/capacitor-canvas
+## @miladyai/capacitor-canvas
 
 Drawing primitives, layer management, embedded web view control, JavaScript evaluation, A2UI directive injection, and `milady://` deep link interception. The canvas layer renders natively on iOS and Android and sits above the Capacitor web view.
 
@@ -270,9 +270,9 @@ Drawing primitives, layer management, embedded web view control, JavaScript eval
 
 ---
 
-## @milady/capacitor-agent
+## @miladyai/capacitor-agent
 
-Agent lifecycle management. Communicates with the Milady agent process via IPC on Electron and via HTTP on iOS, Android, and web.
+Agent lifecycle management. Communicates with the Milady agent process via IPC on Electrobun and via HTTP on iOS, Android, and web.
 
 ### Methods
 
@@ -295,9 +295,9 @@ Agent lifecycle management. Communicates with the Milady agent process via IPC o
 
 ---
 
-## @milady/capacitor-desktop
+## @miladyai/capacitor-desktop
 
-Electron-only plugin for desktop integration. All methods are no-ops on iOS and Android. Check `isFeatureAvailable("desktop")` before calling any method.
+Electrobun-only plugin for desktop integration. All methods are no-ops on iOS and Android. Check `isFeatureAvailable("desktop")` before calling any method.
 
 ### Tray Methods
 
@@ -364,11 +364,11 @@ Electron-only plugin for desktop integration. All methods are no-ops on iOS and 
 
 | Method | Parameters | Description |
 |--------|-----------|-------------|
-| `quit` | — | Quit the Electron application |
-| `relaunch` | — | Relaunch the Electron application |
+| `quit` | — | Quit the Electrobun application |
+| `relaunch` | — | Relaunch the Electrobun application |
 | `getVersion` | — | Return the application version string |
 | `isPackaged` | — | Return whether the app is running from a packaged build |
-| `getPath` | `name: string` | Return an Electron app path (e.g., `userData`, `logs`) |
+| `getPath` | `name: string` | Return an Electrobun app path (e.g., `userData`, `logs`) |
 
 ### Clipboard Methods
 
@@ -408,4 +408,4 @@ await Haptics.selectionEnd();
 
 - [Mobile App](/apps/mobile) — platform configuration, build targets, and project structure
 - [Build Guide](/apps/mobile/build-guide) — how to compile plugins and produce signed iOS/Android builds
-- [Native Modules](/apps/desktop/native-modules) — equivalent capability system for the Electron desktop app
+- [Native Modules](/apps/desktop/native-modules) — equivalent capability system for the Electrobun desktop app

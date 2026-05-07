@@ -1,0 +1,91 @@
+# Connect to Google Chat
+
+Google Chat is Workspace's team chat product (formerly called Hangouts Chat). The connector puts your Milady agent into Chat spaces so it can respond to messages and mentions the way a real bot would.
+
+**What you'll learn:** enable the Google Chat API in a Google Cloud project, create a service account, register the bot with Google, paste credentials into Milady.
+
+## What you need before you start
+
+- **A Google Workspace account** — personal Gmail can't use Google Chat bots.
+- **Workspace admin rights**, or an admin willing to approve a new Chat app for the domain.
+- **A Google Cloud project** (create one in [Connect Gmail Watch](/docs/intermediate/connect-gmail-watch) Step 1 if you haven't).
+- **Milady running** with a working provider.
+
+## Step 1 — Enable the Google Chat API
+
+<Steps>
+  <li>Open <a href="https://console.cloud.google.com">console.cloud.google.com</a> → pick your project.</li>
+  <li>Sidebar: <strong>APIs &amp; Services → Library</strong>.</li>
+  <li>Search <strong>Google Chat API</strong> and enable it.</li>
+</Steps>
+
+## Step 2 — Create a service account
+
+<Steps>
+  <li>Sidebar: <strong>IAM &amp; Admin → Service Accounts → Create service account</strong>.</li>
+  <li>Name it <code>milady-chat-bot</code>.</li>
+  <li>Skip granting project roles (Chat bots don't need any). Click Done.</li>
+  <li>Click the new service account → <strong>Keys → Add Key → Create new key → JSON</strong>.</li>
+  <li>Save the downloaded file.</li>
+</Steps>
+
+## Step 3 — Configure the Chat app
+
+<Steps>
+  <li>Still in the Cloud Console, go to <strong>APIs &amp; Services → Enabled APIs → Google Chat API → Configuration</strong> (tab at the top).</li>
+  <li>
+    <p>Fill in:</p>
+    <ul>
+      <li><strong>App name:</strong> the display name users see in Chat</li>
+      <li><strong>Avatar URL:</strong> a public image URL for the bot's icon</li>
+      <li><strong>Description</strong></li>
+      <li><strong>Functionality:</strong> tick <strong>Receive 1:1 messages</strong> and <strong>Join spaces and group conversations</strong></li>
+      <li><strong>Connection settings → HTTP endpoint URL:</strong> enter your public Milady URL + path, e.g. <code>https://&lt;your-milady-host&gt;/webhooks/google-chat</code></li>
+      <li><strong>Authentication → Service account:</strong> select the one you made in Step 2</li>
+    </ul>
+  </li>
+  <li>Under <strong>Visibility</strong>, add the users or groups allowed to use the bot (start with just yourself).</li>
+  <li>Save.</li>
+</Steps>
+
+## Step 4 — Hand the credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Google Chat → Configure</strong>.</li>
+  <li>Paste the entire contents of the service account JSON file into <strong>Service account key</strong>, or set <strong>Service account file</strong> to the absolute path of the JSON on disk.</li>
+  <li>(Optional) Set <strong>Spaces</strong> to a comma-separated list of space names (e.g. <code>spaces/AAAA_space_id</code>) to restrict the bot.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 5 — Add the bot to a space and test
+
+<Steps>
+  <li>In Google Chat, open any space → click <strong>+</strong> → <strong>Add people &amp; apps</strong>.</li>
+  <li>Search for your bot's app name from Step 3 and add it.</li>
+  <li>Send a message mentioning the bot.</li>
+  <li>The bot should reply within a few seconds.</li>
+</Steps>
+
+## Getting space IDs
+
+<Steps>
+  <li>In Chat, open the space → click the space name at the top.</li>
+  <li>Copy the URL of the space — it contains the space ID after <code>/room/</code>.</li>
+  <li>The full space name format is <code>spaces/&lt;id&gt;</code>. Paste into Milady's Spaces field.</li>
+</Steps>
+
+## Troubleshooting
+
+**"App not found" when adding to a space.**
+Step 3's Visibility list doesn't include you. Add yourself to the allowed users and save.
+
+**Bot is added but never replies.**
+Your HTTP endpoint URL is unreachable from Google's side, or Milady isn't mounting the `/webhooks/google-chat` route. Double-check the public URL and that Milady is exposed.
+
+**Admin approval required.**
+Workspace admins can block unverified Chat apps domain-wide. Ask your admin to approve the app in **Admin Console → Apps → Google Workspace → Google Chat → Chat apps**.
+
+## What's next
+
+- [Connect to Gmail (Gmail Watch)](/docs/intermediate/connect-gmail-watch) — same Google Cloud project, lets the agent react to email too.
+- [Running multiple connectors](/docs/advanced/multi-connector-setup)

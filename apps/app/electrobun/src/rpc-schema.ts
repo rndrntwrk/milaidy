@@ -2,7 +2,7 @@
  * Milady RPC Schema for Electrobun
  *
  * Defines the typed RPC contract between the Bun main process and
- * the webview renderer. Replaces the stringly-typed Electron IPC channels
+ * the webview renderer. Replaces the stringly-typed legacy desktop channel surface
  * with compile-time safe typed RPC.
  *
  * Schema structure (from Electrobun's perspective):
@@ -17,15 +17,6 @@ import type { RPCSchema } from "electrobun/bun";
 // ============================================================================
 // Shared Types
 // ============================================================================
-
-// -- Agent --
-export interface AgentStatus {
-  state: "not_started" | "starting" | "running" | "stopped" | "error";
-  agentName: string | null;
-  port: number | null;
-  startedAt: number | null;
-  error: string | null;
-}
 
 // -- Desktop --
 export interface TrayMenuItem {
@@ -104,6 +95,69 @@ export interface VersionInfo {
   runtime: string;
 }
 
+export interface DesktopBuildInfo {
+  platform: string;
+  arch: string;
+  defaultRenderer: "native" | "cef";
+  availableRenderers: Array<"native" | "cef">;
+  cefVersion?: string;
+  bunVersion?: string;
+  runtime?: Record<string, unknown>;
+}
+
+export interface DesktopUpdaterSnapshot {
+  currentVersion: string;
+  currentHash?: string;
+  channel?: string;
+  baseUrl?: string;
+  appBundlePath?: string | null;
+  canAutoUpdate: boolean;
+  autoUpdateDisabledReason?: string | null;
+  updateAvailable: boolean;
+  updateReady: boolean;
+  latestVersion?: string | null;
+  latestHash?: string | null;
+  error?: string | null;
+  lastStatus?: {
+    status: string;
+    message: string;
+    timestamp: number;
+  } | null;
+}
+
+export type DesktopSessionStorageType =
+  | "cookies"
+  | "localStorage"
+  | "sessionStorage"
+  | "indexedDB"
+  | "webSQL"
+  | "cache"
+  | "all";
+
+export interface DesktopSessionCookie {
+  name: string;
+  value?: string;
+  domain?: string;
+  path?: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  session?: boolean;
+  expirationDate?: number;
+}
+
+export interface DesktopSessionSnapshot {
+  partition: string;
+  persistent: boolean;
+  cookieCount: number;
+  cookies: DesktopSessionCookie[];
+}
+
+export interface DesktopReleaseNotesWindowInfo {
+  url: string;
+  windowId: number | null;
+  webviewId: number | null;
+}
+
 export interface PowerState {
   onBattery: boolean;
   idleState: "active" | "idle" | "locked" | "unknown";
@@ -143,27 +197,18 @@ export interface DiscoveryResult {
 }
 
 // -- Permissions --
-export type SystemPermissionId =
-  | "accessibility"
-  | "screen-recording"
-  | "microphone"
-  | "camera"
-  | "shell";
+export type {
+  PermissionState,
+  PermissionStatus,
+  SystemPermissionId,
+} from "@miladyai/shared/contracts/permissions";
 
-export type PermissionStatus =
-  | "granted"
-  | "denied"
-  | "not-determined"
-  | "restricted"
-  | "not-applicable";
+import type {
+  PermissionState,
+  SystemPermissionId,
+} from "@miladyai/shared/contracts/permissions";
 
-export interface PermissionState {
-  id: SystemPermissionId;
-  status: PermissionStatus;
-  lastChecked: number;
-  canRequest: boolean;
-}
-
+/** Local variant uses an index signature (the canonical contract uses explicit keys). */
 export interface AllPermissionsState {
   [key: string]: PermissionState;
 }
@@ -201,11 +246,35 @@ export interface GpuViewInfo {
   viewId?: number | null;
 }
 
+// -- Steward Sidecar --
+export interface StewardRpcStatus {
+  state: "stopped" | "starting" | "running" | "error" | "restarting";
+  port: number | null;
+  pid: number | null;
+  error: string | null;
+  restartCount: number;
+  walletAddress: string | null;
+  agentId: string | null;
+  tenantId: string | null;
+  startedAt: number | null;
+}
+
 // -- Camera --
 export interface CameraDevice {
   deviceId: string;
   label: string;
   kind: string;
+}
+
+// -- Credentials Auto-Detection --
+export interface DetectedProvider {
+  id: string;
+  source: string;
+  apiKey?: string;
+  authMode?: string;
+  cliInstalled: boolean;
+  status: "valid" | "invalid" | "unchecked" | "error";
+  statusDetail?: string;
 }
 
 // -- Screencapture --
@@ -214,6 +283,59 @@ export interface ScreenSource {
   name: string;
   thumbnail: string;
   appIcon?: string;
+}
+
+// -- Native Editor Bridge --
+export type NativeEditorId =
+  | "vscode"
+  | "cursor"
+  | "windsurf"
+  | "antigravity"
+  | "zed"
+  | "sublime";
+
+export interface NativeEditorInfo {
+  id: NativeEditorId;
+  label: string;
+  installed: boolean;
+  command: string;
+}
+
+export interface EditorSession {
+  editorId: NativeEditorId;
+  workspacePath: string;
+  startedAt: number;
+}
+
+// -- Workspace File Watcher --
+export type FileChangeEventType =
+  | "created"
+  | "modified"
+  | "deleted"
+  | "renamed";
+
+export interface FileChangeEvent {
+  watchId: string;
+  type: FileChangeEventType;
+  filePath: string;
+  relativePath: string;
+  timestamp: number;
+}
+
+export interface WatchStatus {
+  watchId: string;
+  watchPath: string;
+  active: boolean;
+  startedAt: number;
+  eventCount: number;
+}
+
+// -- Floating Chat Window --
+export interface FloatingChatStatus {
+  open: boolean;
+  visible: boolean;
+  contextId: string | null;
+  bounds: WindowBounds | null;
 }
 
 // -- TalkMode --
@@ -231,10 +353,16 @@ export interface TalkModeConfig {
   voiceId?: string;
 }
 
-// -- LIFO (PiP) --
-export interface PipState {
-  enabled: boolean;
-  windowId?: string;
+// -- Music player (plugin-music-player HTTP routes) --
+/** Resolved HTTP URLs for plugin-music-player routes (agent process, not under /api). */
+export interface MusicPlayerDesktopPlaybackUrls {
+  ok: boolean;
+  reason?: string;
+  apiBase?: string;
+  guildId?: string;
+  streamUrl?: string;
+  nowPlayingUrl?: string;
+  queueUrl?: string;
 }
 
 // -- File Dialog --
@@ -290,6 +418,52 @@ export interface MessageBoxResult {
   response: number;
 }
 
+export interface EmbeddedAgentStatus {
+  state: "not_started" | "starting" | "running" | "stopped" | "error";
+  agentName: string | null;
+  port: number | null;
+  startedAt: number | null;
+  error: string | null;
+}
+
+export interface ExistingElizaInstallInfo {
+  detected: boolean;
+  stateDir: string;
+  configPath: string;
+  configExists: boolean;
+  stateDirExists: boolean;
+  hasStateEntries: boolean;
+  source: "config-path-env" | "state-dir-env" | "default-state-dir";
+}
+
+export interface DesktopStartupDiagnostics {
+  state: "not_started" | "starting" | "running" | "stopped" | "error";
+  phase: string;
+  updatedAt: string;
+  lastError: string | null;
+  agentName: string | null;
+  port: number | null;
+  startedAt: number | null;
+  platform: string;
+  arch: string;
+  configDir: string;
+  logPath: string;
+  statusPath: string;
+  logTail: string;
+  appVersion?: string;
+  appRuntime?: string;
+  packaged?: boolean;
+  locale?: string;
+}
+
+export interface DesktopBugReportBundleInfo {
+  directory: string;
+  reportMarkdownPath: string;
+  reportJsonPath: string;
+  startupLogPath: string | null;
+  startupStatusPath: string | null;
+}
+
 // ============================================================================
 // RPC Schema
 // ============================================================================
@@ -298,10 +472,30 @@ export type MiladyRPCSchema = {
   bun: RPCSchema<{
     requests: {
       // ---- Agent ----
-      agentStart: { params: undefined; response: AgentStatus };
-      agentStop: { params: undefined; response: { ok: boolean } };
-      agentRestart: { params: undefined; response: AgentStatus };
-      agentStatus: { params: undefined; response: AgentStatus };
+      agentStart: { params: undefined; response: EmbeddedAgentStatus };
+      agentStop: { params: undefined; response: { ok: true } };
+      agentRestart: { params: undefined; response: EmbeddedAgentStatus };
+      agentRestartClearLocalDb: {
+        params: undefined;
+        response: EmbeddedAgentStatus;
+      };
+      agentStatus: { params: undefined; response: EmbeddedAgentStatus };
+      agentInspectExistingInstall: {
+        params: undefined;
+        response: ExistingElizaInstallInfo;
+      };
+      agentPostCloudDisconnect: {
+        params: { apiBase?: string; bearerToken?: string } | undefined | null;
+        response: { ok: boolean; error?: string };
+      };
+      /** Native confirm + main POST (renderer bridge/fetch can stall after a sheet). */
+      agentCloudDisconnectWithConfirm: {
+        params: { apiBase?: string; bearerToken?: string } | undefined | null;
+        response:
+          | { cancelled: true }
+          | { ok: true }
+          | { ok: false; error: string };
+      };
 
       // ---- Desktop: Tray ----
       desktopCreateTray: { params: TrayOptions; response: undefined };
@@ -378,6 +572,10 @@ export type MiladyRPCSchema = {
         response: { id: string };
       };
       desktopCloseNotification: { params: { id: string }; response: undefined };
+      desktopShowBackgroundNotice: {
+        params: undefined;
+        response: { shown: boolean };
+      };
 
       // ---- Desktop: Power ----
       desktopGetPowerState: { params: undefined; response: PowerState };
@@ -400,13 +598,99 @@ export type MiladyRPCSchema = {
       desktopQuit: { params: undefined; response: undefined };
       desktopRelaunch: { params: undefined; response: undefined };
       desktopApplyUpdate: { params: undefined; response: undefined };
+      desktopCheckForUpdates: {
+        params: undefined;
+        response: DesktopUpdaterSnapshot;
+      };
+      desktopGetUpdaterState: {
+        params: undefined;
+        response: DesktopUpdaterSnapshot;
+      };
       desktopGetVersion: { params: undefined; response: VersionInfo };
+      desktopGetBuildInfo: { params: undefined; response: DesktopBuildInfo };
       desktopIsPackaged: { params: undefined; response: { packaged: boolean } };
+      desktopGetDockIconVisibility: {
+        params: undefined;
+        response: { visible: boolean };
+      };
+      desktopSetDockIconVisibility: {
+        params: { visible: boolean };
+        response: { visible: boolean };
+      };
       desktopGetPath: {
         params: { name: string };
         response: { path: string };
       };
+      desktopGetStartupDiagnostics: {
+        params: undefined;
+        response: DesktopStartupDiagnostics;
+      };
+      desktopGetRuntimeMode: {
+        params: undefined;
+        response: {
+          mode: "local" | "external" | "disabled";
+          externalApiBase?: string | null;
+          externalApiSource?: string | null;
+        };
+      };
+      desktopOpenLogsFolder: { params: undefined; response: undefined };
+      desktopCreateBugReportBundle: {
+        params: {
+          reportMarkdown: string;
+          reportJson: Record<string, unknown>;
+          prefix?: string;
+        };
+        response: DesktopBugReportBundleInfo;
+      };
       desktopBeep: { params: undefined; response: undefined };
+      desktopShowSelectionContextMenu: {
+        params: { text: string };
+        response: { shown: boolean };
+      };
+      desktopGetSessionSnapshot: {
+        params: { partition: string };
+        response: DesktopSessionSnapshot;
+      };
+      desktopClearSessionData: {
+        params: {
+          partition: string;
+          storageTypes?: DesktopSessionStorageType[] | "all";
+          clearCookies?: boolean;
+        };
+        response: DesktopSessionSnapshot;
+      };
+      desktopGetWebGpuBrowserStatus: {
+        params: undefined;
+        response: {
+          available: boolean;
+          reason: string;
+          renderer: string;
+          chromeBetaPath: string | null;
+          downloadUrl: string | null;
+        };
+      };
+      desktopOpenReleaseNotesWindow: {
+        params: { url: string; title?: string };
+        response: DesktopReleaseNotesWindowInfo;
+      };
+      desktopOpenSettingsWindow: {
+        params: { tabHint?: string } | undefined;
+        response: undefined;
+      };
+      desktopOpenSurfaceWindow: {
+        params: {
+          surface:
+            | "chat"
+            | "browser"
+            | "release"
+            | "triggers"
+            | "plugins"
+            | "connectors"
+            | "cloud";
+          browse?: string;
+        };
+        response: undefined;
+      };
 
       // ---- Desktop: Clipboard ----
       desktopWriteToClipboard: {
@@ -732,6 +1016,12 @@ export type MiladyRPCSchema = {
       talkmodeUpdateConfig: { params: TalkModeConfig; response: undefined };
       talkmodeAudioChunk: { params: { data: string }; response: undefined };
 
+      // ---- Music player (elizaOS plugin-music-player HTTP routes on agent) ----
+      musicPlayerGetDesktopPlaybackUrls: {
+        params: { guildId?: string };
+        response: MusicPlayerDesktopPlaybackUrls;
+      };
+
       // ---- Context Menu ----
       contextMenuAskAgent: {
         params: { text: string };
@@ -748,6 +1038,16 @@ export type MiladyRPCSchema = {
       contextMenuSaveAsCommand: {
         params: { text: string };
         response: undefined;
+      };
+
+      // ---- Credentials Auto-Detection ----
+      credentialsScanProviders: {
+        params: { context: "onboarding" | "tray-refresh" };
+        response: { providers: DetectedProvider[] };
+      };
+      credentialsScanAndValidate: {
+        params: { context: "onboarding" | "tray-refresh" };
+        response: { providers: DetectedProvider[] };
       };
 
       // ---- GPU Window ----
@@ -818,9 +1118,93 @@ export type MiladyRPCSchema = {
         response: { views: GpuViewInfo[] };
       };
 
-      // ---- LIFO (PiP) ----
-      lifoGetPipState: { params: undefined; response: PipState };
-      lifoSetPip: { params: PipState; response: undefined };
+      // ---- Native Editor Bridge ----
+      editorBridgeListEditors: {
+        params: undefined;
+        response: { editors: NativeEditorInfo[] };
+      };
+      editorBridgeOpenInEditor: {
+        params: { editorId: NativeEditorId; workspacePath: string };
+        response: EditorSession;
+      };
+      editorBridgeGetSession: {
+        params: undefined;
+        response: EditorSession | null;
+      };
+      editorBridgeClearSession: {
+        params: undefined;
+        response: undefined;
+      };
+
+      // ---- Workspace File Watcher ----
+      fileWatcherStart: {
+        params: { watchPath: string };
+        response: { watchId: string };
+      };
+      fileWatcherStop: {
+        params: { watchId: string };
+        response: { stopped: boolean };
+      };
+      fileWatcherStopAll: {
+        params: undefined;
+        response: undefined;
+      };
+      fileWatcherList: {
+        params: undefined;
+        response: { watches: WatchStatus[] };
+      };
+      fileWatcherGetStatus: {
+        params: { watchId: string };
+        response: WatchStatus | null;
+      };
+
+      // ---- Floating Chat Window ----
+      floatingChatOpen: {
+        params: { contextId?: string; x?: number; y?: number };
+        response: FloatingChatStatus;
+      };
+      floatingChatShow: {
+        params: undefined;
+        response: FloatingChatStatus;
+      };
+      floatingChatHide: {
+        params: undefined;
+        response: FloatingChatStatus;
+      };
+      floatingChatClose: {
+        params: undefined;
+        response: FloatingChatStatus;
+      };
+      floatingChatSetContext: {
+        params: { contextId: string | null };
+        response: FloatingChatStatus;
+      };
+      floatingChatGetStatus: {
+        params: undefined;
+        response: FloatingChatStatus;
+      };
+
+      // ---- Steward Sidecar ----
+      stewardGetStatus: {
+        params: undefined;
+        response: StewardRpcStatus;
+      };
+      stewardIsLocalEnabled: {
+        params: undefined;
+        response: { enabled: boolean };
+      };
+      stewardStart: {
+        params: undefined;
+        response: StewardRpcStatus;
+      };
+      stewardRestart: {
+        params: undefined;
+        response: StewardRpcStatus;
+      };
+      stewardReset: {
+        params: undefined;
+        response: StewardRpcStatus;
+      };
     };
     // biome-ignore lint/complexity/noBannedTypes: empty message schema placeholder for future audio streaming
     messages: {
@@ -836,9 +1220,6 @@ export type MiladyRPCSchema = {
     messages: {
       // Push events FROM bun TO webview
 
-      // Agent
-      agentStatusUpdate: AgentStatus;
-
       // Gateway
       gatewayDiscovery: {
         type: "found" | "updated" | "lost";
@@ -849,7 +1230,12 @@ export type MiladyRPCSchema = {
       permissionsChanged: { id: string };
 
       // Desktop: Tray events
-      desktopTrayMenuClick: { itemId: string; checked?: boolean };
+      desktopTrayMenuClick: {
+        itemId: string;
+        checked?: boolean;
+        /** Present when `itemId === "menu-reset-milady-applied"` (main-process reset). */
+        agentStatus?: Record<string, unknown> | null;
+      };
       desktopTrayClick: TrayClickEvent;
 
       // Desktop: Shortcut events
@@ -861,6 +1247,7 @@ export type MiladyRPCSchema = {
       desktopWindowMaximize: undefined;
       desktopWindowUnmaximize: undefined;
       desktopWindowClose: undefined;
+      desktopShutdownStarted: { reason: string };
 
       // Canvas: Window events
       canvasWindowEvent: {
@@ -877,6 +1264,11 @@ export type MiladyRPCSchema = {
         text: string;
         segments: Array<{ text: string; start: number; end: number }>;
       };
+      talkmodeError: {
+        code: string;
+        message: string;
+        recoverable: boolean;
+      };
 
       // Swabble: Wake word detection
       swabbleWakeWord: {
@@ -885,6 +1277,22 @@ export type MiladyRPCSchema = {
         transcript: string;
       };
       swabbleStateChanged: { listening: boolean };
+      swabbleTranscript: {
+        transcript: string;
+        segments: Array<{
+          text: string;
+          start: number;
+          duration: number;
+          isFinal: boolean;
+        }>;
+        isFinal: boolean;
+        confidence?: number;
+      };
+      swabbleError: {
+        code: string;
+        message: string;
+        recoverable: boolean;
+      };
       // Swabble: audio chunk fallback (whisper.cpp binary missing)
       swabbleAudioChunkPush: { data: string };
 
@@ -893,6 +1301,15 @@ export type MiladyRPCSchema = {
       contextMenuCreateSkill: { text: string };
       contextMenuQuoteInChat: { text: string };
       contextMenuSaveAsCommand: { text: string };
+
+      // Workspace file change push events
+      workspaceFileChanged: FileChangeEvent;
+
+      // Editor bridge push events
+      editorSessionChanged: EditorSession | null;
+
+      // Floating chat push events
+      floatingChatStatusChanged: FloatingChatStatus;
 
       // API Base injection
       apiBaseUpdate: { base: string; token?: string };
@@ -914,6 +1331,18 @@ export type MiladyRPCSchema = {
 
       // GPU Window push events
       gpuWindowClosed: { id: string };
+
+      // Steward sidecar status push
+      stewardStatusUpdate: StewardRpcStatus;
+
+      // WebGPU browser support status
+      webGpuBrowserStatus: {
+        available: boolean;
+        reason: string;
+        renderer: string;
+        chromeBetaPath: string | null;
+        downloadUrl: string | null;
+      };
     };
   }>;
 };
@@ -923,7 +1352,7 @@ export type MiladyRPCSchema = {
 // ============================================================================
 
 /**
- * Maps Electron-style colon-separated IPC channel names to camelCase RPC
+ * Maps legacy colon-separated desktop channel names to camelCase RPC
  * method names. Used by the renderer bridge for backward compatibility.
  */
 export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
@@ -931,7 +1360,11 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "agent:start": "agentStart",
   "agent:stop": "agentStop",
   "agent:restart": "agentRestart",
+  "agent:restartClearLocalDb": "agentRestartClearLocalDb",
   "agent:status": "agentStatus",
+  "agent:inspectExistingInstall": "agentInspectExistingInstall",
+  "agent:postCloudDisconnect": "agentPostCloudDisconnect",
+  "agent:cloudDisconnectWithConfirm": "agentCloudDisconnectWithConfirm",
 
   // Desktop: Tray
   "desktop:createTray": "desktopCreateTray",
@@ -972,6 +1405,7 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   // Desktop: Notifications
   "desktop:showNotification": "desktopShowNotification",
   "desktop:closeNotification": "desktopCloseNotification",
+  "desktop:showBackgroundNotice": "desktopShowBackgroundNotice",
 
   // Desktop: Power
   "desktop:getPowerState": "desktopGetPowerState",
@@ -988,10 +1422,26 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "desktop:quit": "desktopQuit",
   "desktop:relaunch": "desktopRelaunch",
   "desktop:applyUpdate": "desktopApplyUpdate",
+  "desktop:checkForUpdates": "desktopCheckForUpdates",
+  "desktop:getUpdaterState": "desktopGetUpdaterState",
   "desktop:getVersion": "desktopGetVersion",
+  "desktop:getBuildInfo": "desktopGetBuildInfo",
   "desktop:isPackaged": "desktopIsPackaged",
+  "desktop:getDockIconVisibility": "desktopGetDockIconVisibility",
+  "desktop:setDockIconVisibility": "desktopSetDockIconVisibility",
   "desktop:getPath": "desktopGetPath",
+  "desktop:getStartupDiagnostics": "desktopGetStartupDiagnostics",
+  "desktop:getRuntimeMode": "desktopGetRuntimeMode",
+  "desktop:openLogsFolder": "desktopOpenLogsFolder",
+  "desktop:createBugReportBundle": "desktopCreateBugReportBundle",
   "desktop:beep": "desktopBeep",
+  "desktop:showSelectionContextMenu": "desktopShowSelectionContextMenu",
+  "desktop:getSessionSnapshot": "desktopGetSessionSnapshot",
+  "desktop:clearSessionData": "desktopClearSessionData",
+  "desktop:getWebGpuBrowserStatus": "desktopGetWebGpuBrowserStatus",
+  "desktop:openReleaseNotesWindow": "desktopOpenReleaseNotesWindow",
+  "desktop:openSettingsWindow": "desktopOpenSettingsWindow",
+  "desktop:openSurfaceWindow": "desktopOpenSurfaceWindow",
 
   // Desktop: Clipboard
   "desktop:writeToClipboard": "desktopWriteToClipboard",
@@ -1100,15 +1550,18 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "talkmode:updateConfig": "talkmodeUpdateConfig",
   "talkmode:audioChunk": "talkmodeAudioChunk",
 
+  // Music player (desktop)
+  "musicPlayer:getDesktopPlaybackUrls": "musicPlayerGetDesktopPlaybackUrls",
+
   // Context Menu
   "contextMenu:askAgent": "contextMenuAskAgent",
   "contextMenu:createSkill": "contextMenuCreateSkill",
   "contextMenu:quoteInChat": "contextMenuQuoteInChat",
   "contextMenu:saveAsCommand": "contextMenuSaveAsCommand",
 
-  // LIFO
-  "lifo:getPipState": "lifoGetPipState",
-  "lifo:setPip": "lifoSetPip",
+  // Credentials
+  "credentials:scanProviders": "credentialsScanProviders",
+  "credentials:scanAndValidate": "credentialsScanAndValidate",
 
   // GPU Window
   "gpuWindow:create": "gpuWindowCreate",
@@ -1127,10 +1580,38 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "gpuView:setHidden": "gpuViewSetHidden",
   "gpuView:getNativeHandle": "gpuViewGetNativeHandle",
   "gpuView:list": "gpuViewList",
+
+  // Steward Sidecar
+  "steward:getStatus": "stewardGetStatus",
+  "steward:isLocalEnabled": "stewardIsLocalEnabled",
+  "steward:start": "stewardStart",
+  "steward:restart": "stewardRestart",
+  "steward:reset": "stewardReset",
+
+  // Native Editor Bridge
+  "editorBridge:listEditors": "editorBridgeListEditors",
+  "editorBridge:openInEditor": "editorBridgeOpenInEditor",
+  "editorBridge:getSession": "editorBridgeGetSession",
+  "editorBridge:clearSession": "editorBridgeClearSession",
+
+  // Workspace File Watcher
+  "fileWatcher:start": "fileWatcherStart",
+  "fileWatcher:stop": "fileWatcherStop",
+  "fileWatcher:stopAll": "fileWatcherStopAll",
+  "fileWatcher:list": "fileWatcherList",
+  "fileWatcher:getStatus": "fileWatcherGetStatus",
+
+  // Floating Chat Window
+  "floatingChat:open": "floatingChatOpen",
+  "floatingChat:show": "floatingChatShow",
+  "floatingChat:hide": "floatingChatHide",
+  "floatingChat:close": "floatingChatClose",
+  "floatingChat:setContext": "floatingChatSetContext",
+  "floatingChat:getStatus": "floatingChatGetStatus",
 };
 
 /**
- * Maps Electron-style push event channel names to RPC message names.
+ * Maps legacy desktop push channel names to RPC message names.
  * Used by the renderer bridge to subscribe to push events.
  */
 export const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = {
@@ -1145,13 +1626,17 @@ export const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = {
   "desktop:windowMaximize": "desktopWindowMaximize",
   "desktop:windowUnmaximize": "desktopWindowUnmaximize",
   "desktop:windowClose": "desktopWindowClose",
+  "desktop:shutdownStarted": "desktopShutdownStarted",
   "canvas:windowEvent": "canvasWindowEvent",
   "talkmode:audioChunkPush": "talkmodeAudioChunkPush",
   "talkmode:stateChanged": "talkmodeStateChanged",
   "talkmode:speakComplete": "talkmodeSpeakComplete",
   "talkmode:transcript": "talkmodeTranscript",
+  "talkmode:error": "talkmodeError",
   "swabble:wakeWord": "swabbleWakeWord",
   "swabble:stateChange": "swabbleStateChanged",
+  "swabble:transcript": "swabbleTranscript",
+  "swabble:error": "swabbleError",
   "swabble:audioChunkPush": "swabbleAudioChunkPush",
   "contextMenu:askAgent": "contextMenuAskAgent",
   "contextMenu:createSkill": "contextMenuCreateSkill",
@@ -1165,10 +1650,25 @@ export const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = {
 
   // GPU Window push events
   "gpuWindow:closed": "gpuWindowClosed",
+
+  // Steward sidecar
+  stewardStatusUpdate: "stewardStatusUpdate",
+
+  // WebGPU browser support
+  "webgpu:browserStatus": "webGpuBrowserStatus",
+
+  // Workspace file watcher
+  "fileWatcher:fileChanged": "workspaceFileChanged",
+
+  // Editor bridge
+  "editorBridge:sessionChanged": "editorSessionChanged",
+
+  // Floating chat
+  "floatingChat:statusChanged": "floatingChatStatusChanged",
 };
 
 /**
- * Reverse mapping: RPC message name → Electron push channel name.
+ * Reverse mapping: RPC message name → legacy desktop push channel name.
  */
 export const RPC_MESSAGE_TO_PUSH_CHANNEL: Record<string, string> =
   Object.fromEntries(

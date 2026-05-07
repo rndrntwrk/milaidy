@@ -1,10 +1,12 @@
 ---
 title: "Configuration"
 sidebarTitle: "Configuration"
-description: "Complete reference for the Milady config file, environment variables, CLI commands, and all configuration sections."
+description: "Complete reference for the primary Milady runtime config file, environment variables, CLI commands, and all configuration sections."
 ---
 
-Milady uses a single JSON5 config file for all settings. This page documents every configuration section, environment variable override, and CLI command available.
+Milady uses a primary JSON5 config file for runtime and bootstrap settings.
+This page documents the config file, environment variable overrides, and the
+canonical runtime routing fields that now drive hosting and provider selection.
 
 ## Config File Location
 
@@ -27,7 +29,7 @@ Two environment variables control where Milady looks for configuration:
 | `MILADY_STATE_DIR` | Override the entire state directory | `~/.milady` |
 | `MILADY_CONFIG_PATH` | Override the config file path directly | `~/.milady/milady.json` |
 
-`MILADY_CONFIG_PATH` takes precedence over `MILADY_STATE_DIR`. Both support `~` expansion for the home directory.
+`MILADY_CONFIG_PATH` takes precedence over `MILADY_STATE_DIR`. Both support `~` expansion for the home directory. For backwards compatibility, the legacy names `ELIZA_STATE_DIR` and `ELIZA_CONFIG_PATH` are also accepted as fallbacks.
 
 ```bash
 # Use a custom state directory (config lives at /opt/milady/milady.json)
@@ -46,6 +48,48 @@ The state directory also contains:
 | `~/.milady/models/` | Cached model provider lists (per-provider JSON files) |
 | `~/.milady/credentials/` | OAuth credentials (overridable via `MILADY_OAUTH_DIR`) |
 | `~/.milady/credentials/oauth.json` | OAuth token storage |
+
+## Canonical Runtime Routing
+
+Milady's saved runtime topology is no longer inferred from a single
+`connection` blob, and the root `connection` field is no longer part of the
+persisted config schema. The canonical persisted fields are:
+
+| Field | Purpose |
+|------|---------|
+| `deploymentTarget` | Where the active server runs: `local`, `cloud`, or `remote` |
+| `linkedAccounts` | Which provider or cloud accounts are available to that server |
+| `serviceRouting` | Which backend handles each capability (`llmText`, `tts`, `media`, `embeddings`, `rpc`) |
+
+```json5
+{
+  deploymentTarget: {
+    runtime: "cloud",
+    provider: "elizacloud",
+  },
+  linkedAccounts: {
+    elizacloud: {
+      status: "linked",
+      source: "oauth",
+    },
+  },
+  serviceRouting: {
+    llmText: {
+      backend: "anthropic",
+      transport: "direct",
+      primaryModel: "anthropic/claude-sonnet-4-5",
+    },
+    tts: {
+      backend: "elizacloud",
+      transport: "cloud-proxy",
+      accountId: "elizacloud",
+    },
+  },
+}
+```
+
+That means a server can be hosted on Eliza Cloud while still using Anthropic,
+OpenAI, OpenRouter, or a local model for chat inference.
 
 ## File Format
 
@@ -156,6 +200,9 @@ Here is every top-level key in `MiladyConfig`:
   models: {},         // Custom model providers, Bedrock discovery
   nodeHost: {},       // Node host browser proxy settings
   agents: {},         // Agent definitions, defaults, personality
+  deploymentTarget: {}, // Canonical hosting target (local/cloud/remote)
+  linkedAccounts: {}, // Canonical linked account inventory
+  serviceRouting: {}, // Canonical per-capability routing
   tools: {},          // Tool profiles, web search/fetch, exec, media
   bindings: [],       // Agent-to-channel routing rules
   broadcast: {},      // Multi-agent broadcast configuration
@@ -211,7 +258,6 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
         system: "You are Mila, a thoughtful assistant.",
         style: { all: ["concise", "friendly"] },
         adjectives: ["helpful", "creative"],
-        topics: ["technology", "science"],
         // Identity for display
         identity: { name: "Mila" },
         // Per-agent tool overrides
@@ -416,11 +462,12 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | `nostr` | `@elizaos/plugin-nostr` | `connectors.nostr.token` |
 | `msteams` | `@elizaos/plugin-msteams` | `connectors.msteams.token` |
 | `googlechat` | `@elizaos/plugin-google-chat` | `connectors.googlechat.token` |
-| `bluebubbles` | `@elizaos/plugin-bluebubbles` | `connectors.bluebubbles.serverUrl` + `password` |
 | `imessage` | `@elizaos/plugin-imessage` | `connectors.imessage.cliPath` |
 | `lens` | `@elizaos/plugin-lens` | `connectors.lens.token` |
 | `mattermost` | `@elizaos/plugin-mattermost` | `connectors.mattermost.token` |
 | `feishu` | `@elizaos/plugin-feishu` | `connectors.feishu.token` |
+| `blooio` | `@elizaos/plugin-blooio` | `connectors.blooio.token` |
+| `twitch` | `@elizaos/plugin-twitch` | `connectors.twitch.accessToken` or `clientId` or `enabled: true` |
 
 **Provider plugins** are auto-enabled when the corresponding API key environment variable is set:
 
@@ -442,6 +489,11 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | `COHERE_API_KEY` | `@elizaos/plugin-cohere` |
 | `PERPLEXITY_API_KEY` | `@elizaos/plugin-perplexity` |
 | `ELIZAOS_CLOUD_API_KEY` / `ELIZAOS_CLOUD_ENABLED` | `@elizaos/plugin-elizacloud` |
+| `ELIZA_USE_PI_AI` | `@elizaos/plugin-pi-ai` |
+| `CUA_API_KEY` / `CUA_HOST` | `@elizaos/plugin-cua` |
+| `OBSIDIAN_VAULT_PATH` | `@elizaos/plugin-obsidian` |
+| `REPOPROMPT_CLI_PATH` | `@elizaos/plugin-repoprompt` |
+| `CLAUDE_CODE_WORKBENCH_ENABLED` | `@elizaos/plugin-claude-code-workbench` |
 
 **Feature plugins** are auto-enabled via the `features` flag map:
 
@@ -462,13 +514,14 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | Feature Flag | Plugin |
 |-------------|--------|
 | `browser` | `@elizaos/plugin-browser` |
+| `cua` | `@elizaos/plugin-cua` |
+| `obsidian` | `@elizaos/plugin-obsidian` |
 | `cron` | `@elizaos/plugin-cron` |
 | `shell` | `@elizaos/plugin-shell` |
 | `imageGen` | `@elizaos/plugin-image-generation` |
 | `tts` | `@elizaos/plugin-tts` |
 | `stt` | `@elizaos/plugin-stt` |
 | `agentSkills` | `@elizaos/plugin-agent-skills` |
-| `directives` | `@elizaos/plugin-directives` |
 | `commands` | `@elizaos/plugin-commands` |
 | `diagnosticsOtel` | `@elizaos/plugin-diagnostics-otel` |
 | `webhooks` | `@elizaos/plugin-webhooks` |
@@ -481,6 +534,8 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | `suno` | `@elizaos/plugin-suno` |
 | `vision` | `@elizaos/plugin-vision` |
 | `computeruse` | `@elizaos/plugin-computeruse` |
+| `repoprompt` | `@elizaos/plugin-repoprompt` |
+| `claudeCodeWorkbench` | `@elizaos/plugin-claude-code-workbench` |
 
 <Info>
 The `vision`, `fal`, and `suno` plugins are also auto-enabled when their respective `media.*` config sections are configured (e.g., `media.vision.provider` is set, or `media.image.provider: "fal"` with `mode: "own-key"`). Webhook plugins auto-enable when `hooks.token` is set. Gmail watch auto-enables when `hooks.gmail.account` is set.
@@ -958,7 +1013,7 @@ Configure Model Context Protocol (MCP) servers:
     servers: {
       filesystem: {
         type: "stdio",
-        command: "npx",
+        command: "bunx",
         args: ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"],
       },
       "remote-server": {
@@ -979,7 +1034,7 @@ Configure Model Context Protocol (MCP) servers:
   cloud: {
     enabled: false,
     provider: "elizacloud",
-    baseUrl: "https://www.elizacloud.ai/api/v1",
+    baseUrl: "https://elizacloud.ai/api/v1",
     inferenceMode: "byok",         // "cloud" | "byok" | "local"
     autoProvision: false,
     bridge: {
@@ -1203,8 +1258,11 @@ Key environment variables that affect Milady behavior:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MILADY_GATEWAY_PORT` | `18789` | Gateway (API + WebSocket) port |
-| `MILADY_PORT` | `2138` | Dashboard (Web UI) port |
+| `MILADY_API_PORT` | `31337` | API + WebSocket port (dev mode only; in production the API is served on `MILADY_PORT`) |
+| `MILADY_PORT` | `2138` | Dashboard (Web UI) port — also serves the API in production |
+| `MILADY_GATEWAY_PORT` | `18789` | Gateway port |
+| `MILADY_HOME_PORT` | `2142` | Home Dashboard port |
+| `MILADY_WECHAT_WEBHOOK_PORT` | `18790` | WeChat Webhook port |
 
 ```bash
 # Custom ports
@@ -1266,7 +1324,9 @@ milady config show --json   # Raw JSON output
 To change values, edit `~/.milady/milady.json` directly (it supports JSON5 with comments).
 
 <Tip>
-Use `milady configure` for a quick reference of common configuration options and environment variables. For full initial setup, run `milady setup` to go through the onboarding wizard, or edit `~/.milady/milady.json` directly.
+Use `milady configure` for a quick reference of common configuration options
+and environment variables. For local bootstrap, run `milady setup`, or edit
+`~/.milady/milady.json` directly.
 </Tip>
 
 ## Full Example

@@ -1,0 +1,70 @@
+# Connect to Bluesky
+
+Post to Bluesky from your Milady agent, respond to mentions, and handle DMs. Bluesky's API is clean and fast to set up — the only real requirement is creating an **app password**, never your main login password.
+
+**What you'll learn:** create a Bluesky app password, paste it into Milady, confirm posts and replies work. About five minutes.
+
+## What you need before you start
+
+- **A Bluesky account** at any handle — `yourname.bsky.social` is fine, custom domain handles work too.
+- **Milady running** with a working provider.
+
+## Step 1 — Create an app password
+
+Bluesky lets you generate scoped credentials that can only be used by apps, separate from your real login. Always use one of these — never paste your real password anywhere.
+
+<Steps>
+  <li>Open <a href="https://bsky.app">bsky.app</a> and sign in.</li>
+  <li>Go to <strong>Settings → Privacy and security → App passwords</strong> (mobile: Settings → Advanced → App passwords).</li>
+  <li>Click <strong>Add app password</strong>. Give it a memorable name like "Milady".</li>
+  <li>Bluesky generates a password that looks like <code>abcd-efgh-ijkl-mnop</code>. Copy it — you only see it once.</li>
+</Steps>
+
+<Callout kind="warning">
+The app password only has API access — it can't change your email, password, or recovery settings, and you can revoke it at any time from the same page. Never use your real login password with any third-party app.
+</Callout>
+
+## Step 2 — Hand the credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Bluesky → Configure</strong>.</li>
+  <li>Paste your full <strong>Handle</strong> into the handle field, e.g. <code>yourname.bsky.social</code>.</li>
+  <li>Paste the <strong>App password</strong> from Step 1 into the password field.</li>
+  <li>Leave <strong>Service</strong> as <code>https://bsky.social</code> unless you're on a self-hosted PDS.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 3 — Test it
+
+From another Bluesky account (or a friend's), mention your bot's handle in a post. Within a minute Milady should see the mention and reply.
+
+## Useful options
+
+In Settings → Plugins → Bluesky:
+
+| Option | What it does |
+| --- | --- |
+| **Enable posting** | Lets the agent make autonomous posts on an interval, not just reply to mentions. Off by default. |
+| **Post interval min/max** | Seconds between autonomous posts (when enabled). 3600/7200 (one to two hours) is a reasonable starting point. |
+| **Max post length** | Bluesky caps posts at 300 characters. Don't raise this. |
+| **Poll interval** | Seconds between checks for mentions and DMs. Default 60. |
+| **Enable DMs** | Lets the agent reply to direct messages. |
+
+<Callout kind="tip" title="Start with posting off">
+Leave "Enable posting" off until you've seen how the agent responds to mentions for a day. Autonomous posting is powerful and occasionally embarrassing — better to dial it in slowly.
+</Callout>
+
+## Troubleshooting
+
+**"Authentication failed" when saving.**
+You used your real login password instead of an app password, or the app password has a typo. Bluesky app passwords have hyphens — include them.
+
+**Mentions aren't being picked up.**
+Check the **Poll interval** setting. If it's set very high, the bot will only notice mentions every few minutes. Default is 60 seconds.
+
+**Replies are being truncated.**
+Max post length is 300 characters, hardcoded by Bluesky. Milady automatically truncates; this isn't a setting you can raise.
+
+## What's next
+
+[Running multiple connectors](/docs/advanced/multi-connector-setup) — Bluesky plays nicely alongside Twitter/X, Farcaster, and other social platforms.

@@ -16,7 +16,7 @@ const packageRoot = path.resolve(
 );
 
 export function setup(): void {
-  const distIndex = path.join(packageRoot, "dist", "index");
+  const distIndex = path.join(packageRoot, "dist", "index.js");
 
   if (fs.existsSync(distIndex)) {
     // Already built — skip to keep the fast path fast.
@@ -25,5 +25,5 @@ export function setup(): void {
 
   // eslint-disable-next-line no-console
   console.log("[e2e-global-setup] dist/ not found — running tsdown…");
-  execSync("npx tsdown", { cwd: packageRoot, stdio: "inherit" });
+  execSync("bunx tsdown", { cwd: packageRoot, stdio: "inherit" });
 }

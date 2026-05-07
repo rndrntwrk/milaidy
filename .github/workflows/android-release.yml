@@ -22,6 +22,9 @@ concurrency:
   group: android-release-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 env:
   JAVA_VERSION: "21"
   NODE_VERSION: "22"
@@ -29,7 +32,7 @@ env:
 jobs:
   build-aab:
     name: Build Signed AAB
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       version_name: ${{ steps.version.outputs.name }}
       version_code: ${{ steps.version.outputs.code }}
@@ -50,6 +53,8 @@ jobs:
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
 
       - name: Determine version
         id: version
@@ -85,7 +90,7 @@ jobs:
 
       - name: Sync Capacitor
         working-directory: apps/app
-        run: npx cap sync android
+        run: bun run cap:sync:android
 
       - name: Decode keystore
         run: |
@@ -145,7 +150,7 @@ jobs:
     if: |
       (github.event_name == 'release') ||
       (github.event_name == 'workflow_dispatch')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -197,7 +202,7 @@ jobs:
     name: Release Summary
     needs: [build-aab, publish-play-store]
     if: always()
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Summary
         run: |

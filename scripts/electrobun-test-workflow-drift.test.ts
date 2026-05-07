@@ -4,43 +4,82 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const WORKFLOW_PATH = path.join(ROOT, ".github/workflows/test.yml");
+const PR_RELEASE_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/test-electrobun-release.yml",
+);
 
 describe("Electrobun test workflow drift", () => {
-  it("builds the preload bridge before packaging the app", () => {
-    const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
-    const preloadIndex = workflow.indexOf("name: Build webview bridge preload");
-    const packageIndex = workflow.indexOf("name: Build Electrobun app");
+  // Desktop build/packaging validation (preload bridge, diagnostics, DMG
+  // smoke test) was moved to release-electrobun.yml. The old desktop-ui-e2e
+  // and desktop-packaged-dmg-e2e jobs were removed from test.yml.
 
-    expect(preloadIndex).toBeGreaterThan(-1);
-    expect(packageIndex).toBeGreaterThan(preloadIndex);
+  it("routes PR-required suites through named scripts", () => {
+    const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
+
+    expect(workflow).toContain("bun run test:regression-matrix:pr");
+    expect(workflow).toContain("bun run test:e2e");
+    expect(workflow).toContain("bun run test:startup:contract");
+    expect(workflow).toContain("bun run test:startup:e2e");
+    expect(workflow).toContain("bun run test:desktop:contract");
+    expect(workflow).toContain("bun run test:live:cloud");
+    expect(workflow).toContain("bun run test:e2e:validation");
+    expect(workflow).not.toContain(
+      "--exclude packages/agent/test/anvil-contracts.e2e.test.ts",
+    );
+    expect(workflow).not.toContain(
+      "--exclude packages/agent/test/apps-e2e.e2e.test.ts",
+    );
   });
 
-  it("stages startup diagnostics into runner temp before upload", () => {
+  it("does not rerun postinstall in jobs that already use plain bun install", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
 
-    expect(workflow).toContain("name: Stage Electrobun build diagnostic logs");
     expect(workflow).toContain(
-      'Join-Path $env:RUNNER_TEMP "electrobun-ui-e2e-logs"',
+      "name: Setup workspace dependencies\n        uses: ./.github/actions/setup-bun-workspace",
     );
-    expect(workflow).toContain(
-      "path: $" + "{{ runner.temp }}/electrobun-ui-e2e-logs",
+    expect(workflow).toContain("install-command: bun install");
+    expect(workflow).toContain('run-postinstall: "false"');
+    expect(workflow).not.toContain(
+      'install-command: bun install\n          run-postinstall: "true"',
     );
   });
 
-  it("uploads packaged macOS smoke diagnostics from runner temp", () => {
+  it("skips avatar clone and vision deps in pure test jobs", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
 
-    expect(workflow).toContain("name: Upload packaged macOS smoke diagnostics");
     expect(workflow).toContain(
-      "SMOKE_DIAGNOSTICS_DIR: $" +
-        "{{ runner.temp }}/milady-packaged-dmg-smoke",
+      'skip-avatar-clone: "true"\n          no-vision-deps: "true"',
     );
+  });
+
+  it("validates the Electrobun release workflow contract on pull requests without running the full release matrix", () => {
+    const workflow = fs.readFileSync(PR_RELEASE_WORKFLOW_PATH, "utf8");
+
+    expect(workflow).toContain("name: Validate Electrobun Release Workflow");
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain("branches: [main, develop]");
+    expect(workflow).toContain("permissions:");
+    expect(workflow).toContain("contents: read");
+    expect(workflow).toContain('BUN_VERSION: "1.3.9"');
+    expect(workflow).toContain('NODE_NO_WARNINGS: "1"');
     expect(workflow).toContain(
-      "path: |\n            $" +
-        "{{ runner.temp }}/milady-packaged-dmg-smoke/**",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions expression
+      "runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}",
     );
+    expect(workflow).toContain("name: Release Workflow Contract");
+    expect(workflow).toContain("bun install --ignore-scripts");
+    expect(workflow).toContain("bun run postinstall");
     expect(workflow).toContain(
-      "apps/app/electrobun/build/**/wrapper-diagnostics.json",
+      "bun run test:regression-matrix:release-contract",
     );
+    expect(workflow).toContain("bun run test:release:contract");
+    expect(workflow).not.toContain(
+      "uses: ./.github/workflows/release-electrobun.yml",
+    );
+    expect(workflow).not.toContain("publish_release: false");
+    expect(workflow).not.toContain("publish_docker: false");
+    expect(workflow).not.toContain("secrets: inherit");
+    expect(workflow).not.toContain("packages: write");
   });
 });

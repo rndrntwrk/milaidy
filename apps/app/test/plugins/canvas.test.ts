@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Tests for @milady/capacitor-canvas — lifecycle, layers, error paths.
+ * Tests for @miladyai/capacitor-canvas — lifecycle, layers, error paths.
  *
  * Note: Drawing operations (drawRect, clear, etc.) require a real 2D canvas context
  * which is unavailable in Node.js. Those are tested via error paths for invalid IDs
@@ -40,11 +40,11 @@ const stubContext = {
   font: "",
   textAlign: "left",
   textBaseline: "alphabetic",
-} as unknown as CanvasRenderingContext2D;
+} as Partial<CanvasRenderingContext2D> as CanvasRenderingContext2D;
 
 const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
-describe("@milady/capacitor-canvas", () => {
+describe("@miladyai/capacitor-canvas", () => {
   let c: CanvasWeb;
 
   beforeEach(() => {

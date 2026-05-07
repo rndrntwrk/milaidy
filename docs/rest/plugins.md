@@ -26,6 +26,7 @@ The plugins API manages the agent's plugin system. It covers three areas: **plug
 | POST | `/api/plugins/uninstall` | Uninstall a plugin |
 | POST | `/api/plugins/:id/eject` | Eject a plugin to a local copy |
 | POST | `/api/plugins/:id/sync` | Sync an ejected plugin back to npm |
+| POST | `/api/plugins/:id/reinject` | Restore an ejected plugin to its registry version |
 
 ### Core Plugin Management
 
@@ -158,6 +159,7 @@ List all installed plugin packages with version information.
 
 ```json
 {
+  "count": 3,
   "plugins": [
     {
       "name": "@elizaos/plugin-twitter",
@@ -167,6 +169,11 @@ List all installed plugin packages with version information.
   ]
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `count` | number | Total number of installed plugins |
+| `plugins` | array | List of installed plugin packages |
 
 ---
 
@@ -193,14 +200,14 @@ List all ejected plugins (plugins that have been copied to a local directory for
 
 ### POST /api/plugins/install
 
-Install a plugin package from npm.
+Install a plugin package from npm. Plugin installation may take significant time depending on the package size and dependency tree. The client SDK uses a 120-second timeout for this endpoint (compared to the default timeout used for other API calls).
 
 **Request Body**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | npm package name |
-| `version` | string | No | Version (defaults to latest) |
+| `autoRestart` | boolean | No | Whether to restart the agent after install (defaults to `true`) |
 
 **Response**
 
@@ -236,16 +243,30 @@ Uninstall a plugin package.
 
 ### POST /api/plugins/:id/eject
 
-Eject a plugin to a local directory for development. Creates a local copy of the plugin source that can be modified independently.
+Eject a plugin to a local directory for development. Creates a local copy of the plugin source that can be modified independently. If the result indicates a restart is required, the runtime schedules an automatic restart.
 
 **Response**
 
 ```json
 {
   "ok": true,
-  "localPath": "/path/to/local/plugin-copy"
+  "pluginName": "@elizaos/plugin-twitter",
+  "requiresRestart": true,
+  "message": "@elizaos/plugin-twitter ejected to local source."
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pluginName` | string | Name of the ejected plugin |
+| `requiresRestart` | boolean | Whether the runtime will restart to load the local copy |
+| `message` | string | Human-readable status message |
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 422 | Eject failed (plugin not found or already ejected) |
 
 ---
 
@@ -257,9 +278,53 @@ Sync an ejected plugin back — re-build from the local copy.
 
 ```json
 {
-  "ok": true
+  "ok": true,
+  "pluginName": "@elizaos/plugin-twitter",
+  "requiresRestart": true,
+  "message": "@elizaos/plugin-twitter synced with upstream."
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pluginName` | string | Name of the synced plugin |
+| `requiresRestart` | boolean | Whether the runtime will restart to apply changes |
+| `message` | string | Human-readable status message |
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 422 | Sync failed (plugin not ejected or sync error) |
+
+---
+
+### POST /api/plugins/:id/reinject
+
+Restore a previously ejected plugin back to its registry version, removing the local copy.
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "pluginName": "@elizaos/plugin-twitter",
+  "requiresRestart": true,
+  "message": "@elizaos/plugin-twitter restored to registry version."
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pluginName` | string | Name of the reinjected plugin |
+| `requiresRestart` | boolean | Whether the runtime will restart to load the registry version |
+| `message` | string | Human-readable status message |
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 422 | Reinject failed (plugin not ejected or reinject error) |
 
 ---
 
@@ -274,10 +339,13 @@ Get the core manager status and available core plugins.
 ```json
 {
   "available": true,
-  "corePlugins": ["bootstrap", "knowledge", "sql"],
+  "corePlugins": ["knowledge", "sql"],
   "optionalCorePlugins": ["secrets-manager"]
 }
 ```
+
+- **knowledge** -- RAG knowledge retrieval
+- **sql** -- Database layer
 
 ---
 
@@ -290,7 +358,8 @@ List core and optional-core plugins with their enabled/loaded status.
 ```json
 {
   "core": [
-    { "name": "bootstrap", "loaded": true, "required": true }
+    { "name": "knowledge", "loaded": true, "required": true },
+    { "name": "sql", "loaded": true, "required": true }
   ],
   "optionalCore": [
     { "name": "secrets-manager", "loaded": true, "required": false, "enabled": true }
@@ -447,11 +516,37 @@ Get the agent's registry connection status.
 
 **Response**
 
+When the registry service is configured:
+
 ```json
 {
   "registered": true,
-  "agentId": "uuid",
-  "registryUrl": "https://registry.elizaos.com"
+  "configured": true,
+  "tokenId": 1,
+  "agentName": "Milady",
+  "agentEndpoint": "https://...",
+  "capabilitiesHash": "...",
+  "isActive": true,
+  "tokenURI": "https://...",
+  "walletAddress": "0x...",
+  "totalAgents": 42
+}
+```
+
+When the registry service is not configured:
+
+```json
+{
+  "registered": false,
+  "configured": false,
+  "tokenId": 0,
+  "agentName": "",
+  "agentEndpoint": "",
+  "capabilitiesHash": "",
+  "isActive": false,
+  "tokenURI": "",
+  "walletAddress": "",
+  "totalAgents": 0
 }
 ```
 
@@ -461,25 +556,29 @@ Get the agent's registry connection status.
 
 Register the agent with the elizaOS registry.
 
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | No | Agent name override |
+| `endpoint` | string | No | Public endpoint URL |
+| `tokenURI` | string | No | Token URI for the registration |
+
 **Response**
 
-```json
-{
-  "ok": true
-}
-```
+Returns the registration result from the registry service (schema depends on registry implementation).
 
 ---
 
 ### POST /api/registry/update-uri
 
-Update the agent's public URI in the registry.
+Update the agent's token URI in the registry.
 
 **Request Body**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `uri` | string | Yes | New public URI |
+| `tokenURI` | string | Yes | New token URI |
 
 **Response**
 
@@ -495,11 +594,20 @@ Update the agent's public URI in the registry.
 
 Sync the agent's state with the registry (heartbeat, status update).
 
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | No | Agent name override |
+| `endpoint` | string | No | Public endpoint URL |
+| `tokenURI` | string | No | Token URI |
+
 **Response**
 
 ```json
 {
-  "ok": true
+  "ok": true,
+  "txHash": "0x..."
 }
 ```
 
@@ -507,14 +615,16 @@ Sync the agent's state with the registry (heartbeat, status update).
 
 ### GET /api/registry/config
 
-Get the current registry configuration.
+Get the current registry configuration. Returns the contents of `config.registry` along with chain metadata.
 
 **Response**
 
 ```json
 {
-  "registryUrl": "https://registry.elizaos.com",
-  "autoRegister": true,
-  "syncInterval": 300000
+  "chainId": 1,
+  "explorerUrl": "https://etherscan.io",
+  "...": "additional fields from config.registry"
 }
 ```
+
+The exact response shape depends on what is configured in `milady.json` under the `registry` key.

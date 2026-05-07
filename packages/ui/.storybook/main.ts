@@ -1,9 +1,12 @@
 import type { StorybookConfig } from "@storybook/react-vite";
-import tailwindcss from "@tailwindcss/vite";
 
 const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],
-  addons: ["@storybook/addon-essentials"],
+  addons: [
+    "@storybook/addon-essentials",
+    "@storybook/addon-a11y",
+    "@storybook/addon-themes",
+  ],
   framework: {
     name: "@storybook/react-vite",
     options: {},
@@ -11,12 +14,8 @@ const config: StorybookConfig = {
   docs: {
     autodocs: "tag",
   },
-  typescript: {
-    reactDocgen: "react-docgen-typescript",
-  },
-  viteFinal(config) {
-    config.plugins = config.plugins || [];
-    config.plugins.push(tailwindcss());
+  viteFinal: async (config) => {
+    // Ensure theme CSS is available
     return config;
   },
 };

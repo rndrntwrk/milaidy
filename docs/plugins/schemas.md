@@ -274,8 +274,6 @@ const MODEL_TYPES = [
   "TEXT_SMALL",           // Fast text generation
   "TEXT_LARGE",           // Large context text generation
   "TEXT_COMPLETION",      // Completion-style generation
-  "TEXT_REASONING_SMALL", // Chain-of-thought reasoning
-  "TEXT_REASONING_LARGE", // Large reasoning model
   "TEXT_EMBEDDING",       // Embedding vectors
   "TEXT_TOKENIZER_ENCODE",
   "TEXT_TOKENIZER_DECODE",

@@ -85,6 +85,5 @@ The default iMessage database is at `~/Library/Messages/chat.db`. If using a non
 
 ## Related
 
-- [BlueBubbles Plugin](/plugin-registry/platform/bluebubbles) — iMessage bridge via BlueBubbles
 - [Signal Plugin](/plugin-registry/platform/signal) — Signal messaging integration
 - [Connectors Guide](/guides/connectors) — General connector documentation

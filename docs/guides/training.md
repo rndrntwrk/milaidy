@@ -19,7 +19,7 @@ Milady captures all LLM interactions as trajectories, which can be curated into 
 
 ## Trajectory Collection
 
-Every LLM call made by the agent is automatically logged as part of a trajectory. The trajectory logger service (`@elizaos/plugin-trajectory-logger`) records:
+Every LLM call made by the agent is automatically logged as part of a trajectory. The trajectory logger service (`trajectories`) records:
 
 ### Trajectory Record
 

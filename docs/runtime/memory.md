@@ -63,7 +63,7 @@ For production or shared deployments, set `database.provider = "postgres"`. The 
 ```
 nomic-embed-text-v1.5.Q5_K_M.gguf
 Dimensions: 768
-Model directory: ~/.eliza/models/
+Model directory: ~/.milady/models/
 ```
 
 ### Environment Variables
@@ -78,7 +78,7 @@ The embedding plugin reads configuration from environment variables set by `conf
 | `LOCAL_EMBEDDING_CONTEXT_SIZE` | auto | Context window size |
 | `LOCAL_EMBEDDING_GPU_LAYERS` | `"auto"` (Apple Silicon) / `"0"` (other) | GPU acceleration |
 | `LOCAL_EMBEDDING_USE_MMAP` | `"false"` (Apple Silicon) / `"true"` (other) | Memory-mapped model loading |
-| `MODELS_DIR` | `~/.eliza/models` | Directory for model storage |
+| `MODELS_DIR` | `~/.milady/models` | Directory for model storage |
 
 ## Memory Config
 
@@ -264,7 +264,7 @@ Context compaction (summarisation of older history) is handled by elizaOS core a
 
 ## Knowledge Plugin
 
-`@elizaos/plugin-knowledge` provides RAG knowledge management. It loads on startup as a core plugin and integrates with the memory store to retrieve knowledge chunks by vector similarity on every relevant turn.
+`knowledge` provides RAG knowledge management. It loads on startup as a core plugin and integrates with the memory store to retrieve knowledge chunks by vector similarity on every relevant turn.
 
 ## Related Pages
 

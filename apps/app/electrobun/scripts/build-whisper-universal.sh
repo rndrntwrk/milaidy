@@ -15,6 +15,43 @@ set -euo pipefail
 MODEL="${1:-base.en}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WHISPER_CPP_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)/node_modules/whisper-node/lib/whisper.cpp"
+WHISPER_MODEL_DIR="$WHISPER_CPP_DIR/models"
+WHISPER_MODEL_FILENAME="ggml-${MODEL}.bin"
+WHISPER_MODEL_PATH="$WHISPER_MODEL_DIR/$WHISPER_MODEL_FILENAME"
+WHISPER_MODEL_CACHE_DIR="${MILADY_WHISPER_MODEL_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/milady/whisper}"
+WHISPER_MODEL_CACHE_PATH="$WHISPER_MODEL_CACHE_DIR/$WHISPER_MODEL_FILENAME"
+
+patch_whisper_makefile() {
+  local makefile_path="$WHISPER_CPP_DIR/Makefile"
+
+  if [ ! -f "$makefile_path" ]; then
+    return
+  fi
+
+  MAKEFILE_PATH="$makefile_path" node <<'NODE'
+const fs = require("node:fs");
+
+const makefilePath = process.env.MAKEFILE_PATH;
+if (!makefilePath) {
+  process.exit(0);
+}
+
+const original = fs.readFileSync(makefilePath, "utf8");
+const patched = original
+  .replace(
+    "SYSCTL_M := $(shell sysctl -n hw.optional.arm64)",
+    "SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null || echo 0)",
+  )
+  .replace(
+    "CFLAGS  += -DGGML_USE_ACCELERATE",
+    "CFLAGS  += -DGGML_USE_ACCELERATE -Wno-deprecated-declarations",
+  );
+
+if (patched !== original) {
+  fs.writeFileSync(makefilePath, patched, "utf8");
+}
+NODE
+}
 
 if [ ! -d "$WHISPER_CPP_DIR" ]; then
   echo "[whisper-universal] whisper.cpp directory not found at $WHISPER_CPP_DIR"
@@ -24,6 +61,7 @@ fi
 
 cd "$WHISPER_CPP_DIR"
 NCPU=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
+patch_whisper_makefile
 
 echo "[whisper-universal] Building whisper.cpp universal binary (arm64 + x86_64)..."
 echo "[whisper-universal] Directory: $WHISPER_CPP_DIR"
@@ -55,9 +93,8 @@ echo "[whisper-universal] Result: $(file main)"
 lipo -detailed_info main
 echo ""
 
-# --- Download model if not already present ---
-echo "[whisper-universal] === Downloading model: ggml-${MODEL}.bin ==="
-bash models/download-ggml-model.sh "$MODEL"
+# --- Ensure model is available ---
+bash "$SCRIPT_DIR/ensure-whisper-model.sh" "$MODEL"
 
 # --- Verify both slices execute ---
 echo "[whisper-universal] === Verifying arm64 execution ==="
@@ -69,4 +106,5 @@ arch -x86_64 ./main -h >/dev/null 2>&1 && echo "[whisper-universal] x86_64 OK" |
 echo ""
 echo "[whisper-universal] Done."
 echo "    Binary: $WHISPER_CPP_DIR/main"
-echo "    Model:  $WHISPER_CPP_DIR/models/ggml-${MODEL}.bin"
+echo "    Model:  $WHISPER_MODEL_PATH"
+echo "    Cache:  $WHISPER_MODEL_CACHE_PATH"

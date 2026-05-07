@@ -6,7 +6,9 @@
 override_dh_auto_build:
 	# Use bun if available (installed by CI), fallback to npm
 	if command -v bun >/dev/null 2>&1; then \
-		bun install --frozen-lockfile --ignore-scripts; \
+		node scripts/init-submodules.mjs || true; \
+		node scripts/disable-local-eliza-workspace.mjs || true; \
+		MILADY_SKIP_LOCAL_UPSTREAMS=1 bun install --ignore-scripts; \
 		bun run build; \
 	else \
 		npm install --ignore-scripts; \

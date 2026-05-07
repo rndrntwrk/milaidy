@@ -9,16 +9,29 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { TalkModeConfig, TalkModeState } from "../rpc-schema";
+import type { SendToWebview } from "../types.js";
+import { diagnosticLog } from "./agent";
 import {
   isWhisperAvailable,
   transcribeBunSpawn,
   writeWavFile,
 } from "./whisper";
 
-// 3 seconds of audio at 16kHz = 48000 Float32 samples = 192000 bytes
-const TALKMODE_AUDIO_BUFFER_THRESHOLD = 16000 * 3 * 4;
+const TALKMODE_SAMPLE_RATE = 16000;
+const FLOAT32_BYTES_PER_SAMPLE = 4;
+const TALKMODE_CHUNK_WINDOW_SECONDS = 1.25;
+const TALKMODE_MIN_FLUSH_SECONDS = 0.2;
+const TALKMODE_OVERLAP_RATIO = 0.5;
+const TALKMODE_AUDIO_BUFFER_THRESHOLD =
+  TALKMODE_SAMPLE_RATE *
+  TALKMODE_CHUNK_WINDOW_SECONDS *
+  FLOAT32_BYTES_PER_SAMPLE;
+const TALKMODE_MIN_FLUSH_BYTES =
+  TALKMODE_SAMPLE_RATE * TALKMODE_MIN_FLUSH_SECONDS * FLOAT32_BYTES_PER_SAMPLE;
 
-type SendToWebview = (message: string, payload?: unknown) => void;
+function talkmodeLog(message: string): void {
+  diagnosticLog(`[TalkMode] ${message}`);
+}
 
 export class TalkModeManager {
   private sendToWebview: SendToWebview | null = null;
@@ -46,12 +59,21 @@ export class TalkModeManager {
     this.sendToWebview?.("talkmodeStateChanged", { state: newState });
   }
 
+  private async _waitForProcessing(): Promise<void> {
+    while (this._processing) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
   async start() {
     const whisperOk = isWhisperAvailable();
     if (!whisperOk && this.config.engine === "whisper") {
       this.config.engine = "web";
     }
 
+    talkmodeLog(
+      `start platform=${process.platform} whisper=${whisperOk} engine=${this.config.engine}`,
+    );
     this.setState("listening");
     return {
       available: true,
@@ -62,6 +84,13 @@ export class TalkModeManager {
   }
 
   async stop(): Promise<void> {
+    talkmodeLog(
+      `stop state=${this.state} bufferedBytes=${this._audioBufferSize} processing=${this._processing}`,
+    );
+    await this._waitForProcessing();
+    if (this._audioBufferSize >= TALKMODE_MIN_FLUSH_BYTES) {
+      await this._processBuffer({ flush: true });
+    }
     this.setState("idle");
     this.speaking = false;
     this._audioBuffer = [];
@@ -73,6 +102,9 @@ export class TalkModeManager {
     directive?: Record<string, unknown>;
   }): Promise<void> {
     const apiKey = process.env.ELEVEN_LABS_API_KEY?.trim();
+    talkmodeLog(
+      `speak chars=${options.text.length} engine=${apiKey ? "elevenlabs" : "system"}`,
+    );
     if (apiKey) {
       await this._speakElevenLabs(options, apiKey);
     } else {
@@ -170,9 +202,12 @@ export class TalkModeManager {
       );
 
       if (!resp.ok) {
-        console.error(
-          `[TalkMode] ElevenLabs API error: ${resp.status} ${resp.statusText}`,
-        );
+        const errorMsg = `ElevenLabs API error: ${resp.status} ${resp.statusText}`;
+        console.error(`[TalkMode] ${errorMsg}`);
+        this.sendToWebview?.("talkmodeError", {
+          source: "elevenlabs",
+          message: errorMsg,
+        });
         this.setState("error");
         return;
       }
@@ -193,7 +228,12 @@ export class TalkModeManager {
       if (err instanceof Error && err.name === "AbortError") {
         console.log("[TalkMode] ElevenLabs TTS aborted by stopSpeaking()");
       } else {
+        const errorMsg = err instanceof Error ? err.message : String(err);
         console.error("[TalkMode] ElevenLabs TTS error:", err);
+        this.sendToWebview?.("talkmodeError", {
+          source: "elevenlabs",
+          message: errorMsg,
+        });
         this.setState("error");
       }
     } finally {
@@ -206,6 +246,7 @@ export class TalkModeManager {
   }
 
   async stopSpeaking(): Promise<void> {
+    talkmodeLog("stopSpeaking");
     // Kill in-flight system TTS process (say / espeak / PowerShell).
     if (this._speakProc) {
       try {
@@ -237,50 +278,90 @@ export class TalkModeManager {
   }
 
   async getWhisperInfo() {
+    const available = isWhisperAvailable();
+    talkmodeLog(
+      `getWhisperInfo available=${available} modelSize=${this.config.modelSize}`,
+    );
     return {
-      available: isWhisperAvailable(),
+      available,
       modelSize: this.config.modelSize,
     };
   }
 
   async isWhisperAvailableCheck() {
-    return { available: isWhisperAvailable() };
+    const available = isWhisperAvailable();
+    talkmodeLog(`isWhisperAvailable ${available}`);
+    return { available };
   }
 
   async updateConfig(config: TalkModeConfig): Promise<void> {
     Object.assign(this.config, config);
+    talkmodeLog(
+      `updateConfig engine=${this.config.engine ?? "unset"} modelSize=${this.config.modelSize ?? "unset"} language=${this.config.language ?? "unset"}`,
+    );
   }
 
   async audioChunk(options: { data: string }): Promise<void> {
     // Only process audio when actively listening or speaking (not idle/error)
-    if (this.state !== "listening" && this.state !== "speaking") return;
+    if (this.state !== "listening" && this.state !== "speaking") {
+      talkmodeLog(`audioChunk ignored state=${this.state}`);
+      return;
+    }
 
     // Decode base64 Float32 PCM and accumulate
     const chunkBuffer = Buffer.from(options.data, "base64");
+    const previousBufferSize = this._audioBufferSize;
     this._audioBuffer.push(chunkBuffer);
     this._audioBufferSize += chunkBuffer.length;
+    if (previousBufferSize === 0) {
+      talkmodeLog(`audioChunk stream-start bytes=${chunkBuffer.length}`);
+    }
 
-    // Process when we have enough audio (~3 seconds)
+    // Process in smaller rolling windows so text lands in the composer quickly.
     if (
       this._audioBufferSize >= TALKMODE_AUDIO_BUFFER_THRESHOLD &&
       !this._processing
     ) {
+      talkmodeLog(
+        `audioChunk process-threshold bufferedBytes=${this._audioBufferSize}`,
+      );
       await this._processBuffer();
     }
   }
 
-  private async _processBuffer(): Promise<void> {
+  private async _processBuffer(options?: { flush?: boolean }): Promise<void> {
     if (this._processing || this._audioBuffer.length === 0) return;
     this._processing = true;
+    const flush = options?.flush === true;
 
-    // Grab current buffer and clear for next window
+    // Keep trailing overlap while streaming so we do not clip phrase boundaries.
     const allBuffers = [...this._audioBuffer];
     const combined = Buffer.concat(allBuffers);
-    this._audioBuffer = [];
-    this._audioBufferSize = 0;
+    if (!flush) {
+      const overlapBytes = Math.min(
+        Math.floor(combined.byteLength * TALKMODE_OVERLAP_RATIO),
+        combined.byteLength,
+      );
+      if (overlapBytes > 0) {
+        const overlapBuffer = combined.subarray(
+          combined.byteLength - overlapBytes,
+        );
+        this._audioBuffer = [Buffer.from(overlapBuffer)];
+        this._audioBufferSize = overlapBytes;
+      } else {
+        this._audioBuffer = [];
+        this._audioBufferSize = 0;
+      }
+    } else {
+      this._audioBuffer = [];
+      this._audioBufferSize = 0;
+    }
 
     try {
-      // Safe Float32 conversion — avoids alignment issues from Buffer pool offsets.
+      talkmodeLog(
+        `_processBuffer begin flush=${flush} bufferedBytes=${combined.byteLength}`,
+      );
+      // Safe Float32 conversion - avoids alignment issues from Buffer pool offsets.
       const numSamples = combined.byteLength >>> 2; // divide by 4
       const float32 = new Float32Array(numSamples);
       const dv = new DataView(
@@ -307,18 +388,34 @@ export class TalkModeManager {
         fs.unlinkSync(tmpPath);
       } catch {}
 
-      if (!result || !result.text.trim()) return;
+      if (!result?.text?.trim()) {
+        talkmodeLog(`transcribe empty flush=${flush}`);
+        return;
+      }
+
+      talkmodeLog(
+        `transcribe success chars=${result.text.trim().length} segments=${result.segments.length} flush=${flush}`,
+      );
 
       // Emit transcript to renderer
-      this.sendToWebview?.("talkmode:transcript", {
+      this.sendToWebview?.("talkmodeTranscript", {
         text: result.text,
         segments: result.segments.map((s) => ({
           text: s.text,
           start: s.start,
           end: s.end,
         })),
+        isFinal: flush,
       });
     } catch (err) {
+      talkmodeLog(
+        `_processBuffer error ${err instanceof Error ? err.message : String(err)}`,
+      );
+      this.sendToWebview?.("talkmodeError", {
+        code: "transcription_failed",
+        message: err instanceof Error ? err.message : String(err),
+        recoverable: true,
+      });
       console.error("[TalkMode] _processBuffer error:", err);
     } finally {
       this._processing = false;

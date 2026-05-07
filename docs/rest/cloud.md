@@ -6,6 +6,8 @@ description: "REST API endpoints for Eliza Cloud authentication, connection stat
 
 The cloud API connects the local Milady agent to Eliza Cloud for cloud-hosted inference, credits, and remote agent management. Login uses a browser-based OAuth-style flow with polling for session completion.
 
+Billing is now expected to stay inside the app whenever Eliza Cloud exposes the required billing endpoints. The `topUpUrl` values returned by `/api/cloud/status` and `/api/cloud/credits` should be treated as a hosted fallback, not the primary UX.
+
 ## Endpoints
 
 ### POST /api/cloud/login
@@ -75,7 +77,7 @@ Get cloud connection status, authentication state, and billing URL.
   "hasApiKey": true,
   "userId": "user-123",
   "organizationId": "org-456",
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 
@@ -114,7 +116,7 @@ Get the cloud credit balance. Returns `null` balance when not connected.
   "balance": 15.50,
   "low": false,
   "critical": false,
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 
@@ -123,6 +125,91 @@ Get the cloud credit balance. Returns `null` balance when not connected.
 | `balance` | number \| null | Credit balance in dollars |
 | `low` | boolean | `true` when balance is below $2.00 |
 | `critical` | boolean | `true` when balance is below $0.50 |
+
+---
+
+### Billing proxy endpoints
+
+These endpoints proxy authenticated Eliza Cloud billing APIs through the local Milady backend so the desktop app can keep billing, payment methods, and top-ups in-app. They require an active Eliza Cloud login because the local server forwards the saved cloud API key.
+
+Use `topUpUrl` only as a hosted fallback if Eliza Cloud does not return an embedded checkout or crypto quote flow the app can render directly.
+
+#### GET /api/cloud/billing/summary
+
+Get the current Eliza Cloud billing summary.
+
+**Typical response**
+
+```json
+{
+  "balance": 15.5,
+  "currency": "USD",
+  "embeddedCheckoutEnabled": false,
+  "hostedCheckoutEnabled": true,
+  "cryptoEnabled": true
+}
+```
+
+#### GET /api/cloud/billing/payment-methods
+
+List saved payment methods for the authenticated Eliza Cloud account.
+
+#### GET /api/cloud/billing/history
+
+List recent billing activity, including top-ups and settlement history.
+
+#### POST /api/cloud/billing/checkout
+
+Create a billing checkout session.
+
+**Request**
+
+```json
+{
+  "amountUsd": 25,
+  "mode": "hosted"
+}
+```
+
+**Typical response**
+
+```json
+{
+  "provider": "stripe",
+  "mode": "hosted",
+  "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_xxx...",
+  "sessionId": "cs_xxx..."
+}
+```
+
+Milady prefers embedded checkout when Eliza Cloud supports it, but the current cloud billing integration can still return a hosted checkout URL.
+
+#### POST /api/cloud/billing/crypto/quote
+
+Request a crypto invoice or quote for a credit top-up.
+
+**Request**
+
+```json
+{
+  "amountUsd": 25,
+  "walletAddress": "0xabc123..."
+}
+```
+
+**Typical response**
+
+```json
+{
+  "provider": "oxapay",
+  "network": "BEP20",
+  "currency": "USDC",
+  "amount": "25.000",
+  "amountUsd": 25,
+  "paymentLinkUrl": "https://pay.example.com/track_123",
+  "expiresAt": "2026-03-15T01:00:00.000Z"
+}
+```
 
 ---
 

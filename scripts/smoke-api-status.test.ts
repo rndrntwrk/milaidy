@@ -109,15 +109,42 @@ describe("smoke-api-status script", () => {
   });
 
   it("parses comma-separated env origins and legacy fallback", () => {
-    const resolved = resolveBaseUrls([], {
-      MILADY_DEPLOY_BASE_URLS: "https://milady.ai, https://app.milady.ai",
-      MILADY_DEPLOY_BASE_URL: "https://legacy.milady.ai",
-    } as NodeJS.ProcessEnv);
-
-    expect(resolved).toEqual([
+    expect(
+      resolveBaseUrls([], {
+        MILADY_DEPLOY_BASE_URLS: "https://milady.ai, https://app.milady.ai",
+        MILADY_DEPLOY_BASE_URL: "https://legacy.milady.ai",
+      } as NodeJS.ProcessEnv),
+    ).toEqual([
       "https://milady.ai",
       "https://app.milady.ai",
       "https://legacy.milady.ai",
+    ]);
+    expect(
+      resolveBaseUrls([], {
+        ELIZA_DEPLOY_BASE_URLS: "https://eliza.ai, https://app.eliza.ai",
+        ELIZA_DEPLOY_BASE_URL: "https://legacy.eliza.ai",
+      } as NodeJS.ProcessEnv),
+    ).toEqual([
+      "https://eliza.ai",
+      "https://app.eliza.ai",
+      "https://legacy.eliza.ai",
+    ]);
+  });
+
+  it("reports a branded missing-base-url error", async () => {
+    const errors: string[] = [];
+
+    const code = await runSmokeApiStatus({
+      argv: [],
+      env: {},
+      fetchImpl: vi.fn(),
+      error: (line: string) => errors.push(line),
+      log: () => {},
+    });
+
+    expect(code).toBe(2);
+    expect(errors).toEqual([
+      "[smoke-api-status] Missing base URLs. Pass args or set MILADY_DEPLOY_BASE_URLS or ELIZA_DEPLOY_BASE_URLS.",
     ]);
   });
 });

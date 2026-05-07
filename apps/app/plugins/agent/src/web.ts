@@ -1,44 +1,118 @@
 import { WebPlugin } from "@capacitor/core";
 import type { AgentPlugin, AgentStatus, ChatResult } from "./definitions";
 
+interface MiladyWindow extends Window {
+  __MILADY_API_BASE__?: string;
+  __MILADY_API_TOKEN__?: string;
+}
+
 /**
  * Web fallback implementation.
  *
- * On non-Electron platforms (iOS, Android, web), the agent runtime runs
+ * On non-desktop platforms (iOS, Android, web), the agent runtime runs
  * on a server. This implementation delegates to the HTTP API.
  *
- * In Electron the Capacitor plugin bridge calls the native (main-process)
- * implementation via IPC instead — this web fallback is only used when
- * no native plugin is available.  If the page is served from a non-HTTP
- * origin (e.g. capacitor-electron://), relative fetches would hit the
+ * In Electrobun the desktop bridge calls the native main-process
+ * implementation via RPC instead — this web fallback is only used when
+ * no native plugin is available. If the page is served from a non-HTTP
+ * origin (e.g. electrobun://), relative fetches would hit the
  * app shell HTML, so we bail early.
  */
 export class AgentWeb extends WebPlugin implements AgentPlugin {
-  private electronLocalFallbackBase(): string {
-    if (typeof window === "undefined") return "";
-    const proto = window.location.protocol;
-    if (proto === "capacitor-electron:") {
-      return "http://localhost:2138";
+  private legacyConversationStorageKey(): string {
+    const base =
+      this.apiBase() ||
+      (typeof window !== "undefined" ? window.location.origin : "same-origin");
+    return `milady_agent_web_conversation:${encodeURIComponent(base)}`;
+  }
+
+  private readLegacyConversationId(): string | null {
+    if (typeof window === "undefined") return null;
+    const stored = window.sessionStorage.getItem(
+      this.legacyConversationStorageKey(),
+    );
+    return stored?.trim() ? stored.trim() : null;
+  }
+
+  private writeLegacyConversationId(conversationId: string | null): void {
+    if (typeof window === "undefined") return;
+    const key = this.legacyConversationStorageKey();
+    if (conversationId?.trim()) {
+      window.sessionStorage.setItem(key, conversationId.trim());
+      return;
     }
-    if (proto === "file:" && /\bElectron\b/i.test(window.navigator.userAgent)) {
-      return "http://localhost:2138";
+    window.sessionStorage.removeItem(key);
+  }
+
+  private async ensureLegacyConversationId(): Promise<string> {
+    const cached = this.readLegacyConversationId();
+    if (cached) return cached;
+
+    const res = await fetch(`${this.apiBase()}/api/conversations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.authHeaders(),
+      },
+      body: JSON.stringify({ title: "Quick Chat" }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to create conversation: ${res.status}`);
     }
-    return "";
+    const data = (await res.json()) as {
+      conversation?: { id?: string };
+    };
+    const conversationId = data.conversation?.id?.trim();
+    if (!conversationId) {
+      throw new Error("Conversation create response missing id");
+    }
+    this.writeLegacyConversationId(conversationId);
+    return conversationId;
+  }
+
+  private async chatViaConversation(
+    text: string,
+    retryOnMissingConversation = true,
+  ): Promise<ChatResult> {
+    const conversationId = await this.ensureLegacyConversationId();
+    const res = await fetch(
+      `${this.apiBase()}/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...this.authHeaders(),
+        },
+        body: JSON.stringify({ text, channelType: "DM" }),
+      },
+    );
+
+    if (res.status === 404 && retryOnMissingConversation) {
+      this.writeLegacyConversationId(null);
+      return this.chatViaConversation(text, false);
+    }
+
+    if (!res.ok) {
+      throw new Error(`Chat request failed: ${res.status}`);
+    }
+
+    return res.json();
   }
 
   private apiBase(): string {
     const global =
       typeof window !== "undefined"
-        ? (window as unknown as Record<string, unknown>).__MILADY_API_BASE__
+        ? (window as MiladyWindow).__MILADY_API_BASE__
         : undefined;
     if (typeof global === "string" && global.trim().length > 0) return global;
-    return this.electronLocalFallbackBase();
+    // No explicit base — use relative URLs (works on http/https origins).
+    return "";
   }
 
   private apiToken(): string | null {
     const global =
       typeof window !== "undefined"
-        ? (window as unknown as Record<string, unknown>).__MILADY_API_TOKEN__
+        ? (window as MiladyWindow).__MILADY_API_TOKEN__
         : undefined;
     if (typeof global === "string" && global.trim()) return global.trim();
     if (typeof window === "undefined") return null;
@@ -53,8 +127,11 @@ export class AgentWeb extends WebPlugin implements AgentPlugin {
 
   /** True when we can reach the API via HTTP. */
   private canReachApi(): boolean {
-    const base = this.apiBase();
-    if (base) return true;
+    const global =
+      typeof window !== "undefined"
+        ? (window as MiladyWindow).__MILADY_API_BASE__
+        : undefined;
+    if (typeof global === "string" && global.trim().length > 0) return true;
     // No explicit base — relative fetches only work on http(s) origins.
     if (typeof window === "undefined") return false;
     const proto = window.location.protocol;
@@ -110,11 +187,6 @@ export class AgentWeb extends WebPlugin implements AgentPlugin {
     if (!this.canReachApi()) {
       return { text: "Agent API not available", agentName: "System" };
     }
-    const res = await fetch(`${this.apiBase()}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...this.authHeaders() },
-      body: JSON.stringify({ text: options.text }),
-    });
-    return res.json();
+    return this.chatViaConversation(options.text);
   }
 }

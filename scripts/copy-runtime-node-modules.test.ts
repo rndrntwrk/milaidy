@@ -16,6 +16,8 @@ import {
   selectResolvedCandidate,
   shouldCopyPackageEntry,
   shouldKeepPackageRelativePath,
+  shouldSkipPackagedDependency,
+  stripPackagedCronCliRegistration,
 } from "./copy-runtime-node-modules";
 
 describe("inferVersionFromBunEntryPath", () => {
@@ -143,6 +145,46 @@ describe("getRuntimeDependencies", () => {
   });
 });
 
+describe("packaged dependency overrides", () => {
+  it("skips plugin-cli when packaging plugin-cron for desktop/runtime", () => {
+    expect(
+      shouldSkipPackagedDependency(
+        "@elizaos/plugin-cron",
+        "@elizaos/plugin-cli",
+      ),
+    ).toBe(true);
+    expect(
+      shouldSkipPackagedDependency(
+        "@elizaos/plugin-cron",
+        "@elizaos/plugin-openai",
+      ),
+    ).toBe(false);
+    expect(
+      shouldSkipPackagedDependency(
+        "@elizaos/plugin-browser",
+        "@elizaos/plugin-cli",
+      ),
+    ).toBe(false);
+  });
+
+  it("replaces cron CLI registration with packaged no-op shims", () => {
+    const source = [
+      'import { defineCliCommand, registerCliCommand } from "@elizaos/plugin-cli";',
+      'registerCliCommand(defineCliCommand("cron", "Cron", () => {}));',
+    ].join("\n");
+
+    expect(stripPackagedCronCliRegistration(source)).toContain(
+      "const defineCliCommand = () => null;",
+    );
+    expect(stripPackagedCronCliRegistration(source)).toContain(
+      "const registerCliCommand = () => {};",
+    );
+    expect(stripPackagedCronCliRegistration(source)).not.toContain(
+      "@elizaos/plugin-cli",
+    );
+  });
+});
+
 describe("isExactVersionSpecifier", () => {
   it("detects exact semver pins", () => {
     expect(isExactVersionSpecifier("1.3.2")).toBe(true);
@@ -182,6 +224,27 @@ describe("selectResolvedCandidate", () => {
     ).toEqual({
       sourceDir: exactDir,
       packageJsonPath: exactPkg,
+    });
+  });
+
+  it("falls back to the installed candidate when the exact pin is not present", () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "runtime-dependencies-test-"),
+    );
+    const installedDir = path.join(tempDir, "installed");
+    const installedPkg = path.join(installedDir, "package.json");
+
+    fs.mkdirSync(installedDir, { recursive: true });
+    fs.writeFileSync(installedPkg, JSON.stringify({ version: "1.10.1" }));
+
+    expect(
+      selectResolvedCandidate(
+        [{ sourceDir: installedDir, packageJsonPath: installedPkg }],
+        "1.10.0",
+      ),
+    ).toEqual({
+      sourceDir: installedDir,
+      packageJsonPath: installedPkg,
     });
   });
 });

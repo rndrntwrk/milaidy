@@ -204,12 +204,12 @@ class SwabblePlugin : Plugin() {
     }
 
     @PluginMethod
-    fun checkPermissions(call: PluginCall) {
+    override fun checkPermissions(call: PluginCall) {
         call.resolve(buildPermissionResult())
     }
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    override fun requestPermissions(call: PluginCall) {
         requestPermissionForAlias("microphone", call, "handlePermissionCheckResult")
     }
 
@@ -557,7 +557,7 @@ class SwabblePlugin : Plugin() {
 
         // Pass 2: fuzzy match using Levenshtein distance
         val words = transcript.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-        for ((wordIndex, word) in words.withIndex()) {
+        for ((wordIndex, _) in words.withIndex()) {
             for (trigger in config.triggers) {
                 val triggerWords = trigger.split("\\s+".toRegex()).filter { it.isNotEmpty() }
                 val triggerLen = triggerWords.size
@@ -783,7 +783,7 @@ class SwabblePlugin : Plugin() {
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    private fun hasRequiredPermissions(): Boolean {
+    override fun hasRequiredPermissions(): Boolean {
         return getPermissionState("microphone") == com.getcapacitor.PermissionState.GRANTED
     }
 

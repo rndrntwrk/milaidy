@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
+    "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
-    "declaration": true,
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
@@ -10,25 +10,41 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noEmit": true,
-    "noEmitOnError": true,
-    "outDir": "dist",
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "es2022",
+    "target": "es2023",
     "useDefineForClassFields": false,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "@miladyai/plugin-selfcontrol": [
+        "./packages/plugin-selfcontrol/src/index.ts"
+      ],
+      "@miladyai/plugin-selfcontrol/*": ["./packages/plugin-selfcontrol/src/*"],
+      "@miladyai/ui": ["./packages/ui/src/index.ts"],
+      "@miladyai/ui/*": ["./packages/ui/src/*"],
+      "@miladyai/agent/*": ["./packages/agent/src/*"],
+      "@miladyai/shared": ["./packages/shared/src/index.ts"],
+      "@miladyai/shared/*": ["./packages/shared/src/*"],
+      "@elizaos/core": [
+        "./eliza/packages/typescript/src/index.ts"
+      ],
+      "@elizaos/core/*": ["./eliza/packages/typescript/src/*"]
+    }
   },
-  "include": ["src/**/*"],
+  "include": [
+    "packages/app-core/src/**/*",
+    "packages/agent/src/external-modules.d.ts"
+  ],
   "exclude": [
     "node_modules",
+    "node_modules/.bun",
     "dist",
-    "packages",
+    "eliza",
     "plugins",
-    "src/**/*.test.ts",
-    "src/**/*.test.tsx",
-    "src/**/test-helpers.ts",
-    "src/services/training-service.ts",
-    "src/plugins/retake/**"
+    "packages/app-core/src/**/*.test.ts",
+    "packages/app-core/src/**/*.test.tsx",
+    "packages/app-core/src/**/test-helpers.ts",
+    "packages/app-core/src/services/training-service.ts"
   ]
 }

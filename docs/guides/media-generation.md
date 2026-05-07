@@ -106,7 +106,7 @@ The provider module header also references ElevenLabs for sound effects (`Eleven
 | `prompt` | string | Yes | Text description of the audio (lyrics, mood, style, etc.) |
 | `duration` | number | No | Audio duration in seconds |
 | `instrumental` | boolean | No | Whether to generate instrumental music without vocals |
-| `genre` | string | No | Music genre (e.g., `pop`, `rock`, `classical`, `electronic`) |
+| `genre` | string | No | Music genre (e.g., `pop`, `rock`, `classical`, `synthwave`) |
 
 **Output:** Returns an `audioUrl`, optional `title`, and optional `duration` in seconds.
 
@@ -241,13 +241,13 @@ Eliza Cloud settings are in the `cloud` section of `milady.json`:
 ```json
 {
   "cloud": {
-    "baseUrl": "https://www.elizacloud.ai/api/v1",
+    "baseUrl": "https://elizacloud.ai/api/v1",
     "apiKey": "optional-cloud-api-key"
   }
 }
 ```
 
-The default base URL is `https://www.elizacloud.ai/api/v1`. The API key is optional and can provide access to higher-tier cloud features. When provided, it is sent as a `Bearer` token in the `Authorization` header.
+The default base URL is `https://elizacloud.ai/api/v1`. The API key is optional and can provide access to higher-tier cloud features. When provided, it is sent as a `Bearer` token in the `Authorization` header.
 
 Eliza Cloud exposes four media endpoints:
 

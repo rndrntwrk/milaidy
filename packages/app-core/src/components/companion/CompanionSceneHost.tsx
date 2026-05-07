@@ -1,0 +1,890 @@
+import {
+  dispatchAppEmoteEvent,
+  VRM_TELEPORT_COMPLETE_EVENT,
+} from "@miladyai/app-core/events";
+import {
+  useAvatarSpeechCapabilities,
+  useRenderGuard,
+} from "@miladyai/app-core/hooks";
+import {
+  getCameraDistanceScale,
+  getVrmBackgroundUrl,
+  getVrmPreviewUrl,
+  getVrmUrl,
+  useCompanionSceneConfig,
+  useTranslation,
+  VRM_COUNT,
+} from "@miladyai/app-core/state";
+import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
+
+import {
+  memo,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { client } from "../../api";
+import type { VrmEngine } from "../avatar/VrmEngine";
+import { prefetchVrmToCache } from "../avatar/VrmEngine";
+import { resolveCharacterGreetingAnimation } from "../character/character-greeting";
+import type {
+  CompanionStageState,
+  PartialCompanionStageState,
+} from "./companion-stage-state";
+import { DEFAULT_COMPANION_STAGE_STATE } from "./companion-stage-state";
+import { CompanionSceneStatusContext } from "./companion-scene-status-context";
+import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
+import { VrmStage } from "./VrmStage";
+
+export { useSharedCompanionScene } from "./shared-companion-scene-context";
+
+const COMPANION_ZOOM_WHEEL_SENSITIVITY = 1 / 720;
+const COMPANION_ZOOM_PINCH_SENSITIVITY = 2.35;
+const DEFAULT_COMPANION_ZOOM = DEFAULT_COMPANION_STAGE_STATE.camera.zoom;
+const COMPANION_TELEPORT_GREETING_DELAY_MS = 400;
+const CAMERA_DRAG_IGNORE_SELECTOR =
+  'button, a, label, input, textarea, select, option, [role="button"], [role="listbox"], [role="tab"], [aria-expanded], [aria-haspopup], [contenteditable="true"], [data-no-camera-drag="true"]';
+const CAMERA_ZOOM_IGNORE_SELECTOR = '[data-no-camera-zoom="true"]';
+const NON_TEXT_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+
+// SharedCompanionSceneContext is imported from ./shared-companion-scene-context
+// to keep the hook importable without pulling in the 3D stack.
+
+type TouchPoint = {
+  x: number;
+  y: number;
+};
+
+type CompanionWheelEvent = Pick<
+  WheelEvent,
+  "ctrlKey" | "deltaMode" | "deltaY" | "preventDefault" | "target"
+>;
+
+let _companionTeleportCompletedOnce = false;
+
+export function hasCompanionTeleportCompletedOnce(): boolean {
+  return _companionTeleportCompletedOnce;
+}
+
+function getTouchDistance(points: Map<number, TouchPoint>): number {
+  const touchPoints = [...points.values()];
+  if (touchPoints.length < 2) return 0;
+  const [firstPoint, secondPoint] = touchPoints;
+  if (!firstPoint || !secondPoint) return 0;
+  return Math.hypot(secondPoint.x - firstPoint.x, secondPoint.y - firstPoint.y);
+}
+
+function getWheelPixels(
+  event: Pick<WheelEvent, "deltaMode" | "deltaY">,
+): number {
+  if (event.deltaMode === 1) return event.deltaY * 16;
+  if (event.deltaMode === 2) {
+    return event.deltaY * (window.innerHeight || 1);
+  }
+  return event.deltaY;
+}
+
+function hasFocusedTextEntry(): boolean {
+  if (typeof document === "undefined") return false;
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  if (activeElement instanceof HTMLInputElement) {
+    return !NON_TEXT_INPUT_TYPES.has(activeElement.type.toLowerCase());
+  }
+  return activeElement instanceof HTMLElement
+    ? activeElement.isContentEditable
+    : false;
+}
+
+function shouldIgnoreCameraDrag(target: EventTarget | null): boolean {
+  return target instanceof Element
+    ? Boolean(target.closest(CAMERA_DRAG_IGNORE_SELECTOR))
+    : false;
+}
+
+function shouldIgnoreCameraZoom(target: EventTarget | null): boolean {
+  return target instanceof Element
+    ? Boolean(target.closest(CAMERA_ZOOM_IGNORE_SELECTOR))
+    : false;
+}
+
+function clampCompanionZoom(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * Fire-and-forget the companion stage patch to the alice-bot server.
+ * The server deep-merges the patch into `$ELIZA_DATA_DIR/companion/stage.json`
+ * and broadcasts the new full state as a `"companion-stage-state"` WS
+ * event to every connected browser (this operator, any other operator
+ * tabs, and the 555stream capture-service's headless Chromium). On
+ * the caller's own browser the echo is a no-op because the optimistic
+ * local apply at the call site already committed the same values.
+ *
+ * We don't await the promise. Network latency is ~30-80ms on the
+ * same pod; blocking `setCompanionZoom` on that round-trip would make
+ * wheel scrolling feel laggy. Failures are logged as warnings — the
+ * operator's local view is already correct via the optimistic apply,
+ * so a failed commit just means the stream won't mirror it this time.
+ */
+function commitCompanionStagePatch(patch: PartialCompanionStageState): void {
+  void client.setCompanionStageState(patch).catch((err) => {
+    console.warn(
+      "[CompanionSceneHost] Failed to commit stage patch:",
+      err instanceof Error ? err.message : err,
+    );
+  });
+}
+
+function CompanionSceneSurface({
+  active,
+  interactive = true,
+  children,
+}: {
+  active: boolean;
+  interactive?: boolean;
+  children?: ReactNode;
+}) {
+  useRenderGuard("CompanionSceneHost");
+  const {
+    selectedVrmIndex,
+    customVrmUrl,
+    customBackgroundUrl,
+    customWorldUrl,
+    uiTheme,
+    tab,
+    companionVrmPowerMode,
+    companionHalfFramerateMode,
+    companionAnimateWhenHidden,
+  } = useCompanionSceneConfig();
+  const { t } = useTranslation();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const stageEnginesRef = useRef(new Set<VrmEngine>());
+  const companionZoomRef = useRef(DEFAULT_COMPANION_ZOOM);
+  /**
+   * Race guard for the hydration / WS reconciliation loop. Flipped to
+   * true by the first authoritative state application (either the GET
+   * hydration response OR an early WS echo). Subsequent GET responses
+   * drop if it's already true — this prevents a slow GET from
+   * overwriting a fresh WS push that raced it. Reset to false when
+   * `ws-reconnected` fires so the reconnect re-hydration is allowed
+   * to apply.
+   */
+  const authoritativeAppliedRef = useRef(false);
+  /**
+   * Trailing-edge debounce state for commits. Scroll wheel and pinch
+   * fire ~60 events/sec and each one carried a standalone POST in the
+   * first cut of this code, which floods the server's fs.writeFileSync
+   * path. We now accumulate the latest patch into `pendingPatchRef`
+   * and only flush after 120ms of quiescence.
+   */
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatchRef = useRef<PartialCompanionStageState | null>(null);
+  const dragOrbitRef = useRef({ yaw: 0, pitch: 0 });
+  const dragStateRef = useRef<{
+    active: boolean;
+    pointerId: number | null;
+    startX: number;
+    startY: number;
+  }>({
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+  });
+  const touchPointsRef = useRef(new Map<number, TouchPoint>());
+  const pinchStateRef = useRef<{
+    active: boolean;
+    startDistance: number;
+    startZoom: number;
+  }>({
+    active: false,
+    startDistance: 0,
+    startZoom: 0,
+  });
+
+  // Lazy-mount VrmStage: only initialize the 3D engine once the scene is
+  // actually needed (first time active becomes true). This prevents the WebGL
+  // context and asset loads from firing in native/chat mode on startup.
+  const hasEverBeenActiveRef = useRef(active);
+  if (active) hasEverBeenActiveRef.current = true;
+  const shouldMountVrm = hasEverBeenActiveRef.current;
+
+  // Apply a full `CompanionStageState` snapshot to the local refs and
+  // every VrmEngine currently on stage. Used both by the initial REST
+  // hydration and by the `"companion-stage-state"` WS echo handler so
+  // the stream stays in lock-step with whatever authority (operator
+  // action, another operator tab, runtime-triggered mutation) pushed
+  // the update.
+  const applyCompanionStageState = useCallback(
+    (next: CompanionStageState) => {
+      companionZoomRef.current = clampCompanionZoom(next.camera.zoom);
+      for (const engine of stageEnginesRef.current) {
+        engine.setCompanionZoomNormalized(companionZoomRef.current);
+      }
+    },
+    [],
+  );
+  const applyCompanionStageStateRef = useRef(applyCompanionStageState);
+  applyCompanionStageStateRef.current = applyCompanionStageState;
+
+  /**
+   * Synchronously flush any pending stage patch through the server
+   * commit path, clearing the debounce timer. Called by the timer
+   * callback itself (normal path) and by the unmount cleanup effect
+   * so the final value isn't silently dropped when the operator
+   * navigates away mid-scroll.
+   */
+  const flushPendingCommit = useCallback(() => {
+    if (commitTimerRef.current != null) {
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = null;
+    }
+    const pending = pendingPatchRef.current;
+    pendingPatchRef.current = null;
+    if (pending) {
+      commitCompanionStagePatch(pending);
+    }
+  }, []);
+
+  /**
+   * Schedule a trailing-edge-debounced commit of the given patch.
+   * Multiple calls within the debounce window accumulate into a
+   * single patch (the most recent value for each field wins), so a
+   * sustained scroll produces exactly one POST after the operator
+   * stops moving the wheel. The local VrmEngine is already caught up
+   * via the synchronous apply at the call site — the debounce only
+   * affects how often the stream (and other subscribers) receive
+   * updates, not how responsive the operator's own view feels.
+   */
+  const scheduleCompanionStageCommit = useCallback(
+    (patch: PartialCompanionStageState) => {
+      pendingPatchRef.current = {
+        camera: {
+          ...pendingPatchRef.current?.camera,
+          ...patch.camera,
+        },
+      };
+      if (commitTimerRef.current != null) {
+        clearTimeout(commitTimerRef.current);
+      }
+      commitTimerRef.current = setTimeout(flushPendingCommit, 120);
+    },
+    [flushPendingCommit],
+  );
+
+  // Server-authoritative hydration: on first mount, pull the current
+  // persistent stage state from the alice-bot server and subscribe to
+  // WS `"companion-stage-state"` echoes for subsequent mutations.
+  //
+  // This effect runs in BOTH the operator's browser AND the
+  // 555stream capture-service's headless Chromium — both load the
+  // same SPA, both open `/ws`, and both receive every echo. The echo
+  // handler in the operator's own browser is effectively a no-op
+  // because the optimistic apply at the call site already committed
+  // the same values; in the capture-service's Chromium the echo is
+  // the first time those values are seen, and it applies them to its
+  // own VrmEngine so the stream mirrors the operator's camera
+  // framing within a single WS round-trip.
+  //
+  // The effect intentionally has no mount-time dedupe. Earlier
+  // revisions of this code used a `companionZoomHydratedRef` to avoid
+  // re-firing the GET in strict-mode's double-invoke, but that breaks
+  // strict mode — on the second mount the ref is still true (refs
+  // persist across strict mode's mount/cleanup/remount) so the early
+  // return fires and the WS handler is never re-registered, leaving
+  // the dev-mode browser without any reconciliation subscription.
+  // Letting the effect run cleanly on every mount is correct: `fetch`
+  // is idempotent, the cleanup properly unsubscribes the previous
+  // handler, and the second mount re-subscribes.
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateFromServer = () => {
+      void client
+        .getCompanionStageState()
+        .then((response) => {
+          if (cancelled || !response?.state) return;
+          // Race guard: if a WS push already applied authoritative
+          // state while this GET was in flight, the GET is stale by
+          // definition. Drop it so we don't overwrite fresher data.
+          if (authoritativeAppliedRef.current) return;
+          authoritativeAppliedRef.current = true;
+          applyCompanionStageStateRef.current(response.state);
+        })
+        .catch((err) => {
+          console.warn(
+            "[CompanionSceneHost] Failed to hydrate stage state:",
+            err instanceof Error ? err.message : err,
+          );
+        });
+    };
+
+    // Initial hydration on mount.
+    hydrateFromServer();
+
+    // Subscribe to persistent state updates. This is the primary way
+    // the broadcast Chromium learns about operator-originated zoom
+    // changes, and the way any operator tab learns about agent- or
+    // other-tab-originated mutations.
+    const unsubscribeState = client.onWsEvent(
+      "companion-stage-state",
+      (data: Record<string, unknown>) => {
+        const next = data?.state;
+        if (!next || typeof next !== "object") return;
+        authoritativeAppliedRef.current = true;
+        applyCompanionStageStateRef.current(next as CompanionStageState);
+      },
+    );
+
+    // Subscribe to WS reconnect signal. Messages sent during a
+    // disconnect gap are lost, so we re-fetch the canonical state
+    // from REST to close the gap. Mirrors the pattern
+    // AppContext.tsx:7564 uses for PTY sessions. Reset the race
+    // guard first so the re-hydration GET is allowed to apply.
+    const unsubscribeReconnect = client.onWsEvent("ws-reconnected", () => {
+      authoritativeAppliedRef.current = false;
+      hydrateFromServer();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribeState();
+      unsubscribeReconnect();
+    };
+  }, []);
+
+  // Flush any pending debounced commit on unmount so the final zoom
+  // value isn't silently dropped when the operator navigates away
+  // mid-scroll. The POST fires fire-and-forget via the module-level
+  // `client` singleton and doesn't depend on any component state.
+  useEffect(() => {
+    return () => {
+      flushPendingCommit();
+    };
+  }, [flushPendingCommit]);
+
+  const setCompanionZoom = useCallback(
+    (value: number) => {
+      const nextZoom = clampCompanionZoom(value);
+      // Optimistic local apply — no round-trip latency for the operator.
+      companionZoomRef.current = nextZoom;
+      for (const engine of stageEnginesRef.current) {
+        engine.setCompanionZoomNormalized(nextZoom);
+      }
+      // Trailing-edge debounced commit — server persists and
+      // broadcasts the new state to every other subscriber (notably
+      // the 555stream capture-service's headless Chromium) via the
+      // `"companion-stage-state"` WS event. Debouncing collapses a
+      // sustained scroll into a single POST after 120ms of
+      // quiescence, which keeps the stream in sync without flooding
+      // `fs.writeFileSync` on the server.
+      scheduleCompanionStageCommit({ camera: { zoom: nextZoom } });
+    },
+    [scheduleCompanionStageCommit],
+  );
+
+  const handleStageEngineReady = useCallback((engine: VrmEngine) => {
+    stageEnginesRef.current.add(engine);
+    engine.setCompanionZoomNormalized(companionZoomRef.current);
+    engine.setDragOrbitTarget(
+      dragOrbitRef.current.yaw,
+      dragOrbitRef.current.pitch,
+    );
+  }, []);
+
+  const handleStageLayerEngineReady = useCallback(
+    (_vrmPath: string, engine: VrmEngine) => {
+      stageEnginesRef.current.add(engine);
+      engine.setCompanionZoomNormalized(companionZoomRef.current);
+      engine.setDragOrbitTarget(
+        dragOrbitRef.current.yaw,
+        dragOrbitRef.current.pitch,
+      );
+    },
+    [],
+  );
+
+  const handlePointerDownCapture = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!active || !interactive || shouldIgnoreCameraDrag(event.target)) {
+        return;
+      }
+      /* Stop event from reaching children — this is a camera drag */
+      event.stopPropagation();
+      if (typeof window.getSelection === "function") {
+        window.getSelection()?.removeAllRanges();
+      }
+      if (event.pointerType === "touch") {
+        touchPointsRef.current.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY,
+        });
+      }
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (event.pointerType === "touch" && touchPointsRef.current.size >= 2) {
+        pinchStateRef.current = {
+          active: true,
+          startDistance: getTouchDistance(touchPointsRef.current),
+          startZoom: companionZoomRef.current,
+        };
+        dragStateRef.current = {
+          active: false,
+          pointerId: null,
+          startX: 0,
+          startY: 0,
+        };
+        dragOrbitRef.current = { yaw: 0, pitch: 0 };
+        for (const engine of stageEnginesRef.current) {
+          engine.resetDragOrbit();
+        }
+        event.preventDefault?.();
+        return;
+      }
+      dragStateRef.current = {
+        active: true,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      event.preventDefault?.();
+    },
+    [active, interactive],
+  );
+
+  const handlePointerMoveCapture = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!active || !interactive) return;
+      if (
+        event.pointerType === "touch" &&
+        touchPointsRef.current.has(event.pointerId)
+      ) {
+        touchPointsRef.current.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY,
+        });
+        if (
+          pinchStateRef.current.active &&
+          touchPointsRef.current.size >= 2 &&
+          pinchStateRef.current.startDistance > 0
+        ) {
+          const viewportSpan = Math.max(
+            1,
+            Math.min(
+              window.innerWidth || event.currentTarget.clientWidth || 1,
+              window.innerHeight || event.currentTarget.clientHeight || 1,
+            ),
+          );
+          const pinchDistance = getTouchDistance(touchPointsRef.current);
+          const zoomDelta =
+            ((pinchDistance - pinchStateRef.current.startDistance) /
+              viewportSpan) *
+            COMPANION_ZOOM_PINCH_SENSITIVITY;
+          setCompanionZoom(pinchStateRef.current.startZoom + zoomDelta);
+          event.preventDefault();
+          return;
+        }
+      }
+      const dragState = dragStateRef.current;
+      if (!dragState.active || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+      const width = window.innerWidth || event.currentTarget.clientWidth || 1;
+      const height =
+        window.innerHeight || event.currentTarget.clientHeight || 1;
+      const deltaX = event.clientX - dragState.startX;
+      const deltaY = event.clientY - dragState.startY;
+      const yaw = (deltaX / width) * 1.35;
+      const pitch = (-deltaY / height) * 0.85;
+      dragOrbitRef.current = { yaw, pitch };
+      for (const engine of stageEnginesRef.current) {
+        engine.setDragOrbitTarget(yaw, pitch);
+      }
+      event.preventDefault();
+    },
+    [active, interactive, setCompanionZoom],
+  );
+
+  const handleWheelCapture = useCallback(
+    (event: CompanionWheelEvent) => {
+      if (!active || !interactive) return;
+      const wheelPixels = getWheelPixels(event);
+      if (Math.abs(wheelPixels) < 0.01) return;
+      setCompanionZoom(
+        companionZoomRef.current -
+          wheelPixels * COMPANION_ZOOM_WHEEL_SENSITIVITY,
+      );
+      event.preventDefault();
+    },
+    [active, interactive, setCompanionZoom],
+  );
+
+  const handleRootWheelCapture = useCallback(
+    (event: CompanionWheelEvent) => {
+      if (!active || !interactive) return;
+      if (hasFocusedTextEntry()) {
+        event.preventDefault();
+        return;
+      }
+      if (shouldIgnoreCameraZoom(event.target)) {
+        return;
+      }
+      handleWheelCapture(event);
+    },
+    [active, interactive, handleWheelCapture],
+  );
+
+  const releaseCameraDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === "touch") {
+        touchPointsRef.current.delete(event.pointerId);
+        if (touchPointsRef.current.size < 2) {
+          pinchStateRef.current = {
+            active: false,
+            startDistance: 0,
+            startZoom: companionZoomRef.current,
+          };
+        }
+      }
+      const dragState = dragStateRef.current;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      if (dragState.pointerId !== event.pointerId) return;
+      dragStateRef.current = {
+        active: false,
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+      };
+      dragOrbitRef.current = { yaw: 0, pitch: 0 };
+      for (const engine of stageEnginesRef.current) {
+        engine.resetDragOrbit();
+      }
+    },
+    [],
+  );
+
+  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+  const vrmPath =
+    selectedVrmIndex === 0 && customVrmUrl
+      ? customVrmUrl
+      : getVrmUrl(safeSelectedVrmIndex);
+  const fallbackPreviewUrl =
+    selectedVrmIndex > 0
+      ? getVrmPreviewUrl(safeSelectedVrmIndex)
+      : getVrmPreviewUrl(1);
+  const backgroundImageUrl =
+    customBackgroundUrl || getVrmBackgroundUrl(safeSelectedVrmIndex);
+  const worldUrl =
+    customWorldUrl ||
+    resolveAppAssetUrl(
+      uiTheme === "dark"
+        ? "worlds/companion-night.spz"
+        : "worlds/companion-day.spz",
+    );
+  const avatarSpeech = useAvatarSpeechCapabilities({
+    selectedVrmIndex,
+    customVrmUrl,
+  });
+  const teleportKey = vrmPath;
+  const [teleportCompletedKey, setTeleportCompletedKey] = useState<
+    string | null
+  >(null);
+  const teleportKeyRef = useRef(teleportKey);
+  const greetingAnimationPathRef = useRef<string | null>(
+    resolveCharacterGreetingAnimation({ avatarIndex: selectedVrmIndex }),
+  );
+  const greetingEmoteTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const handleTeleportComplete = () => {
+      _companionTeleportCompletedOnce = true;
+      setTeleportCompletedKey(teleportKeyRef.current);
+      if (greetingEmoteTimerRef.current != null) {
+        window.clearTimeout(greetingEmoteTimerRef.current);
+      }
+      // Give the idle blend a moment to settle after the dissolve before
+      // cross-fading into the greeting emote.
+      greetingEmoteTimerRef.current = window.setTimeout(() => {
+        greetingEmoteTimerRef.current = null;
+        const greetingAnimationPath = greetingAnimationPathRef.current;
+        if (!greetingAnimationPath) {
+          return;
+        }
+        dispatchAppEmoteEvent({
+          emoteId: "greeting",
+          path: `/${greetingAnimationPath}`,
+          duration: 3,
+          loop: false,
+          showOverlay: false,
+        });
+      }, COMPANION_TELEPORT_GREETING_DELAY_MS);
+    };
+    window.addEventListener(
+      VRM_TELEPORT_COMPLETE_EVENT,
+      handleTeleportComplete,
+    );
+    return () => {
+      window.removeEventListener(
+        VRM_TELEPORT_COMPLETE_EVENT,
+        handleTeleportComplete,
+      );
+      if (greetingEmoteTimerRef.current != null) {
+        window.clearTimeout(greetingEmoteTimerRef.current);
+        greetingEmoteTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const handleNativeWheel = (event: WheelEvent) => {
+      handleRootWheelCapture(event);
+    };
+
+    root.addEventListener("wheel", handleNativeWheel, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => {
+      root.removeEventListener("wheel", handleNativeWheel, {
+        capture: true,
+      });
+    };
+  }, [handleRootWheelCapture]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const preventGestureZoom = (event: Event) => {
+      event.preventDefault();
+    };
+
+    root.addEventListener("gesturestart", preventGestureZoom, {
+      passive: false,
+    });
+    root.addEventListener("gesturechange", preventGestureZoom, {
+      passive: false,
+    });
+    root.addEventListener("gestureend", preventGestureZoom, {
+      passive: false,
+    });
+
+    return () => {
+      root.removeEventListener("gesturestart", preventGestureZoom);
+      root.removeEventListener("gesturechange", preventGestureZoom);
+      root.removeEventListener("gestureend", preventGestureZoom);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (active && interactive) return;
+    touchPointsRef.current.clear();
+    pinchStateRef.current = {
+      active: false,
+      startDistance: 0,
+      startZoom: companionZoomRef.current,
+    };
+    dragStateRef.current = {
+      active: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+    };
+    dragOrbitRef.current = { yaw: 0, pitch: 0 };
+    for (const engine of stageEnginesRef.current) {
+      engine.resetDragOrbit();
+    }
+  }, [active, interactive]);
+
+  useEffect(() => {
+    return () => {
+      stageEnginesRef.current.clear();
+    };
+  }, []);
+
+  /* ── Camera X-offset for CharacterEditor panel ──────────────────── */
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ offset: number }>).detail;
+      const offset = detail?.offset ?? 0;
+      for (const engine of stageEnginesRef.current) {
+        engine.setCameraXOffset(offset);
+      }
+    };
+    window.addEventListener("eliza:editor-camera-offset", handler);
+    return () =>
+      window.removeEventListener("eliza:editor-camera-offset", handler);
+  }, []);
+  const sceneStatus = useMemo(
+    () => ({
+      avatarReady: teleportCompletedKey === teleportKey,
+      teleportKey,
+    }),
+    [teleportCompletedKey, teleportKey],
+  );
+
+  useEffect(() => {
+    greetingAnimationPathRef.current = resolveCharacterGreetingAnimation({
+      avatarIndex: selectedVrmIndex,
+    });
+  }, [selectedVrmIndex]);
+
+  useEffect(() => {
+    teleportKeyRef.current = teleportKey;
+    _companionTeleportCompletedOnce = false;
+    setTeleportCompletedKey(null);
+    if (greetingEmoteTimerRef.current != null) {
+      window.clearTimeout(greetingEmoteTimerRef.current);
+      greetingEmoteTimerRef.current = null;
+    }
+  }, [teleportKey]);
+
+  const preloadPreviews = useMemo(() => {
+    if (tab !== "character" && tab !== "character-select") {
+      return [];
+    }
+    return Array.from({ length: VRM_COUNT }, (_, index) => {
+      const avatarIndex = index + 1;
+      return { previewUrl: getVrmPreviewUrl(avatarIndex) };
+    });
+  }, [tab]);
+
+  /* ── Preload only lightweight preview thumbnails (~80KB each) for the
+   *    character-select grid. Full VRMs (~10MB each) are fetched on-demand
+   *    when the user actually selects an avatar, and cached in-memory by
+   *    VrmEngine so subsequent swaps skip the network entirely. ── */
+  const preloadedRef = useRef(false);
+  useEffect(() => {
+    if (preloadedRef.current || preloadPreviews.length === 0) return;
+    preloadedRef.current = true;
+    for (const entry of preloadPreviews) {
+      const img = new Image();
+      img.src = entry.previewUrl;
+    }
+  }, [preloadPreviews]);
+
+  /* ── Prefetch VRM buffers into the in-memory cache as soon as the character
+   *    tab opens. Fire-and-forget: errors are silently swallowed inside
+   *    prefetchVrmToCache. This converts the first character-click from a
+   *    cold ~3-8 s network fetch into a <200 ms re-parse from cached bytes. ── */
+  const vrmPrefetchedRef = useRef(false);
+  useEffect(() => {
+    if (tab !== "character" && tab !== "character-select") return;
+    if (vrmPrefetchedRef.current) return;
+    vrmPrefetchedRef.current = true;
+    for (let i = 1; i <= VRM_COUNT; i++) {
+      void prefetchVrmToCache(getVrmUrl(i));
+    }
+  }, [tab]);
+
+  return (
+    <div
+      ref={rootRef}
+      data-testid="companion-root"
+      data-no-window-drag=""
+      className={`relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-[#1a1a2e] font-display ${interactive ? "cursor-grab" : ""}`}
+      style={{
+        overscrollBehavior: "none",
+        touchAction: interactive ? "none" : undefined,
+      }}
+      onPointerDownCapture={handlePointerDownCapture}
+      onPointerMoveCapture={handlePointerMoveCapture}
+      onPointerUpCapture={releaseCameraDrag}
+      onPointerCancelCapture={releaseCameraDrag}
+      onLostPointerCaptureCapture={releaseCameraDrag}
+    >
+      <div
+        aria-hidden={!active}
+        className={`fixed inset-0 z-0 overflow-hidden rounded-2xl transition-opacity duration-200 ${
+          uiTheme === "dark" ? "bg-[#08060e]" : "bg-[#f5f5f5]"
+        } ${active ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        style={{
+          visibility: active ? "visible" : "hidden",
+        }}
+      >
+        <div
+          className={`absolute inset-0 z-0 bg-cover opacity-40 pointer-events-none ${
+            uiTheme === "dark"
+              ? "bg-[radial-gradient(circle_at_50%_40%,rgba(80,20,140,0.2)_0%,transparent_60%)]"
+              : "bg-[radial-gradient(circle_at_50%_40%,rgba(180,200,220,0.15)_0%,transparent_60%)]"
+          }`}
+        />
+
+        {shouldMountVrm && (
+          <VrmStage
+            active={active}
+            vrmPath={vrmPath}
+            worldUrl={worldUrl}
+            speechMotionPath={avatarSpeech.capabilities.speechMotionPath ?? null}
+            speechCapabilities={avatarSpeech.capabilities}
+            avatarSpeechKey={avatarSpeech.avatarKey}
+            fallbackPreviewUrl={fallbackPreviewUrl}
+            backgroundImageUrl={backgroundImageUrl}
+            environmentTheme={uiTheme === "dark" ? "dark" : "light"}
+            cameraProfile="companion"
+            cameraDistanceScale={getCameraDistanceScale(safeSelectedVrmIndex)}
+            companionVrmPowerMode={companionVrmPowerMode}
+            companionHalfFramerateMode={companionHalfFramerateMode}
+            companionAnimateWhenHidden={companionAnimateWhenHidden}
+            onEngineReady={handleStageEngineReady}
+            onLayerEngineReady={handleStageLayerEngineReady}
+            onSpeechCapabilitiesDetected={avatarSpeech.saveDetectedCapabilities}
+            playWaveOnAvatarChange={false}
+            t={t}
+          />
+        )}
+      </div>
+
+      <CompanionSceneStatusContext.Provider value={sceneStatus}>
+        {children}
+      </CompanionSceneStatusContext.Provider>
+    </div>
+  );
+}
+
+// Do NOT use a custom memo comparator that ignores children here.
+// shellContent (which includes ViewRouter / tab content) is passed as
+// children — ignoring children changes blocks all tab navigation.
+// If keystroke re-renders are a concern, memoize shellContent in App.tsx.
+export const CompanionSceneHost = memo(CompanionSceneSurface);
+
+export function SharedCompanionScene({
+  active,
+  interactive = true,
+  children,
+}: {
+  active: boolean;
+  interactive?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <SharedCompanionSceneContext.Provider value={true}>
+      <CompanionSceneHost active={active} interactive={interactive}>
+        {children}
+      </CompanionSceneHost>
+    </SharedCompanionSceneContext.Provider>
+  );
+}

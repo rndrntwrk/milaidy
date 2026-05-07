@@ -1,26 +1,16 @@
 import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, "../..");
-const appDir = path.join(projectRoot, "apps", "app");
-
-// Resolve Playwright CLI lazily — if @playwright/test isn't installed (e.g.
-// in CI unit-test jobs that don't install apps/app devDependencies), the
-// playwright test suite is simply skipped rather than crashing the runner.
-let playwrightCli = null;
-try {
-  const appRequire = createRequire(path.join(appDir, "index.js"));
-  const playwrightPkg = appRequire.resolve("@playwright/test/package.json");
-  playwrightCli = path.join(path.dirname(playwrightPkg), "cli.js");
-} catch {
-  // @playwright/test not available — playwright tests will be skipped
-}
-const shouldRunPlaywright =
-  Boolean(playwrightCli) && process.env.MILADY_RUN_PLAYWRIGHT === "1";
+const resolvedBunCmd =
+  process.env.BUN && fs.existsSync(process.env.BUN)
+    ? process.env.BUN
+    : process.env.BUN_INSTALL
+      ? path.join(process.env.BUN_INSTALL, "bin", "bun")
+      : "bun";
+const bunCmd = fs.existsSync(resolvedBunCmd) ? resolvedBunCmd : "bun";
+const nodeCmd = process.execPath || "node";
 
 /**
  * Each entry describes a test suite to run in parallel.
@@ -30,37 +20,57 @@ const shouldRunPlaywright =
  * - Entries may specify a `cmd` to override the default (`bunx`).
  * - `forceSerial: true` entries always run after parallel groups.
  * - `maxWorkers` lets a suite pin worker concurrency.
+ *
+ * Opt-in UI browser E2E (Playwright): set MILADY_TEST_UI_PLAYWRIGHT=1.
+ * MILADY_TEST_UI_TESTCAFE remains as a legacy alias for the same suite.
  */
 const runs = [
   {
-    name: "unit",
-    args: ["vitest", "run", "--config", "vitest.unit.config.ts"],
+    name: "app-unit",
+    cmd: nodeCmd,
+    args: [path.join(".", "node_modules", ".bin", "vitest"), "run"],
     vitest: true,
+    cwd: "apps/app",
+    reportFile: path.join(os.tmpdir(), "milady-vitest-app-unit-report.json"),
+  },
+  {
+    name: "unit",
+    cmd: bunCmd,
+    args: ["x", "vitest", "run", "--config", "vitest.config.ts"],
+    vitest: true,
+    reportFile: path.join(os.tmpdir(), "milady-vitest-unit-report.json"),
   },
   {
     name: "e2e",
-    args: ["vitest", "run", "--config", "vitest.e2e.config.ts"],
-    vitest: true,
+    cmd: bunCmd,
+    args: ["run", "test:e2e"],
     forceSerial: true,
-    maxWorkers: 1,
   },
-  // Only include playwright tests if @playwright/test is installed
-  ...(shouldRunPlaywright
-    ? [
-        {
-          name: "e2e:playwright",
-          cmd: "node",
-          args: [
-            playwrightCli,
-            "test",
-            "--config",
-            "playwright.electron.config.ts",
-          ],
-          cwd: appDir,
-        },
-      ]
-    : []),
+  {
+    name: "startup-e2e",
+    cmd: bunCmd,
+    args: ["run", "test:startup:e2e"],
+    forceSerial: true,
+  },
+  {
+    name: "orchestrator-integration",
+    cmd: bunCmd,
+    args: ["run", "test:orchestrator:integration"],
+    forceSerial: true,
+  },
 ];
+
+if (
+  process.env.MILADY_TEST_UI_PLAYWRIGHT === "1" ||
+  process.env.MILADY_TEST_UI_TESTCAFE === "1"
+) {
+  runs.push({
+    name: "ui-playwright",
+    cmd: bunCmd,
+    args: ["run", "test:ui:playwright"],
+    forceSerial: true,
+  });
+}
 
 const children = new Set();
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
@@ -90,30 +100,63 @@ const resolvedOverride =
   Number.isFinite(overrideWorkers) && overrideWorkers > 0
     ? overrideWorkers
     : null;
-const defaultParallelRuns = runs.filter((entry) => !entry.forceSerial);
-const defaultSerialRuns = runs.filter((entry) => entry.forceSerial);
+const defaultParallelRuns = [];
+const defaultSerialRuns = runs;
 const parallelRuns = isWindowsCi ? [] : defaultParallelRuns;
 const serialRuns = isWindowsCi ? runs : defaultSerialRuns;
-const localWorkers = Math.max(4, Math.min(16, os.cpus().length));
-const parallelCount = Math.max(1, parallelRuns.length);
+const localWorkers = 2;
+const parallelCount = Math.max(1, parallelRuns.length || 1);
 const perRunWorkers = Math.max(1, Math.floor(localWorkers / parallelCount));
 const macCiWorkers = isCI && isMacOS ? 1 : perRunWorkers;
-// Keep worker counts predictable for local runs; trim macOS CI workers to avoid worker crashes/OOM.
-// In CI on linux/windows, prefer Vitest defaults to avoid cross-test interference from lower worker counts.
-const maxWorkers = resolvedOverride ?? (isCI && !isMacOS ? null : macCiWorkers);
+// Use Vitest defaults for local unit runs. Forcing low local worker counts can leave the
+// child Vitest process hanging after completion on macOS. Keep the explicit cap only for
+// CI, where we want deterministic resource usage and known crash avoidance behavior.
+const maxWorkers = resolvedOverride ?? (isCI ? macCiWorkers : null);
 
 const WARNING_SUPPRESSION_FLAGS = [
   "--disable-warning=ExperimentalWarning",
   "--disable-warning=DEP0040",
   "--disable-warning=DEP0060",
 ];
+const LOCALSTORAGE_NODE_OPTION_PATTERN =
+  /(^|\s)--localstorage-file(?:=\S+)?(?=\s|$)/g;
+
+function sanitiseNodeOptions(nodeOptions) {
+  return nodeOptions
+    .replace(LOCALSTORAGE_NODE_OPTION_PATTERN, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildChildEnv(baseEnv, cwd) {
+  const nextEnv = { ...baseEnv };
+  for (const key of Object.keys(nextEnv)) {
+    if (key.startsWith("npm_") || key === "INIT_CWD") {
+      delete nextEnv[key];
+    }
+  }
+  if (cwd) {
+    nextEnv.PWD = path.resolve(cwd);
+  }
+  return nextEnv;
+}
 
 const runOnce = (entry, extraArgs = []) =>
   new Promise((resolve) => {
+    if (entry.reportFile) {
+      try {
+        fs.rmSync(entry.reportFile, { force: true });
+      } catch {
+        // Best-effort cleanup only.
+      }
+    }
     const entryWorkers =
       typeof entry.maxWorkers === "number" ? entry.maxWorkers : maxWorkers;
     const vitestExtras = entry.vitest
       ? [
+          ...(entry.reportFile
+            ? ["--reporter", "json", "--outputFile", entry.reportFile]
+            : []),
           ...(entryWorkers ? ["--maxWorkers", String(entryWorkers)] : []),
           ...ciWorkerArgs,
         ]
@@ -124,14 +167,17 @@ const runOnce = (entry, extraArgs = []) =>
       (acc, flag) => (acc.includes(flag) ? acc : `${acc} ${flag}`.trim()),
       nodeOptions,
     );
-    const cmd = entry.cmd ?? "bunx";
+    const cmd = entry.cmd ?? "bun";
     const child = spawn(cmd, args, {
       stdio: "inherit",
       ...(entry.cwd ? { cwd: entry.cwd } : {}),
       env: {
-        ...process.env,
+        ...buildChildEnv(process.env, entry.cwd),
         VITEST_GROUP: entry.name,
-        NODE_OPTIONS: nextNodeOptions,
+        MILADY_LIVE_TEST: "0",
+        ELIZA_LIVE_TEST: "0",
+        NODE_OPTIONS: sanitiseNodeOptions(nextNodeOptions),
+        NODE_NO_WARNINGS: process.env.NODE_NO_WARNINGS ?? "1",
       },
       shell: process.platform === "win32",
     });

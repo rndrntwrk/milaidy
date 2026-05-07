@@ -38,7 +38,7 @@ my-plugin/
     "test": "vitest run"
   },
   "dependencies": {
-    "@elizaos/core": "next"
+    "@elizaos/core": "alpha"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
@@ -301,10 +301,10 @@ Add to `milady.json`:
 
 ```bash
 # Build the plugin
-cd my-plugin && npm run build
+cd my-plugin && bun run build
 
 # Run tests
-npm test
+bun test
 
 # Start Milady with the plugin loaded
 milady start
@@ -354,7 +354,7 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
   ],
   "requiredSecrets": ["WEATHER_API_KEY"],
   "channels": ["chat", "telegram", "discord"],
-  "dependencies": ["@elizaos/plugin-knowledge"]
+  "dependencies": ["knowledge"]
 }
 ```
 

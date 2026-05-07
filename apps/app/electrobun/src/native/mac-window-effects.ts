@@ -1,17 +1,3 @@
-/**
- * macOS Native Window Effects — Bun FFI wrapper
- *
- * Loads libMacWindowEffects.dylib once and exposes typed helpers for:
- * - NSVisualEffectView vibrancy
- * - Window shadow
- * - Traffic light button positioning
- * - Native drag region
- * - Window hide/show via orderOut / makeKeyAndOrderFront
- * - Focus detection via isKeyWindow
- *
- * All functions are no-ops on non-macOS platforms.
- */
-
 import { dlopen, FFIType, type Pointer } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -65,7 +51,7 @@ function loadLib(): MacEffectsLib {
       },
       isAppActive: { args: [], returns: FFIType.bool },
       isWindowKey: { args: [FFIType.ptr], returns: FFIType.bool },
-    }) as unknown as MacEffectsLib;
+    }) as MacEffectsLib;
   } catch (err) {
     console.warn("[MacEffects] Failed to load dylib:", err);
     return null;
@@ -96,6 +82,12 @@ export function setTrafficLightsPosition(
   return getLib()?.symbols.setWindowTrafficLightsPosition(ptr, x, y) ?? false;
 }
 
+/**
+ * @param height Pass `0` for thickness derived from the window's NSScreen (backing
+ *   scale + very wide displays). Pass a positive value (points) to pin depth. The same
+ *   value sizes the top drag strip and the right/bottom/corner resize overlay views
+ *   (native, above WKWebView).
+ */
 export function setNativeDragRegion(
   ptr: Pointer,
   x: number,

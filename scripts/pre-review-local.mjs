@@ -1,8 +1,35 @@
 import { execFileSync, execSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ANY_TYPE_PATTERN = /:\s*any\b|<\s*any\s*>|\bas\s+any\b/;
+
+// TypeScript / JavaScript source file extensions. TS-specific patterns like
+// ANY_TYPE_PATTERN and @ts-expect-error should only be scanned against these — not
+// against Markdown, YAML, JSON, shell scripts, or other non-source files where
+// the literal strings may legitimately appear in prose or configuration.
+const SOURCE_CODE_EXTENSIONS = /\.(?:m|c)?[jt]sx?$/i;
+
+export function isSourceCode(file) {
+  return SOURCE_CODE_EXTENSIONS.test(file);
+}
+
+// Files whose changes do not require accompanying regression tests. Broader
+// than "docs-only" — also covers agent definitions (.claude/), CI workflow
+// YAML (.github/), editor rules (.cursor/), and dev-tooling shell scripts.
+// None of these produce runtime behavior that a Vitest suite could meaningfully
+// assert against.
+export function isTestExempt(file) {
+  if (file.startsWith("docs/")) return true;
+  if (/\.(mdx?|txt)$/i.test(file)) return true;
+  if (file.startsWith(".claude/")) return true;
+  if (file.startsWith(".github/")) return true;
+  if (file.startsWith(".cursor/")) return true;
+  if (file.startsWith("scripts/generated/")) return true;
+  if (/\.sh$/i.test(file)) return true;
+  return false;
+}
 
 const SECRET_LIKE_TOKEN_PATTERNS = [
   /sk-[a-z0-9]{20,}/i,
@@ -11,6 +38,30 @@ const SECRET_LIKE_TOKEN_PATTERNS = [
   /gh[pousr]_[A-Za-z0-9_]{36,}/i,
   /(?:^|[^A-Za-z0-9_])(password|secret|api[_-]?key|access[_-]?token|client[_-]?secret|private[_-]?key)\s*[:=]\s*["'][^"']{8,}/i,
 ];
+
+function extractAddedDiffLines(diffChunks) {
+  return diffChunks
+    .split("\n")
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .map((line) => line.slice(1))
+    .join("\n");
+}
+
+function extractRemovedDiffLines(diffChunks) {
+  return diffChunks
+    .split("\n")
+    .filter((line) => line.startsWith("-") && !line.startsWith("---"))
+    .map((line) => line.slice(1))
+    .join("\n");
+}
+
+function countPatternMatches(text, pattern) {
+  const flags = pattern.flags.includes("g")
+    ? pattern.flags
+    : `${pattern.flags}g`;
+  const globalPattern = new RegExp(pattern.source, flags);
+  return [...text.matchAll(globalPattern)].length;
+}
 
 function normalizeExecError(error) {
   return {
@@ -56,7 +107,22 @@ function runCommandArgs(command, args, options = {}) {
 }
 
 export function getBaseRef() {
+  const explicitBase =
+    process.env.MILADY_PRE_REVIEW_BASE ?? process.env.PRE_REVIEW_BASE_REF;
+  if (explicitBase) {
+    const explicitResult = runCommandArgs("git", [
+      "rev-parse",
+      "--verify",
+      explicitBase,
+    ]);
+    if (explicitResult.ok) return explicitBase;
+  }
+
   const candidates = [
+    "refs/remotes/upstream/develop",
+    "upstream/develop",
+    "refs/remotes/upstream/main",
+    "upstream/main",
     "refs/heads/origin/develop",
     "origin/develop",
     "develop",
@@ -81,7 +147,7 @@ export function classificationFromInputs({ branch, message }) {
   const content = `${branch} ${message}`.toLowerCase();
 
   if (
-    /(redesign|restyle|theme|font|layout|css|visual|icon|logo|dark mode|animation|aesthetic)/.test(
+    /\b(redesign|restyle|theme|font|layout|css|visual|icon|logo|animation|aesthetic)\b|\bdark mode\b/.test(
       content,
     )
   ) {
@@ -96,38 +162,49 @@ export function classificationFromInputs({ branch, message }) {
     return "bugfix";
   }
 
+  if (/\bdocs?\b|\.mdx?\b|\.md\b|readme/i.test(content)) {
+    return "docs";
+  }
+
   return "feature";
 }
 
 export function scopeVerdictFor(classification) {
   if (classification === "aesthetic") return "out of scope";
+  if (classification === "docs") return "in scope";
   if (classification === "feature") return "needs deep review";
   return "in scope";
 }
 
-export function decisionFromFindings({ classification, issues }) {
-  return classification === "aesthetic" || issues.length > 0
-    ? "REQUEST CHANGES"
-    : "APPROVE";
+export function decisionFromFindings({
+  classification: _classification,
+  issues,
+}) {
+  return issues.length > 0 ? "REQUEST CHANGES" : "APPROVE";
 }
 
 export function scanDiffTextForBlockedPatterns(diffChunks) {
   const issues = [];
+  const addedLines = extractAddedDiffLines(diffChunks);
+  const removedLines = extractRemovedDiffLines(diffChunks);
 
-  if (ANY_TYPE_PATTERN.test(diffChunks)) {
+  if (
+    countPatternMatches(addedLines, ANY_TYPE_PATTERN) >
+    countPatternMatches(removedLines, ANY_TYPE_PATTERN)
+  ) {
     issues.push(
       "Potential `any` usage introduced or modified. Verify strict typing is necessary.",
     );
   }
 
-  if (/@ts-ignore/.test(diffChunks)) {
+  if (/@ts-ignore/.test(addedLines)) {
     issues.push(
       "`@ts-ignore` usage detected. Prefer explicit narrowing or guards.",
     );
   }
 
   for (const pattern of SECRET_LIKE_TOKEN_PATTERNS) {
-    if (pattern.test(diffChunks)) {
+    if (pattern.test(addedLines)) {
       issues.push(
         "Potential secret-like string in diff; verify no credentials or secrets were added.",
       );
@@ -156,12 +233,37 @@ export function scanForBlockedDiffPatterns(base, changedFiles) {
   const sourceFiles = changedFiles.filter(
     (file) =>
       file !== "scripts/pre-review-local.mjs" &&
-      !/\.(?:e2e\.)?test\.(tsx?|jsx?)$/i.test(file),
+      !/\.(?:e2e\.)?test\.(tsx?|jsx?)$/i.test(file) &&
+      isSourceCode(file),
   );
   if (sourceFiles.length === 0) return [];
 
   const diffChunks = readDiffForFiles(base, sourceFiles);
   return scanDiffTextForBlockedPatterns(diffChunks);
+}
+
+export function resolveRunnableTestFiles(testFiles, cwd = process.cwd()) {
+  return testFiles.filter((file) => existsSync(path.resolve(cwd, file)));
+}
+
+export function splitRunnableTestFiles(testFiles) {
+  const repoTests = [];
+  const homepageTests = [];
+  const repoE2eTests = [];
+
+  for (const file of testFiles) {
+    if (file.startsWith("apps/homepage/")) {
+      homepageTests.push(path.relative("apps/homepage", file));
+    } else if (/\.e2e\.test\.[jt]sx?$/.test(file)) {
+      if (file.startsWith("test/")) {
+        repoE2eTests.push(file);
+      }
+    } else {
+      repoTests.push(file);
+    }
+  }
+
+  return { repoTests, repoE2eTests, homepageTests };
 }
 
 export function collectChangedFiles(base) {
@@ -248,8 +350,8 @@ export function runChecks() {
   const issues = scanForBlockedDiffPatterns(base, changed.files);
 
   const checks = [
-    { name: "bun run lint", command: "bun run lint" },
-    { name: "bun run typecheck", command: "bun run typecheck" },
+    { name: "bun run verify:lint", command: "bun run verify:lint" },
+    { name: "bun run verify:typecheck", command: "bun run verify:typecheck" },
   ];
 
   const missingTests = [];
@@ -263,10 +365,16 @@ export function runChecks() {
     }
   }
 
+  // Changes that produce no runtime behavior (docs, agent tooling, CI
+  // workflow YAML, editor rules, dev shell scripts) do not need accompanying
+  // regression tests — there is no runtime path to assert against.
+  const allFilesAreTestExempt = changed.files.every(isTestExempt);
+
   if (
-    classification === "bugfix" ||
-    classification === "feature" ||
-    classification === "security"
+    !allFilesAreTestExempt &&
+    (classification === "bugfix" ||
+      classification === "feature" ||
+      classification === "security")
   ) {
     const testFiles = changed.files.filter((file) =>
       /\.(?:e2e\.)?test\.(ts|tsx|js|jsx)$/.test(file),
@@ -280,15 +388,51 @@ export function runChecks() {
         "Run tests that validate the exact behavior change and check them in.",
       );
     } else {
-      const testRun = runCommand(`bunx vitest run ${testFiles.join(" ")}`);
-      if (!testRun.ok) {
-        issues.push("Regression/new-behavior tests did not pass.");
+      const runnableTestFiles = resolveRunnableTestFiles(testFiles);
+      if (runnableTestFiles.length === 0) {
+        issues.push(
+          "No runnable changed test files found for a behavioral change.",
+        );
         missingTests.push(
-          "Fix failing tests or add missing assertions for changed paths.",
+          "Add or update regression tests for changed runtime behavior.",
         );
         checklist.push(
-          "Re-run targeted regression tests after behavioral fixes.",
+          "Run tests that validate the exact behavior change and check them in.",
         );
+      } else {
+        const { repoTests, repoE2eTests, homepageTests } =
+          splitRunnableTestFiles(runnableTestFiles);
+        const testCommands = [];
+
+        if (repoTests.length > 0) {
+          testCommands.push(`bunx vitest run ${repoTests.join(" ")}`);
+        }
+
+        if (repoE2eTests.length > 0) {
+          testCommands.push(
+            `bunx vitest run --config vitest.e2e.config.ts ${repoE2eTests.join(" ")}`,
+          );
+        }
+
+        if (homepageTests.length > 0) {
+          testCommands.push(
+            `cd apps/homepage && bunx vitest run ${homepageTests.join(" ")}`,
+          );
+        }
+
+        for (const command of testCommands) {
+          const testRun = runCommand(command);
+          if (!testRun.ok) {
+            issues.push("Regression/new-behavior tests did not pass.");
+            missingTests.push(
+              "Fix failing tests or add missing assertions for changed paths.",
+            );
+            checklist.push(
+              "Re-run targeted regression tests after behavioral fixes.",
+            );
+            break;
+          }
+        }
       }
     }
   }

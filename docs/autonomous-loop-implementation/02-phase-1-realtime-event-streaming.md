@@ -4,7 +4,7 @@ Goal: expose structured autonomous and message-loop events from runtime to front
 
 ## Why this phase is first
 
-Without an event backbone, all later phases (autonomy panel, admin/autonomy blending visibility, rolodex trust auditability) are blind.
+Without an event backbone, all later phases (autonomy panel, admin/autonomy blending visibility, relationships trust auditability) are blind.
 
 ## Files in scope
 

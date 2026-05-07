@@ -137,7 +137,7 @@ Computer use is a powerful capability. Consider:
 
 ## Trajectory Logging
 
-Computer use sessions are automatically logged by the `@elizaos/plugin-trajectory-logger` (a core plugin). Logs include screenshots and action sequences for debugging and RL training.
+Computer use sessions are automatically logged by the `trajectories` (a core plugin). Logs include screenshots and action sequences for debugging and RL training.
 
 ## Related
 

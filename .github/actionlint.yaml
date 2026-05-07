@@ -1,6 +1,10 @@
 # actionlint configuration
 # https://github.com/rhysd/actionlint/blob/main/docs/config.md
 
+# No custom self-hosted-runner labels: all jobs run on GitHub-hosted
+# runners (ubuntu-24.04 / ubuntu-24.04-arm / windows-2025). If self-hosted
+# runners are reintroduced later, declare their labels here.
+
 paths:
   .github/workflows/release.yml:
     ignore:

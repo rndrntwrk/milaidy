@@ -1,12 +1,24 @@
 ---
 title: "Milady"
 sidebarTitle: "Introduction"
-description: "Your personal AI assistant that runs on YOUR machine. Local-first, multi-provider, extensible."
+description: "A client/server AI agent app that can create, discover, and connect to local, LAN, remote, and Eliza Cloud servers."
 ---
 
-**Milady** is a local-first AI assistant built on [elizaOS](https://github.com/elizaOS). It runs entirely on your machine -- not in a datacenter, not in the cloud. It manages your sessions, tools, and agent personality through a Gateway control plane, connects to Telegram, Discord, and other platforms, and ships with a web dashboard for real-time interaction.
+**Milady** is a client/server AI agent app built on [elizaOS](https://github.com/elizaOS).
+The Milady client can create a local server on your machine, discover a server
+on your LAN, connect to an existing remote gateway, or attach to Eliza Cloud.
+Once connected, the selected server owns provider routing, tools, memory, and
+runtime state through the Gateway control plane.
 
-It supports 11 model providers out of the box (including fully local inference via Ollama), has a growing plugin ecosystem powered by elizaOS, a skills marketplace via [ClawHub](https://clawhub.ai), and runs on every major platform: desktop, mobile, web, CLI, and Chrome extension.
+This Mintlify site documents the developer and operator side of Milady:
+architecture, configuration, APIs, plugins, and runtime behavior. Developer
+docs live at [docs.milady.ai](https://docs.milady.ai). Consumer-facing docs
+live at [milady.ai/docs](https://milady.ai/docs).
+
+Milady supports local inference and third-party model providers, has a growing
+plugin ecosystem powered by elizaOS, a skills marketplace via
+[ClawHub](https://clawhub.ai), and runs on every major platform: desktop,
+mobile, web, CLI, and Chrome extension.
 
 <CardGroup cols={2}>
   <Card title="Installation" icon="download" href="/installation">
@@ -31,27 +43,38 @@ It supports 11 model providers out of the box (including fully local inference v
 
 ## Why Milady
 
-### Local-First Privacy
+### Client/Server by Default
 
-Milady runs on your hardware. Your conversations, memory, and wallet keys stay in `~/.milady/` on your local filesystem. Nothing leaves your machine unless you explicitly connect an external service. Even embedding generation can run locally via the `plugin-local-embedding` package.
+Milady can create a local server on your own hardware, discover a server on
+your LAN, or connect to a trusted remote or Eliza Cloud server without
+changing the client model. The selected server owns provider routing,
+conversations, tools, and runtime state.
 
 ### Multi-Model, Multi-Provider
 
-Connect to any of 11 supported AI providers -- or run fully offline with Ollama:
+Connect to any of 19 supported AI providers -- or run fully offline with Ollama:
 
 | Provider | What You Get |
 |----------|-------------|
 | **Anthropic** | Claude (recommended) |
 | **OpenAI** | GPT-4o, o1, and friends |
 | **OpenRouter** | 100+ models through one API |
-| **Google Gemini** | Gemini Pro and Ultra |
+| **Google Gemini** | Gemini Pro, Flash, and Ultra |
+| **Google Antigravity** | Google Cloud / Vertex AI models |
 | **xAI** | Grok |
-| **Groq** | Ultra-fast inference |
-| **DeepSeek** | Reasoning models |
-| **Mistral** | Open-weight European models |
+| **Groq** | Ultra-fast inference (LPU) |
+| **DeepSeek** | Reasoning and code models |
+| **Mistral** | Mistral and Mixtral models |
 | **Together AI** | Open-source model hosting |
+| **Cohere** | Command R+ and embeddings |
+| **Perplexity** | Search-augmented generation |
+| **Qwen** | Alibaba's Qwen models |
+| **MiniMax** | MiniMax language models |
+| **Pi AI** | Inflection Pi conversational models |
+| **zAI** | Homunculus Labs custom endpoints |
 | **Vercel AI Gateway** | Unified gateway access |
 | **Ollama** | Fully local, free, no API key |
+| **Eliza Cloud** | Cloud server target, linked account, and optional inference route |
 
 Switch providers mid-conversation with `/model <id>`. No lock-in.
 
@@ -77,7 +100,7 @@ Milady is a single codebase that targets every surface you need:
 
 <CardGroup cols={3}>
   <Card title="Desktop" icon="desktop">
-    Electron app for macOS, Windows, and Linux. Native system tray, auto-updates, and offline support.
+    Electrobun app for macOS, Windows, and Linux. Native system tray, auto-updates, and offline support.
   </Card>
   <Card title="Mobile" icon="mobile">
     Capacitor builds for Android and iOS. Same web dashboard, native container.
@@ -85,8 +108,8 @@ Milady is a single codebase that targets every surface you need:
   <Card title="Web Dashboard" icon="browser">
     Real-time chat UI at `localhost:2138`. Manage sessions, view activity, configure your agent.
   </Card>
-  <Card title="CLI / TUI" icon="terminal">
-    Full-featured terminal interface with hotkeys, live activity feed, and token tracking.
+  <Card title="CLI" icon="terminal">
+    Full-featured command-line interface with hotkeys and token tracking.
   </Card>
   <Card title="Chrome Extension" icon="chrome">
     Browser integration for web-context actions and quick access.
@@ -101,7 +124,7 @@ Milady is a single codebase that targets every surface you need:
 Milady is structured as a layered system:
 
 ```
- User Interfaces (Desktop / Mobile / Web / CLI / TUI)
+ User Interfaces (Desktop / Mobile / Web / CLI)
                          |
                     API Server (HTTP + WebSocket on :2138)
                          |
@@ -115,17 +138,21 @@ Milady is structured as a layered system:
              autonomous state) shell, cron, ...)
                     |
               Connector Layer
-         (Telegram, Discord, WebChat, ...)
+         (Discord, Telegram, Slack, WhatsApp, Twitter,
+          Signal, Farcaster, WeChat, Matrix, Nostr, ...)
 ```
 
 - **elizaOS Runtime** -- the core agent framework that handles memory, message processing, action dispatch, and provider abstraction.
 - **Milady Plugin** -- a first-party elizaOS plugin that provides workspace context, session keys, personality presets, autonomous state, and wallet integration.
 - **Gateway** -- a WebSocket + HTTP multiplexed server that bridges the runtime to all connected clients and connectors.
 - **Plugin System** -- standard elizaOS plugins that add capabilities (knowledge, browser, TTS, etc.).
-- **Connector Layer** -- platform-specific adapters for Telegram, Discord, and the web chat UI.
+- **Connector Layer** -- platform-specific adapters for Telegram, Discord, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, WeChat, Matrix, Feishu/Lark, Nostr, Lens, and the web chat UI.
 
-All configuration lives in `~/.milady/milady.json`. Secrets can go in `~/.milady/.env`.
+The runtime's primary persisted config lives in `~/.milady/milady.json`.
+Canonical runtime routing is split across `deploymentTarget`,
+`linkedAccounts`, and `serviceRouting`. Secrets can also come from
+`~/.milady/.env`.
 
 <Info>
-Milady is currently in alpha (`v2.0.0-alpha.26`). APIs and configuration may change between releases. Check the [GitHub releases](https://github.com/milady-ai/milady/releases) for the latest version.
+Milady is currently in alpha (`v2.0.0-alpha.116`). APIs and configuration may change between releases. Check the [GitHub releases](https://github.com/milady-ai/milady/releases) for the latest version.
 </Info>

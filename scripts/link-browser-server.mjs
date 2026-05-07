@@ -1,11 +1,14 @@
 #!/usr/bin/env node
+import { execSync } from "node:child_process";
 /**
  * Post-install setup for @elizaos/plugin-browser:
  *
- * 1. Symlinks the installed package's `dist/server` to the workspace's
+ * 1. Builds the stagehand-server if dist/index.js is missing but source exists.
+ *
+ * 2. Symlinks the installed package's `dist/server` to the workspace's
  *    stagehand-server source (the npm package doesn't ship the server).
  *
- * 2. Copies the workspace's patched process-manager.js over the npm
+ * 3. Copies the workspace's patched process-manager.js over the npm
  *    package's version (adds probe/reuse, port management, removes Docker
  *    env defaults).
  *
@@ -15,229 +18,133 @@
 import {
   copyFileSync,
   existsSync,
-  readFileSync,
   readlinkSync,
   symlinkSync,
   unlinkSync,
-  writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const miladyRoot = resolve(__dirname, "..");
-// plugins are inside milady, not one level up
-const workspaceRoot = miladyRoot;
+const repoRoot = resolve(__dirname, "..");
 
 // ── Resolve plugin-browser package ───────────────────────────────────────────
 
-let pluginRoot = null;
+let pluginRoot;
 try {
-  const req = createRequire(join(miladyRoot, "package.json"));
+  const req = createRequire(join(repoRoot, "package.json"));
   const pkgJson = req.resolve("@elizaos/plugin-browser/package.json");
   pluginRoot = dirname(pkgJson);
 } catch {
   console.log(
     "[link-browser-server] @elizaos/plugin-browser not installed — skipping",
   );
+  process.exit(0);
 }
 
-// ── 1. Symlink stagehand-server ──────────────────────────────────────────────
+// ── 1. Build stagehand-server if needed ─────────────────────────────────────
 
 const stagehandDir = join(
-  workspaceRoot,
+  repoRoot,
   "plugins",
   "plugin-browser",
   "stagehand-server",
 );
 const stagehandIndex = join(stagehandDir, "dist", "index.js");
+const stagehandSrc = join(stagehandDir, "src", "index.ts");
 
-if (pluginRoot) {
-  if (existsSync(stagehandIndex)) {
-    const serverLink = join(pluginRoot, "dist", "server");
-
-    let needsLink = true;
-    if (existsSync(serverLink)) {
-      try {
-        const target = readlinkSync(serverLink);
-        if (target === stagehandDir) {
-          console.log("[link-browser-server] Symlink already up to date");
-          needsLink = false;
-        } else {
-          // Stale symlink — remove and recreate
-          unlinkSync(serverLink);
-        }
-      } catch {
-        // Not a symlink (real directory) — leave it alone
-        console.log(
-          "[link-browser-server] dist/server already exists as a directory — skipping symlink",
-        );
-        needsLink = false;
-      }
-    }
-
-    if (needsLink) {
-      try {
-        symlinkSync(stagehandDir, serverLink, "dir");
-        console.log(
-          `[link-browser-server] Linked: ${serverLink} -> ${stagehandDir}`,
-        );
-      } catch (err) {
-        console.error(`[link-browser-server] Failed to create symlink: ${err}`);
-      }
-    }
-  } else {
-    console.log(
-      `[link-browser-server] Stagehand server not found at ${stagehandDir} — skipping symlink`,
-    );
-  }
-
-  // ── 2. Copy patched process-manager.js ─────────────────────────────────────
-  // The workspace has a fixed process-manager that adds port probing/reuse,
-  // removes Docker env defaults, and handles EADDRINUSE properly.
-
-  const patchedPm = join(
-    workspaceRoot,
-    "plugins",
-    "plugin-browser",
-    "typescript",
-    "src",
-    "services",
-    "process-manager.patched.js",
-  );
-  const targetPm = join(pluginRoot, "dist", "services", "process-manager.js");
-
-  if (existsSync(patchedPm) && existsSync(targetPm)) {
-    try {
-      copyFileSync(patchedPm, targetPm);
-      console.log("[link-browser-server] Copied patched process-manager.js");
-    } catch (err) {
-      console.error(
-        `[link-browser-server] Failed to copy process-manager.js: ${err}`,
-      );
-    }
-  } else {
-    console.log(
-      "[link-browser-server] No patched process-manager.js found — skipping",
-    );
-  }
-}
-
-// ── 3. Patch known @elizaos/plugin-github spec-name mismatches ──────────────
-// Some published plugin-github builds reference legacy action/provider IDs
-// (e.g. CREATE_BRANCH) while shipping generated specs with new IDs
-// (e.g. CREATE_GITHUB_BRANCH). That crashes plugin load at import time.
-//
-// We apply a deterministic rewrite so runtime can load the plugin consistently.
-
-const githubPluginDist = join(
-  miladyRoot,
-  "node_modules",
-  "@elizaos",
-  "plugin-github",
-  "dist",
-  "index.js",
-);
-
-const githubCompatRewrites = [
-  [
-    'requireActionSpec("CREATE_BRANCH")',
-    'requireActionSpec("CREATE_GITHUB_BRANCH")',
-  ],
-  [
-    'requireActionSpec("CREATE_COMMENT")',
-    'requireActionSpec("CREATE_GITHUB_COMMENT")',
-  ],
-  [
-    'requireActionSpec("CREATE_ISSUE")',
-    'requireActionSpec("CREATE_GITHUB_ISSUE")',
-  ],
-  [
-    'requireActionSpec("CREATE_PULL_REQUEST")',
-    'requireActionSpec("CREATE_GITHUB_PULL_REQUEST")',
-  ],
-  [
-    'requireActionSpec("MERGE_PULL_REQUEST")',
-    'requireActionSpec("MERGE_GITHUB_PULL_REQUEST")',
-  ],
-  ['requireActionSpec("PUSH_CODE")', 'requireActionSpec("PUSH_GITHUB_CODE")'],
-  [
-    'requireActionSpec("REVIEW_PULL_REQUEST")',
-    'requireActionSpec("REVIEW_GITHUB_PULL_REQUEST")',
-  ],
-  [
-    'requireProviderSpec("issueContext")',
-    'requireProviderSpec("GITHUB_ISSUE_CONTEXT")',
-  ],
-  [
-    'requireProviderSpec("repositoryState")',
-    'requireProviderSpec("GITHUB_REPOSITORY_STATE")',
-  ],
-];
-
-const githubStaticServiceStartNeedle = `  getClient() {
-    if (!this.octokit) {
-      throw new Error("GitHub service not initialized");
-    }
-    return this.octokit;
-  }
-  async start(runtime) {`;
-
-const githubStaticServiceStartPatch = `  getClient() {
-    if (!this.octokit) {
-      throw new Error("GitHub service not initialized");
-    }
-    return this.octokit;
-  }
-  static async start(runtime) {
-    const service = new GitHubService(runtime);
-    await service.start(runtime);
-    return service;
-  }
-  async start(runtime) {`;
-
-if (!existsSync(githubPluginDist)) {
+if (!existsSync(stagehandIndex) && existsSync(stagehandSrc)) {
   console.log(
-    "[link-browser-server] @elizaos/plugin-github dist not found — skipping compat patch",
+    "[link-browser-server] Stagehand server not built — building now...",
   );
-  process.exit(0);
+  try {
+    // Install deps if node_modules is missing, then compile TypeScript
+    if (!existsSync(join(stagehandDir, "node_modules"))) {
+      execSync("pnpm install --ignore-scripts", {
+        cwd: stagehandDir,
+        stdio: "inherit",
+      });
+    }
+    // Resolve tsc: prefer local node_modules/.bin, then pnpm dlx, then npx
+    const localTsc = join(stagehandDir, "node_modules", ".bin", "tsc");
+    const tscCmd = existsSync(localTsc) ? localTsc : "pnpm exec tsc";
+    execSync(tscCmd, { cwd: stagehandDir, stdio: "inherit" });
+    console.log("[link-browser-server] Stagehand server built successfully");
+  } catch (err) {
+    console.error(
+      `[link-browser-server] Failed to build stagehand-server: ${err.message ?? err}`,
+    );
+  }
 }
 
-try {
-  const original = readFileSync(githubPluginDist, "utf8");
-  let patched = original;
-  let appliedCount = 0;
+// ── 2. Symlink stagehand-server ──────────────────────────────────────────────
 
-  for (const [from, to] of githubCompatRewrites) {
-    if (!patched.includes(from)) continue;
-    patched = patched.split(from).join(to);
-    appliedCount += 1;
+if (existsSync(stagehandIndex)) {
+  const serverLink = join(pluginRoot, "dist", "server");
+
+  let needsLink = true;
+  if (existsSync(serverLink)) {
+    try {
+      const target = readlinkSync(serverLink);
+      if (target === stagehandDir) {
+        console.log("[link-browser-server] Symlink already up to date");
+        needsLink = false;
+      } else {
+        // Stale symlink — remove and recreate
+        unlinkSync(serverLink);
+      }
+    } catch {
+      // Not a symlink (real directory) — leave it alone
+      console.log(
+        "[link-browser-server] dist/server already exists as a directory — skipping symlink",
+      );
+      needsLink = false;
+    }
   }
 
-  if (
-    !patched.includes("static async start(runtime)") &&
-    patched.includes(githubStaticServiceStartNeedle)
-  ) {
-    patched = patched.replace(
-      githubStaticServiceStartNeedle,
-      githubStaticServiceStartPatch,
-    );
-    appliedCount += 1;
+  if (needsLink) {
+    try {
+      symlinkSync(stagehandDir, serverLink, "dir");
+      console.log(
+        `[link-browser-server] Linked: ${serverLink} -> ${stagehandDir}`,
+      );
+    } catch (err) {
+      console.error(`[link-browser-server] Failed to create symlink: ${err}`);
+    }
   }
+} else {
+  console.log(
+    `[link-browser-server] Stagehand server not found at ${stagehandDir} — skipping symlink`,
+  );
+}
 
-  if (appliedCount === 0) {
-    console.log(
-      "[link-browser-server] plugin-github compat patch already applied (or not needed)",
-    );
-  } else {
-    writeFileSync(githubPluginDist, patched, "utf8");
-    console.log(
-      `[link-browser-server] Patched plugin-github compatibility rewrites: ${appliedCount}`,
+// ── 3. Copy patched process-manager.js ───────────────────────────────────────
+// The workspace has a fixed process-manager that adds port probing/reuse,
+// removes Docker env defaults, and handles EADDRINUSE properly.
+
+const patchedPm = join(
+  repoRoot,
+  "plugins",
+  "plugin-browser",
+  "typescript",
+  "src",
+  "services",
+  "process-manager.patched.js",
+);
+const targetPm = join(pluginRoot, "dist", "services", "process-manager.js");
+
+if (existsSync(patchedPm) && existsSync(targetPm)) {
+  try {
+    copyFileSync(patchedPm, targetPm);
+    console.log("[link-browser-server] Copied patched process-manager.js");
+  } catch (err) {
+    console.error(
+      `[link-browser-server] Failed to copy process-manager.js: ${err}`,
     );
   }
-} catch (err) {
-  console.error(
-    `[link-browser-server] Failed plugin-github compat patch: ${err}`,
+} else {
+  console.log(
+    "[link-browser-server] No patched process-manager.js found — skipping",
   );
 }

@@ -737,12 +737,12 @@ describe("my-plugin integration", () => {
 
 2. **Build your plugin:**
    ```bash
-   npm run build
+   bun run build
    ```
 
 3. **Publish:**
    ```bash
-   npm publish --access public
+   bun publish --access public
    ```
 
 ### Local Development
@@ -920,10 +920,6 @@ const ModelType = {
   TEXT_SMALL: "TEXT_SMALL",       // Fast, cheap, simple tasks
   TEXT_LARGE: "TEXT_LARGE",       // Complex reasoning
   TEXT_COMPLETION: "TEXT_COMPLETION",
-
-  // Reasoning models
-  TEXT_REASONING_SMALL: "REASONING_SMALL",
-  TEXT_REASONING_LARGE: "REASONING_LARGE",
 
   // Embeddings
   TEXT_EMBEDDING: "TEXT_EMBEDDING",

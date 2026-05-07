@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { client } from "../api/client";
 
-export type WhatsAppPairingStatus =
-  | "idle"
-  | "initializing"
-  | "waiting_for_qr"
-  | "connected"
-  | "disconnected"
-  | "timeout"
-  | "error";
+export type { WhatsAppPairingStatus } from "@miladyai/agent/services/whatsapp-pairing";
+
+import type { WhatsAppPairingStatus } from "@miladyai/agent/services/whatsapp-pairing";
 
 interface WhatsAppPairingState {
   status: WhatsAppPairingStatus;
@@ -25,7 +20,6 @@ export function useWhatsAppPairing(accountId = "default") {
     error: null,
   });
 
-  // Fetch initial status on mount
   useEffect(() => {
     client
       .getWhatsAppStatus(accountId)
@@ -38,11 +32,10 @@ export function useWhatsAppPairing(accountId = "default") {
         }
       })
       .catch(() => {
-        // Non-fatal — just means we can't check initial status
+        // Non-fatal — just means we can't check initial status.
       });
   }, [accountId]);
 
-  // Listen for WebSocket events
   useEffect(() => {
     const unbindQr = client.onWsEvent(
       "whatsapp-qr",
@@ -65,7 +58,6 @@ export function useWhatsAppPairing(accountId = "default") {
           status: data.status as WhatsAppPairingStatus,
           phoneNumber: (data.phoneNumber as string) ?? prev.phoneNumber,
           error: (data.error as string) ?? null,
-          // Clear QR when connected
           qrDataUrl: data.status === "connected" ? null : prev.qrDataUrl,
         }));
       },

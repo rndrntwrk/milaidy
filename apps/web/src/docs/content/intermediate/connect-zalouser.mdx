@@ -1,0 +1,69 @@
+# Connect to Zalo (personal account)
+
+<Callout kind="warning">
+The Zalo User connector uses an <strong>unofficial API</strong> — it logs in as a personal Zalo account rather than using an Official Account. This violates Zalo's terms of service and can get your account banned. Use a dedicated account, not your main one. If your use case is business-facing, use <a href="/docs/intermediate/connect-zalo">the official Zalo OA connector</a> instead.
+</Callout>
+
+**What you'll learn:** export your Zalo session from a real Zalo client, point Milady at the session files, and connect.
+
+## What you need before you start
+
+- **A dedicated Zalo account** — create a fresh one.
+- **Either an iPhone/Android with official Zalo installed**, or a Zalo web session running in a browser where you can read cookies.
+- **Milady running** with a working provider.
+
+## Step 1 — Export session data
+
+The connector reads the same session information the official Zalo client uses — cookies, device IMEI, user agent. You need to grab these from a live Zalo session and save them to a file Milady can read.
+
+Exact extraction depends on your platform. The general shape:
+
+- **Zalo on desktop browser:** open devtools → Application → Cookies → `chat.zalo.me` → copy all cookies to a JSON file.
+- **Zalo mobile app:** requires a rooted / jailbroken device and is much harder. Most users use the browser path.
+
+Save the cookies as JSON at a path you'll reference, e.g. `~/.milady/zalouser-cookies.json`.
+
+## Step 2 — Get your IMEI and User Agent
+
+- **IMEI:** the official mobile Zalo app uses a device IMEI to identify sessions. You can extract yours from the Zalo desktop app's local storage — or, if unavailable, generate a plausible one and hope for the best (this is unreliable).
+- **User Agent:** the browser user agent string from the device where you captured the cookies. Copy from devtools → Network → any request → Request Headers.
+
+## Step 3 — Hand everything to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Zalo User → Configure</strong>.</li>
+  <li>Set <strong>Cookie path</strong> to the absolute path of the JSON file from Step 1.</li>
+  <li>Paste the <strong>IMEI</strong>.</li>
+  <li>Paste the <strong>User agent</strong>.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test
+
+Send a Zalo message from another account to the account you used for the cookies. If everything is set up right, Milady will see it and reply.
+
+## Multi-account profiles
+
+If you want to run multiple personal Zalo accounts simultaneously, use the **Profiles** field to pass a JSON array of separate session configs. Each profile needs its own cookie path, IMEI, and user agent.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **Allowed threads** | Restrict the bot to replying only in specific conversation threads. Empty = all threads. |
+| **DM policy / Group policy** | Standard `allow-all` / `allow-from` pattern. |
+
+## Troubleshooting
+
+**"Session invalid" on startup.**
+Cookies expired. Log in to Zalo on the browser again, re-export, update the file.
+
+**IMEI mismatch error.**
+The IMEI doesn't match the session — Zalo ties cookies to specific device IDs. You need to re-capture both together from the same live session.
+
+**Account gets flagged or disconnected mid-session.**
+This is the normal failure mode for unofficial-API Zalo access. Your session will eventually end, sometimes within hours, sometimes within weeks. Re-export and continue — or switch to the [official OA connector](/docs/intermediate/connect-zalo).
+
+## What's next
+
+- [Connect to Zalo (Official Account)](/docs/intermediate/connect-zalo) — the official, ToS-compliant path. Strongly preferred if you have the option.
