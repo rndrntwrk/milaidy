@@ -935,6 +935,7 @@ jobs:
         run: |
           out_dir="$RUNNER_TEMP/electrobun-entry-probe"
           rm -rf "$out_dir"
+          node "$GITHUB_WORKSPACE/scripts/copy-runtime-node-modules.ts" --link-only
           bun build src/index.ts --target=bun --outdir "$out_dir"
 
       - name: Build patched Electrobun CLI

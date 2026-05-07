@@ -235,6 +235,13 @@ test("eliza CI patches align release source helpers", () => {
     patchScript,
     /type StructuredResponseFormat = "JSON";[\s\S]*type StructuredResponseFormat = "JSON" \| "TOON";/,
   );
+  assert.match(patchScript, /format: "JSON";[\s\S]*format: "JSON" \| "TOON";/);
+  assert.match(patchScript, /shouldHoistRuntimePackage/);
+  assert.match(patchScript, /name\.startsWith\("@solana\/"\)/);
+  assert.match(
+    patchScript,
+    /"@elizaos\/core", "commander"[\s\S]*runtime copy tar-safe Solana hoists/,
+  );
   assert.match(patchScript, /nestedElizaPackageJson/);
   assert.match(patchScript, /collectWorkspaceMaps\(\s*elizaRoot/);
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);
@@ -329,6 +336,10 @@ test("Electrobun release uses Milady whisper cache path", () => {
 
 test("Electrobun release applies elizaOS source overlay before manual build setup", () => {
   const electrobun = workflow("release-electrobun.yml");
+  const copyRuntimeWrapper = fs.readFileSync(
+    "scripts/copy-runtime-node-modules.ts",
+    "utf8",
+  );
 
   assert.match(
     electrobun,
@@ -337,6 +348,15 @@ test("Electrobun release applies elizaOS source overlay before manual build setu
   assert.match(
     electrobun,
     /node eliza\/packages\/app-core\/scripts\/build-patched-electrobun-cli\.mjs "\$\{\{ steps\.resolve-electrobun\.outputs\.package-dir \}\}" "\$\{\{ matrix\.platform\.artifact-name \}\}"/,
+  );
+  assert.match(
+    electrobun,
+    /name: Probe Electrobun bun entry build[\s\S]*?node "\$GITHUB_WORKSPACE\/scripts\/copy-runtime-node-modules\.ts" --link-only[\s\S]*?bun build src\/index\.ts --target=bun/,
+  );
+  assert.match(copyRuntimeWrapper, /elizaElectrobunNodeModules/);
+  assert.match(
+    copyRuntimeWrapper,
+    /elizaAppCoreDir,\s*"platforms",\s*"electrobun"/,
   );
 });
 
@@ -367,7 +387,17 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   assert.match(hydrateScript, /@playwright\/test@1\.59\.1/);
   assert.match(hydrateScript, /@elizaos\/plugin-elizacloud/);
   assert.match(hydrateScript, /@elizaos\/cloud-sdk/);
+  assert.match(hydrateScript, /@elizaos\/core/);
+  assert.match(hydrateScript, /@elizaos\/plugin-sql/);
+  assert.match(hydrateScript, /plugins", "plugin-sql/);
+  assert.match(hydrateScript, /sqlPluginTypescriptPath = path\.join/);
+  assert.match(hydrateScript, /sqlPluginPath,\s*"typescript"/);
+  assert.match(hydrateScript, /copy: true/);
+  assert.match(hydrateScript, /assertPathExists/);
+  assert.match(hydrateScript, /dist",\s*"index\.node\.js"/);
+  assert.match(hydrateScript, /dist",\s*"node",\s*"index\.node\.js"/);
   assert.match(hydrateScript, /linkElizaPackage/);
+  assert.match(hydrateScript, /linkScopedPackage/);
   assert.match(hydrateScript, /symlinkSync/);
   assert.match(hydrateScript, /junction/);
   assert.doesNotMatch(
@@ -552,6 +582,33 @@ test("GitHub workflows use the verified Bun runtime", () => {
     );
     assert.doesNotMatch(workflowText, /BUN_VERSION:\s*"1\.3\.1[01]"/);
     assert.doesNotMatch(workflowText, /bun-version:\s*"?1\.3\.1[01]"?/);
+  }
+});
+
+test("GitHub workflows and composite actions use current Node action majors", () => {
+  const actionFiles = [
+    ...fs
+      .readdirSync(".github/workflows")
+      .filter((fileName) => fileName.endsWith(".yml"))
+      .map((fileName) => path.join(".github/workflows", fileName)),
+    ...fs
+      .readdirSync(".github/actions", { recursive: true })
+      .filter((fileName) => String(fileName).endsWith(".yml"))
+      .map((fileName) => path.join(".github/actions", String(fileName))),
+  ];
+
+  for (const actionFile of actionFiles) {
+    const workflowText = fs.readFileSync(actionFile, "utf8");
+    assert.doesNotMatch(workflowText, /actions\/checkout@v[1-5]\b/);
+    assert.doesNotMatch(workflowText, /actions\/setup-node@v[1-5]\b/);
+    assert.doesNotMatch(workflowText, /actions\/github-script@v[1-8]\b/);
+    assert.doesNotMatch(workflowText, /actions\/cache@v[1-4]\b/);
+    assert.doesNotMatch(workflowText, /actions\/setup-python@v[1-5]\b/);
+    assert.doesNotMatch(workflowText, /docker\/setup-buildx-action@v[1-3]\b/);
+    assert.doesNotMatch(workflowText, /docker\/login-action@v[1-3]\b/);
+    assert.doesNotMatch(workflowText, /docker\/metadata-action@v[1-5]\b/);
+    assert.doesNotMatch(workflowText, /docker\/build-push-action@v[1-6]\b/);
+    assert.doesNotMatch(workflowText, /bufbuild\/buf-setup-action@/);
   }
 });
 

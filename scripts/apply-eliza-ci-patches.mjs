@@ -189,6 +189,32 @@ function patchCoreRuntimeTypes(raw) {
   );
 }
 
+function patchCoreStateTypes(raw) {
+  return raw.replace('format: "JSON";', 'format: "JSON" | "TOON";');
+}
+
+function patchRuntimeCopyTarSafeHoists(raw) {
+  let next = raw.replace(
+    'const ALWAYS_HOISTED_PACKAGES = new Set(["@elizaos/core"]);',
+    'const ALWAYS_HOISTED_PACKAGES = new Set(["@elizaos/core", "commander"]);',
+  );
+  if (!next.includes("function shouldHoistRuntimePackage")) {
+    next = next.replace(
+      "\ntype CopyTargetOptions = {",
+      `
+function shouldHoistRuntimePackage(name: string): boolean {
+  return ALWAYS_HOISTED_PACKAGES.has(name) || name.startsWith("@solana/");
+}
+
+type CopyTargetOptions = {`,
+    );
+  }
+  return next.replace(
+    "if (ALWAYS_HOISTED_PACKAGES.has(name) && topLevelVersions.has(name)) {",
+    "if (shouldHoistRuntimePackage(name) && topLevelVersions.has(name)) {",
+  );
+}
+
 function patchWorkspaceDistRelinkScript(raw) {
   if (raw.includes("nestedElizaPackageJson")) return raw;
   return raw.replace(
@@ -281,6 +307,24 @@ function applyReleaseSourcePatches() {
     path.join(elizaDir, "packages", "core", "src", "runtime.ts"),
     patchCoreRuntimeTypes,
     "core structured response format type",
+  );
+
+  replaceFileText(
+    path.join(elizaDir, "packages", "core", "src", "types", "state.ts"),
+    patchCoreStateTypes,
+    "core structured failure format type",
+  );
+
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "app-core",
+      "scripts",
+      "copy-runtime-node-modules.ts",
+    ),
+    patchRuntimeCopyTarSafeHoists,
+    "runtime copy tar-safe Solana hoists",
   );
 
   replaceFileText(
