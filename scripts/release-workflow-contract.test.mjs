@@ -173,6 +173,7 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /COPY cloud-sdk \.\/eliza\/cloud\/packages\/sdk/);
   assert.match(patchScript, /build-patched-electrobun-cli\.mjs/);
   assert.match(patchScript, /require\.resolve\("rcedit\/package\.json"\)/);
+  assert.match(patchScript, /replace\(\/\\r\\n\/g, "\\n"\)/);
   assert.match(
     pruneScript,
     /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
