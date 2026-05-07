@@ -414,6 +414,8 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   assert.match(hydrateScript, /copy: true/);
   assert.match(hydrateScript, /packageEntryCandidates/);
   assert.match(hydrateScript, /assertPackageRuntimeEntry/);
+  assert.match(hydrateScript, /selectRuntimePackageRoot/);
+  assert.match(hydrateScript, /using installed \$\{scopedPackageName\}/);
   assert.match(hydrateScript, /dist\/index\.node\.js/);
   assert.match(hydrateScript, /dist\/node\/index\.node\.js/);
   assert.match(hydrateScript, /linkElizaPackage/);
