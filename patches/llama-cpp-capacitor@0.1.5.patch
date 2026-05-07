@@ -59,7 +59,7 @@ diff --git a/android/src/main/jni.cpp b/android/src/main/jni.cpp
 index 0000000..0000001 100644
 --- a/android/src/main/jni.cpp
 +++ b/android/src/main/jni.cpp
-@@ -1481,19 +1481,23 @@ Java_ai_annadata_plugin_capacitor_LlamaCpp_embeddingNative(
+@@ -1481,19 +1481,22 @@ Java_ai_annadata_plugin_capacitor_LlamaCpp_embeddingNative(
          if (params != nullptr) {
              jclass jsObjectClass = env->GetObjectClass(params);
              if (jsObjectClass != nullptr && !env->ExceptionCheck()) {
