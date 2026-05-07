@@ -404,6 +404,7 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
     /node scripts\/hydrate-windows-playwright-deps\.mjs && cd apps\/app &&/,
   );
   assert.match(hydrateScript, /@playwright\/test@1\.59\.1/);
+  assert.match(hydrateScript, /@elizaos\/plugin-elizacloud@alpha/);
   assert.match(hydrateScript, /@elizaos\/plugin-elizacloud/);
   assert.match(hydrateScript, /@elizaos\/cloud-sdk/);
   assert.match(hydrateScript, /@elizaos\/core/);

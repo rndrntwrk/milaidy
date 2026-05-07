@@ -234,7 +234,14 @@ function assertCorePackageEntry(nodeModulesRoot) {
 }
 
 run(
-  ["add", "--no-save", "--dev", "--ignore-scripts", "@playwright/test@1.59.1"],
+  [
+    "add",
+    "--no-save",
+    "--dev",
+    "--ignore-scripts",
+    "@playwright/test@1.59.1",
+    "@elizaos/plugin-elizacloud@alpha",
+  ],
   {
     cwd: path.join(repoRoot, "apps/app"),
   },
