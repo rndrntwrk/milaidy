@@ -235,6 +235,13 @@ test("eliza CI patches align release source helpers", () => {
     patchScript,
     /type StructuredResponseFormat = "JSON";[\s\S]*type StructuredResponseFormat = "JSON" \| "TOON";/,
   );
+  assert.match(patchScript, /format: "JSON";[\s\S]*format: "JSON" \| "TOON";/);
+  assert.match(patchScript, /shouldHoistRuntimePackage/);
+  assert.match(patchScript, /name\.startsWith\("@solana\/"\)/);
+  assert.match(
+    patchScript,
+    /"@elizaos\/core", "commander"[\s\S]*runtime copy tar-safe Solana hoists/,
+  );
   assert.match(patchScript, /nestedElizaPackageJson/);
   assert.match(patchScript, /collectWorkspaceMaps\(\s*elizaRoot/);
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);
