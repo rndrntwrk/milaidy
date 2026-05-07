@@ -242,6 +242,10 @@ test("eliza CI patches align release source helpers", () => {
     patchScript,
     /"@elizaos\/core", "commander"[\s\S]*runtime copy tar-safe Solana hoists/,
   );
+  assert.match(patchScript, /alpha\|beta\|rc\|nightly/);
+  assert.match(patchScript, /browser bridge canary release versions/);
+  assert.match(patchScript, /Agent-Browser-Bridge/);
+  assert.match(patchScript, /browser bridge Safari bundle identifiers/);
   assert.match(patchScript, /nestedElizaPackageJson/);
   assert.match(patchScript, /collectWorkspaceMaps\(\s*elizaRoot/);
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);

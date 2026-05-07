@@ -215,6 +215,42 @@ type CopyTargetOptions = {`,
   );
 }
 
+function patchBrowserBridgeReleaseVersion(raw) {
+  return raw
+    .replace(
+      "(?:-(beta|rc|nightly)\\.([0-9A-Za-z.-]+))?",
+      "(?:-(alpha|beta|rc|nightly)\\.([0-9A-Za-z.-]+))?",
+    )
+    .replace(
+      "Expected 1.2.3 or 1.2.3-beta.0 style semver.",
+      "Expected 1.2.3 or 1.2.3-alpha.0 style semver.",
+    );
+}
+
+function patchBrowserBridgeSafariPackage(raw) {
+  const bundleIdentifierMarker =
+    "PRODUCT_BUNDLE_IDENTIFIER = $" + "{bundleIdentifier}";
+  if (raw.includes(bundleIdentifierMarker)) {
+    return raw;
+  }
+  const currentProjectVersionPatch = `${[
+    "  source = source.replace(",
+    "    /CURRENT_PROJECT_VERSION = [^;]+;/g,",
+    "    `CURRENT_PROJECT_VERSION = $" + "{safariVersions.buildVersion};`,",
+    "  );",
+  ].join("\n")}\n`;
+  const safariBundlePatch = `${[
+    "  source = source.replace(",
+    '    /PRODUCT_BUNDLE_IDENTIFIER = "ai\\.elizaos\\.browserbridge\\.Agent-Browser-Bridge";/g,',
+    "    `PRODUCT_BUNDLE_IDENTIFIER = $" + "{bundleIdentifier};`,",
+    "  );",
+  ].join("\n")}\n`;
+  return raw.replace(
+    currentProjectVersionPatch,
+    currentProjectVersionPatch + safariBundlePatch,
+  );
+}
+
 function patchWorkspaceDistRelinkScript(raw) {
   if (raw.includes("nestedElizaPackageJson")) return raw;
   return raw.replace(
@@ -325,6 +361,30 @@ function applyReleaseSourcePatches() {
     ),
     patchRuntimeCopyTarSafeHoists,
     "runtime copy tar-safe Solana hoists",
+  );
+
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "browser-bridge",
+      "scripts",
+      "release-version.mjs",
+    ),
+    patchBrowserBridgeReleaseVersion,
+    "browser bridge canary release versions",
+  );
+
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "browser-bridge",
+      "scripts",
+      "package-safari.mjs",
+    ),
+    patchBrowserBridgeSafariPackage,
+    "browser bridge Safari bundle identifiers",
   );
 
   replaceFileText(
