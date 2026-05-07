@@ -326,7 +326,11 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   );
   assert.match(
     rootPackage.scripts["test:desktop:playwright:windows"],
-    /bunx --package @playwright\/test@1\.59\.1 playwright test/,
+    /bun add --no-save --dev --ignore-scripts @playwright\/test@1\.59\.1 && bunx playwright test/,
+  );
+  assert.match(
+    electrobun,
+    /name: Run Windows packaged renderer bootstrap check[\s\S]*?PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"[\s\S]*?run: bun run test:desktop:playwright:windows/,
   );
 });
 

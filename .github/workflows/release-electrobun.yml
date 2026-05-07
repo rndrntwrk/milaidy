@@ -1291,6 +1291,8 @@ jobs:
 
       - name: Run Windows packaged renderer bootstrap check
         if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
         run: bun run test:desktop:playwright:windows
 
       - name: Upload Windows Playwright UI diagnostics
