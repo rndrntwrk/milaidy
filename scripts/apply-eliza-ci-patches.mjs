@@ -322,6 +322,44 @@ const candidateBases = [root, ...workspaceDirs];
   );
 }
 
+function patchCorePluginRuntimeSurface(raw) {
+  return raw
+    .replace(
+      '  "@elizaos/app-companion", // VRM companion emotes; actions gated until app session is active\n',
+      "",
+    )
+    .replace(
+      '  "@elizaos/app-lifeops", // LifeOps: personal ops — tasks, goals, calendar, inbox, website blocking\n',
+      "",
+    )
+    .replace(
+      '  "@elizaos/plugin-video", // Video download / transcription (managed yt-dlp + ffmpeg with auto-update on extractor failure)\n',
+      "",
+    );
+}
+
+function patchN8nAutoEnableDefault(raw) {
+  return raw.replace(
+    `    const localN8nEnabled =
+      params.isNativePlatform === true
+        ? false
+        : n8nConfig?.localEnabled !== false;
+`,
+    `    const localN8nEnabled =
+      params.isNativePlatform === true
+        ? false
+        : n8nConfig?.localEnabled === true;
+`,
+  );
+}
+
+function patchN8nCharacterKnowledge(raw) {
+  return raw.replace(
+    "  const n8nLocalEnabled = config.n8n?.localEnabled !== false;",
+    "  const n8nLocalEnabled = config.n8n?.localEnabled === true;",
+  );
+}
+
 function applyReleaseSourcePatches() {
   replaceFileText(
     path.join(
@@ -437,6 +475,45 @@ function applyReleaseSourcePatches() {
     ),
     patchWorkspaceDistRelinkScript,
     "workspace dist relink nested eliza discovery",
+  );
+
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "agent",
+      "src",
+      "runtime",
+      "core-plugins.ts",
+    ),
+    patchCorePluginRuntimeSurface,
+    "agent core plugin runtime surface",
+  );
+
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "agent",
+      "src",
+      "config",
+      "plugin-auto-enable.ts",
+    ),
+    patchN8nAutoEnableDefault,
+    "agent n8n explicit local auto-enable",
+  );
+
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "agent",
+      "src",
+      "runtime",
+      "build-character-config.ts",
+    ),
+    patchN8nCharacterKnowledge,
+    "agent n8n explicit knowledge gate",
   );
 }
 

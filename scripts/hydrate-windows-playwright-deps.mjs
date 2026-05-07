@@ -36,12 +36,6 @@ function copyPackage(sourcePath, destinationPath) {
   });
 }
 
-function assertPathExists(filePath) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Expected hydrated Windows dependency path: ${filePath}`);
-  }
-}
-
 function linkScopedPackage(
   nodeModulesRoot,
   scopedPackageName,
@@ -101,27 +95,73 @@ function linkElizaPackage(scopedPackageName, sourcePath, options = {}) {
   );
 }
 
-function coreEntryPath(nodeModulesRoot) {
-  return path.join(
-    nodeModulesRoot,
-    "@elizaos",
-    "core",
-    "dist",
-    "index.node.js",
+function addEntryCandidate(candidates, value) {
+  if (typeof value !== "string" || !value.trim()) return;
+  candidates.push(value.replace(/^\.\//, ""));
+}
+
+function packageEntryCandidates(packageRoot, fallbackEntries) {
+  const manifestPath = path.join(packageRoot, "package.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const candidates = [];
+
+  addEntryCandidate(candidates, manifest.main);
+  addEntryCandidate(candidates, manifest.module);
+
+  const rootExport = manifest.exports?.["."] ?? manifest.exports;
+  if (typeof rootExport === "string") {
+    addEntryCandidate(candidates, rootExport);
+  } else if (rootExport && typeof rootExport === "object") {
+    addEntryCandidate(candidates, rootExport.node?.import);
+    addEntryCandidate(candidates, rootExport.node?.default);
+    addEntryCandidate(candidates, rootExport.bun?.import);
+    addEntryCandidate(candidates, rootExport.bun?.default);
+    addEntryCandidate(candidates, rootExport.import);
+    addEntryCandidate(candidates, rootExport.default);
+  }
+
+  for (const fallback of fallbackEntries) {
+    addEntryCandidate(candidates, fallback);
+  }
+
+  return [...new Set(candidates)];
+}
+
+function assertPackageRuntimeEntry(packageRoot, label, fallbackEntries) {
+  const candidates = packageEntryCandidates(packageRoot, fallbackEntries);
+  for (const candidate of candidates) {
+    const filePath = path.join(packageRoot, candidate);
+    if (fs.existsSync(filePath)) {
+      console.log(
+        `[hydrate-windows-playwright-deps] verified ${label} entry at ${relativePath(
+          filePath,
+        )}`,
+      );
+      return;
+    }
+  }
+
+  throw new Error(
+    `Expected hydrated Windows dependency entry for ${label}; checked ${candidates
+      .map((candidate) => path.join(packageRoot, candidate))
+      .join(", ")}`,
   );
 }
 
-function assertElizaPackageEntry(scopedPackageName, relativeEntryPath) {
+function assertElizaPackageEntry(scopedPackageName, fallbackEntries) {
   const [, packageName] = scopedPackageName.split("/");
-  assertPathExists(
-    path.join(
-      repoRoot,
-      "eliza",
-      "node_modules",
-      "@elizaos",
-      packageName,
-      ...relativeEntryPath,
-    ),
+  assertPackageRuntimeEntry(
+    path.join(repoRoot, "eliza", "node_modules", "@elizaos", packageName),
+    scopedPackageName,
+    fallbackEntries,
+  );
+}
+
+function assertCorePackageEntry(nodeModulesRoot) {
+  assertPackageRuntimeEntry(
+    path.join(nodeModulesRoot, "@elizaos", "core"),
+    "@elizaos/core",
+    ["dist/index.node.js", "dist/node/index.node.js"],
   );
 }
 
@@ -164,19 +204,14 @@ if (fs.existsSync(path.join(elizaRoot, "package.json"))) {
     corePath,
     { copy: true },
   );
-  assertElizaPackageEntry("@elizaos/core", ["dist", "index.node.js"]);
-  assertElizaPackageEntry("@elizaos/plugin-sql", [
-    "dist",
-    "node",
-    "index.node.js",
+  assertElizaPackageEntry("@elizaos/core", [
+    "dist/index.node.js",
+    "dist/node/index.node.js",
   ]);
+  assertElizaPackageEntry("@elizaos/plugin-sql", ["dist/node/index.node.js"]);
   assertElizaPackageEntry("@elizaos/plugin-elizacloud", [
-    "dist",
-    "node",
-    "index.node.js",
+    "dist/node/index.node.js",
   ]);
-  assertPathExists(coreEntryPath(path.join(sqlPluginPath, "node_modules")));
-  assertPathExists(
-    coreEntryPath(path.join(sqlPluginTypescriptPath, "node_modules")),
-  );
+  assertCorePackageEntry(path.join(sqlPluginPath, "node_modules"));
+  assertCorePackageEntry(path.join(sqlPluginTypescriptPath, "node_modules"));
 }

@@ -258,6 +258,11 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /app-core release browser bridge hard gate/);
   assert.match(patchScript, /nestedElizaPackageJson/);
   assert.match(patchScript, /collectWorkspaceMaps\(\s*elizaRoot/);
+  assert.match(patchScript, /patchCorePluginRuntimeSurface/);
+  assert.match(patchScript, /agent core plugin runtime surface/);
+  assert.match(patchScript, /patchN8nAutoEnableDefault/);
+  assert.match(patchScript, /n8nConfig\?\.localEnabled === true/);
+  assert.match(patchScript, /patchN8nCharacterKnowledge/);
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);
   assert.match(patchScript, /DEFAULT_AVATAR_ASSET_SLUGS=\\\(\[\^\)\]\*\\\)/);
   assert.match(patchScript, /DEFAULT_AVATAR_ASSET_SLUGS=\(eliza-1\)/);
@@ -407,9 +412,10 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   assert.match(hydrateScript, /sqlPluginTypescriptPath = path\.join/);
   assert.match(hydrateScript, /sqlPluginPath,\s*"typescript"/);
   assert.match(hydrateScript, /copy: true/);
-  assert.match(hydrateScript, /assertPathExists/);
-  assert.match(hydrateScript, /dist",\s*"index\.node\.js"/);
-  assert.match(hydrateScript, /dist",\s*"node",\s*"index\.node\.js"/);
+  assert.match(hydrateScript, /packageEntryCandidates/);
+  assert.match(hydrateScript, /assertPackageRuntimeEntry/);
+  assert.match(hydrateScript, /dist\/index\.node\.js/);
+  assert.match(hydrateScript, /dist\/node\/index\.node\.js/);
   assert.match(hydrateScript, /linkElizaPackage/);
   assert.match(hydrateScript, /linkScopedPackage/);
   assert.match(hydrateScript, /symlinkSync/);
