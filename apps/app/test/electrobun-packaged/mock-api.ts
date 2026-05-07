@@ -49,7 +49,8 @@ type PermissionId =
   | "screen-recording"
   | "microphone"
   | "camera"
-  | "shell";
+  | "shell"
+  | "website-blocking";
 type PermissionStateRecord = {
   id: PermissionId;
   status: PermissionStatus;
@@ -228,6 +229,12 @@ function createDefaultPermissionsState(): PermissionsStateRecord {
       status: "granted",
       lastChecked: now,
       canRequest: false,
+    },
+    "website-blocking": {
+      id: "website-blocking",
+      status: "not-determined",
+      lastChecked: now,
+      canRequest: true,
     },
   };
 }

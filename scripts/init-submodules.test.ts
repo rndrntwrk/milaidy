@@ -25,15 +25,20 @@ describe("parseTrackedSubmodules", () => {
 });
 
 describe("shouldSkipSubmoduleInit", () => {
-  it("skips plugin-openrouter until the upstream Windows-invalid paths are fixed", () => {
+  it("skips stale top-level split plugin gitlinks", () => {
     expect(
       shouldSkipSubmoduleInit("plugins/plugin-openrouter", {
         skipLocal: false,
       }),
     ).toBe(true);
+    expect(
+      shouldSkipSubmoduleInit("plugins/plugin-agent-orchestrator", {
+        skipLocal: false,
+      }),
+    ).toBe(true);
   });
 
-  it("skips optional upstream repos that are not required for runtime deploys", () => {
+  it("skips stale root upstream repos that are now handled by eliza monorepo source", () => {
     expect(shouldSkipSubmoduleInit("cloud", { skipLocal: false })).toBe(true);
     expect(
       shouldSkipSubmoduleInit("examples/clone-your-crush", {
@@ -48,6 +53,6 @@ describe("shouldSkipSubmoduleInit", () => {
       shouldSkipSubmoduleInit("plugins/plugin-agent-orchestrator", {
         skipLocal: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

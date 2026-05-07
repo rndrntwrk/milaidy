@@ -95,6 +95,15 @@ const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
 
+async function registerMiladyOsSystemApps(): Promise<void> {
+  if (!isMiladyOS()) return;
+  await Promise.all([
+    import("@elizaos/app-contacts/register"),
+    import("@elizaos/app-phone/register"),
+    import("@elizaos/app-wifi/register"),
+  ]);
+}
+
 function isDesktopPlatform(): boolean {
   return isElectrobunRuntime();
 }
@@ -265,6 +274,8 @@ async function initializeStatusBar(): Promise<void> {
 
 async function initializeKeyboard(): Promise<void> {
   if (isIOS) {
+    await Keyboard.setResizeMode({ mode: KeyboardResize.None });
+    await Keyboard.setScroll({ isDisabled: true });
     await Keyboard.setAccessoryBarVisible({ isVisible: true });
   }
 
@@ -565,6 +576,22 @@ async function runMain(): Promise<void> {
       "[Milady] Failed to apply managed cloud launch session:",
       err instanceof Error ? err.message : err,
     );
+  }
+
+  // MiladyOS only: pre-seed the on-device agent as the default runtime so
+  // the RuntimeGate "Choose your setup" picker is bypassed entirely on first
+  // launch. The same APK installed on a stock Android device falls through
+  // to the picker — those users actively choose Cloud / Remote / Local.
+  // Detection: `isMiladyOS` reads the `MiladyOS/<tag>` user-agent suffix
+  // that `MainActivity` appends when `ro.miladyos.product` is set by the
+  // AOSP product config. Settings ▸ Runtime exposes a deliberate
+  // `?runtime=picker` re-entry on MiladyOS for users who want to switch.
+  // No-op when the user already has a persisted runtime mode or active
+  // server, so a deliberate cloud/remote choice — including one applied by
+  // `applyLaunchConnectionFromUrl` above — is never clobbered.
+  if (isMiladyOS()) {
+    await registerMiladyOsSystemApps();
+    preSeedAndroidLocalRuntimeIfFresh();
   }
 
   if (isPopoutWindow()) {

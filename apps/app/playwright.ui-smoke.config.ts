@@ -8,8 +8,15 @@ const uiSmokeApiStub = path.join(
   repoRoot,
   "scripts/playwright-ui-smoke-api-stub.mjs",
 );
-const uiSmokeApiPort = Number(process.env.MILADY_UI_SMOKE_API_PORT || "31337");
-const uiSmokePort = Number(process.env.MILADY_UI_SMOKE_PORT || "2138");
+const uiSmokeApiPort = Number(
+  process.env.MILADY_UI_SMOKE_API_PORT ||
+    process.env.ELIZA_UI_SMOKE_API_PORT ||
+    "31337",
+);
+const uiSmokePort = Number(
+  process.env.MILADY_UI_SMOKE_PORT || process.env.ELIZA_UI_SMOKE_PORT || "2138",
+);
+const reuseExistingServer = process.env.MILADY_UI_SMOKE_REUSE_SERVER === "1";
 
 export default defineConfig({
   testDir: "./test/ui-smoke",
@@ -31,6 +38,11 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "mobile-chromium",
+      testMatch: /mobile-routes\.spec\.ts/,
+      use: { ...devices["Pixel 7"] },
     },
   ],
   webServer: [

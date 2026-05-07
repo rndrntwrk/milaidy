@@ -12,21 +12,23 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  getElizaGitBranch,
+  getElizaGitUrl,
+  isLocalElizaDisabled,
+  isLocalElizaForced,
+  LOCAL_UPSTREAM_FORCE_ENV_KEYS,
+  LOCAL_UPSTREAM_SKIP_ENV_KEYS,
+} from "./lib/eliza-package-mode.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 
-export const LOCAL_UPSTREAM_SKIP_ENVS = [
-  "MILADY_SKIP_LOCAL_UPSTREAMS",
-  "ELIZA_SKIP_LOCAL_UPSTREAMS",
-];
-export const LOCAL_UPSTREAM_FORCE_ENVS = [
-  "MILADY_FORCE_LOCAL_UPSTREAMS",
-  "ELIZA_FORCE_LOCAL_UPSTREAMS",
-];
-export const ELIZA_GIT_URL = "https://github.com/elizaos/eliza.git";
-export const ELIZA_BRANCH = "develop";
+export const LOCAL_UPSTREAM_SKIP_ENVS = LOCAL_UPSTREAM_SKIP_ENV_KEYS;
+export const LOCAL_UPSTREAM_FORCE_ENVS = LOCAL_UPSTREAM_FORCE_ENV_KEYS;
+export const ELIZA_GIT_URL = getElizaGitUrl();
+export const ELIZA_BRANCH = getElizaGitBranch();
 export const ELIZA_REQUIRED_FILES = ["package.json"];
 export const ELIZA_BUILD_STEPS = [
   {
@@ -34,7 +36,7 @@ export const ELIZA_BUILD_STEPS = [
     // Build the package once so src/types/generated exists before root typecheck/tests.
     check: path.join(
       "packages",
-      "typescript",
+      "core",
       "src",
       "types",
       "generated",
@@ -42,7 +44,7 @@ export const ELIZA_BUILD_STEPS = [
       "v1",
       "agent_pb.ts",
     ),
-    cwd: path.join("packages", "typescript"),
+    cwd: path.join("packages", "core"),
     args: ["run", "build"],
     label: "@elizaos/core",
   },
@@ -58,12 +60,37 @@ export const ELIZA_BUILD_STEPS = [
     args: ["run", "build"],
     label: "@elizaos/skills",
   },
+  {
+    // plugin-elizacloud imports types from @elizaos/cloud-sdk; fresh CI
+    // checkouts need the SDK declarations before plugin builds run.
+    check: path.join("cloud", "packages", "sdk", "dist", "index.d.ts"),
+    cwd: path.join("cloud", "packages", "sdk"),
+    args: ["run", "build"],
+    label: "@elizaos/cloud-sdk",
+  },
+  {
+    // plugin-streaming imports isCloudConnected from @elizaos/cloud-routing;
+    // without dist its tsup --dts pass fails with TS2307.
+    check: path.join("packages", "cloud-routing", "dist", "index.js"),
+    cwd: path.join("packages", "cloud-routing"),
+    args: ["run", "build"],
+    label: "@elizaos/cloud-routing",
+  },
 ];
 
 const PACKAGE_LINK_ROOTS = [
   ["node_modules"],
   ["apps", "app", "node_modules"],
-  ["apps", "home", "node_modules"],
+];
+const MILADY_SINGLETON_DEPENDENCY_LINKS = [
+  {
+    packageDir: path.join("eliza", "packages", "agent"),
+    dependencies: ["drizzle-orm"],
+  },
+  {
+    packageDir: path.join("eliza", "packages", "app-core"),
+    dependencies: ["drizzle-orm"],
+  },
 ];
 
 function toDisplayPath(targetPath) {
@@ -72,11 +99,15 @@ function toDisplayPath(targetPath) {
 
 function runCommand(command, args, { cwd, env = process.env, label } = {}) {
   const printable = label ?? `${command} ${args.join(" ")}`;
+  const childEnv = { ...env };
+  if (cwd && childEnv.npm_package_json) {
+    delete childEnv.npm_package_json;
+  }
 
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      env,
+      env: childEnv,
       stdio: "inherit",
     });
 
@@ -145,10 +176,8 @@ export function getElizaWorkspaceSkipReason(
   repoRoot = DEFAULT_REPO_ROOT,
   { env = process.env, pathExists = existsSync } = {},
 ) {
-  const matchedSkipEnv =
-    LOCAL_UPSTREAM_SKIP_ENVS.find((key) => env[key] === "1") ?? null;
-  if (matchedSkipEnv) {
-    return `${matchedSkipEnv}=1`;
+  if (isLocalElizaDisabled(env)) {
+    return "elizaOS package mode";
   }
 
   const devWorkspaceMarkers = [
@@ -160,7 +189,7 @@ export function getElizaWorkspaceSkipReason(
   const isDevCheckout = devWorkspaceMarkers.every((marker) =>
     pathExists(marker),
   );
-  if (!isDevCheckout && !getForceEnvKey(env)) {
+  if (!isDevCheckout && !getForceEnvKey(env) && !isLocalElizaForced(env)) {
     return "non-development install";
   }
 
@@ -519,10 +548,10 @@ export function ensurePluginDependencyLinks(
     });
 
     const packageDependencies = {
-      ...(packageJson.peerDependencies ?? {}),
-      ...(packageJson.dependencies ?? {}),
-      ...(packageJson.optionalDependencies ?? {}),
-      ...(packageJson.devDependencies ?? {}),
+      ...packageJson.peerDependencies,
+      ...packageJson.dependencies,
+      ...packageJson.optionalDependencies,
+      ...packageJson.devDependencies,
     };
     const dependencyNames = Object.keys(packageDependencies);
     if (dependencyNames.length === 0) {
@@ -557,6 +586,53 @@ export function ensurePluginDependencyLinks(
   if (linkedDependencies > 0) {
     console.log(
       `[setup-upstreams] Linked ${linkedDependencies} plugin dependency ${linkedDependencies === 1 ? "entry" : "entries"}`,
+    );
+  }
+
+  return linkedDependencies;
+}
+
+export function ensureMiladySingletonDependencyLinks(
+  repoRoot = DEFAULT_REPO_ROOT,
+) {
+  let linkedDependencies = 0;
+  const searchRoots = [repoRoot, getRepoElizaRoot(repoRoot)];
+
+  for (const {
+    packageDir: relativePackageDir,
+    dependencies,
+  } of MILADY_SINGLETON_DEPENDENCY_LINKS) {
+    const packageDir = path.join(repoRoot, relativePackageDir);
+    if (!existsSync(packageDir)) {
+      continue;
+    }
+
+    for (const dependencyName of dependencies) {
+      const installedDependencyDir = findInstalledPackageDir(
+        repoRoot,
+        dependencyName,
+        undefined,
+        null,
+        { searchRoots },
+      );
+      if (!installedDependencyDir) {
+        continue;
+      }
+
+      const dependencyLinkPath = path.join(
+        packageDir,
+        "node_modules",
+        ...dependencyName.split("/"),
+      );
+      if (createPackageLink(dependencyLinkPath, installedDependencyDir)) {
+        linkedDependencies += 1;
+      }
+    }
+  }
+
+  if (linkedDependencies > 0) {
+    console.log(
+      `[setup-upstreams] Linked ${linkedDependencies} Milady singleton dependency ${linkedDependencies === 1 ? "entry" : "entries"}`,
     );
   }
 

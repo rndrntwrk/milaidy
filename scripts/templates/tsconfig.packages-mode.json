@@ -1,0 +1,68 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "forceConsistentCasingInFileNames": true,
+    "ignoreDeprecations": "6.0",
+    "lib": ["DOM", "DOM.Iterable", "ES2023", "ScriptHost"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "es2023",
+    "useDefineForClassFields": false,
+    "baseUrl": ".",
+    "paths": {
+      "@elizaos/app-lifeops": ["./node_modules/@elizaos/app-lifeops"],
+      "@elizaos/app-lifeops/*": ["./node_modules/@elizaos/app-lifeops/*"],
+      "@elizaos/app-screenshare": ["./node_modules/@elizaos/app-screenshare"],
+      "@elizaos/app-screenshare/*": [
+        "./node_modules/@elizaos/app-screenshare/*"
+      ],
+      "@elizaos/app-companion": ["./node_modules/@elizaos/app-companion"],
+      "@elizaos/app-companion/*": ["./node_modules/@elizaos/app-companion/*"],
+      "@elizaos/app-shopify": ["./node_modules/@elizaos/app-shopify"],
+      "@elizaos/app-shopify/*": ["./node_modules/@elizaos/app-shopify/*"],
+      "@elizaos/app-hyperliquid": ["./node_modules/@elizaos/app-hyperliquid"],
+      "@elizaos/app-hyperliquid/*": [
+        "./node_modules/@elizaos/app-hyperliquid/*"
+      ],
+      "@elizaos/app-polymarket": ["./node_modules/@elizaos/app-polymarket"],
+      "@elizaos/app-polymarket/*": ["./node_modules/@elizaos/app-polymarket/*"],
+      "@elizaos/app-vincent": ["./node_modules/@elizaos/app-vincent"],
+      "@elizaos/app-vincent/*": ["./node_modules/@elizaos/app-vincent/*"],
+      "@elizaos/app-elizamaker": ["./node_modules/@elizaos/app-elizamaker"],
+      "@elizaos/app-elizamaker/*": ["./node_modules/@elizaos/app-elizamaker/*"],
+      "@elizaos/app-core": ["./node_modules/@elizaos/app-core"],
+      "@elizaos/app-core/*": ["./node_modules/@elizaos/app-core/*"],
+      "@elizaos/shared": ["./node_modules/@elizaos/shared"],
+      "@elizaos/shared/*": ["./node_modules/@elizaos/shared/*"],
+      "@elizaos/skills": ["./node_modules/@elizaos/skills"],
+      "@elizaos/skills/*": ["./node_modules/@elizaos/skills/*"],
+      "@elizaos/core": ["./node_modules/@elizaos/core"],
+      "@elizaos/core/*": ["./node_modules/@elizaos/core/*"],
+      "@elizaos/agent": ["./node_modules/@elizaos/agent"],
+      "@elizaos/agent/*": ["./node_modules/@elizaos/agent/*"],
+      "@elizaos/plugin-browser-bridge": [
+        "./node_modules/@elizaos/plugin-browser-bridge"
+      ],
+      "@elizaos/plugin-browser-bridge/*": [
+        "./node_modules/@elizaos/plugin-browser-bridge/*"
+      ],
+      "@elizaos/ui": ["./node_modules/@elizaos/ui"],
+      "@elizaos/ui/*": ["./node_modules/@elizaos/ui/*"],
+      "@elizaos/capacitor-mobile-signals": [
+        "./node_modules/@elizaos/capacitor-mobile-signals"
+      ],
+      "@elizaos/app-steward": ["./node_modules/@elizaos/app-steward"],
+      "@elizaos/app-steward/*": ["./node_modules/@elizaos/app-steward/*"]
+    }
+  },
+  "include": ["vitest.config.ts", "scripts/lib/repo-root.d.mts"],
+  "exclude": ["node_modules", "dist"]
+}
