@@ -77,14 +77,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.source_sha || github.sha }}
           submodules: false
 
       - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -94,7 +94,7 @@ jobs:
           bun-version: "1.3.13"
 
       - name: Cache bun store
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: bun-store-${{ runner.os }}-${{ hashFiles('bun.lock') }}

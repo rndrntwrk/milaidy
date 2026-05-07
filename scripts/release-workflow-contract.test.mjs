@@ -336,6 +336,10 @@ test("Electrobun release uses Milady whisper cache path", () => {
 
 test("Electrobun release applies elizaOS source overlay before manual build setup", () => {
   const electrobun = workflow("release-electrobun.yml");
+  const copyRuntimeWrapper = fs.readFileSync(
+    "scripts/copy-runtime-node-modules.ts",
+    "utf8",
+  );
 
   assert.match(
     electrobun,
@@ -344,6 +348,15 @@ test("Electrobun release applies elizaOS source overlay before manual build setu
   assert.match(
     electrobun,
     /node eliza\/packages\/app-core\/scripts\/build-patched-electrobun-cli\.mjs "\$\{\{ steps\.resolve-electrobun\.outputs\.package-dir \}\}" "\$\{\{ matrix\.platform\.artifact-name \}\}"/,
+  );
+  assert.match(
+    electrobun,
+    /name: Probe Electrobun bun entry build[\s\S]*?node "\$GITHUB_WORKSPACE\/scripts\/copy-runtime-node-modules\.ts" --link-only[\s\S]*?bun build src\/index\.ts --target=bun/,
+  );
+  assert.match(copyRuntimeWrapper, /elizaElectrobunNodeModules/);
+  assert.match(
+    copyRuntimeWrapper,
+    /elizaAppCoreDir,\s*"platforms",\s*"electrobun"/,
   );
 });
 
@@ -569,6 +582,25 @@ test("GitHub workflows use the verified Bun runtime", () => {
     );
     assert.doesNotMatch(workflowText, /BUN_VERSION:\s*"1\.3\.1[01]"/);
     assert.doesNotMatch(workflowText, /bun-version:\s*"?1\.3\.1[01]"?/);
+  }
+});
+
+test("GitHub workflows use current Node action majors", () => {
+  const workflowDir = ".github/workflows";
+  const workflowFiles = fs
+    .readdirSync(workflowDir)
+    .filter((fileName) => fileName.endsWith(".yml"));
+
+  for (const fileName of workflowFiles) {
+    const workflowText = fs.readFileSync(
+      path.join(workflowDir, fileName),
+      "utf8",
+    );
+    assert.doesNotMatch(workflowText, /actions\/checkout@v[1-5]\b/);
+    assert.doesNotMatch(workflowText, /actions\/setup-node@v[1-5]\b/);
+    assert.doesNotMatch(workflowText, /actions\/github-script@v[1-8]\b/);
+    assert.doesNotMatch(workflowText, /actions\/cache@v[1-4]\b/);
+    assert.doesNotMatch(workflowText, /actions\/setup-python@v[1-5]\b/);
   }
 });
 
