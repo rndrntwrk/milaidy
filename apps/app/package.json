@@ -33,6 +33,7 @@
     "@capacitor/status-bar": "^8.0.1",
     "@elizaos/app-contacts": "workspace:*",
     "@elizaos/app-phone": "workspace:*",
+    "@elizaos/app-wallet": "workspace:*",
     "@elizaos/app-wifi": "workspace:*",
     "@miladyai/app-core": "workspace:*",
     "@miladyai/shared": "workspace:*",

@@ -1,6 +1,7 @@
 import { ErrorBoundary } from "@miladyai/app-core/components";
 import "@miladyai/app-core/styles/styles.css";
 import "@miladyai/app-core/styles/brand-gold.css";
+import "@elizaos/app-wallet/register";
 
 import "./native-plugin-entrypoints";
 
