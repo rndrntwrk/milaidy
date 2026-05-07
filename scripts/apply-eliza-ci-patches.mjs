@@ -169,6 +169,10 @@ function patchElectrobunCliPatchScript(raw) {
 function patchDesktopSmokeScript(raw) {
   return raw
     .replace(
+      /\$pgliteDataDir\s*=\s*Join-Path\s+\$tempRoot\s+"pglite"/,
+      '$pgliteDataDir = Join-Path $tempRoot ("pglite-" + [Guid]::NewGuid().ToString("N"))',
+    )
+    .replace(
       /\$defaultAvatarAssetSlugs\s*=\s*@\([^)]*\)/,
       '$defaultAvatarAssetSlugs = @("eliza-1")',
     )

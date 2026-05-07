@@ -230,6 +230,7 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /smoke-test-windows\.ps1/);
   assert.match(patchScript, /smoke-test\.sh/);
   assert.doesNotMatch(patchScript, /milady-1/);
+  assert.match(patchScript, /pglite-" \+ \[Guid\]::NewGuid/);
   assert.match(
     patchScript,
     /type StructuredResponseFormat = "JSON";[\s\S]*type StructuredResponseFormat = "JSON" \| "TOON";/,
@@ -365,7 +366,15 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   );
   assert.match(hydrateScript, /@playwright\/test@1\.59\.1/);
   assert.match(hydrateScript, /@elizaos\/plugin-elizacloud/);
-  assert.match(hydrateScript, /MILADY_ELIZAOS_DIST_TAG/);
+  assert.match(hydrateScript, /@elizaos\/cloud-sdk/);
+  assert.match(hydrateScript, /linkElizaPackage/);
+  assert.match(hydrateScript, /symlinkSync/);
+  assert.match(hydrateScript, /junction/);
+  assert.doesNotMatch(
+    hydrateScript,
+    /@elizaos\/plugin-elizacloud@\$\{?elizaPackageSpecifier/,
+  );
+  assert.doesNotMatch(hydrateScript, /elizaPackageSpecifier/);
   assert.match(
     rootPackage.scripts["test:desktop:playwright:windows"],
     /bunx playwright test --config playwright\.electrobun\.packaged\.config\.ts/,

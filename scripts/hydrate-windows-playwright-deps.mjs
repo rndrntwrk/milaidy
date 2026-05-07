@@ -5,14 +5,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 const repoRoot = process.cwd();
-const elizaPackageSpecifier =
-  process.env.MILADY_ELIZAOS_VERSION ||
-  process.env.ELIZAOS_VERSION ||
-  process.env.MILADY_ELIZAOS_DIST_TAG ||
-  process.env.ELIZAOS_DIST_TAG ||
-  process.env.MILADY_ELIZAOS_NPM_TAG ||
-  process.env.ELIZAOS_NPM_TAG ||
-  "alpha";
 
 function run(args, options = {}) {
   const result = spawnSync("bun", args, {
@@ -25,6 +17,34 @@ function run(args, options = {}) {
   }
 }
 
+function removeExistingLink(linkPath) {
+  if (!fs.existsSync(linkPath)) return;
+  fs.rmSync(linkPath, { recursive: true, force: true });
+}
+
+function linkElizaPackage(scopedPackageName, sourcePath) {
+  if (!fs.existsSync(path.join(sourcePath, "package.json"))) return;
+
+  const [scopeName, packageName] = scopedPackageName.split("/");
+  if (scopeName !== "@elizaos" || !packageName) {
+    throw new Error(`Unsupported elizaOS package link: ${scopedPackageName}`);
+  }
+
+  const scopeDir = path.join(repoRoot, "eliza", "node_modules", scopeName);
+  const linkPath = path.join(scopeDir, packageName);
+  fs.mkdirSync(scopeDir, { recursive: true });
+  removeExistingLink(linkPath);
+  try {
+    fs.symlinkSync(
+      sourcePath,
+      linkPath,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+  } catch {
+    fs.cpSync(sourcePath, linkPath, { recursive: true });
+  }
+}
+
 run(
   ["add", "--no-save", "--dev", "--ignore-scripts", "@playwright/test@1.59.1"],
   {
@@ -34,13 +54,12 @@ run(
 
 const elizaRoot = path.join(repoRoot, "eliza");
 if (fs.existsSync(path.join(elizaRoot, "package.json"))) {
-  run(
-    [
-      "add",
-      "--no-save",
-      "--ignore-scripts",
-      `@elizaos/plugin-elizacloud@${elizaPackageSpecifier}`,
-    ],
-    { cwd: elizaRoot },
+  linkElizaPackage(
+    "@elizaos/cloud-sdk",
+    path.join(elizaRoot, "cloud", "packages", "sdk"),
+  );
+  linkElizaPackage(
+    "@elizaos/plugin-elizacloud",
+    path.join(elizaRoot, "plugins", "plugin-elizacloud"),
   );
 }
