@@ -585,17 +585,20 @@ test("GitHub workflows use the verified Bun runtime", () => {
   }
 });
 
-test("GitHub workflows use current Node action majors", () => {
-  const workflowDir = ".github/workflows";
-  const workflowFiles = fs
-    .readdirSync(workflowDir)
-    .filter((fileName) => fileName.endsWith(".yml"));
+test("GitHub workflows and composite actions use current Node action majors", () => {
+  const actionFiles = [
+    ...fs
+      .readdirSync(".github/workflows")
+      .filter((fileName) => fileName.endsWith(".yml"))
+      .map((fileName) => path.join(".github/workflows", fileName)),
+    ...fs
+      .readdirSync(".github/actions", { recursive: true })
+      .filter((fileName) => String(fileName).endsWith(".yml"))
+      .map((fileName) => path.join(".github/actions", String(fileName))),
+  ];
 
-  for (const fileName of workflowFiles) {
-    const workflowText = fs.readFileSync(
-      path.join(workflowDir, fileName),
-      "utf8",
-    );
+  for (const actionFile of actionFiles) {
+    const workflowText = fs.readFileSync(actionFile, "utf8");
     assert.doesNotMatch(workflowText, /actions\/checkout@v[1-5]\b/);
     assert.doesNotMatch(workflowText, /actions\/setup-node@v[1-5]\b/);
     assert.doesNotMatch(workflowText, /actions\/github-script@v[1-8]\b/);
