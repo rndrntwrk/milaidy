@@ -244,13 +244,13 @@ jobs:
       - name: Initialize eliza source checkout
         run: |
           if [ ! -f eliza/package.json ]; then
-            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
           fi
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Apply Milady eliza CI patches
+      - name: Apply elizaOS source CI patches
         run: node scripts/apply-eliza-ci-patches.mjs
 
       - name: Setup Node.js
@@ -408,13 +408,13 @@ jobs:
       - name: Initialize eliza source checkout
         run: |
           if [ ! -f eliza/package.json ]; then
-            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
           fi
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Apply Milady eliza CI patches
+      - name: Apply elizaOS source CI patches
         run: node scripts/apply-eliza-ci-patches.mjs
 
       - name: Setup Node.js
@@ -497,13 +497,13 @@ jobs:
       - name: Initialize eliza source checkout
         run: |
           if [ ! -f eliza/package.json ]; then
-            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
           fi
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Apply Milady eliza CI patches
+      - name: Apply elizaOS source CI patches
         run: node scripts/apply-eliza-ci-patches.mjs
 
       - name: Setup Node.js

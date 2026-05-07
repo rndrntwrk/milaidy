@@ -54,7 +54,7 @@ const requiredWorkflowSnippets = [
 const requiredActionSnippets = [
   "disable-local-eliza-workspace:",
   "run: node scripts/disable-local-eliza-workspace.mjs",
-  "name: Apply Milady eliza CI patches",
+  "name: Apply elizaOS source CI patches",
   "run: node scripts/apply-eliza-ci-patches.mjs",
   "name: Validate published-only install mode",
   "disable-local-eliza-workspace requires an install-command with --no-frozen-lockfile",
