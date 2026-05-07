@@ -520,12 +520,8 @@ jobs:
       - name: Package Agent Browser Bridge release bundles
         id: package-browser-bridge
         run: |
-          if bun run browser-bridge:package:release; then
-            echo "packaged=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Agent Browser Bridge packaging failed; desktop release will continue without browser companion bundles."
-            echo "packaged=false" >> "$GITHUB_OUTPUT"
-          fi
+          bun run browser-bridge:package:release
+          echo "packaged=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload Agent Browser Bridge release artifacts
         if: steps.package-browser-bridge.outputs.packaged == 'true'

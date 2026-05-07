@@ -117,6 +117,14 @@ test("distribution workflows consume the canonical channel policy", () => {
   assert.match(electrobun, /eliza\/packages\/browser-bridge\/dist\/artifacts/);
   assert.match(
     electrobun,
+    /name: Package Agent Browser Bridge release bundles[\s\S]*?bun run browser-bridge:package:release[\s\S]*?packaged=true/,
+  );
+  assert.doesNotMatch(
+    electrobun,
+    /Agent Browser Bridge packaging failed|continue without browser companion bundles/,
+  );
+  assert.match(
+    electrobun,
     /workflow_dispatch:[\s\S]*?tag:\n\s+description: "Release tag \(e\.g\. v2\.0\.0-alpha\.3\)"\n\s+required: true/,
   );
   assert.match(electrobun, /beta desktop release requires a beta version/);
@@ -242,8 +250,19 @@ test("eliza CI patches align release source helpers", () => {
     patchScript,
     /"@elizaos\/core", "commander"[\s\S]*runtime copy tar-safe Solana hoists/,
   );
+  assert.match(patchScript, /alpha\|beta\|rc\|nightly/);
+  assert.match(patchScript, /browser bridge canary release versions/);
+  assert.match(patchScript, /Agent-Browser-Bridge/);
+  assert.ok(patchScript.includes("Agent-Browser-Bridge\\\\.Extension"));
+  assert.match(patchScript, /browser bridge Safari bundle identifiers/);
+  assert.match(patchScript, /app-core release browser bridge hard gate/);
   assert.match(patchScript, /nestedElizaPackageJson/);
   assert.match(patchScript, /collectWorkspaceMaps\(\s*elizaRoot/);
+  assert.match(patchScript, /patchCorePluginRuntimeSurface/);
+  assert.match(patchScript, /agent core plugin runtime surface/);
+  assert.match(patchScript, /patchN8nAutoEnableDefault/);
+  assert.match(patchScript, /n8nConfig\?\.localEnabled === true/);
+  assert.match(patchScript, /patchN8nCharacterKnowledge/);
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);
   assert.match(patchScript, /DEFAULT_AVATAR_ASSET_SLUGS=\\\(\[\^\)\]\*\\\)/);
   assert.match(patchScript, /DEFAULT_AVATAR_ASSET_SLUGS=\(eliza-1\)/);
@@ -385,6 +404,7 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
     /node scripts\/hydrate-windows-playwright-deps\.mjs && cd apps\/app &&/,
   );
   assert.match(hydrateScript, /@playwright\/test@1\.59\.1/);
+  assert.match(hydrateScript, /@elizaos\/plugin-elizacloud@alpha/);
   assert.match(hydrateScript, /@elizaos\/plugin-elizacloud/);
   assert.match(hydrateScript, /@elizaos\/cloud-sdk/);
   assert.match(hydrateScript, /@elizaos\/core/);
@@ -393,9 +413,12 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   assert.match(hydrateScript, /sqlPluginTypescriptPath = path\.join/);
   assert.match(hydrateScript, /sqlPluginPath,\s*"typescript"/);
   assert.match(hydrateScript, /copy: true/);
-  assert.match(hydrateScript, /assertPathExists/);
-  assert.match(hydrateScript, /dist",\s*"index\.node\.js"/);
-  assert.match(hydrateScript, /dist",\s*"node",\s*"index\.node\.js"/);
+  assert.match(hydrateScript, /packageEntryCandidates/);
+  assert.match(hydrateScript, /assertPackageRuntimeEntry/);
+  assert.match(hydrateScript, /selectRuntimePackageRoot/);
+  assert.match(hydrateScript, /using installed \$\{scopedPackageName\}/);
+  assert.match(hydrateScript, /dist\/index\.node\.js/);
+  assert.match(hydrateScript, /dist\/node\/index\.node\.js/);
   assert.match(hydrateScript, /linkElizaPackage/);
   assert.match(hydrateScript, /linkScopedPackage/);
   assert.match(hydrateScript, /symlinkSync/);
