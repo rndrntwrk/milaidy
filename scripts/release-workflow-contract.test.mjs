@@ -177,6 +177,11 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /smoke-test-windows\.ps1/);
   assert.match(patchScript, /smoke-test\.sh/);
   assert.match(patchScript, /milady-1/);
+  assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);
+  assert.match(
+    patchScript,
+    /\/DEFAULT_AVATAR_ASSET_SLUGS=\\\(\\s\*eliza-1\\s\*\\\)/,
+  );
   assert.match(
     pruneScript,
     /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
@@ -271,10 +276,19 @@ test("Electrobun release applies Milady eliza overlay before manual build setup"
 
 test("Electrobun Windows release runs packaged Playwright check after disk cleanup", () => {
   const electrobun = workflow("release-electrobun.yml");
+  const rootPackage = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
   assert.match(
     electrobun,
+    /name: Free disk space before Windows smoke test[\s\S]*?name: Reapply Windows smoke asset patch[\s\S]*?run: node scripts\/apply-eliza-ci-patches\.mjs[\s\S]*?name: Smoke test packaged Windows app/,
+  );
+  assert.match(
+    electrobun,
     /name: Run Windows packaged renderer bootstrap check[\s\S]*?run: bun run test:desktop:playwright:windows/,
+  );
+  assert.match(
+    rootPackage.scripts["test:desktop:playwright:windows"],
+    /bunx --package @playwright\/test@1\.59\.1 playwright test/,
   );
 });
 

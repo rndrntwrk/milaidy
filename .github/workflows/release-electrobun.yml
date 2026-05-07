@@ -1169,6 +1169,10 @@ jobs:
           Write-Host "=== Disk after smoke cleanup ==="
           Get-Volume | Where-Object { $_.DriveLetter } | Format-Table DriveLetter, @{N='FreeGB';E={[math]::Round($_.SizeRemaining/1GB,1)}}, @{N='TotalGB';E={[math]::Round($_.Size/1GB,1)}}
 
+      - name: Reapply Windows smoke asset patch
+        if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
+        run: node scripts/apply-eliza-ci-patches.mjs
+
       - name: Smoke test packaged Windows app
         if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
         continue-on-error: true

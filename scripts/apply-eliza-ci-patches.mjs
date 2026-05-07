@@ -169,11 +169,11 @@ function patchElectrobunCliPatchScript(raw) {
 function patchDesktopSmokeScript(raw) {
   return raw
     .replace(
-      '$defaultAvatarAssetSlugs = @("eliza-1")',
+      /\$defaultAvatarAssetSlugs\s*=\s*@\(\s*["']eliza-1["']\s*\)/,
       '$defaultAvatarAssetSlugs = @("eliza-1", "milady-1")',
     )
     .replace(
-      "DEFAULT_AVATAR_ASSET_SLUGS=(eliza-1)",
+      /DEFAULT_AVATAR_ASSET_SLUGS=\(\s*eliza-1\s*\)/,
       "DEFAULT_AVATAR_ASSET_SLUGS=(eliza-1 milady-1)",
     );
 }
