@@ -43,6 +43,15 @@ describe("CI bootstrap contract", () => {
     );
   });
 
+  it("bounds nested eliza installs for the agent image", () => {
+    const buildDocker = workflow("build-docker.yml");
+
+    expect(buildDocker).toContain(
+      "timeout 10m bun install --cwd eliza --no-frozen-lockfile --ignore-scripts",
+    );
+    expect(buildDocker).toContain("eliza bun install failed after");
+  });
+
   it("does not run nested eliza workspace installs inside CI jobs", () => {
     const ci = workflow("ci.yml");
 

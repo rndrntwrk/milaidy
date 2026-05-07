@@ -169,7 +169,22 @@ jobs:
         run: bun install --ignore-scripts --no-frozen-lockfile
 
       - name: Install eliza source dependencies
-        run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
+        run: |
+          install_cmd=(timeout 10m bun install --cwd eliza --no-frozen-lockfile --ignore-scripts)
+
+          for attempt in 1 2 3; do
+            if "${install_cmd[@]}"; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "eliza bun install failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+
+            echo "eliza bun install failed on attempt ${attempt}; retrying in 15 seconds" >&2
+            sleep 15
+          done
 
       - name: Hydrate eliza Bun package postinstall
         run: cd eliza/node_modules/bun && node install.js
