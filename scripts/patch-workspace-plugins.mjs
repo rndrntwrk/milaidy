@@ -20,7 +20,8 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const root = resolve(__dirname, "..");
 const patchDir = resolve(__dirname, "workspace-plugin-patches");
 
@@ -34,6 +35,7 @@ export const PLUGIN_PATCH_DIRS = {
   "plugin-personality": "plugins/plugin-personality",
   "plugin-plugin-manager": "plugins/plugin-plugin-manager",
   "plugin-agent-skills": "plugins/plugin-agent-skills",
+  "plugin-sql": "eliza",
 };
 
 export function resolvePluginDir(patchFile, { rootDir = root } = {}) {
@@ -154,4 +156,9 @@ function run() {
   }
 }
 
-run();
+const isMain =
+  process.argv[1] && resolve(process.argv[1]) === resolve(__filename);
+
+if (isMain) {
+  run();
+}

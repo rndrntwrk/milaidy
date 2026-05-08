@@ -19,6 +19,7 @@ describe("PLUGIN_PATCH_DIRS", () => {
     expect(PLUGIN_PATCH_DIRS["plugin-agent-skills"]).toBe(
       "plugins/plugin-agent-skills",
     );
+    expect(PLUGIN_PATCH_DIRS["plugin-sql"]).toBe("eliza");
   });
 });
 
@@ -49,6 +50,12 @@ describe("resolvePluginDir", () => {
         rootDir: root,
       }),
     ).toBe(path.join(root, "plugins", "plugin-agent-skills"));
+
+    expect(
+      resolvePluginDir("plugin-sql-pglite-container-pid-reuse.patch", {
+        rootDir: root,
+      }),
+    ).toBe(path.join(root, "eliza"));
   });
 
   it("returns null for patch files with no matching prefix", () => {

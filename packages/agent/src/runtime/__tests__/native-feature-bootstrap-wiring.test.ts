@@ -142,6 +142,14 @@ describe("native feature bootstrap wiring", () => {
     expect(initBlock).toContain("skipping bundled knowledge seeding");
   });
 
+  it("treats same-pid PGlite pid files from older containers as stale", () => {
+    expect(elizaSource).toContain("statSync");
+    expect(elizaSource).toContain("isPidFileFromPreviousProcess");
+    expect(elizaSource).toContain(
+      "Removed stale PGlite postmaster.pid from prior container process",
+    );
+  });
+
   it("calls native feature probes with the runtime instance bound", () => {
     expect(elizaSource).toContain('from "./native-runtime-features.js"');
 

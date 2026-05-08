@@ -1,0 +1,117 @@
+diff --git a/plugins/plugin-sql/typescript/pglite/manager.ts b/plugins/plugin-sql/typescript/pglite/manager.ts
+index 821b48b659..3a5920604d 100644
+--- a/plugins/plugin-sql/typescript/pglite/manager.ts
++++ b/plugins/plugin-sql/typescript/pglite/manager.ts
+@@ -4,6 +4,7 @@ import {
+   mkdirSync,
+   openSync,
+   readFileSync,
++  statSync,
+   unlinkSync,
+   writeFileSync,
+ } from "node:fs";
+@@ -22,6 +23,11 @@ type PglitePidFileStatus =
+   | "cleared-malformed"
+   | "check-failed";
+ 
++interface PgliteLockState {
++  pid: number | null;
++  createdAtMs: number | null;
++}
++
+ export class PGliteClientManager implements IDatabaseClientManager<PGlite> {
+   private client: PGlite;
+   private options: PGliteOptions;
+@@ -117,13 +123,22 @@ export class PGliteClientManager implements IDatabaseClientManager<PGlite> {
+     return `${dataDir}/eliza-pglite.lock`;
+   }
+ 
+-  private getLockPid(lockPath: string): number | null {
++  private getLockState(lockPath: string): PgliteLockState {
+     try {
+       const raw = readFileSync(lockPath, "utf-8");
+-      const parsed = JSON.parse(raw) as { pid?: unknown };
+-      return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : null;
++      const parsed = JSON.parse(raw) as { pid?: unknown; createdAt?: unknown };
++      const pid =
++        typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : null;
++      const createdAtMs =
++        typeof parsed.createdAt === "string"
++          ? Date.parse(parsed.createdAt)
++          : NaN;
++      return {
++        pid,
++        createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : null,
++      };
+     } catch {
+-      return null;
++      return { pid: null, createdAtMs: null };
+     }
+   }
+ 
+@@ -136,6 +151,24 @@ export class PGliteClientManager implements IDatabaseClientManager<PGlite> {
+     }
+   }
+ 
++  private isLockFromPreviousProcess(lockState: PgliteLockState): boolean {
++    if (lockState.pid !== process.pid || !lockState.createdAtMs) {
++      return false;
++    }
++
++    const currentProcessStartedAtMs = Date.now() - process.uptime() * 1000;
++    return lockState.createdAtMs + 1000 < currentProcessStartedAtMs;
++  }
++
++  private isPidFileFromPreviousProcess(pidPath: string, pid: number): boolean {
++    if (pid !== process.pid) {
++      return false;
++    }
++
++    const currentProcessStartedAtMs = Date.now() - process.uptime() * 1000;
++    return statSync(pidPath).mtimeMs + 1000 < currentProcessStartedAtMs;
++  }
++
+   private acquireDataDirLockIfNeeded(): void {
+     const dataDir = this.getDataDir();
+     if (!this.isFileBackedDataDir(dataDir)) {
+@@ -164,8 +197,22 @@ export class PGliteClientManager implements IDatabaseClientManager<PGlite> {
+           throw this.createActiveLockError(dataDir, err);
+         }
+ 
+-        const pid = this.getLockPid(lockPath);
+-        if (pid && this.isPidRunning(pid)) {
++        const lockState = this.getLockState(lockPath);
++        if (this.isLockFromPreviousProcess(lockState)) {
++          try {
++            unlinkSync(lockPath);
++            logger.info(
++              { src: "plugin:sql", dataDir, lockPath, pid: lockState.pid },
++              "Removed stale PGlite lock file from prior container process"
++            );
++            continue;
++          } catch (unlinkErr) {
++            throw this.createActiveLockError(dataDir, unlinkErr);
++          }
++        }
++
++        const pid = lockState.pid;
++        if (pid && pid !== process.pid && this.isPidRunning(pid)) {
+           throw this.createActiveLockError(
+             dataDir,
+             new Error(`PGlite lock file is held by running process ${pid}`)
+@@ -230,6 +277,15 @@ export class PGliteClientManager implements IDatabaseClientManager<PGlite> {
+         return "cleared-malformed";
+       }
+ 
++      if (this.isPidFileFromPreviousProcess(pidPath, pid)) {
++        unlinkSync(pidPath);
++        logger.info(
++          { src: "plugin:sql", dataDir, pid },
++          "Removed stale PGlite postmaster.pid from prior container process"
++        );
++        return "cleared-stale";
++      }
++
+       try {
+         process.kill(pid, 0);
+         logger.warn(

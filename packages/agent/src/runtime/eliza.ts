@@ -13,6 +13,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  statSync,
   symlinkSync,
   unlinkSync,
 } from "node:fs";
@@ -2042,6 +2043,17 @@ type PgliteRecoveryAction =
   | "fail-active-lock"
   | "fail-manual-reset";
 
+function isPidFileFromPreviousProcess(pidPath: string, pid: number): boolean {
+  if (pid !== process.pid) return false;
+
+  try {
+    const currentProcessStartedAtMs = Date.now() - process.uptime() * 1000;
+    return statSync(pidPath).mtimeMs + 1000 < currentProcessStartedAtMs;
+  } catch {
+    return false;
+  }
+}
+
 function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
   const pidPath = path.join(dataDir, "postmaster.pid");
   if (!existsSync(pidPath)) return "missing";
@@ -2056,6 +2068,14 @@ function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
       unlinkSync(pidPath);
       logger.info(`[eliza] Removed malformed PGlite postmaster.pid`);
       return "cleared-malformed";
+    }
+
+    if (isPidFileFromPreviousProcess(pidPath, pid)) {
+      unlinkSync(pidPath);
+      logger.info(
+        `[eliza] Removed stale PGlite postmaster.pid from prior container process ${pid}`,
+      );
+      return "cleared-stale";
     }
 
     // Check if the process is still alive
