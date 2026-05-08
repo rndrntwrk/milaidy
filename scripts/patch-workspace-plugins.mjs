@@ -55,6 +55,30 @@ function exec(cmd, args, cwd) {
   });
 }
 
+function commandMessage(error) {
+  return String(error.stderr || error.stdout || error.message || error);
+}
+
+function isBrokenGitMetadata(error) {
+  const msg = commandMessage(error);
+  return (
+    msg.includes("not a git repository") ||
+    msg.includes(".git/modules") ||
+    msg.includes("Invalid gitfile format")
+  );
+}
+
+function gitApply(args, cwd, { allowNoIndexFallback = false } = {}) {
+  try {
+    return exec("git", ["apply", ...args], cwd);
+  } catch (error) {
+    if (!allowNoIndexFallback || !isBrokenGitMetadata(error)) {
+      throw error;
+    }
+    return exec("git", ["apply", "--no-index", ...args], cwd);
+  }
+}
+
 function applyPatch(patchPath, pluginDir) {
   const patchName = patchPath.split(/[\\/]/).pop();
 
@@ -67,7 +91,9 @@ function applyPatch(patchPath, pluginDir) {
 
   // Check if patch is already applied
   try {
-    exec("git", ["apply", "--check", "--reverse", patchPath], pluginDir);
+    gitApply(["--check", "--reverse", patchPath], pluginDir, {
+      allowNoIndexFallback: true,
+    });
     console.log(
       `[patch-workspace-plugins] ${patchName}: already applied, skipping`,
     );
@@ -78,9 +104,11 @@ function applyPatch(patchPath, pluginDir) {
 
   // Check if patch applies cleanly
   try {
-    exec("git", ["apply", "--check", patchPath], pluginDir);
+    gitApply(["--check", patchPath], pluginDir, {
+      allowNoIndexFallback: true,
+    });
   } catch (checkErr) {
-    const msg = checkErr.stderr || checkErr.stdout || String(checkErr);
+    const msg = commandMessage(checkErr);
     console.warn(
       `[patch-workspace-plugins] ${patchName}: does not apply cleanly (upstream may have fixed it): ${msg.trim().slice(0, 200)}`,
     );
@@ -89,11 +117,11 @@ function applyPatch(patchPath, pluginDir) {
 
   // Apply the patch
   try {
-    exec("git", ["apply", patchPath], pluginDir);
+    gitApply([patchPath], pluginDir, { allowNoIndexFallback: true });
     console.log(`[patch-workspace-plugins] ${patchName}: applied successfully`);
     return "applied";
   } catch (applyErr) {
-    const msg = applyErr.stderr || applyErr.stdout || String(applyErr);
+    const msg = commandMessage(applyErr);
     console.error(
       `[patch-workspace-plugins] ERROR: failed to apply ${patchName}: ${msg.trim().slice(0, 400)}`,
     );
