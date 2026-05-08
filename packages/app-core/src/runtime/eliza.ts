@@ -1213,34 +1213,18 @@ export async function startEliza(
     }
 
     if (options?.serverOnly) {
-      let currentRuntime =
-        (await withStartupPhase(
-          "runtime-boot",
-          { serverOnly: true, includesPgliteStartup: true },
-          () => upstreamBootElizaRuntime({}),
-        )) ?? undefined;
-
-      currentRuntime = currentRuntime
-        ? await withStartupPhase(
-            "runtime-repair",
-            runtimeStartupFields(currentRuntime),
-            () => repairRuntimeAfterBoot(currentRuntime),
-          )
-        : currentRuntime;
-
-      if (!currentRuntime) {
-        return currentRuntime;
-      }
-
+      let currentRuntime:
+        | Awaited<ReturnType<typeof upstreamBootElizaRuntime>>
+        | undefined;
       const { startApiServer } = await import("../api/server");
       const apiPort = resolveServerOnlyPort(process.env);
-      const { port: actualApiPort } = await withStartupPhase(
+      const apiServerHandle = await withStartupPhase(
         "api-bind",
-        { port: apiPort },
+        { port: apiPort, initialAgentState: "starting" },
         () =>
           startApiServer({
             port: apiPort,
-            runtime: currentRuntime,
+            initialAgentState: "starting",
             onRestart: async () => {
               if (!currentRuntime) {
                 return null;
@@ -1274,7 +1258,7 @@ export async function startEliza(
             },
           }),
       );
-
+      const actualApiPort = apiServerHandle.port;
       syncResolvedApiPort(process.env, actualApiPort, {
         overwriteUiPort: true,
       });
@@ -1288,6 +1272,46 @@ export async function startEliza(
       logger.info(
         `[milady] API server listening on http://localhost:${actualApiPort}`,
       );
+
+      try {
+        currentRuntime =
+          (await withStartupPhase(
+            "runtime-boot",
+            { serverOnly: true, includesPgliteStartup: true },
+            () => upstreamBootElizaRuntime({}),
+          )) ?? undefined;
+
+        currentRuntime = currentRuntime
+          ? await withStartupPhase(
+              "runtime-repair",
+              runtimeStartupFields(currentRuntime),
+              () => repairRuntimeAfterBoot(currentRuntime),
+            )
+          : currentRuntime;
+
+        if (!currentRuntime) {
+          await apiServerHandle.close();
+          return currentRuntime;
+        }
+
+        apiServerHandle.updateRuntime(currentRuntime);
+        apiServerHandle.updateStartup({
+          state: "running",
+          phase: "running",
+          attempt: 0,
+        });
+      } catch (error) {
+        apiServerHandle.updateStartup({
+          state: "error",
+          phase: "runtime-boot",
+          attempt: 1,
+          lastError: errorMessage(error),
+          lastErrorAt: Date.now(),
+        });
+        await apiServerHandle.close().catch(() => undefined);
+        throw error;
+      }
+
       startupInfo("start-eliza:done", {
         serverOnly: true,
         port: actualApiPort,
@@ -1316,6 +1340,7 @@ export async function startEliza(
             /* ignore */
           }
         }
+        await apiServerHandle.close().catch(() => undefined);
         if (currentRuntime) {
           await upstreamShutdownRuntime(currentRuntime, "server-only shutdown");
         }
@@ -1432,16 +1457,17 @@ if (isDirectRuntimeRun()) {
   } else if (DIRECT_VERSION_FLAGS.has(command ?? "")) {
     printDirectRuntimeVersion();
   } else {
-    const directStartOptions =
-      shouldUseLegacyDirectRuntimeServerOnlyCompat(process.env)
-        ? (() => {
-            normalizeLegacyDirectRuntimePorts(process.env);
-            console.log(
-              `[milady] start:eliza detected a production container; forcing server-only mode on port ${process.env.MILAIDY_PORT}`,
-            );
-            return { serverOnly: true } satisfies StartElizaOptionsExt;
-          })()
-        : undefined;
+    const directStartOptions = shouldUseLegacyDirectRuntimeServerOnlyCompat(
+      process.env,
+    )
+      ? (() => {
+          normalizeLegacyDirectRuntimePorts(process.env);
+          console.log(
+            `[milady] start:eliza detected a production container; forcing server-only mode on port ${process.env.MILAIDY_PORT}`,
+          );
+          return { serverOnly: true } satisfies StartElizaOptionsExt;
+        })()
+      : undefined;
     startEliza(directStartOptions).catch((err) => {
       console.error(
         "[milady] Fatal error:",
