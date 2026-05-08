@@ -6832,9 +6832,8 @@ export async function startApiServer(opts?: {
     config.agents?.defaults?.workspace ?? resolveDefaultAgentWorkspaceDir();
 
   const hasRuntime = opts?.runtime != null;
-  const initialAgentState = hasRuntime
-    ? "running"
-    : (opts?.initialAgentState ?? "not_started");
+  const initialAgentState =
+    opts?.initialAgentState ?? (hasRuntime ? "running" : "not_started");
   const initialStartup: AgentStartupDiagnostics =
     initialAgentState === "running"
       ? { phase: "running", attempt: 0 }

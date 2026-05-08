@@ -1485,7 +1485,6 @@ export function ensureBrowserServerLink(): boolean {
 // Plugin resolution
 // ---------------------------------------------------------------------------
 
-
 /** @internal Exported for testing. */
 export function repairBrokenInstallRecord(
   config: ElizaConfig,
@@ -4172,8 +4171,323 @@ export async function startEliza(
     });
   };
 
+  type RuntimeApiServerHandle = Awaited<
+    ReturnType<typeof import("../api/server.js").startApiServer>
+  >;
+  type RuntimeApiInitialState =
+    | "not_started"
+    | "starting"
+    | "stopped"
+    | "error";
+  let apiServerHandle: RuntimeApiServerHandle | null = null;
+
+  const startRuntimeApiServer = async ({
+    initialAgentState,
+    scheduleBundledSeed = true,
+  }: {
+    initialAgentState?: RuntimeApiInitialState;
+    scheduleBundledSeed?: boolean;
+  } = {}): Promise<RuntimeApiServerHandle | null> => {
+    try {
+      const { startApiServer } = await import("../api/server.js");
+      const apiPort = resolveServerOnlyPort(process.env);
+      const handle = await startApiServer({
+        port: apiPort,
+        runtime,
+        initialAgentState,
+        onRestart: async () => {
+          logger.info("[eliza] Hot-reload: Restarting runtime...");
+          try {
+            // Stop the old runtime to release resources (DB connections, timers, etc.)
+
+            try {
+              await shutdownRuntime(runtime, "hot-reload cleanup");
+            } catch (stopErr) {
+              logger.warn(
+                `[eliza] Hot-reload: old runtime stop failed: ${formatError(stopErr)}`,
+              );
+            }
+
+            // Reload config from disk (updated by API)
+            const freshConfig = loadElizaConfig();
+
+            // Propagate secrets & cloud config into process.env so plugins
+            // (especially plugin-elizacloud) can discover them.  The initial
+            // startup does this in startEliza(); the hot-reload must repeat it
+            // because the config may have changed (e.g. cloud enabled during
+            // onboarding).
+            applyConnectorSecretsToEnv(freshConfig);
+            await autoResolveDiscordAppId();
+            applyCloudConfigToEnv(freshConfig);
+            applyX402ConfigToEnv(freshConfig);
+            applyDatabaseConfigToEnv(freshConfig);
+            await autoFetchCloudGithubToken(
+              freshConfig.cloud?.agentId?.trim() || agentId,
+            );
+
+            // Apply subscription-based credentials (Claude Max, Codex Max)
+            // that may have been set up during onboarding.
+            try {
+              const { applySubscriptionCredentials } = await import(
+                "../auth/index.js"
+              );
+              await applySubscriptionCredentials(freshConfig);
+            } catch (subErr) {
+              logger.warn(
+                `[eliza] Hot-reload: subscription credentials: ${formatError(subErr)}`,
+              );
+            }
+
+            // Resolve plugins using same function as startup
+            const resolvedPlugins = await resolvePlugins(freshConfig);
+
+            // Rebuild character from the fresh config so onboarding changes
+            // (name, bio, style, etc.) are picked up on restart.
+            const freshCharacter = buildCharacterFromConfig(freshConfig);
+
+            // Recreate Eliza plugin with fresh workspace
+            const freshElizaPlugin = createElizaPlugin({
+              workspaceDir:
+                freshConfig.agents?.defaults?.workspace ?? workspaceDir,
+
+              agentId:
+                freshCharacter.name?.toLowerCase().replace(/\s+/g, "-") ??
+                "main",
+            });
+
+            // Create new runtime with updated plugins.
+            // Filter out pre-registered plugins so they aren't double-loaded
+            // inside initialize()'s Promise.all — same pattern as the initial
+            // startup to avoid the TEXT_EMBEDDING race condition.
+            const freshPreferredProviderId =
+              resolvePreferredProviderId(freshConfig);
+            const freshPreferredProviderPluginName =
+              resolvePreferredProviderPluginName(freshConfig);
+            const freshOtherPlugins = resolvedPlugins.filter(
+              (p) => !PREREGISTER_PLUGINS.has(p.name),
+            );
+            // Boost the preferred provider plugin priority (same as initial startup)
+            const freshPluginsForRuntime = freshOtherPlugins.map(
+              (p) => p.plugin,
+            );
+            const freshVisionModeSetting =
+              resolveVisionModeSetting(freshConfig);
+            if (freshPreferredProviderPluginName) {
+              for (const plugin of freshPluginsForRuntime) {
+                if (plugin.name === freshPreferredProviderPluginName) {
+                  plugin.priority = (plugin.priority ?? 0) + 10;
+                  break;
+                }
+              }
+            }
+            const newRuntime = new AgentRuntime({
+              character: freshCharacter,
+              plugins: [freshElizaPlugin, ...freshPluginsForRuntime],
+              ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
+              settings: {
+                ...(freshPreferredProviderId
+                  ? { MODEL_PROVIDER: freshPreferredProviderId }
+                  : {}),
+                ...(freshVisionModeSetting
+                  ? { VISION_MODE: freshVisionModeSetting }
+                  : {}),
+                // Disable image description when vision is explicitly toggled off.
+                ...(freshConfig.features?.vision === false
+                  ? { DISABLE_IMAGE_DESCRIPTION: "true" }
+                  : {}),
+              },
+            });
+            installRuntimeMethodBindings(newRuntime);
+
+            // Pre-register plugin-sql + local-embedding before initialize()
+            // to avoid the same race condition as the initial startup.
+            // Re-derive from freshly resolved plugins (not outer closure) so
+            // hot-reload picks up any plugin updates.
+            const freshSqlPlugin = resolvedPlugins.find(
+              (p) => p.name === "@elizaos/plugin-sql",
+            );
+            const freshLocalEmbeddingPlugin = resolvedPlugins.find(
+              (p) => p.name === "@elizaos/plugin-local-embedding",
+            );
+            if (freshSqlPlugin) {
+              await registerSqlPluginWithRecovery(
+                newRuntime,
+                freshSqlPlugin,
+                freshConfig,
+              );
+            }
+            if (freshLocalEmbeddingPlugin) {
+              configureLocalEmbeddingPlugin(
+                freshLocalEmbeddingPlugin.plugin,
+                freshConfig,
+              );
+              await newRuntime.registerPlugin(freshLocalEmbeddingPlugin.plugin);
+            }
+
+            // Pre-register remaining core plugins sequentially (same as startup)
+            {
+              try {
+                await newRuntime.registerPlugin(rolesPlugin);
+              } catch (err) {
+                logger.warn(
+                  `[eliza] Hot-reload: internal roles capability pre-registration failed: ${formatError(err)}`,
+                );
+              }
+
+              const alreadyPreRegistered = new Set([
+                "@elizaos/plugin-sql",
+                "@elizaos/plugin-local-embedding",
+              ]);
+              for (const name of CORE_PLUGINS) {
+                if (alreadyPreRegistered.has(name)) continue;
+                const resolved = resolvedPlugins.find((p) => p.name === name);
+                if (!resolved) continue;
+                try {
+                  await newRuntime.registerPlugin(resolved.plugin);
+                } catch (err) {
+                  logger.warn(
+                    `[eliza] Hot-reload: core plugin ${name} pre-registration failed: ${formatError(err)}`,
+                  );
+                }
+              }
+            }
+
+            assertPersistentDatabaseRequired(newRuntime);
+            try {
+              const { stewardEvmPreBoot: preBootHR } = await import(
+                "../services/steward-evm-bridge.js"
+              );
+              await preBootHR(newRuntime);
+            } catch {
+              // non-fatal
+            }
+            assertPersistentDatabaseRequired(newRuntime);
+            await newRuntime.initialize();
+            await prepareRuntimeForTrajectoryCapture(
+              newRuntime,
+              "hot-reload runtime.initialize()",
+            );
+
+            try {
+              const { stewardEvmPostBoot: postBootHR } = await import(
+                "../services/steward-evm-bridge.js"
+              );
+              await postBootHR(newRuntime);
+            } catch {
+              // non-fatal
+            }
+
+            // Ensure AutonomyService survives hot-reload (respects ENABLE_AUTONOMY)
+            const hotReloadAutonomyEnabled =
+              (process.env.ENABLE_AUTONOMY ?? "true").toLowerCase() !== "false";
+
+            if (
+              hotReloadAutonomyEnabled &&
+              !newRuntime.getService("AUTONOMY")
+            ) {
+              try {
+                await AutonomyService.start(newRuntime);
+              } catch (err) {
+                logger.warn(
+                  `[eliza] AutonomyService failed to start after hot-reload: ${formatError(err)}`,
+                );
+              }
+            }
+
+            // Enable the autonomy loop after hot-reload (same as initial boot)
+            if (hotReloadAutonomyEnabled) {
+              const svc = (newRuntime.getService("AUTONOMY") ??
+                newRuntime.getService("autonomy")) as unknown as
+                | { enableAutonomy(): Promise<void> }
+                | null
+                | undefined;
+              if (svc && typeof svc.enableAutonomy === "function") {
+                try {
+                  await svc.enableAutonomy();
+                } catch (err) {
+                  logger.warn(
+                    `[eliza] Failed to enable autonomy after hot-reload: ${formatError(err)}`,
+                  );
+                }
+              }
+            }
+
+            installActionAliases(newRuntime);
+            runtime = newRuntime;
+            logger.info("[eliza] Hot-reload: Runtime restarted successfully");
+            return newRuntime;
+          } catch (err) {
+            logger.error(`[eliza] Hot-reload failed: ${formatError(err)}`);
+            return null;
+          }
+        },
+      });
+      const dashboardUrl = `http://localhost:${handle.port}`;
+      console.log(`[eliza] Control UI: ${dashboardUrl}`);
+      logger.info(`[eliza] API server listening on ${dashboardUrl}`);
+      if (scheduleBundledSeed) {
+        scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
+      }
+      return handle;
+    } catch (apiErr) {
+      // Log to both stderr (visible to Electrobun agent.ts) and the in-memory
+      // logger so the error is never silently swallowed in packaged builds.
+      const apiErrMsg = `[eliza] Could not start API server: ${formatError(apiErr)}`;
+      console.error(apiErrMsg);
+      logger.warn(apiErrMsg);
+
+      // In server-only mode (Electrobun desktop), a missing API server is fatal
+      // — nothing else can serve requests. Exit so the parent process sees a
+      // non-zero exit code instead of the misleading "Server running" message.
+      if (opts?.serverOnly) {
+        console.error(
+          "[eliza] Exiting: API server is required in server-only mode.",
+        );
+        process.exit(1);
+      }
+      // Non-fatal in CLI mode — the interactive chat loop still works.
+      return null;
+    }
+  };
+
+  const closeApiServerForStartupRetry = async (err: unknown): Promise<void> => {
+    if (!apiServerHandle) return;
+    apiServerHandle.updateStartup({
+      state: "error",
+      phase: "runtime-initialize",
+      attempt: opts?.pgliteRecoveryAttempted ? 1 : 0,
+      lastError: formatError(err),
+      lastErrorAt: Date.now(),
+    });
+    try {
+      await apiServerHandle.close();
+    } catch (closeErr) {
+      logger.warn(
+        `[eliza] API server close during startup retry failed: ${formatError(closeErr)}`,
+      );
+    } finally {
+      apiServerHandle = null;
+    }
+  };
+
+  if (opts?.serverOnly) {
+    apiServerHandle = await startRuntimeApiServer({
+      initialAgentState: "starting",
+      scheduleBundledSeed: false,
+    });
+  }
+
   try {
     await initializeRuntimeServices();
+    if (apiServerHandle) {
+      apiServerHandle.updateRuntime(runtime);
+      apiServerHandle.updateStartup({
+        state: "running",
+        phase: "running",
+        attempt: 0,
+      });
+      scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
+    }
   } catch (err) {
     const pgliteDataDir = resolveActivePgliteDataDir(config);
     const recoveryAction =
@@ -4182,18 +4496,22 @@ export async function startEliza(
         : "none";
 
     if (!pgliteDataDir || recoveryAction === "none") {
+      await closeApiServerForStartupRetry(err);
       throw err;
     }
     if (recoveryAction === "fail-active-lock") {
+      await closeApiServerForStartupRetry(err);
       throw createActivePgliteLockError(pgliteDataDir, err);
     }
     if (recoveryAction === "fail-manual-reset") {
+      await closeApiServerForStartupRetry(err);
       throw createManualResetRequiredPgliteError(pgliteDataDir, err);
     }
 
     logger.warn(
       `[eliza] Runtime migrations failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying startup once without resetting data.`,
     );
+    await closeApiServerForStartupRetry(err);
     try {
       await shutdownRuntime(runtime, "PGLite recovery");
     } catch {
@@ -4257,258 +4575,11 @@ export async function startEliza(
   await loadHooksSystem();
 
   // ── Start API server for GUI access ──────────────────────────────────────
-  // In CLI mode (non-headless), start the API server in the background so
-  // the GUI can connect to the running agent.  This ensures full feature
-  // parity: whether started via `npx elizaos`, `bun run dev`, or the
-  // desktop app, the API server is always available for the GUI admin
-  // surface.
-  try {
-    const { startApiServer } = await import("../api/server.js");
-    const apiPort = resolveServerOnlyPort(process.env);
-    const { port: actualApiPort } = await startApiServer({
-      port: apiPort,
-      runtime,
-      onRestart: async () => {
-        logger.info("[eliza] Hot-reload: Restarting runtime...");
-        try {
-          // Stop the old runtime to release resources (DB connections, timers, etc.)
-
-          try {
-            await shutdownRuntime(runtime, "hot-reload cleanup");
-          } catch (stopErr) {
-            logger.warn(
-              `[eliza] Hot-reload: old runtime stop failed: ${formatError(stopErr)}`,
-            );
-          }
-
-          // Reload config from disk (updated by API)
-          const freshConfig = loadElizaConfig();
-
-          // Propagate secrets & cloud config into process.env so plugins
-          // (especially plugin-elizacloud) can discover them.  The initial
-          // startup does this in startEliza(); the hot-reload must repeat it
-          // because the config may have changed (e.g. cloud enabled during
-          // onboarding).
-          applyConnectorSecretsToEnv(freshConfig);
-          await autoResolveDiscordAppId();
-          applyCloudConfigToEnv(freshConfig);
-          applyX402ConfigToEnv(freshConfig);
-          applyDatabaseConfigToEnv(freshConfig);
-          await autoFetchCloudGithubToken(
-            freshConfig.cloud?.agentId?.trim() || agentId,
-          );
-
-          // Apply subscription-based credentials (Claude Max, Codex Max)
-          // that may have been set up during onboarding.
-          try {
-            const { applySubscriptionCredentials } = await import(
-              "../auth/index.js"
-            );
-            await applySubscriptionCredentials(freshConfig);
-          } catch (subErr) {
-            logger.warn(
-              `[eliza] Hot-reload: subscription credentials: ${formatError(subErr)}`,
-            );
-          }
-
-          // Resolve plugins using same function as startup
-          const resolvedPlugins = await resolvePlugins(freshConfig);
-
-          // Rebuild character from the fresh config so onboarding changes
-          // (name, bio, style, etc.) are picked up on restart.
-          const freshCharacter = buildCharacterFromConfig(freshConfig);
-
-          // Recreate Eliza plugin with fresh workspace
-          const freshElizaPlugin = createElizaPlugin({
-            workspaceDir:
-              freshConfig.agents?.defaults?.workspace ?? workspaceDir,
-
-            agentId:
-              freshCharacter.name?.toLowerCase().replace(/\s+/g, "-") ?? "main",
-          });
-
-          // Create new runtime with updated plugins.
-          // Filter out pre-registered plugins so they aren't double-loaded
-          // inside initialize()'s Promise.all — same pattern as the initial
-          // startup to avoid the TEXT_EMBEDDING race condition.
-          const freshPreferredProviderId =
-            resolvePreferredProviderId(freshConfig);
-          const freshPreferredProviderPluginName =
-            resolvePreferredProviderPluginName(freshConfig);
-          const freshOtherPlugins = resolvedPlugins.filter(
-            (p) => !PREREGISTER_PLUGINS.has(p.name),
-          );
-          // Boost the preferred provider plugin priority (same as initial startup)
-          const freshPluginsForRuntime = freshOtherPlugins.map((p) => p.plugin);
-          const freshVisionModeSetting = resolveVisionModeSetting(freshConfig);
-          if (freshPreferredProviderPluginName) {
-            for (const plugin of freshPluginsForRuntime) {
-              if (plugin.name === freshPreferredProviderPluginName) {
-                plugin.priority = (plugin.priority ?? 0) + 10;
-                break;
-              }
-            }
-          }
-          const newRuntime = new AgentRuntime({
-            character: freshCharacter,
-            plugins: [freshElizaPlugin, ...freshPluginsForRuntime],
-            ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
-            settings: {
-              ...(freshPreferredProviderId
-                ? { MODEL_PROVIDER: freshPreferredProviderId }
-                : {}),
-              ...(freshVisionModeSetting
-                ? { VISION_MODE: freshVisionModeSetting }
-                : {}),
-              // Disable image description when vision is explicitly toggled off.
-              ...(freshConfig.features?.vision === false
-                ? { DISABLE_IMAGE_DESCRIPTION: "true" }
-                : {}),
-            },
-          });
-          installRuntimeMethodBindings(newRuntime);
-
-          // Pre-register plugin-sql + local-embedding before initialize()
-          // to avoid the same race condition as the initial startup.
-          // Re-derive from freshly resolved plugins (not outer closure) so
-          // hot-reload picks up any plugin updates.
-          const freshSqlPlugin = resolvedPlugins.find(
-            (p) => p.name === "@elizaos/plugin-sql",
-          );
-          const freshLocalEmbeddingPlugin = resolvedPlugins.find(
-            (p) => p.name === "@elizaos/plugin-local-embedding",
-          );
-          if (freshSqlPlugin) {
-            await registerSqlPluginWithRecovery(
-              newRuntime,
-              freshSqlPlugin,
-              freshConfig,
-            );
-          }
-          if (freshLocalEmbeddingPlugin) {
-            configureLocalEmbeddingPlugin(
-              freshLocalEmbeddingPlugin.plugin,
-              freshConfig,
-            );
-            await newRuntime.registerPlugin(freshLocalEmbeddingPlugin.plugin);
-          }
-
-          // Pre-register remaining core plugins sequentially (same as startup)
-          {
-            try {
-              await newRuntime.registerPlugin(rolesPlugin);
-            } catch (err) {
-              logger.warn(
-                `[eliza] Hot-reload: internal roles capability pre-registration failed: ${formatError(err)}`,
-              );
-            }
-
-            const alreadyPreRegistered = new Set([
-              "@elizaos/plugin-sql",
-              "@elizaos/plugin-local-embedding",
-            ]);
-            for (const name of CORE_PLUGINS) {
-              if (alreadyPreRegistered.has(name)) continue;
-              const resolved = resolvedPlugins.find((p) => p.name === name);
-              if (!resolved) continue;
-              try {
-                await newRuntime.registerPlugin(resolved.plugin);
-              } catch (err) {
-                logger.warn(
-                  `[eliza] Hot-reload: core plugin ${name} pre-registration failed: ${formatError(err)}`,
-                );
-              }
-            }
-          }
-
-          assertPersistentDatabaseRequired(newRuntime);
-          try {
-            const { stewardEvmPreBoot: preBootHR } = await import(
-              "../services/steward-evm-bridge.js"
-            );
-            await preBootHR(newRuntime);
-          } catch {
-            // non-fatal
-          }
-          assertPersistentDatabaseRequired(newRuntime);
-          await newRuntime.initialize();
-          await prepareRuntimeForTrajectoryCapture(
-            newRuntime,
-            "hot-reload runtime.initialize()",
-          );
-
-          try {
-            const { stewardEvmPostBoot: postBootHR } = await import(
-              "../services/steward-evm-bridge.js"
-            );
-            await postBootHR(newRuntime);
-          } catch {
-            // non-fatal
-          }
-
-          // Ensure AutonomyService survives hot-reload (respects ENABLE_AUTONOMY)
-          const hotReloadAutonomyEnabled =
-            (process.env.ENABLE_AUTONOMY ?? "true").toLowerCase() !== "false";
-
-          if (hotReloadAutonomyEnabled && !newRuntime.getService("AUTONOMY")) {
-            try {
-              await AutonomyService.start(newRuntime);
-            } catch (err) {
-              logger.warn(
-                `[eliza] AutonomyService failed to start after hot-reload: ${formatError(err)}`,
-              );
-            }
-          }
-
-          // Enable the autonomy loop after hot-reload (same as initial boot)
-          if (hotReloadAutonomyEnabled) {
-            const svc = (newRuntime.getService("AUTONOMY") ??
-              newRuntime.getService("autonomy")) as unknown as
-              | { enableAutonomy(): Promise<void> }
-              | null
-              | undefined;
-            if (svc && typeof svc.enableAutonomy === "function") {
-              try {
-                await svc.enableAutonomy();
-              } catch (err) {
-                logger.warn(
-                  `[eliza] Failed to enable autonomy after hot-reload: ${formatError(err)}`,
-                );
-              }
-            }
-          }
-
-          installActionAliases(newRuntime);
-          runtime = newRuntime;
-          logger.info("[eliza] Hot-reload: Runtime restarted successfully");
-          return newRuntime;
-        } catch (err) {
-          logger.error(`[eliza] Hot-reload failed: ${formatError(err)}`);
-          return null;
-        }
-      },
-    });
-    const dashboardUrl = `http://localhost:${actualApiPort}`;
-    console.log(`[eliza] Control UI: ${dashboardUrl}`);
-    logger.info(`[eliza] API server listening on ${dashboardUrl}`);
-    scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
-  } catch (apiErr) {
-    // Log to both stderr (visible to Electrobun agent.ts) and the in-memory
-    // logger so the error is never silently swallowed in packaged builds.
-    const apiErrMsg = `[eliza] Could not start API server: ${formatError(apiErr)}`;
-    console.error(apiErrMsg);
-    logger.warn(apiErrMsg);
-
-    // In server-only mode (Electrobun desktop), a missing API server is fatal
-    // — nothing else can serve requests. Exit so the parent process sees a
-    // non-zero exit code instead of the misleading "Server running" message.
-    if (opts?.serverOnly) {
-      console.error(
-        "[eliza] Exiting: API server is required in server-only mode.",
-      );
-      process.exit(1);
-    }
-    // Non-fatal in CLI mode — the interactive chat loop still works.
+  // Server-only mode binds before runtime service initialization above so
+  // Kubernetes startup probes can see /health while heavier services finish.
+  // CLI mode starts here after hooks, preserving the previous interactive flow.
+  if (!apiServerHandle) {
+    apiServerHandle = await startRuntimeApiServer();
   }
 
   // ── Server-only mode — keep running without chat loop ────────────────────

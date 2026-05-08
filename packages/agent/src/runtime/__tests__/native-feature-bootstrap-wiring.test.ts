@@ -11,6 +11,10 @@ const nativeRuntimeFeaturesSource = readFileSync(
   path.resolve(import.meta.dirname, "..", "native-runtime-features.ts"),
   "utf-8",
 );
+const apiServerSource = readFileSync(
+  path.resolve(import.meta.dirname, "..", "..", "api", "server.ts"),
+  "utf-8",
+);
 const expectedCorePlugins = [
   "@elizaos/plugin-sql",
   "@elizaos/plugin-local-embedding",
@@ -140,6 +144,33 @@ describe("native feature bootstrap wiring", () => {
     );
     expect(initBlock).toContain("Native knowledge disabled");
     expect(initBlock).toContain("skipping bundled knowledge seeding");
+  });
+
+  it("binds the server-only API before long runtime service initialization", () => {
+    const apiBindIndex = elizaSource.indexOf(
+      "apiServerHandle = await startRuntimeApiServer",
+    );
+    const runtimeInitIndex = elizaSource.indexOf(
+      "await initializeRuntimeServices();",
+    );
+
+    expect(apiBindIndex).toBeGreaterThan(-1);
+    expect(runtimeInitIndex).toBeGreaterThan(-1);
+    expect(apiBindIndex).toBeLessThan(runtimeInitIndex);
+    expect(elizaSource).toContain('initialAgentState: "starting"');
+    expect(elizaSource).toMatch(
+      /apiServerHandle\.updateStartup\(\{\s*state: "running",\s*phase: "running",\s*attempt: 0,\s*\}\)/m,
+    );
+  });
+
+  it("lets runtime-backed API startup report starting before readiness", () => {
+    const initialAgentStateBlock =
+      apiServerSource.match(/const initialAgentState =[\s\S]*?;/m)?.[0] ?? "";
+
+    expect(initialAgentStateBlock).toContain("opts?.initialAgentState");
+    expect(initialAgentStateBlock).toContain(
+      'hasRuntime ? "running" : "not_started"',
+    );
   });
 
   it("treats same-pid PGlite pid files from older containers as stale", () => {
