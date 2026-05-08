@@ -18,6 +18,8 @@
     "scripts/rt.sh",
     "scripts/run-node.mjs",
     "scripts/init-submodules.mjs",
+    "scripts/apply-alice-eliza-runtime-patches.mjs",
+    "scripts/alice-eliza-runtime-patches",
     "scripts/setup-upstreams.mjs",
     "scripts/run-repo-setup.mjs",
     "scripts/ensure-skills.mjs",
