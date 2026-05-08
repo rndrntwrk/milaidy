@@ -181,6 +181,26 @@ describe("native feature bootstrap wiring", () => {
     );
   });
 
+  it("reconciles active-lock PGlite pid files before failing startup", () => {
+    const recoveryBlock =
+      elizaSource.match(
+        /export function getPgliteRecoveryAction\([\s\S]*?\n\}/m,
+      )?.[0] ?? "";
+    const activeLockCheckIndex = recoveryBlock.indexOf(
+      "code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK",
+    );
+    const pidReconcileIndex = recoveryBlock.indexOf(
+      "const pidStatus = reconcilePglitePidFile(dataDir);",
+    );
+    const failActiveIndex = recoveryBlock.indexOf('return "fail-active-lock";');
+
+    expect(activeLockCheckIndex).toBeGreaterThan(-1);
+    expect(pidReconcileIndex).toBeGreaterThan(-1);
+    expect(failActiveIndex).toBeGreaterThan(-1);
+    expect(pidReconcileIndex).toBeLessThan(failActiveIndex);
+    expect(recoveryBlock).toContain('return "retry-without-reset";');
+  });
+
   it("calls native feature probes with the runtime instance bound", () => {
     expect(elizaSource).toContain('from "./native-runtime-features.js"');
 

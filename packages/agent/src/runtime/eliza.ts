@@ -2221,9 +2221,8 @@ export function getPgliteRecoveryAction(
   dataDir: string,
 ): PgliteRecoveryAction {
   const code = pluginSql.getPgliteErrorCode(err);
-  if (code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK) {
-    return "fail-active-lock";
-  }
+  const treatPidAsActiveLock =
+    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK || isPgliteLockError(err);
   if (
     code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
     code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
@@ -2231,11 +2230,11 @@ export function getPgliteRecoveryAction(
     return "fail-manual-reset";
   }
 
-  if (!isRecoverablePgliteInitError(err)) return "none";
+  if (!treatPidAsActiveLock && !isRecoverablePgliteInitError(err)) {
+    return "none";
+  }
 
   const pidStatus = reconcilePglitePidFile(dataDir);
-  const treatPidAsActiveLock =
-    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK || isPgliteLockError(err);
   if (
     (treatPidAsActiveLock && pidStatus === "active") ||
     (treatPidAsActiveLock && pidStatus === "active-unconfirmed") ||
@@ -2245,6 +2244,9 @@ export function getPgliteRecoveryAction(
   }
   if (pidStatus === "cleared-stale" || pidStatus === "cleared-malformed") {
     return "retry-without-reset";
+  }
+  if (treatPidAsActiveLock) {
+    return "fail-active-lock";
   }
   return "fail-manual-reset";
 }

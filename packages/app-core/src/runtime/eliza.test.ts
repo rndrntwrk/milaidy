@@ -3519,6 +3519,25 @@ describe("getPgliteRecoveryAction", () => {
     expect(exists).toBe(false);
   });
 
+  it("retries without reset when an active-lock error leaves a malformed pid file", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "-42\n/tmp/pglite\n5432\n");
+
+    const error = Object.assign(
+      new Error("PGlite data dir is already in use"),
+      { code: "ELIZA_PGLITE_DATA_DIR_IN_USE" },
+    );
+
+    const action = getPgliteRecoveryAction(error, tmpDir);
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+
+    expect(action).toBe("retry-without-reset");
+    expect(exists).toBe(false);
+  });
+
   it("returns none for unrelated startup errors", () => {
     const action = getPgliteRecoveryAction(
       new Error("Connection refused"),
