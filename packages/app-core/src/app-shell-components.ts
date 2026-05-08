@@ -5,6 +5,8 @@
  * `./components/index.ts`. Both files must stay in sync.
  */
 
+import type { ComponentType } from "react";
+
 export { GameViewOverlay } from "./components/apps/GameViewOverlay";
 export { AvatarLoader } from "./components/character/AvatarLoader";
 export { CharacterEditor } from "./components/character/CharacterEditor";
@@ -49,3 +51,47 @@ export { ShellOverlays } from "./components/shell/ShellOverlays";
 export { StartupFailureView } from "./components/shell/StartupFailureView";
 export { StartupShell } from "./components/shell/StartupShell";
 export { SystemWarningBanner } from "./components/shell/SystemWarningBanner";
+
+export interface AppShellPageRegistration {
+  id: string;
+  pluginId: string;
+  label: string;
+  icon?: string;
+  path: string;
+  order?: number;
+  developerOnly?: boolean;
+  group?: string;
+  Component: ComponentType<unknown>;
+}
+
+interface AppShellPageRegistryStore {
+  entries: Map<string, AppShellPageRegistration>;
+}
+
+const APP_SHELL_PAGE_REGISTRY_KEY = Symbol.for(
+  "elizaos.app-core.app-shell-page-registry",
+);
+
+function getRegistryStore(): AppShellPageRegistryStore {
+  const globalObject = globalThis as Record<PropertyKey, unknown>;
+  const existing = globalObject[APP_SHELL_PAGE_REGISTRY_KEY] as
+    | AppShellPageRegistryStore
+    | null
+    | undefined;
+  if (existing) return existing;
+  const created: AppShellPageRegistryStore = {
+    entries: new Map<string, AppShellPageRegistration>(),
+  };
+  globalObject[APP_SHELL_PAGE_REGISTRY_KEY] = created;
+  return created;
+}
+
+export function registerAppShellPage(
+  registration: AppShellPageRegistration,
+): void {
+  getRegistryStore().entries.set(registration.id, registration);
+}
+
+export function listAppShellPages(): AppShellPageRegistration[] {
+  return [...getRegistryStore().entries.values()];
+}

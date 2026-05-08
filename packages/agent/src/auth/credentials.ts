@@ -12,11 +12,16 @@ import { logger } from "@elizaos/core";
 import { refreshAnthropicToken } from "./anthropic.js";
 import { refreshCodexToken } from "./openai-codex.js";
 import {
+  type AccountCredentialProvider,
+  DIRECT_ACCOUNT_PROVIDER_ENV,
+  type DirectAccountProvider,
+  isSubscriptionProvider,
   type OAuthCredentials,
   type StoredCredentials,
   SUBSCRIPTION_PROVIDER_MAP,
   type SubscriptionProvider,
 } from "./types.js";
+import type { AccountCredentialRecord } from "./account-storage.js";
 
 const AUTH_DIR = path.join(
   process.env.ELIZA_HOME || path.join(os.homedir(), ".eliza"),
@@ -26,6 +31,8 @@ const AUTH_DIR = path.join(
 /** Buffer before expiry to trigger refresh (5 minutes) */
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 const invalidClaudeCodeRefreshTokens = new Set<string>();
+const DEFAULT_ACCOUNT_ID = "default";
+const FAR_FUTURE_EXPIRES_AT = 8_640_000_000_000_000;
 
 function ensureAuthDir(): void {
   if (!fs.existsSync(AUTH_DIR)) {
@@ -100,13 +107,68 @@ export function hasValidCredentials(provider: SubscriptionProvider): boolean {
   return stored.credentials.expires > Date.now();
 }
 
+function storedToAccountRecord(
+  provider: SubscriptionProvider,
+  stored: StoredCredentials,
+): AccountCredentialRecord {
+  return {
+    id: DEFAULT_ACCOUNT_ID,
+    providerId: provider,
+    label: "Default",
+    source: "oauth",
+    credentials: stored.credentials,
+    createdAt: stored.createdAt,
+    updatedAt: stored.updatedAt,
+  };
+}
+
+function directProviderAccount(
+  provider: DirectAccountProvider,
+): AccountCredentialRecord | null {
+  const envKey = DIRECT_ACCOUNT_PROVIDER_ENV[provider];
+  const access = process.env[envKey]?.trim();
+  if (!access) return null;
+  return {
+    id: DEFAULT_ACCOUNT_ID,
+    providerId: provider,
+    label: envKey,
+    source: "api-key",
+    credentials: {
+      access,
+      refresh: "",
+      expires: FAR_FUTURE_EXPIRES_AT,
+    },
+    createdAt: 0,
+    updatedAt: 0,
+  };
+}
+
+export function listProviderAccounts(
+  provider: AccountCredentialProvider,
+): AccountCredentialRecord[] {
+  if (!isSubscriptionProvider(provider)) {
+    const account = directProviderAccount(provider);
+    return account ? [account] : [];
+  }
+  const stored = loadCredentials(provider);
+  return stored ? [storedToAccountRecord(provider, stored)] : [];
+}
+
 /**
  * Get a valid access token, refreshing if needed.
  * Returns null if no credentials stored or refresh fails.
  */
 export async function getAccessToken(
-  provider: SubscriptionProvider,
+  provider: AccountCredentialProvider,
+  accountId: string = DEFAULT_ACCOUNT_ID,
 ): Promise<string | null> {
+  if (!isSubscriptionProvider(provider)) {
+    return accountId === DEFAULT_ACCOUNT_ID
+      ? (directProviderAccount(provider)?.credentials.access ?? null)
+      : null;
+  }
+  if (accountId !== DEFAULT_ACCOUNT_ID) return null;
+
   const stored = loadCredentials(provider);
   if (!stored) return null;
 
