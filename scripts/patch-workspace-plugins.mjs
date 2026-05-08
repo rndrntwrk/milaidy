@@ -16,7 +16,7 @@
  * the milady submodule pointer is bumped past it.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -79,6 +79,248 @@ function gitApply(args, cwd, { allowNoIndexFallback = false } = {}) {
   }
 }
 
+function replaceOnce(source, before, after, patchName) {
+  if (!source.includes(before)) {
+    throw new Error(`${patchName}: expected source segment was not found`);
+  }
+  return source.replace(before, after);
+}
+
+export function applyPluginSqlPgliteContainerPidPatch(pluginDir) {
+  const patchName = "plugin-sql-pglite-container-pid-reuse.patch";
+  const managerPath = resolve(
+    pluginDir,
+    "plugins/plugin-sql/typescript/pglite/manager.ts",
+  );
+
+  if (!existsSync(managerPath)) {
+    return null;
+  }
+
+  let source = readFileSync(managerPath, "utf8");
+  if (
+    source.includes("interface PgliteLockState") &&
+    source.includes("private isLockFromPreviousProcess") &&
+    source.includes("private isPidFileFromPreviousProcess")
+  ) {
+    return "already-applied";
+  }
+
+  source = replaceOnce(
+    source,
+    `  openSync,
+  readFileSync,
+  unlinkSync,
+`,
+    `  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+`,
+    patchName,
+  );
+
+  source = replaceOnce(
+    source,
+    `type PglitePidFileStatus =
+  | "missing"
+  | "active"
+  | "active-unconfirmed"
+  | "cleared-stale"
+  | "cleared-malformed"
+  | "check-failed";
+
+export class PGliteClientManager implements IDatabaseClientManager<PGlite> {
+`,
+    `type PglitePidFileStatus =
+  | "missing"
+  | "active"
+  | "active-unconfirmed"
+  | "cleared-stale"
+  | "cleared-malformed"
+  | "check-failed";
+
+interface PgliteLockState {
+  pid: number | null;
+  createdAtMs: number | null;
+}
+
+export class PGliteClientManager implements IDatabaseClientManager<PGlite> {
+`,
+    patchName,
+  );
+
+  source = replaceOnce(
+    source,
+    `  private getLockPid(lockPath: string): number | null {
+    try {
+      const raw = readFileSync(lockPath, "utf-8");
+      const parsed = JSON.parse(raw) as { pid?: unknown };
+      return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : null;
+    } catch {
+      return null;
+    }
+  }
+`,
+    `  private getLockState(lockPath: string): PgliteLockState {
+    try {
+      const raw = readFileSync(lockPath, "utf-8");
+      const parsed = JSON.parse(raw) as { pid?: unknown; createdAt?: unknown };
+      const pid =
+        typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : null;
+      const createdAtMs =
+        typeof parsed.createdAt === "string"
+          ? Date.parse(parsed.createdAt)
+          : NaN;
+      return {
+        pid,
+        createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : null,
+      };
+    } catch {
+      return { pid: null, createdAtMs: null };
+    }
+  }
+`,
+    patchName,
+  );
+
+  source = replaceOnce(
+    source,
+    `  private isPidRunning(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      return (err as NodeJS.ErrnoException).code !== "ESRCH";
+    }
+  }
+
+  private acquireDataDirLockIfNeeded(): void {
+`,
+    `  private isPidRunning(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      return (err as NodeJS.ErrnoException).code !== "ESRCH";
+    }
+  }
+
+  private isLockFromPreviousProcess(lockState: PgliteLockState): boolean {
+    if (lockState.pid !== process.pid || !lockState.createdAtMs) {
+      return false;
+    }
+
+    const currentProcessStartedAtMs = Date.now() - process.uptime() * 1000;
+    return lockState.createdAtMs + 1000 < currentProcessStartedAtMs;
+  }
+
+  private isPidFileFromPreviousProcess(pidPath: string, pid: number): boolean {
+    if (pid !== process.pid) {
+      return false;
+    }
+
+    const currentProcessStartedAtMs = Date.now() - process.uptime() * 1000;
+    return statSync(pidPath).mtimeMs + 1000 < currentProcessStartedAtMs;
+  }
+
+  private acquireDataDirLockIfNeeded(): void {
+`,
+    patchName,
+  );
+
+  source = replaceOnce(
+    source,
+    `        const pid = this.getLockPid(lockPath);
+        if (pid && this.isPidRunning(pid)) {
+          throw this.createActiveLockError(
+            dataDir,
+            new Error(\`PGlite lock file is held by running process \${pid}\`)
+          );
+        }
+
+        try {
+          unlinkSync(lockPath);
+          logger.info(
+            { src: "plugin:sql", dataDir, lockPath, pid },
+            "Removed stale PGlite lock file"
+          );
+        } catch (unlinkErr) {
+          throw this.createActiveLockError(dataDir, unlinkErr);
+        }
+`,
+    `        const lockState = this.getLockState(lockPath);
+        if (this.isLockFromPreviousProcess(lockState)) {
+          try {
+            unlinkSync(lockPath);
+            logger.info(
+              { src: "plugin:sql", dataDir, lockPath, pid: lockState.pid },
+              "Removed stale PGlite lock file from prior container process"
+            );
+            continue;
+          } catch (unlinkErr) {
+            throw this.createActiveLockError(dataDir, unlinkErr);
+          }
+        }
+
+        const pid = lockState.pid;
+        if (pid && pid !== process.pid && this.isPidRunning(pid)) {
+          throw this.createActiveLockError(
+            dataDir,
+            new Error(\`PGlite lock file is held by running process \${pid}\`)
+          );
+        }
+
+        try {
+          unlinkSync(lockPath);
+          logger.info(
+            { src: "plugin:sql", dataDir, lockPath, pid },
+            "Removed stale PGlite lock file"
+          );
+        } catch (unlinkErr) {
+          throw this.createActiveLockError(dataDir, unlinkErr);
+        }
+`,
+    patchName,
+  );
+
+  source = replaceOnce(
+    source,
+    `      try {
+        process.kill(pid, 0);
+        logger.warn(
+`,
+    `      if (this.isPidFileFromPreviousProcess(pidPath, pid)) {
+        unlinkSync(pidPath);
+        logger.info(
+          { src: "plugin:sql", dataDir, pid },
+          "Removed stale PGlite postmaster.pid from prior container process"
+        );
+        return "cleared-stale";
+      }
+
+      try {
+        process.kill(pid, 0);
+        logger.warn(
+`,
+    patchName,
+  );
+
+  writeFileSync(managerPath, source);
+  return "applied";
+}
+
+function applyDirectPatchForBrokenGitMetadata(patchName, pluginDir, error) {
+  if (
+    patchName !== "plugin-sql-pglite-container-pid-reuse.patch" ||
+    !isBrokenGitMetadata(error)
+  ) {
+    return null;
+  }
+
+  return applyPluginSqlPgliteContainerPidPatch(pluginDir);
+}
+
 function applyPatch(patchPath, pluginDir) {
   const patchName = patchPath.split(/[\\/]/).pop();
 
@@ -108,6 +350,24 @@ function applyPatch(patchPath, pluginDir) {
       allowNoIndexFallback: true,
     });
   } catch (checkErr) {
+    const directResult = applyDirectPatchForBrokenGitMetadata(
+      patchName,
+      pluginDir,
+      checkErr,
+    );
+    if (directResult === "applied") {
+      console.log(
+        `[patch-workspace-plugins] ${patchName}: applied successfully without git metadata`,
+      );
+      return "applied";
+    }
+    if (directResult === "already-applied") {
+      console.log(
+        `[patch-workspace-plugins] ${patchName}: already applied, skipping`,
+      );
+      return "already-applied";
+    }
+
     const msg = commandMessage(checkErr);
     console.warn(
       `[patch-workspace-plugins] ${patchName}: does not apply cleanly (upstream may have fixed it): ${msg.trim().slice(0, 200)}`,
