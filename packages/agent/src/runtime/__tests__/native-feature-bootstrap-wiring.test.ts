@@ -57,15 +57,12 @@ describe("native feature bootstrap wiring", () => {
     expect(elizaSource).toContain('"@elizaos/plugin-cron": pluginCron');
   });
 
-  it("guards plugin-elizacloud bootstrap behind a runtime require", () => {
+  it("defers plugin-elizacloud bootstrap behind a dynamic loader", () => {
     expect(elizaSource).not.toContain(
       'import * as pluginElizacloud from "@elizaos/plugin-elizacloud";',
     );
     expect(elizaSource).toContain(
-      'pluginElizacloud = require("@elizaos/plugin-elizacloud");',
-    );
-    expect(elizaSource).toContain(
-      '"@elizaos/plugin-elizacloud": pluginElizacloud',
+      '"@elizaos/plugin-elizacloud": () => import("@elizaos/plugin-elizacloud")',
     );
   });
 
@@ -127,13 +124,20 @@ describe("native feature bootstrap wiring", () => {
     expect(ensureBlock).toContain("Native trajectories disabled");
   });
 
-  it("skips bundled knowledge seeding when native knowledge is disabled", () => {
+  it("defers bundled knowledge seeding until the API server can answer probes", () => {
     const initBlock =
       elizaSource.match(
         /const initializeRuntimeServices = async \(\): Promise<void> => \{[\s\S]*?\n {2}\};/m,
       )?.[0] ?? "";
 
     expect(initBlock).toContain("if (runtimeKnowledgeEnabled(runtime))");
+    expect(initBlock).toContain(
+      "bundled knowledge seeding deferred until API server startup",
+    );
+    expect(initBlock).not.toContain("await seedBundledKnowledge(runtime)");
+    expect(elizaSource).toContain(
+      'scheduleBundledKnowledgeSeed(runtime, "api-server-listen")',
+    );
     expect(initBlock).toContain("Native knowledge disabled");
     expect(initBlock).toContain("skipping bundled knowledge seeding");
   });

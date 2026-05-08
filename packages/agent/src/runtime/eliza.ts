@@ -537,6 +537,8 @@ type StartupPhaseFields = Record<
   string | number | boolean | null | undefined
 >;
 
+const BUNDLED_KNOWLEDGE_SEED_DELAY_MS = 30_000;
+
 function formatStartupPhaseFields(fields: StartupPhaseFields = {}): string {
   const parts = Object.entries(fields)
     .filter(([, value]) => value !== undefined)
@@ -579,6 +581,38 @@ async function withStartupPhase<T>(
     );
     throw err;
   }
+}
+
+function scheduleBundledKnowledgeSeed(
+  runtime: AgentRuntime,
+  reason: string,
+): void {
+  if (!runtimeKnowledgeEnabled(runtime)) {
+    logger.info(
+      "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",
+    );
+    return;
+  }
+
+  logger.info(
+    `[eliza] Bundled knowledge seeding scheduled after ${reason} delayMs=${BUNDLED_KNOWLEDGE_SEED_DELAY_MS}`,
+  );
+  setTimeout(() => {
+    void withStartupPhase(
+      "bundled-knowledge-seed",
+      {
+        agentId: runtime.agentId,
+        mode: "background",
+        after: reason,
+        delayMs: BUNDLED_KNOWLEDGE_SEED_DELAY_MS,
+      },
+      () => seedBundledKnowledge(runtime),
+    ).catch((err) => {
+      logger.warn(
+        `[eliza] Failed to seed bundled knowledge: ${formatError(err)}`,
+      );
+    });
+  }, BUNDLED_KNOWLEDGE_SEED_DELAY_MS);
 }
 
 function trimEnvString(value: unknown): string | undefined {
@@ -4037,21 +4071,13 @@ export async function startEliza(
       );
     }
 
-    try {
-      if (runtimeKnowledgeEnabled(runtime)) {
-        await withStartupPhase(
-          "bundled-knowledge-seed",
-          { agentId: runtime.agentId },
-          () => seedBundledKnowledge(runtime),
-        );
-      } else {
-        logger.info(
-          "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",
-        );
-      }
-    } catch (err) {
-      logger.warn(
-        `[eliza] Failed to seed bundled knowledge: ${formatError(err)}`,
+    if (runtimeKnowledgeEnabled(runtime)) {
+      logger.info(
+        "[eliza] Native knowledge enabled; bundled knowledge seeding deferred until API server startup",
+      );
+    } else {
+      logger.info(
+        "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",
       );
     }
 
@@ -4200,6 +4226,7 @@ export async function startEliza(
     void loadHooksSystem().catch((err) => {
       logger.warn(`[eliza] Hooks system load failed: ${formatError(err)}`);
     });
+    scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");
     logger.info(
       "[eliza] Runtime initialised in headless mode (autonomy enabled)",
     );
@@ -4444,6 +4471,7 @@ export async function startEliza(
     const dashboardUrl = `http://localhost:${actualApiPort}`;
     console.log(`[eliza] Control UI: ${dashboardUrl}`);
     logger.info(`[eliza] API server listening on ${dashboardUrl}`);
+    scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
   } catch (apiErr) {
     // Log to both stderr (visible to Electrobun agent.ts) and the in-memory
     // logger so the error is never silently swallowed in packaged builds.
