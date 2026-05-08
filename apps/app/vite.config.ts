@@ -42,6 +42,10 @@ const _require = createRequire(import.meta.url);
 // .ts files directly in CI.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
+const pluginSqlSrcRoot = path.join(
+  miladyRoot,
+  "eliza/plugins/plugin-sql/typescript",
+);
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1309,6 +1313,20 @@ export default defineConfig({
           miladyRoot,
           "packages/plugin-selfcontrol/src/index.ts",
         ),
+      },
+      // Keep plugin-sql subpath imports on the repo-local source layout. Some
+      // installed package copies can be stale enough to miss these exports.
+      {
+        find: /^@elizaos\/plugin-sql\/drizzle$/,
+        replacement: path.join(pluginSqlSrcRoot, "drizzle/index.ts"),
+      },
+      {
+        find: /^@elizaos\/plugin-sql\/schema$/,
+        replacement: path.join(pluginSqlSrcRoot, "schema/index.ts"),
+      },
+      {
+        find: /^@elizaos\/plugin-sql\/types$/,
+        replacement: path.join(pluginSqlSrcRoot, "types.ts"),
       },
       // Force local @miladyai/app-core when workspace-linked (prevents stale
       // bun cache copies from overriding the symlinked local source).
