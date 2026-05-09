@@ -218,11 +218,6 @@ index 9becb337a0..b20476b87c 100644
 +        }
 +
 +        apiServerHandle.updateRuntime(currentRuntime);
-+        apiServerHandle.updateStartup({
-+          state: "running",
-+          phase: "running",
-+          attempt: 0,
-+        });
 +      } catch (error) {
 +        apiServerHandle.updateStartup({
 +          state: "error",
@@ -239,6 +234,11 @@ index 9becb337a0..b20476b87c 100644
 +        serverOnly: true,
 +        port: actualApiPort,
 +        elapsedMs: Date.now() - startupStartedAt,
++      });
++      apiServerHandle.updateStartup({
++        state: "running",
++        phase: "running",
++        attempt: 0,
 +      });
 +      console.log(`[milady] Control UI: http://localhost:${actualApiPort}`);
 +      console.log("[milady] Server running. Press Ctrl+C to stop.");

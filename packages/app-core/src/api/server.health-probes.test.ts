@@ -42,7 +42,29 @@ describe("Kubernetes health probes", () => {
     });
   });
 
-  it("marks all kube health routes healthy after runtime attachment", () => {
+  it("keeps readiness closed after runtime attachment until startup is complete", () => {
+    expect(buildKubeHealthResponse("/health", false, 11)).toEqual({
+      statusCode: 503,
+      payload: {
+        ok: false,
+        ready: false,
+        agentState: "starting",
+        uptime: 11,
+      },
+    });
+
+    expect(buildKubeHealthResponse("/health/live", false, 11)).toEqual({
+      statusCode: 200,
+      payload: {
+        ok: true,
+        ready: false,
+        agentState: "starting",
+        uptime: 11,
+      },
+    });
+  });
+
+  it("marks all kube health routes healthy after startup completion", () => {
     for (const pathname of ["/health", "/health/live", "/health/ready"] as const) {
       expect(buildKubeHealthResponse(pathname, true, 11)).toEqual({
         statusCode: 200,
@@ -56,7 +78,7 @@ describe("Kubernetes health probes", () => {
     }
   });
 
-  it("does not mark the compat runtime ready until upstream updateRuntime returns", () => {
+  it("does not mark Kubernetes ready from updateRuntime alone", () => {
     const updateRuntimeBlock =
       serverSource.match(
         /server\.updateRuntime = \(runtime: AgentRuntime\) => \{[\s\S]*?\n    \};/,
@@ -71,11 +93,24 @@ describe("Kubernetes health probes", () => {
     const backgroundRepairIndex = updateRuntimeBlock.indexOf(
       "queueMicrotask(() => {",
     );
+    const kubeReadyIndex = updateRuntimeBlock.indexOf("kubeReady");
 
     expect(upstreamUpdateIndex).toBeGreaterThan(-1);
     expect(compatReadyIndex).toBeGreaterThan(-1);
     expect(backgroundRepairIndex).toBeGreaterThan(-1);
     expect(upstreamUpdateIndex).toBeLessThan(compatReadyIndex);
     expect(compatReadyIndex).toBeLessThan(backgroundRepairIndex);
+    expect(kubeReadyIndex).toBe(-1);
+  });
+
+  it("marks Kubernetes ready only through the startup state transition", () => {
+    const updateStartupBlock =
+      serverSource.match(
+        /server\.updateStartup = \(update\) => \{[\s\S]*?\n    \};/,
+      )?.[0] ?? "";
+
+    expect(updateStartupBlock).toContain('nextState === "running"');
+    expect(updateStartupBlock).toContain("compatState.kubeReady = true;");
+    expect(updateStartupBlock).toContain("compatState.kubeReady = false;");
   });
 });

@@ -1295,11 +1295,6 @@ export async function startEliza(
         }
 
         apiServerHandle.updateRuntime(currentRuntime);
-        apiServerHandle.updateStartup({
-          state: "running",
-          phase: "running",
-          attempt: 0,
-        });
       } catch (error) {
         apiServerHandle.updateStartup({
           state: "error",
@@ -1316,6 +1311,11 @@ export async function startEliza(
         serverOnly: true,
         port: actualApiPort,
         elapsedMs: Date.now() - startupStartedAt,
+      });
+      apiServerHandle.updateStartup({
+        state: "running",
+        phase: "running",
+        attempt: 0,
       });
       console.log(`[milady] Control UI: http://localhost:${actualApiPort}`);
       console.log("[milady] Server running. Press Ctrl+C to stop.");

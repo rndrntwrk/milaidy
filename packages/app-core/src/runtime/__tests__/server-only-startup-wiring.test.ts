@@ -34,6 +34,17 @@ describe("server-only startup wiring", () => {
     expect(serverOnlyBranch).toContain(
       "apiServerHandle.updateRuntime(currentRuntime);",
     );
+    const updateRuntimeIndex = serverOnlyBranch.indexOf(
+      "apiServerHandle.updateRuntime(currentRuntime);",
+    );
+    const doneMarkerIndex = serverOnlyBranch.indexOf(
+      'startupInfo("start-eliza:done"',
+    );
+    expect(updateRuntimeIndex).toBeLessThan(doneMarkerIndex);
+    const updateStartupRunningIndex = serverOnlyBranch.indexOf(
+      'apiServerHandle.updateStartup({\n        state: "running"',
+    );
+    expect(doneMarkerIndex).toBeLessThan(updateStartupRunningIndex);
     expect(serverOnlyBranch).toMatch(
       /apiServerHandle\.updateStartup\(\{\s*state: "running",\s*phase: "running",\s*attempt: 0,\s*\}\)/m,
     );

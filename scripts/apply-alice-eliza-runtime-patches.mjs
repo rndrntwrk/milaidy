@@ -125,14 +125,24 @@ export function isAliceRuntimeApiBindPatched(source) {
   const runtimeBootIndex = serverOnlyBranch.indexOf(
     "upstreamStartElizaWithPgliteCompat({",
   );
+  const updateRuntimeIndex = serverOnlyBranch.indexOf(
+    "apiServerHandle.updateRuntime(currentRuntime);",
+  );
+  const doneMarkerIndex = serverOnlyBranch.indexOf(
+    'startupInfo("start-eliza:done"',
+  );
+  const updateStartupRunningIndex = serverOnlyBranch.indexOf(
+    'apiServerHandle.updateStartup({\n        state: "running"',
+  );
 
   return (
     apiBindIndex >= 0 &&
     runtimeBootIndex >= 0 &&
     apiBindIndex < runtimeBootIndex &&
+    updateRuntimeIndex >= 0 &&
+    doneMarkerIndex > updateRuntimeIndex &&
+    updateStartupRunningIndex > doneMarkerIndex &&
     serverOnlyBranch.includes('initialAgentState: "starting"') &&
-    serverOnlyBranch.includes("apiServerHandle.updateRuntime(currentRuntime);") &&
-    serverOnlyBranch.includes("apiServerHandle.updateStartup({") &&
     source.includes("[milady][startup]")
   );
 }

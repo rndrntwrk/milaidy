@@ -43,6 +43,12 @@ describe("Alice Eliza runtime patch contract", () => {
       "+        apiServerHandle.updateRuntime(currentRuntime);",
     );
     expect(patch).toContain("+        apiServerHandle.updateStartup({");
+    expect(patch.indexOf("+        apiServerHandle.updateRuntime(currentRuntime);")).toBeLessThan(
+      patch.indexOf('+      startupInfo("start-eliza:done"'),
+    );
+    expect(patch.indexOf('+      startupInfo("start-eliza:done"')).toBeLessThan(
+      patch.indexOf("+      apiServerHandle.updateStartup({"),
+    );
     expect(patch).toContain(
       "+        await apiServerHandle.close().catch(() => undefined);",
     );
@@ -56,7 +62,9 @@ describe("Alice Eliza runtime patch contract", () => {
       'initialAgentState: "starting"',
       "upstreamStartElizaWithPgliteCompat({",
       "apiServerHandle.updateRuntime(currentRuntime);",
+      'startupInfo("start-eliza:done"',
       "apiServerHandle.updateStartup({",
+      '        state: "running"',
       "const keepAlive",
     ].join("\n");
 

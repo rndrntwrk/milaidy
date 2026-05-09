@@ -15,6 +15,7 @@ const MAX_BODY_BYTES = 1_048_576;
 
 export interface CompatRuntimeState {
   current: AgentRuntime | null;
+  kubeReady: boolean;
   pendingAgentName: string | null;
   pendingRestartReasons: string[];
 }

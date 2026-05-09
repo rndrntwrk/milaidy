@@ -264,6 +264,7 @@ describe("buildPluginListResponse", () => {
         current: {
           plugins: [{ name: "@elizaos/plugin-openai" }],
         } as never,
+        kubeReady: false,
         pendingAgentName: null,
         pendingRestartReasons: [],
       };
@@ -319,6 +320,7 @@ describe("buildPluginListResponse", () => {
     }>();
     const state = {
       current: null,
+      kubeReady: false,
       pendingAgentName: null,
       pendingRestartReasons: [],
     };
@@ -373,6 +375,7 @@ describe("buildPluginListResponse", () => {
     }>();
     const state = {
       current: null,
+      kubeReady: false,
       pendingAgentName: null,
       pendingRestartReasons: [],
     };
@@ -435,6 +438,7 @@ describe("buildPluginListResponse", () => {
     }>();
     const state = {
       current: null,
+      kubeReady: false,
       pendingAgentName: null,
       pendingRestartReasons: [],
     };
@@ -509,6 +513,7 @@ describe("buildPluginListResponse", () => {
     const runtime = { plugins: [] };
     const state = {
       current: runtime as never,
+      kubeReady: false,
       pendingAgentName: null,
       pendingRestartReasons: [],
     };
@@ -589,6 +594,7 @@ describe("buildPluginListResponse", () => {
     const runtime = { plugins: [] };
     const state = {
       current: runtime as never,
+      kubeReady: false,
       pendingAgentName: null,
       pendingRestartReasons: [],
     };

@@ -1213,7 +1213,7 @@ export function patchHttpCreateServerForMiladyCompat(
       ) {
         const health = buildKubeHealthResponse(
           pathname,
-          Boolean(state?.current),
+          Boolean(state?.kubeReady),
           Math.floor(process.uptime()),
         );
         sendJsonResponse(res, health.statusCode, health.payload);
@@ -1285,6 +1285,7 @@ export async function startApiServer(
   await initStewardWalletCache();
   const compatState: CompatRuntimeState = {
     current: (args[0]?.runtime as AgentRuntime | null) ?? null,
+    kubeReady: Boolean(args[0]?.runtime),
     pendingAgentName: null,
     pendingRestartReasons: [],
   };
@@ -1308,6 +1309,7 @@ export async function startApiServer(
     const originalUpdateRuntime = server.updateRuntime as (
       runtime: AgentRuntime,
     ) => void;
+    const originalUpdateStartup = server.updateStartup;
 
     server.updateRuntime = (runtime: AgentRuntime) => {
       originalUpdateRuntime(runtime);
@@ -1320,6 +1322,17 @@ export async function startApiServer(
       queueMicrotask(() => {
         void repairRuntimeCompatAsync(runtime);
       });
+    };
+
+    server.updateStartup = (update) => {
+      const nextState = update.state;
+      if (nextState === "running") {
+        compatState.kubeReady = true;
+      } else if (nextState) {
+        compatState.kubeReady = false;
+      }
+
+      originalUpdateStartup(update);
     };
 
     async function repairRuntimeCompatAsync(runtime: AgentRuntime) {
