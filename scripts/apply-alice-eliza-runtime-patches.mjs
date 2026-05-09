@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,6 +17,10 @@ export const aliceElizaRuntimePatchRelativePath =
   "scripts/alice-eliza-runtime-patches/app-core-server-only-api-bind.patch";
 
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
+const lifeOpsSourceRelativePaths = [
+  "plugins/app-lifeops/src",
+  "apps/app-lifeops/src",
+];
 
 function runGitApply(args, { cwd, allowFailure = false } = {}) {
   const result = spawnSync("git", args, {
@@ -49,13 +59,90 @@ export function isAliceRuntimeApiBindPatched(source) {
   );
 }
 
-export function applyAliceElizaRuntimePatches({
-  rootDir = repoRoot,
+export function rewriteRelativeTsRuntimeSpecifiers(source) {
+  return source
+    .replace(
+      /(\bfrom\s*["'])(\.{1,2}\/[^"']+)\.(?:ts|tsx)(["'])/g,
+      "$1$2.js$3",
+    )
+    .replace(
+      /(\bimport\s*["'])(\.{1,2}\/[^"']+)\.(?:ts|tsx)(["'])/g,
+      "$1$2.js$3",
+    )
+    .replace(
+      /(\bimport\s*\(\s*["'])(\.{1,2}\/[^"']+)\.(?:ts|tsx)(["']\s*\))/g,
+      "$1$2.js$3",
+    );
+}
+
+function listLifeOpsSourceFiles(dir) {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listLifeOpsSourceFiles(entryPath));
+      continue;
+    }
+    if (
+      entry.isFile() &&
+      (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) &&
+      !entry.name.endsWith(".d.ts")
+    ) {
+      files.push(entryPath);
+    }
+  }
+  return files;
+}
+
+export function applyAliceLifeOpsRuntimeImportPatch({
+  elizaRoot,
   log = console.log,
 } = {}) {
-  const elizaRoot = path.join(rootDir, "eliza");
-  const runtimePath = path.join(elizaRoot, runtimeRelativePath);
+  let patchedFiles = 0;
+  let inspectedDirs = 0;
 
+  for (const relativePath of lifeOpsSourceRelativePaths) {
+    const sourceDir = path.join(elizaRoot, relativePath);
+    if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
+      continue;
+    }
+
+    inspectedDirs += 1;
+    for (const file of listLifeOpsSourceFiles(sourceDir)) {
+      const before = readFileSync(file, "utf8");
+      const after = rewriteRelativeTsRuntimeSpecifiers(before);
+      if (after === before) {
+        continue;
+      }
+      writeFileSync(file, after);
+      patchedFiles += 1;
+    }
+  }
+
+  if (inspectedDirs === 0) {
+    log("[alice-eliza-runtime-patches] app-lifeops source absent; skipping");
+    return "skipped";
+  }
+
+  if (patchedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] app-lifeops runtime imports already use JS specifiers",
+    );
+    return "already-applied";
+  }
+
+  log(
+    `[alice-eliza-runtime-patches] patched app-lifeops runtime imports in ${patchedFiles} file(s)`,
+  );
+  return "applied";
+}
+
+function applyAliceRuntimeApiBindPatch({
+  rootDir,
+  elizaRoot,
+  runtimePath,
+  log,
+}) {
   if (!existsSync(runtimePath)) {
     log(
       "[alice-eliza-runtime-patches] eliza runtime source absent; skipping patch",
@@ -103,6 +190,25 @@ export function applyAliceElizaRuntimePatches({
 
   log("[alice-eliza-runtime-patches] applied app-core API bind patch");
   return "applied";
+}
+
+export function applyAliceElizaRuntimePatches({
+  rootDir = repoRoot,
+  log = console.log,
+} = {}) {
+  const elizaRoot = path.join(rootDir, "eliza");
+  const runtimePath = path.join(elizaRoot, runtimeRelativePath);
+
+  const results = [
+    applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
+    applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),
+  ];
+
+  return results.includes("applied")
+    ? "applied"
+    : results.includes("already-applied")
+      ? "already-applied"
+      : "skipped";
 }
 
 const isDirectRun =
