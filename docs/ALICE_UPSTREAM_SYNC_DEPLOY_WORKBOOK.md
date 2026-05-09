@@ -36,6 +36,8 @@ work from `milady-ai/develop` and the nested Eliza source.
   patches against upstream Eliza source anchors.
 - `packages/agent/src/api/lifeops-agent-subpaths.test.ts` verifies LifeOps
   imports do not require missing root `@elizaos/agent` subpaths.
+- AppCore native bridge tests verify LifeOps imports do not require missing root
+  `@elizaos/app-core/bridge/native-plugins` exports.
 - Staging deploy must assert the materialized runtime image includes the same
   exports and source files the runtime imports at startup.
 - Any new `Cannot find module`, package `exports`, or staged `.runtime-imports`
@@ -49,6 +51,8 @@ work from `milady-ai/develop` and the nested Eliza source.
   - `./cloud/cloud-api-key`
 - Staged app plugin imports must patch
   `@elizaos/plugin-telegram/account-auth-service` before importing LifeOps.
+- Root `@elizaos/app-core/bridge/native-plugins` must expose the AppBlocker
+  bridge used by LifeOps.
 - Startup acceptance requires `[milady][startup] start-eliza:done` and rejects
   LifeOps load failures, optional LifeOps skips, PGlite lock errors, and runtime
   boot errors.
