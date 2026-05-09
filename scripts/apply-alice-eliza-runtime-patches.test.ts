@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyAliceAppCoreCodingAgentsFallbackPatch,
   applyAliceAppCoreCompanionStagePatch,
+  applyAliceAppCoreOpenAccessPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceKubeHealthReadinessPatch,
@@ -330,6 +331,55 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceAppCoreCompanionStagePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches source-mode app-core trusted-local-request with MILADY_OPEN_ACCESS env gate", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-open-access-"),
+    );
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const filePath = path.join(apiDir, "trusted-local-request.ts");
+      const original = [
+        'import type http from "node:http";',
+        "",
+        "function isCloudProvisionedByEnv(): boolean {",
+        '  return process.env.ELIZA_CLOUD_PROVISIONED === "1";',
+        "}",
+        "",
+        "export function isTrustedLocalRequest(",
+        '  req: Pick<http.IncomingMessage, "headers" | "socket">,',
+        "): boolean {",
+        "  if (isCloudProvisionedByEnv()) return false;",
+        "  return true;",
+        "}",
+      ].join("\n");
+      writeFileSync(filePath, original);
+
+      expect(
+        applyAliceAppCoreOpenAccessPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(filePath, "utf8");
+      expect(patched).toContain(
+        'if (process.env.MILADY_OPEN_ACCESS === "1") return true;',
+      );
+      // The original gate must remain after the new env check.
+      expect(patched).toContain("if (isCloudProvisionedByEnv()) return false;");
+
+      expect(
+        applyAliceAppCoreOpenAccessPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

@@ -22,6 +22,8 @@ const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
 const appCoreCompatStateRelativePath =
   "packages/app-core/src/api/compat-route-shared.ts";
 const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
+const appCoreTrustedLocalRequestRelativePath =
+  "packages/app-core/src/api/trusted-local-request.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
@@ -1397,6 +1399,65 @@ export function applyAliceAppCoreCompanionStagePatch({
   return "applied";
 }
 
+function patchAliceAppCoreOpenAccessSource(source) {
+  if (source.includes("MILADY_OPEN_ACCESS")) {
+    return source;
+  }
+
+  const anchor = `export function isTrustedLocalRequest(
+  req: Pick<http.IncomingMessage, "headers" | "socket">,
+): boolean {
+  if (isCloudProvisionedByEnv()) return false;`;
+
+  if (!source.includes(anchor)) {
+    throw new Error(
+      "trusted-local-request isTrustedLocalRequest anchor drifted",
+    );
+  }
+
+  const replacement = `export function isTrustedLocalRequest(
+  req: Pick<http.IncomingMessage, "headers" | "socket">,
+): boolean {
+  // [milaidy:open-access] Staging-only escape hatch. When MILADY_OPEN_ACCESS=1
+  // every request is treated as locally trusted; the cascade lets the SPA
+  // boot into the chat shell without the pairing/login flow. Set ONLY on the
+  // staging bot deploy where reviewer access is the goal — production must
+  // never set this, since production relies on Cloudflare Access as the gate
+  // and this bypass would render that gate moot.
+  if (process.env.MILADY_OPEN_ACCESS === "1") return true;
+  if (isCloudProvisionedByEnv()) return false;`;
+
+  return source.replace(anchor, replacement);
+}
+
+export function applyAliceAppCoreOpenAccessPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const filePath = path.join(elizaRoot, appCoreTrustedLocalRequestRelativePath);
+  if (!existsSync(filePath)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core trusted-local-request source absent; skipping open-access patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(filePath, "utf8");
+  const after = patchAliceAppCoreOpenAccessSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] app-core open-access patch already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(filePath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched app-core open-access (MILADY_OPEN_ACCESS env-gated)",
+  );
+  return "applied";
+}
+
 function patchAliceBundledKnowledgeStartupDeferralSource(source) {
   if (isAliceBundledKnowledgeStartupDeferralPatched(source)) {
     return source;
@@ -1647,6 +1708,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
+    applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
     applyAliceBundledKnowledgeStartupDeferralPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAlicePgliteContainerLockPatch({ elizaRoot, log }),
