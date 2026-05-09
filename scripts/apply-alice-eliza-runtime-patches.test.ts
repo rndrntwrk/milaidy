@@ -12,8 +12,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAliceTelegramAccountAuthResolverPatch,
   applyAliceLifeOpsNativeActivityTrackerPatch,
   aliceElizaRuntimePatchRelativePath,
+  isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
   rewriteRelativeTsRuntimeSpecifiers,
 } from "./apply-alice-eliza-runtime-patches.mjs";
@@ -83,6 +85,98 @@ describe("Alice Eliza runtime patch contract", () => {
         'import { external } from "@elizaos/core";',
       ].join("\n"),
     );
+  });
+
+  it("patches the Eliza resolver so staged LifeOps can import telegram account auth", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-telegram-auth-resolver-"),
+    );
+    try {
+      const resolverDir = path.join(
+        tempDir,
+        "packages",
+        "agent",
+        "src",
+        "runtime",
+      );
+      mkdirSync(resolverDir, { recursive: true });
+      const resolverPath = path.join(resolverDir, "plugin-resolver.ts");
+      writeFileSync(
+        resolverPath,
+        [
+          'import { existsSync } from "node:fs";',
+          'import fs from "node:fs/promises";',
+          'import path from "node:path";',
+          "",
+          "const LAST_FAILED_PLUGIN_NAMES = Symbol.for(",
+          '  "@elizaos/plugin-resolver/last-failed-plugin-names",',
+          ");",
+          "",
+          "type GlobalWithLastFailedPluginNames = typeof globalThis & {",
+          "  [LAST_FAILED_PLUGIN_NAMES]?: string[];",
+          "};",
+          "",
+          "const RUNTIME_APP_PLUGIN_SUBPATHS = new Set([",
+          '  "@elizaos/app-lifeops",',
+          "]);",
+          "",
+          "// ---------------------------------------------------------------------------",
+          "// Helpers (private)",
+          "// ---------------------------------------------------------------------------",
+          "",
+          "async function stagePluginImportRoot(params: {",
+          "  installRoot: string;",
+          "  packageName: string;",
+          "  packageRoot: string;",
+          "  stagedPackageRoot: string;",
+          "}): Promise<string> {",
+          '  const stagedInstallRoot = "staged";',
+          "  await ensureStagedPackageDependencies({",
+          "    installRoot: params.installRoot,",
+          "    packageName: params.packageName,",
+          "    packageRoot: params.packageRoot,",
+          "    stagedPackageRoot,",
+          "  });",
+          "",
+          "  return stagedPackageRoot;",
+          "}",
+          "",
+          "export async function resolvePlugins(): Promise<unknown[]> {",
+          "  const plugins: ResolvedPlugin[] = [];",
+          "  const failedPlugins: Array<{ name: string; error: string }> = [];",
+          "  const repairedInstallRecords = new Set<string>();",
+          "",
+          "  return plugins;",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceTelegramAccountAuthResolverPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(resolverPath, "utf8");
+      expect(isAliceTelegramAccountAuthResolverPatched(patched)).toBe(true);
+      expect(patched).toContain(
+        "ensureTelegramAccountAuthExportCompat(stagedInstallRoot)",
+      );
+      expect(patched).toContain(
+        "ensureTelegramAccountAuthExportCompat(process.cwd())",
+      );
+      expect(patched).toContain('exportsMap[TELEGRAM_ACCOUNT_AUTH_EXPORT]');
+
+      expect(
+        applyAliceTelegramAccountAuthResolverPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("makes LifeOps native activity tracker imports optional on Linux staging", () => {

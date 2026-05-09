@@ -18,6 +18,8 @@ export const aliceElizaRuntimePatchRelativePath =
   "scripts/alice-eliza-runtime-patches/app-core-server-only-api-bind.patch";
 
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
+const agentPluginResolverRelativePath =
+  "packages/agent/src/runtime/plugin-resolver.ts";
 const lifeOpsSourceRelativePaths = [
   "plugins/app-lifeops/src",
   "apps/app-lifeops/src",
@@ -147,6 +149,178 @@ export function rewriteRelativeTsRuntimeSpecifiers(source) {
       /(\bimport\s*\(\s*["'])(\.{1,2}\/[^"']+)\.(?:ts|tsx)(["']\s*\))/g,
       "$1$2.js$3",
     );
+}
+
+export function isAliceTelegramAccountAuthResolverPatched(source) {
+  return (
+    source.includes("const TELEGRAM_ACCOUNT_AUTH_EXPORT") &&
+    source.includes("function ensureTelegramAccountAuthExportCompat(") &&
+    source.includes(
+      "await ensureTelegramAccountAuthExportCompat(stagedInstallRoot);",
+    ) &&
+    source.includes(
+      "await ensureTelegramAccountAuthExportCompat(process.cwd());",
+    )
+  );
+}
+
+function patchAliceTelegramAccountAuthResolverSource(source) {
+  if (isAliceTelegramAccountAuthResolverPatched(source)) {
+    return source;
+  }
+
+  const constantsAnchor = `type GlobalWithLastFailedPluginNames = typeof globalThis & {
+  [LAST_FAILED_PLUGIN_NAMES]?: string[];
+};
+
+`;
+  const constantsPatch = `${constantsAnchor}const TELEGRAM_ACCOUNT_AUTH_EXPORT = "./account-auth-service";
+const TELEGRAM_ACCOUNT_AUTH_TARGET = "./dist/account-auth-service.js";
+
+const TELEGRAM_ACCOUNT_AUTH_FALLBACK = \`export const defaultTelegramAccountDeviceModel = "Milady Cloud";
+export const defaultTelegramAccountSystemVersion = "Linux";
+export function loadTelegramAccountSessionString() { return ""; }
+export class TelegramAccountAuthSession {
+  constructor() {}
+  snapshot() { return { state: "idle", error: null, identity: null }; }
+  async begin() { return this.snapshot(); }
+  async submitCode() { return this.snapshot(); }
+  async submitPassword() { return this.snapshot(); }
+  async cancel() { return undefined; }
+}
+export default { TelegramAccountAuthSession, loadTelegramAccountSessionString, defaultTelegramAccountDeviceModel, defaultTelegramAccountSystemVersion };
+\`;
+
+`;
+  if (!source.includes(constantsAnchor)) {
+    throw new Error("plugin-resolver global failed-plugin anchor drifted");
+  }
+  let next = source.replace(constantsAnchor, constantsPatch);
+
+  const helperAnchor = `// ---------------------------------------------------------------------------
+// Helpers (private)
+// ---------------------------------------------------------------------------
+
+`;
+  const helperPatch = `${helperAnchor}async function ensureTelegramAccountAuthExportCompat(
+  installRoot: string,
+): Promise<void> {
+  const packageJsonPath = path.join(
+    installRoot,
+    "node_modules",
+    "@elizaos",
+    "plugin-telegram",
+    "package.json",
+  );
+  if (!existsSync(packageJsonPath)) {
+    return;
+  }
+
+  const packageDir = path.dirname(packageJsonPath);
+  const accountAuthPath = path.join(
+    packageDir,
+    "dist",
+    "account-auth-service.js",
+  );
+
+  await fs.mkdir(path.dirname(accountAuthPath), { recursive: true });
+  if (!existsSync(accountAuthPath)) {
+    await fs.writeFile(accountAuthPath, TELEGRAM_ACCOUNT_AUTH_FALLBACK);
+  }
+
+  const packageJson = JSON.parse(
+    await fs.readFile(packageJsonPath, "utf8"),
+  ) as {
+    main?: string;
+    exports?: unknown;
+  };
+
+  if (!packageJson.exports || typeof packageJson.exports !== "object") {
+    packageJson.exports = { ".": packageJson.main ?? "./dist/index.js" };
+  }
+
+  const exportsMap = packageJson.exports as Record<string, unknown>;
+  if (exportsMap[TELEGRAM_ACCOUNT_AUTH_EXPORT] !== TELEGRAM_ACCOUNT_AUTH_TARGET) {
+    exportsMap[TELEGRAM_ACCOUNT_AUTH_EXPORT] = TELEGRAM_ACCOUNT_AUTH_TARGET;
+    await fs.writeFile(
+      packageJsonPath,
+      \`\${JSON.stringify(packageJson, null, 2)}\\n\`,
+    );
+  }
+}
+
+`;
+  if (!next.includes(helperAnchor)) {
+    throw new Error("plugin-resolver helper anchor drifted");
+  }
+  next = next.replace(helperAnchor, helperPatch);
+
+  const stagedImportAnchor = `  await ensureStagedPackageDependencies({
+    installRoot: params.installRoot,
+    packageName: params.packageName,
+    packageRoot: params.packageRoot,
+    stagedPackageRoot,
+  });
+
+  return stagedPackageRoot;
+`;
+  const stagedImportPatch = `  await ensureStagedPackageDependencies({
+    installRoot: params.installRoot,
+    packageName: params.packageName,
+    packageRoot: params.packageRoot,
+    stagedPackageRoot,
+  });
+  await ensureTelegramAccountAuthExportCompat(stagedInstallRoot);
+
+  return stagedPackageRoot;
+`;
+  if (!next.includes(stagedImportAnchor)) {
+    throw new Error("plugin-resolver staged import anchor drifted");
+  }
+  next = next.replace(stagedImportAnchor, stagedImportPatch);
+
+  const resolvePluginsAnchor = `  const plugins: ResolvedPlugin[] = [];
+  const failedPlugins: Array<{ name: string; error: string }> = [];
+  const repairedInstallRecords = new Set<string>();
+
+`;
+  const resolvePluginsPatch = `${resolvePluginsAnchor}  await ensureTelegramAccountAuthExportCompat(process.cwd());
+
+`;
+  if (!next.includes(resolvePluginsAnchor)) {
+    throw new Error("plugin-resolver resolvePlugins anchor drifted");
+  }
+  next = next.replace(resolvePluginsAnchor, resolvePluginsPatch);
+
+  return next;
+}
+
+export function applyAliceTelegramAccountAuthResolverPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const resolverPath = path.join(elizaRoot, agentPluginResolverRelativePath);
+  if (!existsSync(resolverPath)) {
+    log(
+      "[alice-eliza-runtime-patches] agent plugin resolver source absent; skipping telegram account-auth resolver patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(resolverPath, "utf8");
+  if (isAliceTelegramAccountAuthResolverPatched(before)) {
+    log(
+      "[alice-eliza-runtime-patches] telegram account-auth resolver patch already applied",
+    );
+    return "already-applied";
+  }
+
+  const after = patchAliceTelegramAccountAuthResolverSource(before);
+  writeFileSync(resolverPath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched telegram account-auth resolver compatibility",
+  );
+  return "applied";
 }
 
 function listLifeOpsSourceFiles(dir) {
@@ -441,6 +615,7 @@ export function applyAliceElizaRuntimePatches({
 
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
+    applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),
     applyAliceLifeOpsNativeActivityTrackerPatch({ elizaRoot, log }),
   ];
