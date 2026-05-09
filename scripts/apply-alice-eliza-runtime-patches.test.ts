@@ -16,6 +16,7 @@ import {
   applyAliceAppCoreCompanionStagePatch,
   applyAliceAppCoreOpenAccessPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
+  applyAliceCoreBasicCapabilitiesBrowserSafePatch,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceKubeHealthReadinessPatch,
   applyAliceLifeOpsCalendarActionPatch,
@@ -331,6 +332,74 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceAppCoreCompanionStagePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches core basic-capabilities to bypass the plugin-manager barrel for browser safety", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-basic-capabilities-browser-safe-"),
+    );
+    try {
+      const dir = path.join(
+        tempDir,
+        "packages",
+        "core",
+        "src",
+        "features",
+        "basic-capabilities",
+      );
+      mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "index.ts");
+      const original = [
+        "// Re-export plugin-manager security helpers (used by other plugins like",
+        "// plugin-app-control to gate owner/admin-only actions without taking a dep",
+        "// on @elizaos/agent, which would create a layer cycle).",
+        "export {",
+        "\tcreatePluginAction,",
+        "\thasAdminAccess,",
+        "\thasOwnerAccess,",
+        "\ttype PluginMode,",
+        "\tpluginAction,",
+        "\ttype SecurityDeps,",
+        '} from "../plugin-manager/index.ts";',
+      ].join("\n");
+      writeFileSync(filePath, original);
+
+      expect(
+        applyAliceCoreBasicCapabilitiesBrowserSafePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(filePath, "utf8");
+      // The exact safe re-export block must be present, pointed at the leaf
+      // source file rather than the plugin-manager barrel.
+      expect(patched).toContain(
+        [
+          "export {",
+          "\thasAdminAccess,",
+          "\thasOwnerAccess,",
+          "\ttype SecurityDeps,",
+          '} from "../plugin-manager/security.ts";',
+        ].join("\n"),
+      );
+      // The original tab-indented exports of the unsafe symbols must be gone
+      // from the source. Comment-text mentions are allowed (and documented).
+      expect(patched).not.toContain("\tcreatePluginAction,");
+      expect(patched).not.toContain("\tpluginAction,");
+      expect(patched).not.toContain("\ttype PluginMode,");
+      // The barrel re-export must be gone.
+      expect(patched).not.toContain('"../plugin-manager/index.ts"');
+
+      expect(
+        applyAliceCoreBasicCapabilitiesBrowserSafePatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
