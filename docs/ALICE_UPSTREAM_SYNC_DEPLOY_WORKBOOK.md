@@ -58,6 +58,10 @@ work from `milady-ai/develop` and the nested Eliza source.
   `@elizaos/plugin-telegram/account-auth-service` before importing LifeOps.
 - Root `@elizaos/app-core/bridge/native-plugins` must expose the AppBlocker
   bridge used by LifeOps.
+- LifeOps umbrella actions must not shadow child actions they include in
+  `subActions`; the calendar umbrella aliases the inner Google Calendar
+  `CALENDAR_ACTION` as `googleCalendarAction` to avoid module-initialization
+  self-reference.
 - Startup acceptance requires `[milady][startup] start-eliza:done` and rejects
   LifeOps load failures, optional LifeOps skips, PGlite lock errors, and runtime
   boot errors.

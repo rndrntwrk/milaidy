@@ -151,6 +151,60 @@ export function rewriteRelativeTsRuntimeSpecifiers(source) {
     );
 }
 
+export function isAliceLifeOpsCalendarActionPatched(source) {
+  return (
+    source.includes("calendarAction as googleCalendarAction") &&
+    source.includes("googleCalendarAction.handler") &&
+    source.includes("googleCalendarAction,\n    proposeMeetingTimesAction") &&
+    !source.includes(
+      'import { calendarAction } from "./lib/calendar-handler.js";',
+    ) &&
+    !source.includes(
+      "subActions: [\n    calendarAction,\n    proposeMeetingTimesAction",
+    )
+  );
+}
+
+function patchAliceLifeOpsCalendarActionSource(source) {
+  if (isAliceLifeOpsCalendarActionPatched(source)) {
+    return source;
+  }
+
+  const importAnchor =
+    'import { calendarAction } from "./lib/calendar-handler.js";';
+  if (!source.includes(importAnchor)) {
+    throw new Error("app-lifeops calendar action import anchor drifted");
+  }
+  let next = source.replace(
+    importAnchor,
+    'import { calendarAction as googleCalendarAction } from "./lib/calendar-handler.js";',
+  );
+
+  const handlerAnchor = "return (await calendarAction.handler?.(";
+  if (!next.includes(handlerAnchor)) {
+    throw new Error("app-lifeops calendar action handler anchor drifted");
+  }
+  next = next.replace(
+    handlerAnchor,
+    "return (await googleCalendarAction.handler?.(",
+  );
+
+  const subActionsAnchor =
+    "subActions: [\n    calendarAction,\n    proposeMeetingTimesAction";
+  if (!next.includes(subActionsAnchor)) {
+    throw new Error("app-lifeops calendar action subActions anchor drifted");
+  }
+  next = next.replace(
+    subActionsAnchor,
+    "subActions: [\n    googleCalendarAction,\n    proposeMeetingTimesAction",
+  );
+
+  if (!isAliceLifeOpsCalendarActionPatched(next)) {
+    throw new Error("app-lifeops calendar action patch applied but contract is absent");
+  }
+  return next;
+}
+
 export function isAliceTelegramAccountAuthResolverPatched(source) {
   return (
     source.includes("const TELEGRAM_ACCOUNT_AUTH_EXPORT") &&
@@ -319,6 +373,52 @@ export function applyAliceTelegramAccountAuthResolverPatch({
   writeFileSync(resolverPath, after);
   log(
     "[alice-eliza-runtime-patches] patched telegram account-auth resolver compatibility",
+  );
+  return "applied";
+}
+
+export function applyAliceLifeOpsCalendarActionPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  let patchedFiles = 0;
+  let inspectedFiles = 0;
+
+  for (const relativePath of lifeOpsSourceRelativePaths) {
+    const calendarActionPath = path.join(
+      elizaRoot,
+      relativePath,
+      "actions",
+      "calendar.ts",
+    );
+    if (!existsSync(calendarActionPath)) {
+      continue;
+    }
+
+    inspectedFiles += 1;
+    const before = readFileSync(calendarActionPath, "utf8");
+    const after = patchAliceLifeOpsCalendarActionSource(before);
+    if (after === before) {
+      continue;
+    }
+    writeFileSync(calendarActionPath, after);
+    patchedFiles += 1;
+  }
+
+  if (inspectedFiles === 0) {
+    log("[alice-eliza-runtime-patches] app-lifeops calendar action source absent; skipping");
+    return "skipped";
+  }
+
+  if (patchedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] app-lifeops calendar action already avoids self-reference",
+    );
+    return "already-applied";
+  }
+
+  log(
+    `[alice-eliza-runtime-patches] patched app-lifeops calendar action in ${patchedFiles} file(s)`,
   );
   return "applied";
 }
@@ -616,6 +716,7 @@ export function applyAliceElizaRuntimePatches({
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
+    applyAliceLifeOpsCalendarActionPatch({ elizaRoot, log }),
     applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),
     applyAliceLifeOpsNativeActivityTrackerPatch({ elizaRoot, log }),
   ];

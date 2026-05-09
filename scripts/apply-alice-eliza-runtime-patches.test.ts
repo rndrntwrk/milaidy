@@ -13,8 +13,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyAliceTelegramAccountAuthResolverPatch,
+  applyAliceLifeOpsCalendarActionPatch,
   applyAliceLifeOpsNativeActivityTrackerPatch,
   aliceElizaRuntimePatchRelativePath,
+  isAliceLifeOpsCalendarActionPatched,
   isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
   rewriteRelativeTsRuntimeSpecifiers,
@@ -170,6 +172,75 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceTelegramAccountAuthResolverPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches the LifeOps calendar umbrella action to avoid child self-reference", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-lifeops-calendar-action-"),
+    );
+    try {
+      const actionsDir = path.join(
+        tempDir,
+        "plugins",
+        "app-lifeops",
+        "src",
+        "actions",
+      );
+      mkdirSync(actionsDir, { recursive: true });
+      const calendarPath = path.join(actionsDir, "calendar.ts");
+      writeFileSync(
+        calendarPath,
+        [
+          'import { calendarAction } from "./lib/calendar-handler.js";',
+          "",
+          "async function route(target: string) {",
+          '  switch (target) {',
+          '    case "calendar":',
+          "      return (await calendarAction.handler?.(",
+          "        runtime,",
+          "        message,",
+          "        state,",
+          "        forwardedOptions,",
+          "        delegatedCallback,",
+          "      )) as ActionResult;",
+          "  }",
+          "}",
+          "",
+          "export const calendarAction = {",
+          "  subActions: [",
+          "    calendarAction,",
+          "    proposeMeetingTimesAction,",
+          "  ],",
+          "};",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceLifeOpsCalendarActionPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(calendarPath, "utf8");
+      expect(isAliceLifeOpsCalendarActionPatched(patched)).toBe(true);
+      expect(patched).toContain(
+        "calendarAction as googleCalendarAction",
+      );
+      expect(patched).toContain("googleCalendarAction.handler");
+      expect(patched).toContain(
+        "googleCalendarAction,\n    proposeMeetingTimesAction",
+      );
+
+      expect(
+        applyAliceLifeOpsCalendarActionPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
