@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyAliceAppCoreCodingAgentsFallbackPatch,
+  applyAliceAppCoreCompanionStagePatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceKubeHealthReadinessPatch,
@@ -21,6 +22,7 @@ import {
   applyAlicePgliteContainerLockPatch,
   aliceElizaRuntimePatchRelativePath,
   isAliceAppCoreCodingAgentsFallbackPatched,
+  isAliceAppCoreCompanionStagePatched,
   isAliceLifeOpsCalendarActionPatched,
   isAliceBundledKnowledgeStartupDeferralPatched,
   isAliceKubeHealthReadinessPatched,
@@ -232,7 +234,11 @@ describe("Alice Eliza runtime patch contract", () => {
       writeFileSync(
         serverPath,
         [
-          "async function handleCompatRoute(req, res, state) {",
+          "async function handleCompatRoute(",
+          "  req,",
+          "  res,",
+          "  state,",
+          ") {",
           "  const method = req.method ?? \"GET\";",
           "  const url = new URL(req.url ?? \"/\", \"http://localhost\");",
           "  // GET /api/agents — return the running agent's info.",
@@ -261,6 +267,69 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceAppCoreCodingAgentsFallbackPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches source-mode app-core with companion stage routes", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-companion-stage-routes-"),
+    );
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const serverPath = path.join(apiDir, "server.ts");
+      writeFileSync(
+        serverPath,
+        [
+          'import fs from "node:fs";',
+          'import path from "node:path";',
+          'import { logger } from "@elizaos/core";',
+          "import {",
+          "  getConfiguredCompatAgentName,",
+          '} from "./compat-route-shared";',
+          "",
+          "async function handleCompatRoute(",
+          "  req,",
+          "  res,",
+          "  state,",
+          ") {",
+          "  const method = req.method ?? \"GET\";",
+          "  const url = new URL(req.url ?? \"/\", \"http://localhost\");",
+          "  if (method === \"GET\" && url.pathname === \"/api/coding-agents\") {",
+          "    if (!(await ensureRouteAuthorized(req, res, state))) {",
+          "      return true;",
+          "    }",
+          "    sendJsonResponse(res, 200, []);",
+          "    return true;",
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceAppCoreCompanionStagePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(serverPath, "utf8");
+      expect(isAliceAppCoreCompanionStagePatched(patched)).toBe(true);
+      expect(patched).toContain('url.pathname === "/api/companion/stage"');
+      expect(patched).toContain(
+        "/^\\/api\\/broadcast\\/([a-zA-Z0-9-]+)\\/stage$/",
+      );
+      expect(patched).toContain("aliceWriteCompanionStageState(merged)");
+      expect(patched).toContain("readCompatJsonBody");
+
+      expect(
+        applyAliceAppCoreCompanionStagePatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

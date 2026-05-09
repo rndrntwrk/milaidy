@@ -213,6 +213,16 @@ export function isAliceAppCoreCodingAgentsFallbackPatched(source) {
   );
 }
 
+export function isAliceAppCoreCompanionStagePatched(source) {
+  return (
+    source.includes("const ALICE_COMPANION_STAGE_DEFAULT") &&
+    source.includes('url.pathname === "/api/companion/stage"') &&
+    source.includes("/^\\/api\\/broadcast\\/([a-zA-Z0-9-]+)\\/stage$/") &&
+    source.includes("aliceReadCompanionStageState()") &&
+    source.includes("aliceWriteCompanionStageState(merged)")
+  );
+}
+
 export function isAliceBundledKnowledgeStartupDeferralPatched(source) {
   return (
     source.includes("const BUNDLED_KNOWLEDGE_SEED_DELAY_MS = 30_000;") &&
@@ -1173,6 +1183,220 @@ export function applyAliceAppCoreCodingAgentsFallbackPatch({
   return "applied";
 }
 
+function patchAliceAppCoreCompanionStageSource(source) {
+  if (isAliceAppCoreCompanionStagePatched(source)) {
+    return source;
+  }
+
+  let next = source;
+
+  const compatImportAnchor = `  getConfiguredCompatAgentName,
+} from "./compat-route-shared";
+`;
+  const compatImportPatch = `  getConfiguredCompatAgentName,
+  readCompatJsonBody,
+} from "./compat-route-shared";
+`;
+  if (!next.includes("readCompatJsonBody,\n} from \"./compat-route-shared\"")) {
+    if (!next.includes(compatImportAnchor)) {
+      throw new Error("app-core companion stage compat import anchor drifted");
+    }
+    next = next.replace(compatImportAnchor, compatImportPatch);
+  }
+
+  const helperAnchor = `async function handleCompatRoute(
+`;
+  const helperPatch = `const ALICE_COMPANION_STAGE_DEFAULT = {
+  camera: {
+    zoom: 0.95,
+    yaw: 0,
+    pitch: 0,
+    pan: 0,
+  },
+};
+
+function aliceClamp01(value, fallback) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function aliceClampFinite(value, fallback, min, max) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function aliceSanitizeCompanionStageState(raw) {
+  const candidate =
+    raw && typeof raw === "object" ? raw : {};
+  const rawCamera =
+    candidate.camera && typeof candidate.camera === "object"
+      ? candidate.camera
+      : {};
+  return {
+    camera: {
+      zoom: aliceClamp01(
+        rawCamera.zoom,
+        ALICE_COMPANION_STAGE_DEFAULT.camera.zoom,
+      ),
+      yaw: aliceClampFinite(rawCamera.yaw, 0, -Math.PI, Math.PI),
+      pitch: aliceClampFinite(rawCamera.pitch, 0, -Math.PI / 2, Math.PI / 2),
+      pan: aliceClampFinite(rawCamera.pan, 0, -5, 5),
+    },
+  };
+}
+
+function aliceCompanionStageFile() {
+  const root =
+    process.env.MILAIDY_HOME ||
+    process.env.ELIZA_DATA_DIR ||
+    path.join(process.cwd(), "data");
+  return path.join(root, "companion", "stage.json");
+}
+
+function aliceReadCompanionStageState() {
+  const stageFile = aliceCompanionStageFile();
+  try {
+    if (fs.existsSync(stageFile)) {
+      return aliceSanitizeCompanionStageState(
+        JSON.parse(fs.readFileSync(stageFile, "utf-8")),
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      \`[companion-stage] Failed to read \${stageFile}: \${
+        err instanceof Error ? err.message : String(err)
+      }\`,
+    );
+  }
+  return aliceSanitizeCompanionStageState(ALICE_COMPANION_STAGE_DEFAULT);
+}
+
+function aliceWriteCompanionStageState(nextState) {
+  const stageFile = aliceCompanionStageFile();
+  try {
+    fs.mkdirSync(path.dirname(stageFile), { recursive: true });
+    fs.writeFileSync(stageFile, JSON.stringify(nextState, null, 2), "utf-8");
+  } catch (err) {
+    logger.warn(
+      \`[companion-stage] Failed to persist \${stageFile}: \${
+        err instanceof Error ? err.message : String(err)
+      }\`,
+    );
+  }
+}
+
+function aliceMergeCompanionStagePatch(base, patch) {
+  return {
+    camera: {
+      ...base.camera,
+      ...(patch?.camera ?? {}),
+    },
+  };
+}
+
+${helperAnchor}`;
+  if (!next.includes("const ALICE_COMPANION_STAGE_DEFAULT")) {
+    if (!next.includes(helperAnchor)) {
+      throw new Error("app-core companion stage helper anchor drifted");
+    }
+    next = next.replace(helperAnchor, helperPatch);
+  }
+
+  const routeAnchor = `  if (method === "GET" && url.pathname === "/api/coding-agents") {
+`;
+  const routePatch = `  if (method === "GET" && url.pathname === "/api/companion/stage") {
+    if (!(await ensureRouteAuthorized(req, res, state))) {
+      return true;
+    }
+    sendJsonResponse(res, 200, {
+      ok: true,
+      state: aliceReadCompanionStageState(),
+    });
+    return true;
+  }
+
+  const aliceBroadcastStageMatch = url.pathname.match(
+    /^\\/api\\/broadcast\\/([a-zA-Z0-9-]+)\\/stage$/,
+  );
+  if (method === "GET" && aliceBroadcastStageMatch) {
+    const channel = aliceBroadcastStageMatch[1];
+    if (channel !== "alice-cam") {
+      sendJsonResponse(res, 404, { error: "Unknown broadcast channel" });
+      return true;
+    }
+    sendJsonResponse(res, 200, {
+      ok: true,
+      channel,
+      state: aliceReadCompanionStageState(),
+    });
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/api/companion/stage") {
+    if (!(await ensureRouteAuthorized(req, res, state))) {
+      return true;
+    }
+    const body = await readCompatJsonBody(req, res);
+    if (!body) return true;
+    if (!body.patch || typeof body.patch !== "object") {
+      sendJsonResponse(res, 400, { error: "Missing 'patch' field" });
+      return true;
+    }
+    const current = aliceReadCompanionStageState();
+    const merged = aliceSanitizeCompanionStageState(
+      aliceMergeCompanionStagePatch(current, body.patch),
+    );
+    aliceWriteCompanionStageState(merged);
+    sendJsonResponse(res, 200, { ok: true, state: merged });
+    return true;
+  }
+
+${routeAnchor}`;
+  if (!next.includes('url.pathname === "/api/companion/stage"')) {
+    if (!next.includes(routeAnchor)) {
+      throw new Error("app-core companion stage route anchor drifted");
+    }
+    next = next.replace(routeAnchor, routePatch);
+  }
+
+  if (!isAliceAppCoreCompanionStagePatched(next)) {
+    throw new Error(
+      "app-core companion stage patch applied but contract is absent",
+    );
+  }
+  return next;
+}
+
+export function applyAliceAppCoreCompanionStagePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const serverPath = path.join(elizaRoot, appCoreApiServerRelativePath);
+  if (!existsSync(serverPath)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core server source absent; skipping companion stage routes",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(serverPath, "utf8");
+  const after = patchAliceAppCoreCompanionStageSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] app-core companion stage routes already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(serverPath, after);
+  log("[alice-eliza-runtime-patches] patched app-core companion stage routes");
+  return "applied";
+}
+
 function patchAliceBundledKnowledgeStartupDeferralSource(source) {
   if (isAliceBundledKnowledgeStartupDeferralPatched(source)) {
     return source;
@@ -1422,6 +1646,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
+    applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceBundledKnowledgeStartupDeferralPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAlicePgliteContainerLockPatch({ elizaRoot, log }),
