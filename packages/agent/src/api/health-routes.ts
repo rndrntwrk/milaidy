@@ -405,9 +405,9 @@ export async function handleHealthRoutes(
 
   const isApiHealthRoute = method === "GET" && pathname === "/api/health";
   const isLiveHealthRoute =
-    method === "GET" &&
-    (pathname === "/health/live" || pathname === "/health");
-  const isReadyHealthRoute = method === "GET" && pathname === "/health/ready";
+    method === "GET" && pathname === "/health/live";
+  const isReadyHealthRoute =
+    method === "GET" && (pathname === "/health" || pathname === "/health/ready");
 
   // ── GET /api/health + kube-friendly health aliases ──────────────────────
   // Structured health check endpoint returning subsystem status.

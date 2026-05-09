@@ -168,6 +168,7 @@ import { getMiladyStartupEmbeddingAugmentation } from "../runtime/milady-startup
 import { hydrateWalletKeysFromNodePlatformSecureStore } from "../security/hydrate-wallet-keys-from-platform-store";
 import { deleteWalletSecretsFromOsStore } from "../security/wallet-os-store-actions";
 import { clearCloudSecrets, getCloudSecret } from "./cloud-secrets";
+import { buildKubeHealthResponse } from "./kube-health";
 import { clearPersistedOnboardingConfig } from "./provider-switch-config";
 
 // ---------------------------------------------------------------------------
@@ -1210,14 +1211,12 @@ export function patchHttpCreateServerForMiladyCompat(
           pathname === "/health/live" ||
           pathname === "/health/ready")
       ) {
-        const ready = Boolean(state?.current);
-        const isReadyRoute = pathname === "/health/ready";
-        sendJsonResponse(res, isReadyRoute && !ready ? 503 : 200, {
-          ok: isReadyRoute ? ready : true,
-          ready,
-          agentState: ready ? "running" : "starting",
-          uptime: Math.floor(process.uptime()),
-        });
+        const health = buildKubeHealthResponse(
+          pathname,
+          Boolean(state?.current),
+          Math.floor(process.uptime()),
+        );
+        sendJsonResponse(res, health.statusCode, health.payload);
         return;
       }
 

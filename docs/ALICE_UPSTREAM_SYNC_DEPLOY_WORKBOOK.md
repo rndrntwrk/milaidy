@@ -62,6 +62,9 @@ work from `milady-ai/develop` and the nested Eliza source.
   `subActions`; the calendar umbrella aliases the inner Google Calendar
   `CALENDAR_ACTION` as `googleCalendarAction` to avoid module-initialization
   self-reference.
+- Kubernetes root `/health` is startup/readiness-grade for Alice server-only
+  deploys and must remain `503` until the runtime is attached; `/health/live`
+  is the process-liveness endpoint.
 - Startup acceptance requires `[milady][startup] start-eliza:done` and rejects
   LifeOps load failures, optional LifeOps skips, PGlite lock errors, and runtime
   boot errors.
