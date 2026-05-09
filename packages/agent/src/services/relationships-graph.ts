@@ -2050,6 +2050,43 @@ export function createNativeRelationshipsGraphService(
   };
 }
 
+type RelationshipsFeatureRuntime = IAgentRuntime & {
+  enableRelationships?: () => Promise<void>;
+  isRelationshipsEnabled?: () => boolean;
+};
+
+export async function resolveRelationshipsGraphService(
+  runtime: IAgentRuntime,
+): Promise<RelationshipsGraphService | null> {
+  const registered =
+    (runtime.getService(
+      "RELATIONSHIPS_GRAPH",
+    ) as unknown as RelationshipsGraphService | null) ??
+    (runtime.getService(
+      "relationships_graph",
+    ) as unknown as RelationshipsGraphService | null);
+  if (registered) {
+    return registered;
+  }
+
+  const runtimeWithFeatures = runtime as RelationshipsFeatureRuntime;
+  if (
+    typeof runtimeWithFeatures.isRelationshipsEnabled === "function" &&
+    !runtimeWithFeatures.isRelationshipsEnabled() &&
+    typeof runtimeWithFeatures.enableRelationships === "function"
+  ) {
+    await runtimeWithFeatures.enableRelationships();
+  }
+
+  const relationshipsService = runtime.getService(
+    "relationships",
+  ) as unknown as RelationshipsServiceLike | null;
+  if (!relationshipsService) {
+    return null;
+  }
+  return createNativeRelationshipsGraphService(runtime, relationshipsService);
+}
+
 export type ClusterMemoriesQuery = {
   tableName: string;
   roomId?: UUID;

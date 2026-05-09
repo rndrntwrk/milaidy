@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createNativeRelationshipsGraphService,
   getMemoriesForCluster,
+  resolveRelationshipsGraphService,
   searchMemoriesForCluster,
 } from "./relationships-graph.js";
 
@@ -555,5 +556,51 @@ describe("relationships-graph", () => {
       "primary-search",
       "alias-search",
     ]);
+  });
+
+  it("resolves registered or native relationships graph services", async () => {
+    const registeredService = {
+      getGraphSnapshot: vi.fn(),
+      getPersonDetail: vi.fn(),
+    };
+    const uppercaseRuntime = {
+      getService: vi.fn((serviceType: string) =>
+        serviceType === "RELATIONSHIPS_GRAPH" ? registeredService : null,
+      ),
+    } as unknown as IAgentRuntime;
+    const lowercaseRuntime = {
+      getService: vi.fn((serviceType: string) =>
+        serviceType === "relationships_graph" ? registeredService : null,
+      ),
+    } as unknown as IAgentRuntime;
+    const relationshipsService = createRelationshipsService([]);
+    let relationshipsEnabled = false;
+    const nativeRuntime = {
+      ...createGraphRuntime({ entities: [], messages: [] }).runtime,
+      getService: vi.fn((serviceType: string) =>
+        serviceType === "relationships" ? relationshipsService : null,
+      ),
+      isRelationshipsEnabled: vi.fn(() => relationshipsEnabled),
+      enableRelationships: vi.fn(async () => {
+        relationshipsEnabled = true;
+      }),
+    } as unknown as IAgentRuntime & {
+      enableRelationships: () => Promise<void>;
+      isRelationshipsEnabled: () => boolean;
+    };
+
+    await expect(
+      resolveRelationshipsGraphService(uppercaseRuntime),
+    ).resolves.toBe(registeredService);
+    await expect(
+      resolveRelationshipsGraphService(lowercaseRuntime),
+    ).resolves.toBe(registeredService);
+    const nativeService = await resolveRelationshipsGraphService(nativeRuntime);
+
+    expect(nativeRuntime.enableRelationships).toHaveBeenCalledOnce();
+    expect(nativeService).toEqual({
+      getGraphSnapshot: expect.any(Function),
+      getPersonDetail: expect.any(Function),
+    });
   });
 });
