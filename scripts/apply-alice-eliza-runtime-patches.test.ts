@@ -13,11 +13,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyAliceTelegramAccountAuthResolverPatch,
+  applyAliceKubeHealthReadinessPatch,
   applyAliceLifeOpsCalendarActionPatch,
   applyAliceLifeOpsNativeActivityTrackerPatch,
   applyAlicePgliteContainerLockPatch,
   aliceElizaRuntimePatchRelativePath,
   isAliceLifeOpsCalendarActionPatched,
+  isAliceKubeHealthReadinessPatched,
   isAlicePgliteContainerLockPatchPatched,
   isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
@@ -97,6 +99,122 @@ describe("Alice Eliza runtime patch contract", () => {
         'import { external } from "@elizaos/core";',
       ].join("\n"),
     );
+  });
+
+  it("patches source-mode app-core health probes to wait for startup completion", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-kube-health-"));
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const compatPath = path.join(apiDir, "compat-route-shared.ts");
+      const serverPath = path.join(apiDir, "server.ts");
+      const kubeHealthPath = path.join(apiDir, "kube-health.ts");
+
+      writeFileSync(
+        compatPath,
+        [
+          'import type http from "node:http";',
+          'import type { AgentRuntime } from "@elizaos/core";',
+          "",
+          "export interface CompatRuntimeState {",
+          "  current: AgentRuntime | null;",
+          "  pendingAgentName: string | null;",
+          "  pendingRestartReasons: string[];",
+          "}",
+        ].join("\n"),
+      );
+      writeFileSync(
+        serverPath,
+        [
+          'import { sendJson as sendJsonResponse } from "./response";',
+          "",
+          "export function patchHttpCreateServerForCompat(",
+          "  state?: CompatRuntimeState,",
+          "): () => void {",
+          "  const wrappedListener: http.RequestListener = async (req, res) => {",
+          '      if (req.method === "OPTIONS") {',
+          "        res.statusCode = 204;",
+          "        res.end();",
+          "        return;",
+          "      }",
+          "",
+          "      res.on(\"finish\", () => {",
+          "        syncElizaEnvAliases();",
+          "        syncCompatConfigFiles();",
+          "      });",
+          "",
+          "      if (state) {",
+          '        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;',
+          "        if (",
+          '          pathname.startsWith("/api/database") ||',
+          '          pathname.startsWith("/api/trajectories")',
+          "        ) {",
+          "          await ensureRuntimeSqlCompatibility(state.current);",
+          "        }",
+          "      }",
+          "  };",
+          "}",
+          "",
+          "export async function startApiServer(",
+          "  ...args: Parameters<typeof upstreamStartApiServer>",
+          "): Promise<Awaited<ReturnType<typeof upstreamStartApiServer>>> {",
+          "  const compatState: CompatRuntimeState = {",
+          "    current: (args[0]?.runtime as AgentRuntime | null) ?? null,",
+          "    pendingAgentName: null,",
+          "    pendingRestartReasons: [],",
+          "  };",
+          "  const server = await upstreamStartApiServer(...args);",
+          "",
+          "    const originalUpdateRuntime = server.updateRuntime as (",
+          "      runtime: AgentRuntime,",
+          "    ) => void;",
+          "",
+          "    server.updateRuntime = (runtime: AgentRuntime) => {",
+          "      compatState.current = runtime;",
+          "      clearCompatRuntimeRestart(compatState);",
+          "      originalUpdateRuntime(runtime);",
+          "      void (async () => {",
+          "        try {",
+          "          await ensureRuntimeSqlCompatibility(runtime);",
+          "        } catch {}",
+          "      })();",
+          "    };",
+          "",
+          "    syncElizaEnvAliases();",
+          "    return server;",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceKubeHealthReadinessPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patchedServer = readFileSync(serverPath, "utf8");
+      const patchedCompat = readFileSync(compatPath, "utf8");
+      expect(isAliceKubeHealthReadinessPatched(patchedServer, patchedCompat)).toBe(
+        true,
+      );
+      expect(patchedServer).toContain("Boolean(state?.kubeReady)");
+      expect(patchedServer).toContain("server.updateStartup = (update) =>");
+      expect(patchedServer).toContain("originalUpdateStartup(update)");
+      expect(patchedCompat).toContain("kubeReady: boolean");
+      expect(readFileSync(kubeHealthPath, "utf8")).toContain(
+        "buildKubeHealthResponse",
+      );
+
+      expect(
+        applyAliceKubeHealthReadinessPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("patches the Eliza resolver so staged LifeOps can import telegram account auth", () => {

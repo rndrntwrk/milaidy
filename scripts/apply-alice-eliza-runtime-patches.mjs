@@ -18,6 +18,10 @@ export const aliceElizaRuntimePatchRelativePath =
   "scripts/alice-eliza-runtime-patches/app-core-server-only-api-bind.patch";
 
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
+const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
+const appCoreCompatStateRelativePath =
+  "packages/app-core/src/api/compat-route-shared.ts";
+const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
 const pluginSqlPgliteManagerRelativePath =
@@ -100,6 +104,36 @@ export async function loadNativeActivityTracker({
 }
 `;
 
+const kubeHealthSource = `export interface KubeHealthResponse {
+  statusCode: number;
+  payload: {
+    ok: boolean;
+    ready: boolean;
+    agentState: "running" | "starting";
+    uptime: number;
+  };
+}
+
+export function buildKubeHealthResponse(
+  pathname: "/health" | "/health/live" | "/health/ready",
+  hasRuntime: boolean,
+  uptimeSeconds: number,
+): KubeHealthResponse {
+  const isLiveRoute = pathname === "/health/live";
+  const statusCode = isLiveRoute || hasRuntime ? 200 : 503;
+
+  return {
+    statusCode,
+    payload: {
+      ok: isLiveRoute ? true : hasRuntime,
+      ready: hasRuntime,
+      agentState: hasRuntime ? "running" : "starting",
+      uptime: uptimeSeconds,
+    },
+  };
+}
+`;
+
 function runGitApply(args, { cwd, allowFailure = false } = {}) {
   const result = spawnSync("git", args, {
     cwd,
@@ -144,6 +178,30 @@ export function isAliceRuntimeApiBindPatched(source) {
     updateStartupRunningIndex > doneMarkerIndex &&
     serverOnlyBranch.includes('initialAgentState: "starting"') &&
     source.includes("[milady][startup]")
+  );
+}
+
+export function isAliceKubeHealthReadinessPatched(serverSource, compatSource) {
+  const updateRuntimeBlock =
+    serverSource.match(/server\.updateRuntime = \(runtime:[\s\S]*?\n    \};/)?.[0] ??
+    "";
+  const updateStartupBlock =
+    serverSource.match(/server\.updateStartup = \(update\) => \{[\s\S]*?\n    \};/)?.[0] ??
+    "";
+
+  return (
+    compatSource.includes("kubeReady: boolean") &&
+    serverSource.includes('import { buildKubeHealthResponse } from "./kube-health"') &&
+    serverSource.includes('pathname === "/health"') &&
+    serverSource.includes('pathname === "/health/live"') &&
+    serverSource.includes('pathname === "/health/ready"') &&
+    serverSource.includes("Boolean(state?.kubeReady)") &&
+    serverSource.includes("kubeReady: Boolean(args[0]?.runtime)") &&
+    updateRuntimeBlock.includes("compatState.current = runtime") &&
+    !updateRuntimeBlock.includes("kubeReady") &&
+    updateStartupBlock.includes('nextState === "running"') &&
+    updateStartupBlock.includes("compatState.kubeReady = true;") &&
+    updateStartupBlock.includes("compatState.kubeReady = false;")
   );
 }
 
@@ -860,6 +918,183 @@ export function applyAliceLifeOpsNativeActivityTrackerPatch({
   return "applied";
 }
 
+function patchAliceKubeHealthCompatStateSource(source) {
+  if (source.includes("kubeReady: boolean")) {
+    return source;
+  }
+
+  const anchor = "  current: AgentRuntime | null;\n";
+  if (!source.includes(anchor)) {
+    throw new Error("app-core compat state current-runtime anchor drifted");
+  }
+
+  return source.replace(anchor, `${anchor}  kubeReady: boolean;\n`);
+}
+
+function patchAliceKubeHealthServerSource(source) {
+  if (
+    source.includes('import { buildKubeHealthResponse } from "./kube-health"') &&
+    source.includes("Boolean(state?.kubeReady)") &&
+    source.includes("compatState.kubeReady = true;") &&
+    source.includes("compatState.kubeReady = false;")
+  ) {
+    return source;
+  }
+
+  let next = source;
+
+  const importAnchor = 'import { sendJson as sendJsonResponse } from "./response";\n';
+  if (!next.includes(importAnchor)) {
+    throw new Error("app-core server response import anchor drifted");
+  }
+  next = next.replace(
+    importAnchor,
+    `${importAnchor}import { buildKubeHealthResponse } from "./kube-health";\n`,
+  );
+
+  const requestStateAnchor = `      if (state) {
+        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+        if (
+`;
+  const requestStatePatch = `      const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+      if (
+        req.method === "GET" &&
+        (pathname === "/health" ||
+          pathname === "/health/live" ||
+          pathname === "/health/ready")
+      ) {
+        const health = buildKubeHealthResponse(
+          pathname,
+          Boolean(state?.kubeReady),
+          Math.floor(process.uptime()),
+        );
+        sendJsonResponse(res, health.statusCode, health.payload);
+        return;
+      }
+
+      if (state) {
+        if (
+`;
+  if (!next.includes(requestStateAnchor)) {
+    throw new Error("app-core server request state anchor drifted");
+  }
+  next = next.replace(requestStateAnchor, requestStatePatch);
+
+  const compatStateAnchor = `  const compatState: CompatRuntimeState = {
+    current: (args[0]?.runtime as AgentRuntime | null) ?? null,
+    pendingAgentName: null,
+    pendingRestartReasons: [],
+  };
+`;
+  const compatStatePatch = `  const compatState: CompatRuntimeState = {
+    current: (args[0]?.runtime as AgentRuntime | null) ?? null,
+    kubeReady: Boolean(args[0]?.runtime),
+    pendingAgentName: null,
+    pendingRestartReasons: [],
+  };
+`;
+  if (!next.includes(compatStateAnchor)) {
+    throw new Error("app-core server compat state initializer anchor drifted");
+  }
+  next = next.replace(compatStateAnchor, compatStatePatch);
+
+  const updateRuntimeAnchor = `    const originalUpdateRuntime = server.updateRuntime as (
+      runtime: AgentRuntime,
+    ) => void;
+
+    server.updateRuntime = (runtime: AgentRuntime) => {
+`;
+  const updateRuntimePatch = `    const originalUpdateRuntime = server.updateRuntime as (
+      runtime: AgentRuntime,
+    ) => void;
+    const originalUpdateStartup = server.updateStartup;
+
+    server.updateRuntime = (runtime: AgentRuntime) => {
+`;
+  if (!next.includes(updateRuntimeAnchor)) {
+    throw new Error("app-core server updateRuntime anchor drifted");
+  }
+  next = next.replace(updateRuntimeAnchor, updateRuntimePatch);
+
+  const updateRuntimeEndAnchor = `      })();
+    };
+
+    syncElizaEnvAliases();
+`;
+  const updateRuntimeEndPatch = `      })();
+    };
+
+    server.updateStartup = (update) => {
+      const nextState = update.state;
+      if (nextState === "running") {
+        compatState.kubeReady = true;
+      } else if (nextState) {
+        compatState.kubeReady = false;
+      }
+
+      originalUpdateStartup(update);
+    };
+
+    syncElizaEnvAliases();
+`;
+  if (!next.includes(updateRuntimeEndAnchor)) {
+    throw new Error("app-core server updateStartup insertion anchor drifted");
+  }
+  next = next.replace(updateRuntimeEndAnchor, updateRuntimeEndPatch);
+
+  return next;
+}
+
+export function applyAliceKubeHealthReadinessPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const serverPath = path.join(elizaRoot, appCoreApiServerRelativePath);
+  const compatPath = path.join(elizaRoot, appCoreCompatStateRelativePath);
+  const kubeHealthPath = path.join(elizaRoot, appCoreKubeHealthRelativePath);
+
+  if (!existsSync(serverPath) || !existsSync(compatPath)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core kube health source absent; skipping",
+    );
+    return "skipped";
+  }
+
+  const beforeServer = readFileSync(serverPath, "utf8");
+  const beforeCompat = readFileSync(compatPath, "utf8");
+  const afterCompat = patchAliceKubeHealthCompatStateSource(beforeCompat);
+  const afterServer = patchAliceKubeHealthServerSource(beforeServer);
+  const existingKubeHealth = existsSync(kubeHealthPath)
+    ? readFileSync(kubeHealthPath, "utf8")
+    : null;
+
+  if (
+    afterServer === beforeServer &&
+    afterCompat === beforeCompat &&
+    existingKubeHealth === kubeHealthSource &&
+    isAliceKubeHealthReadinessPatched(afterServer, afterCompat)
+  ) {
+    log(
+      "[alice-eliza-runtime-patches] app-core kube /health readiness gate already applied",
+    );
+    return "already-applied";
+  }
+
+  mkdirSync(path.dirname(kubeHealthPath), { recursive: true });
+  writeFileSync(serverPath, afterServer);
+  writeFileSync(compatPath, afterCompat);
+  writeFileSync(kubeHealthPath, kubeHealthSource);
+
+  if (!isAliceKubeHealthReadinessPatched(afterServer, afterCompat)) {
+    throw new Error("app-core kube health patch applied but contract is absent");
+  }
+
+  log(
+    "[alice-eliza-runtime-patches] patched app-core kube /health readiness gate",
+  );
+  return "applied";
+}
+
 function applyAliceRuntimeApiBindPatch({
   rootDir,
   elizaRoot,
@@ -924,6 +1159,7 @@ export function applyAliceElizaRuntimePatches({
 
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
+    applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAlicePgliteContainerLockPatch({ elizaRoot, log }),
     applyAliceLifeOpsCalendarActionPatch({ elizaRoot, log }),
