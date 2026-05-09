@@ -299,6 +299,10 @@ describe("Alice Eliza runtime patch contract", () => {
         "bundled knowledge seeding deferred until API server startup",
       );
       expect(patched).toContain(
+        "bundled knowledge seeding disabled by default during server startup",
+      );
+      expect(patched).toContain("ALICE_ENABLE_BUNDLED_KNOWLEDGE_SEED");
+      expect(patched).toContain(
         'scheduleBundledKnowledgeSeed(runtime, "api-server-listen");',
       );
       expect(patched).toContain(

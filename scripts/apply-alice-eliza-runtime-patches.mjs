@@ -210,6 +210,9 @@ export function isAliceBundledKnowledgeStartupDeferralPatched(source) {
   return (
     source.includes("const BUNDLED_KNOWLEDGE_SEED_DELAY_MS = 30_000;") &&
     source.includes("function scheduleBundledKnowledgeSeed(") &&
+    source.includes(
+      "bundled knowledge seeding disabled by default during server startup",
+    ) &&
     source.includes("Bundled knowledge seeding scheduled after") &&
     source.includes("bundled knowledge seeding deferred until API server startup") &&
     source.includes('scheduleBundledKnowledgeSeed(runtime, "api-server-listen");') &&
@@ -1129,6 +1132,16 @@ function scheduleBundledKnowledgeSeed(
     );
     return;
   }
+  const enabledRaw =
+    process.env.ALICE_ENABLE_BUNDLED_KNOWLEDGE_SEED ??
+    process.env.ELIZA_ENABLE_BUNDLED_KNOWLEDGE_SEED ??
+    "";
+  if (!["1", "true", "yes"].includes(enabledRaw.trim().toLowerCase())) {
+    logger.info(
+      "[eliza] Native knowledge enabled; bundled knowledge seeding disabled by default during server startup",
+    );
+    return;
+  }
 
   logger.info(
     \`[eliza] Bundled knowledge seeding scheduled after \${reason} delayMs=\${BUNDLED_KNOWLEDGE_SEED_DELAY_MS}\`,
@@ -1148,6 +1161,33 @@ function scheduleBundledKnowledgeSeed(
       throw new Error("agent runtime helper anchor drifted");
     }
     next = next.replace(helperAnchor, `${schedulerSource}${helperAnchor}`);
+  }
+
+  const enableGuardAnchor = `  logger.info(
+    \`[eliza] Bundled knowledge seeding scheduled after \${reason} delayMs=\${BUNDLED_KNOWLEDGE_SEED_DELAY_MS}\`,
+  );
+`;
+  const enableGuardPatch = `  const enabledRaw =
+    process.env.ALICE_ENABLE_BUNDLED_KNOWLEDGE_SEED ??
+    process.env.ELIZA_ENABLE_BUNDLED_KNOWLEDGE_SEED ??
+    "";
+  if (!["1", "true", "yes"].includes(enabledRaw.trim().toLowerCase())) {
+    logger.info(
+      "[eliza] Native knowledge enabled; bundled knowledge seeding disabled by default during server startup",
+    );
+    return;
+  }
+
+${enableGuardAnchor}`;
+  if (
+    !next.includes(
+      "bundled knowledge seeding disabled by default during server startup",
+    )
+  ) {
+    if (!next.includes(enableGuardAnchor)) {
+      throw new Error("agent runtime bundled knowledge schedule anchor drifted");
+    }
+    next = next.replace(enableGuardAnchor, enableGuardPatch);
   }
 
   const blockingSeedAnchor = `    try {

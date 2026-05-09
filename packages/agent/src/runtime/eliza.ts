@@ -594,6 +594,16 @@ function scheduleBundledKnowledgeSeed(
     );
     return;
   }
+  const enabledRaw =
+    process.env.ALICE_ENABLE_BUNDLED_KNOWLEDGE_SEED ??
+    process.env.ELIZA_ENABLE_BUNDLED_KNOWLEDGE_SEED ??
+    "";
+  if (!["1", "true", "yes"].includes(enabledRaw.trim().toLowerCase())) {
+    logger.info(
+      "[eliza] Native knowledge enabled; bundled knowledge seeding disabled by default during server startup",
+    );
+    return;
+  }
 
   logger.info(
     `[eliza] Bundled knowledge seeding scheduled after ${reason} delayMs=${BUNDLED_KNOWLEDGE_SEED_DELAY_MS}`,
