@@ -1,5 +1,11 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildKubeHealthResponse } from "./kube-health";
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const serverSource = readFileSync(path.join(dirname, "server.ts"), "utf8");
 
 describe("Kubernetes health probes", () => {
   it("keeps /health unready until the runtime is attached", () => {
@@ -48,5 +54,28 @@ describe("Kubernetes health probes", () => {
         },
       });
     }
+  });
+
+  it("does not mark the compat runtime ready until upstream updateRuntime returns", () => {
+    const updateRuntimeBlock =
+      serverSource.match(
+        /server\.updateRuntime = \(runtime: AgentRuntime\) => \{[\s\S]*?\n    \};/,
+      )?.[0] ?? "";
+
+    const upstreamUpdateIndex = updateRuntimeBlock.indexOf(
+      "originalUpdateRuntime(runtime);",
+    );
+    const compatReadyIndex = updateRuntimeBlock.indexOf(
+      "compatState.current = runtime;",
+    );
+    const backgroundRepairIndex = updateRuntimeBlock.indexOf(
+      "queueMicrotask(() => {",
+    );
+
+    expect(upstreamUpdateIndex).toBeGreaterThan(-1);
+    expect(compatReadyIndex).toBeGreaterThan(-1);
+    expect(backgroundRepairIndex).toBeGreaterThan(-1);
+    expect(upstreamUpdateIndex).toBeLessThan(compatReadyIndex);
+    expect(compatReadyIndex).toBeLessThan(backgroundRepairIndex);
   });
 });

@@ -65,6 +65,11 @@ work from `milady-ai/develop` and the nested Eliza source.
 - Kubernetes root `/health` is startup/readiness-grade for Alice server-only
   deploys and must remain `503` until the runtime is attached; `/health/live`
   is the process-liveness endpoint.
+- Runtime attachment must not flip Kubernetes readiness until upstream
+  `updateRuntime()` returns. Background SQL/TTS compatibility repairs must run
+  after the startup caller can emit `[milady][startup] start-eliza:done`;
+  otherwise startupProbe releases liveness too early and Kubernetes can kill
+  the container mid-boot.
 - PGlite lock recovery must be container-aware. PVC lock files and
   `postmaster.pid` files created before the current process started are stale
   even if Kubernetes reused the numeric PID in the replacement container.

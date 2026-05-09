@@ -1310,37 +1310,39 @@ export async function startApiServer(
     ) => void;
 
     server.updateRuntime = (runtime: AgentRuntime) => {
+      originalUpdateRuntime(runtime);
       compatState.current = runtime;
       clearCompatRuntimeRestart(compatState);
-      // Make the runtime immediately visible to upstream routes so hot swaps do
-      // not briefly return 503s while compat setup finishes in the background.
-      originalUpdateRuntime(runtime);
 
-      // Continue repairing SQL compatibility + Edge TTS registration
-      // asynchronously. These are important, but they should not block the
-      // runtime from becoming available to non-TTS routes.
-      void (async () => {
-        try {
-          await ensureRuntimeSqlCompatibility(runtime);
-        } catch (err) {
-          logger.error(
-            `[milady][runtime] SQL compatibility init failed: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
-        }
-
-        try {
-          await (await lazyEnsureTTS())(runtime);
-        } catch (err) {
-          logger.warn(
-            `[milady][runtime] TTS init failed (non-critical): ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
-        }
-      })();
+      // Run compatibility repairs after the startup caller has had a chance to
+      // emit its completion marker. These should not release Kubernetes
+      // readiness or block basic API availability.
+      queueMicrotask(() => {
+        void repairRuntimeCompatAsync(runtime);
+      });
     };
+
+    async function repairRuntimeCompatAsync(runtime: AgentRuntime) {
+      try {
+        await ensureRuntimeSqlCompatibility(runtime);
+      } catch (err) {
+        logger.error(
+          `[milady][runtime] SQL compatibility init failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+
+      try {
+        await (await lazyEnsureTTS())(runtime);
+      } catch (err) {
+        logger.warn(
+          `[milady][runtime] TTS init failed (non-critical): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
 
     syncElizaEnvToMilady();
     syncCompatConfigFiles();
