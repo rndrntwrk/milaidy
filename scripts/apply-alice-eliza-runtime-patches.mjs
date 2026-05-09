@@ -22,6 +22,7 @@ const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
 const appCoreCompatStateRelativePath =
   "packages/app-core/src/api/compat-route-shared.ts";
 const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
+const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
 const pluginSqlPgliteManagerRelativePath =
@@ -202,6 +203,18 @@ export function isAliceKubeHealthReadinessPatched(serverSource, compatSource) {
     updateStartupBlock.includes('nextState === "running"') &&
     updateStartupBlock.includes("compatState.kubeReady = true;") &&
     updateStartupBlock.includes("compatState.kubeReady = false;")
+  );
+}
+
+export function isAliceBundledKnowledgeStartupDeferralPatched(source) {
+  return (
+    source.includes("const BUNDLED_KNOWLEDGE_SEED_DELAY_MS = 30_000;") &&
+    source.includes("function scheduleBundledKnowledgeSeed(") &&
+    source.includes("Bundled knowledge seeding scheduled after") &&
+    source.includes("bundled knowledge seeding deferred until API server startup") &&
+    source.includes('scheduleBundledKnowledgeSeed(runtime, "api-server-listen");') &&
+    source.includes('scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");') &&
+    !source.includes("await seedBundledKnowledge(runtime);")
   );
 }
 
@@ -1095,6 +1108,152 @@ export function applyAliceKubeHealthReadinessPatch({
   return "applied";
 }
 
+function patchAliceBundledKnowledgeStartupDeferralSource(source) {
+  if (isAliceBundledKnowledgeStartupDeferralPatched(source)) {
+    return source;
+  }
+
+  let next = source;
+
+  const helperAnchor = `function trimEnvString(value: unknown): string | undefined {
+`;
+  const schedulerSource = `const BUNDLED_KNOWLEDGE_SEED_DELAY_MS = 30_000;
+
+function scheduleBundledKnowledgeSeed(
+  runtime: AgentRuntime,
+  reason: string,
+): void {
+  if (!runtimeKnowledgeEnabled(runtime)) {
+    logger.info(
+      "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",
+    );
+    return;
+  }
+
+  logger.info(
+    \`[eliza] Bundled knowledge seeding scheduled after \${reason} delayMs=\${BUNDLED_KNOWLEDGE_SEED_DELAY_MS}\`,
+  );
+  setTimeout(() => {
+    void seedBundledKnowledge(runtime).catch((err) => {
+      logger.warn(
+        \`[eliza] Failed to seed bundled knowledge: \${formatError(err)}\`,
+      );
+    });
+  }, BUNDLED_KNOWLEDGE_SEED_DELAY_MS);
+}
+
+`;
+  if (!next.includes("function scheduleBundledKnowledgeSeed(")) {
+    if (!next.includes(helperAnchor)) {
+      throw new Error("agent runtime helper anchor drifted");
+    }
+    next = next.replace(helperAnchor, `${schedulerSource}${helperAnchor}`);
+  }
+
+  const blockingSeedAnchor = `    try {
+      if (runtimeKnowledgeEnabled(runtime)) {
+        await seedBundledKnowledge(runtime);
+      } else {
+        logger.info(
+          "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        \`[eliza] Failed to seed bundled knowledge: \${formatError(err)}\`,
+      );
+    }
+`;
+  const deferredSeedPatch = `    if (runtimeKnowledgeEnabled(runtime)) {
+      logger.info(
+        "[eliza] Native knowledge enabled; bundled knowledge seeding deferred until API server startup",
+      );
+    } else {
+      logger.info(
+        "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",
+      );
+    }
+`;
+  if (next.includes(blockingSeedAnchor)) {
+    next = next.replace(blockingSeedAnchor, deferredSeedPatch);
+  }
+
+  const apiListenAnchor = `    logger.info(\`[eliza] API server listening on \${dashboardUrl}\`);
+`;
+  const apiListenPatch = `    logger.info(\`[eliza] API server listening on \${dashboardUrl}\`);
+    scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
+`;
+  if (!next.includes('scheduleBundledKnowledgeSeed(runtime, "api-server-listen");')) {
+    if (!next.includes(apiListenAnchor)) {
+      throw new Error("agent runtime API listen anchor drifted");
+    }
+    next = next.replace(apiListenAnchor, apiListenPatch);
+  }
+
+  const headlessAnchor = `  if (opts?.headless) {
+    void loadHooksSystem().catch((err) => {
+      logger.warn(\`[eliza] Hooks system load failed: \${formatError(err)}\`);
+    });
+    logger.info(
+      "[eliza] Runtime initialised in headless mode (autonomy enabled)",
+    );
+    return runtime;
+  }
+`;
+  const headlessPatch = `  if (opts?.headless) {
+    void loadHooksSystem().catch((err) => {
+      logger.warn(\`[eliza] Hooks system load failed: \${formatError(err)}\`);
+    });
+    scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");
+    logger.info(
+      "[eliza] Runtime initialised in headless mode (autonomy enabled)",
+    );
+    return runtime;
+  }
+`;
+  if (!next.includes('scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");')) {
+    if (!next.includes(headlessAnchor)) {
+      throw new Error("agent runtime headless return anchor drifted");
+    }
+    next = next.replace(headlessAnchor, headlessPatch);
+  }
+
+  if (!isAliceBundledKnowledgeStartupDeferralPatched(next)) {
+    throw new Error(
+      "agent runtime bundled knowledge deferral patch applied but contract is absent",
+    );
+  }
+  return next;
+}
+
+export function applyAliceBundledKnowledgeStartupDeferralPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const runtimePath = path.join(elizaRoot, agentRuntimeRelativePath);
+  if (!existsSync(runtimePath)) {
+    log(
+      "[alice-eliza-runtime-patches] agent runtime source absent; skipping bundled knowledge deferral",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(runtimePath, "utf8");
+  const after = patchAliceBundledKnowledgeStartupDeferralSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] agent bundled knowledge startup deferral already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(runtimePath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched agent bundled knowledge startup deferral",
+  );
+  return "applied";
+}
+
 function applyAliceRuntimeApiBindPatch({
   rootDir,
   elizaRoot,
@@ -1160,6 +1319,7 @@ export function applyAliceElizaRuntimePatches({
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
+    applyAliceBundledKnowledgeStartupDeferralPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAlicePgliteContainerLockPatch({ elizaRoot, log }),
     applyAliceLifeOpsCalendarActionPatch({ elizaRoot, log }),

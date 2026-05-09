@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceKubeHealthReadinessPatch,
   applyAliceLifeOpsCalendarActionPatch,
@@ -19,6 +20,7 @@ import {
   applyAlicePgliteContainerLockPatch,
   aliceElizaRuntimePatchRelativePath,
   isAliceLifeOpsCalendarActionPatched,
+  isAliceBundledKnowledgeStartupDeferralPatched,
   isAliceKubeHealthReadinessPatched,
   isAlicePgliteContainerLockPatchPatched,
   isAliceTelegramAccountAuthResolverPatched,
@@ -208,6 +210,104 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceKubeHealthReadinessPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches source-mode agent startup to defer bundled knowledge seeding", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-knowledge-deferral-"),
+    );
+    try {
+      const runtimeDir = path.join(
+        tempDir,
+        "packages",
+        "agent",
+        "src",
+        "runtime",
+      );
+      mkdirSync(runtimeDir, { recursive: true });
+      const runtimePath = path.join(runtimeDir, "eliza.ts");
+      writeFileSync(
+        runtimePath,
+        [
+          'import { AgentRuntime, logger } from "@elizaos/core";',
+          'import { formatError } from "@elizaos/shared";',
+          'import { seedBundledKnowledge } from "./default-knowledge.js";',
+          'import { runtimeKnowledgeEnabled } from "./native-runtime-features.js";',
+          "",
+          "function trimEnvString(value: unknown): string | undefined {",
+          "  if (typeof value !== \"string\") return undefined;",
+          "  return value.trim();",
+          "}",
+          "",
+          "async function initializeRuntimeServices(runtime: AgentRuntime) {",
+          "    try {",
+          "      if (runtimeKnowledgeEnabled(runtime)) {",
+          "        await seedBundledKnowledge(runtime);",
+          "      } else {",
+          "        logger.info(",
+          "          \"[eliza] Native knowledge disabled; skipping bundled knowledge seeding\",",
+          "        );",
+          "      }",
+          "    } catch (err) {",
+          "      logger.warn(",
+          "        `[eliza] Failed to seed bundled knowledge: ${formatError(err)}`,",
+          "      );",
+          "    }",
+          "}",
+          "",
+          "async function startApiServer(runtime: AgentRuntime) {",
+          "    const dashboardUrl = `http://localhost:3000`;",
+          "    logger.info(`[eliza] API server listening on ${dashboardUrl}`);",
+          "}",
+          "",
+          "async function startEliza(opts?: { headless?: boolean }) {",
+          "  const runtime = {} as AgentRuntime;",
+          "  const loadHooksSystem = async (): Promise<void> => {};",
+          "  if (opts?.headless) {",
+          "    void loadHooksSystem().catch((err) => {",
+          "      logger.warn(`[eliza] Hooks system load failed: ${formatError(err)}`);",
+          "    });",
+          "    logger.info(",
+          "      \"[eliza] Runtime initialised in headless mode (autonomy enabled)\",",
+          "    );",
+          "    return runtime;",
+          "  }",
+          "  await initializeRuntimeServices(runtime);",
+          "  await startApiServer(runtime);",
+          "  return runtime;",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceBundledKnowledgeStartupDeferralPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(runtimePath, "utf8");
+      expect(isAliceBundledKnowledgeStartupDeferralPatched(patched)).toBe(true);
+      expect(patched).toContain(
+        "bundled knowledge seeding deferred until API server startup",
+      );
+      expect(patched).toContain(
+        'scheduleBundledKnowledgeSeed(runtime, "api-server-listen");',
+      );
+      expect(patched).toContain(
+        'scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");',
+      );
+      expect(patched).not.toContain("await seedBundledKnowledge(runtime);");
+
+      expect(
+        applyAliceBundledKnowledgeStartupDeferralPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
