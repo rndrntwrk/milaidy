@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAliceAppCoreCodingAgentsFallbackPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceKubeHealthReadinessPatch,
@@ -19,6 +20,7 @@ import {
   applyAliceLifeOpsNativeActivityTrackerPatch,
   applyAlicePgliteContainerLockPatch,
   aliceElizaRuntimePatchRelativePath,
+  isAliceAppCoreCodingAgentsFallbackPatched,
   isAliceLifeOpsCalendarActionPatched,
   isAliceBundledKnowledgeStartupDeferralPatched,
   isAliceKubeHealthReadinessPatched,
@@ -210,6 +212,55 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceKubeHealthReadinessPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches source-mode app-core with a coding agents empty fallback", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-coding-agents-fallback-"),
+    );
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const serverPath = path.join(apiDir, "server.ts");
+      writeFileSync(
+        serverPath,
+        [
+          "async function handleCompatRoute(req, res, state) {",
+          "  const method = req.method ?? \"GET\";",
+          "  const url = new URL(req.url ?? \"/\", \"http://localhost\");",
+          "  // GET /api/agents — return the running agent's info.",
+          "  if (method === \"GET\" && url.pathname === \"/api/agents\") {",
+          "    if (!(await ensureRouteAuthorized(req, res, state))) {",
+          "      return true;",
+          "    }",
+          "    sendJsonResponse(res, 200, { agents: [] });",
+          "    return true;",
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceAppCoreCodingAgentsFallbackPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(serverPath, "utf8");
+      expect(isAliceAppCoreCodingAgentsFallbackPatched(patched)).toBe(true);
+      expect(patched).toContain('url.pathname === "/api/coding-agents"');
+      expect(patched).toContain("sendJsonResponse(res, 200, []);");
+
+      expect(
+        applyAliceAppCoreCodingAgentsFallbackPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

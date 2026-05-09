@@ -206,6 +206,13 @@ export function isAliceKubeHealthReadinessPatched(serverSource, compatSource) {
   );
 }
 
+export function isAliceAppCoreCodingAgentsFallbackPatched(source) {
+  return (
+    source.includes('url.pathname === "/api/coding-agents"') &&
+    source.includes("sendJsonResponse(res, 200, []);")
+  );
+}
+
 export function isAliceBundledKnowledgeStartupDeferralPatched(source) {
   return (
     source.includes("const BUNDLED_KNOWLEDGE_SEED_DELAY_MS = 30_000;") &&
@@ -1111,6 +1118,61 @@ export function applyAliceKubeHealthReadinessPatch({
   return "applied";
 }
 
+function patchAliceAppCoreCodingAgentsFallbackSource(source) {
+  if (isAliceAppCoreCodingAgentsFallbackPatched(source)) {
+    return source;
+  }
+
+  const anchor = `  // GET /api/agents — return the running agent's info.
+`;
+  const patch = `  if (method === "GET" && url.pathname === "/api/coding-agents") {
+    if (!(await ensureRouteAuthorized(req, res, state))) {
+      return true;
+    }
+    sendJsonResponse(res, 200, []);
+    return true;
+  }
+
+${anchor}`;
+  if (!source.includes(anchor)) {
+    throw new Error("app-core coding agents fallback anchor drifted");
+  }
+
+  const next = source.replace(anchor, patch);
+  if (!isAliceAppCoreCodingAgentsFallbackPatched(next)) {
+    throw new Error(
+      "app-core coding agents fallback patch applied but contract is absent",
+    );
+  }
+  return next;
+}
+
+export function applyAliceAppCoreCodingAgentsFallbackPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const serverPath = path.join(elizaRoot, appCoreApiServerRelativePath);
+  if (!existsSync(serverPath)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core server source absent; skipping coding agents fallback",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(serverPath, "utf8");
+  const after = patchAliceAppCoreCodingAgentsFallbackSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] app-core coding agents fallback already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(serverPath, after);
+  log("[alice-eliza-runtime-patches] patched app-core coding agents fallback");
+  return "applied";
+}
+
 function patchAliceBundledKnowledgeStartupDeferralSource(source) {
   if (isAliceBundledKnowledgeStartupDeferralPatched(source)) {
     return source;
@@ -1359,6 +1421,7 @@ export function applyAliceElizaRuntimePatches({
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
+    applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceBundledKnowledgeStartupDeferralPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAlicePgliteContainerLockPatch({ elizaRoot, log }),

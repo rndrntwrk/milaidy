@@ -1089,6 +1089,14 @@ async function handleMiladyCompatRoute(
     return true;
   }
 
+  if (method === "GET" && url.pathname === "/api/coding-agents") {
+    if (!ensureCompatApiAuthorized(req, res)) {
+      return true;
+    }
+    sendJsonResponse(res, 200, []);
+    return true;
+  }
+
   // GET /api/agents — return the running agent's info.
   // Milady runs a single agent; this returns it as a one-element array
   // for compatibility with the upstream elizaOS health probe convention.
