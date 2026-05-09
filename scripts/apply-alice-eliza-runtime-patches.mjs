@@ -24,6 +24,8 @@ const appCoreCompatStateRelativePath =
 const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
 const appCoreTrustedLocalRequestRelativePath =
   "packages/app-core/src/api/trusted-local-request.ts";
+const coreBasicCapabilitiesRelativePath =
+  "packages/core/src/features/basic-capabilities/index.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
@@ -1458,6 +1460,92 @@ export function applyAliceAppCoreOpenAccessPatch({
   return "applied";
 }
 
+function patchAliceCoreBasicCapabilitiesBrowserSafeSource(source) {
+  const safeMarker = '} from "../plugin-manager/security.ts";';
+  if (source.includes(safeMarker)) {
+    return source;
+  }
+
+  const anchor = `// Re-export plugin-manager security helpers (used by other plugins like
+// plugin-app-control to gate owner/admin-only actions without taking a dep
+// on @elizaos/agent, which would create a layer cycle).
+export {
+\tcreatePluginAction,
+\thasAdminAccess,
+\thasOwnerAccess,
+\ttype PluginMode,
+\tpluginAction,
+\ttype SecurityDeps,
+} from "../plugin-manager/index.ts";`;
+
+  if (!source.includes(anchor)) {
+    throw new Error(
+      "core/features/basic-capabilities/index.ts plugin-manager re-export anchor drifted",
+    );
+  }
+
+  // Re-route the re-export to the leaf source file so the browser bundle
+  // never evaluates the plugin-manager barrel. The barrel statically pulls
+  // PluginManagerService and pluginAction → plugin-handlers/create.ts which
+  // does `import fs from "fs-extra"` at the top; fs-extra wraps graceful-fs,
+  // graceful-fs reads `fs.realpath.native` at module init, and in a browser
+  // where fs is stubbed empty that lookup throws TypeError synchronously,
+  // killing SPA boot before React mounts.
+  //
+  // createPluginAction / pluginAction / PluginMode were never reachable from
+  // a browser consumer (the only references were in the agent runtime barrel
+  // features/index.ts which the browser entry never imports), so dropping
+  // them here is a pure dead-export prune.
+  const replacement = `// Re-export plugin-manager security helpers (used by other plugins like
+// plugin-app-control to gate owner/admin-only actions without taking a dep
+// on @elizaos/agent, which would create a layer cycle).
+//
+// Direct import from ../plugin-manager/security.ts (NOT the barrel) so the
+// browser bundle never evaluates plugin-manager/index.ts, whose static
+// imports drag PluginManagerService and pluginAction → plugin-handlers/
+// create.ts → fs-extra → graceful-fs into the SPA. graceful-fs reads
+// fs.realpath.native at module init; in a browser where fs is stubbed
+// empty, that lookup throws TypeError and kills SPA boot before React
+// mounts. createPluginAction / pluginAction / PluginMode are server-only
+// and have no browser-reachable consumer; dropping them from this re-export
+// is a pure dead-export prune.
+export {
+\thasAdminAccess,
+\thasOwnerAccess,
+\ttype SecurityDeps,
+} from "../plugin-manager/security.ts";`;
+
+  return source.replace(anchor, replacement);
+}
+
+export function applyAliceCoreBasicCapabilitiesBrowserSafePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const filePath = path.join(elizaRoot, coreBasicCapabilitiesRelativePath);
+  if (!existsSync(filePath)) {
+    log(
+      "[alice-eliza-runtime-patches] core basic-capabilities source absent; skipping browser-safe patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(filePath, "utf8");
+  const after = patchAliceCoreBasicCapabilitiesBrowserSafeSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] core basic-capabilities browser-safe patch already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(filePath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched core basic-capabilities to bypass plugin-manager barrel for browser safety",
+  );
+  return "applied";
+}
+
 function patchAliceBundledKnowledgeStartupDeferralSource(source) {
   if (isAliceBundledKnowledgeStartupDeferralPatched(source)) {
     return source;
@@ -1706,6 +1794,7 @@ export function applyAliceElizaRuntimePatches({
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
+    applyAliceCoreBasicCapabilitiesBrowserSafePatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
