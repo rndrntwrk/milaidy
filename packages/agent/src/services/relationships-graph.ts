@@ -1,6 +1,7 @@
 import type {
   Entity,
   IAgentRuntime,
+  Memory,
   Relationship,
   Room,
   UUID,
@@ -2047,4 +2048,108 @@ export function createNativeRelationshipsGraphService(
       };
     },
   };
+}
+
+export type ClusterMemoriesQuery = {
+  tableName: string;
+  roomId?: UUID;
+  worldId?: UUID;
+  count?: number;
+  limit?: number;
+  offset?: number;
+  unique?: boolean;
+  start?: number;
+  end?: number;
+  metadata?: Record<string, unknown>;
+  orderBy?: "createdAt";
+  orderDirection?: "asc" | "desc";
+};
+
+export type ClusterSearchQuery = {
+  tableName: string;
+  embedding: number[];
+  match_threshold?: number;
+  limit?: number;
+  unique?: boolean;
+  query?: string;
+  roomId?: UUID;
+  worldId?: UUID;
+};
+
+type ClusterResolver = {
+  getMemberEntityIds: (primaryEntityId: UUID) => Promise<UUID[]>;
+};
+
+function getClusterResolver(runtime: IAgentRuntime): ClusterResolver | null {
+  const service = runtime.getService("relationships");
+  if (!service) {
+    return null;
+  }
+  const candidate = service as unknown as Partial<ClusterResolver>;
+  if (typeof candidate.getMemberEntityIds !== "function") {
+    return null;
+  }
+  return candidate as ClusterResolver;
+}
+
+function dedupeMemoriesById(memories: Memory[]): Memory[] {
+  const seen = new Set<string>();
+  const unique: Memory[] = [];
+  for (const memory of memories) {
+    const id = memory.id as string | undefined;
+    if (!id) {
+      unique.push(memory);
+      continue;
+    }
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    unique.push(memory);
+  }
+  return unique;
+}
+
+export async function getMemoriesForCluster(
+  runtime: IAgentRuntime,
+  primaryEntityId: UUID,
+  params: ClusterMemoriesQuery,
+): Promise<Memory[]> {
+  const resolver = getClusterResolver(runtime);
+  const memberIds = resolver
+    ? await resolver.getMemberEntityIds(primaryEntityId)
+    : [primaryEntityId];
+  const ids = memberIds.length > 0 ? memberIds : [primaryEntityId];
+
+  const results = await Promise.all(
+    ids.map((entityId) =>
+      runtime.getMemories({
+        ...params,
+        entityId,
+      }),
+    ),
+  );
+  return dedupeMemoriesById(results.flat());
+}
+
+export async function searchMemoriesForCluster(
+  runtime: IAgentRuntime,
+  primaryEntityId: UUID,
+  params: ClusterSearchQuery,
+): Promise<Memory[]> {
+  const resolver = getClusterResolver(runtime);
+  const memberIds = resolver
+    ? await resolver.getMemberEntityIds(primaryEntityId)
+    : [primaryEntityId];
+  const ids = memberIds.length > 0 ? memberIds : [primaryEntityId];
+
+  const results = await Promise.all(
+    ids.map((entityId) =>
+      runtime.searchMemories({
+        ...params,
+        entityId,
+      }),
+    ),
+  );
+  return dedupeMemoriesById(results.flat());
 }

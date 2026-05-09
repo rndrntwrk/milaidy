@@ -36,6 +36,8 @@ work from `milady-ai/develop` and the nested Eliza source.
   patches against upstream Eliza source anchors.
 - `packages/agent/src/api/lifeops-agent-subpaths.test.ts` verifies LifeOps
   imports do not require missing root `@elizaos/agent` subpaths.
+- Relationships graph tests verify LifeOps cluster memory helper exports remain
+  present on the materialized root `@elizaos/agent` package.
 - AppCore native bridge tests verify LifeOps imports do not require missing root
   `@elizaos/app-core/bridge/native-plugins` exports.
 - Staging deploy must assert the materialized runtime image includes the same
@@ -49,6 +51,8 @@ work from `milady-ai/develop` and the nested Eliza source.
   - `./actions/grounded-action-reply`
   - `./api/conversation-metadata`
   - `./cloud/cloud-api-key`
+- Root `@elizaos/agent/services/relationships-graph` must expose
+  cluster-aware memory helpers used by LifeOps.
 - Staged app plugin imports must patch
   `@elizaos/plugin-telegram/account-auth-service` before importing LifeOps.
 - Root `@elizaos/app-core/bridge/native-plugins` must expose the AppBlocker

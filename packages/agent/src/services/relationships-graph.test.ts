@@ -1,6 +1,10 @@
 import type { Entity, IAgentRuntime, Room, UUID, World } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
-import { createNativeRelationshipsGraphService } from "./relationships-graph.js";
+import {
+  createNativeRelationshipsGraphService,
+  getMemoriesForCluster,
+  searchMemoriesForCluster,
+} from "./relationships-graph.js";
 
 type ContactLike = {
   entityId: UUID;
@@ -487,6 +491,69 @@ describe("relationships-graph", () => {
         primaryEntityId: ownerEntityId,
         isOwner: true,
       }),
+    ]);
+  });
+
+  it("fans memory lookups out across identity cluster members", async () => {
+    const primaryEntityId = "person-primary" as UUID;
+    const aliasEntityId = "person-alias" as UUID;
+    const relationshipsService = {
+      getMemberEntityIds: vi.fn(async () => [primaryEntityId, aliasEntityId]),
+    };
+    const runtime = {
+      getService: vi.fn((serviceType: string) =>
+        serviceType === "relationships" ? relationshipsService : null,
+      ),
+      getMemories: vi.fn(async ({ entityId }: { entityId: UUID }) =>
+        entityId === primaryEntityId
+          ? [
+              { id: "shared-memory", entityId },
+              { id: "primary-memory", entityId },
+            ]
+          : [
+              { id: "shared-memory", entityId },
+              { id: "alias-memory", entityId },
+            ],
+      ),
+      searchMemories: vi.fn(async ({ entityId }: { entityId: UUID }) =>
+        entityId === primaryEntityId
+          ? [
+              { id: "shared-search", entityId },
+              { id: "primary-search", entityId },
+            ]
+          : [
+              { id: "shared-search", entityId },
+              { id: "alias-search", entityId },
+            ],
+      ),
+    } as unknown as IAgentRuntime;
+
+    const memories = await getMemoriesForCluster(runtime, primaryEntityId, {
+      tableName: "facts",
+    });
+    const searchResults = await searchMemoriesForCluster(
+      runtime,
+      primaryEntityId,
+      {
+        tableName: "facts",
+        embedding: [0.1, 0.2],
+      },
+    );
+
+    expect(relationshipsService.getMemberEntityIds).toHaveBeenCalledWith(
+      primaryEntityId,
+    );
+    expect(runtime.getMemories).toHaveBeenCalledTimes(2);
+    expect(runtime.searchMemories).toHaveBeenCalledTimes(2);
+    expect(memories.map((memory) => memory.id)).toEqual([
+      "shared-memory",
+      "primary-memory",
+      "alias-memory",
+    ]);
+    expect(searchResults.map((memory) => memory.id)).toEqual([
+      "shared-search",
+      "primary-search",
+      "alias-search",
     ]);
   });
 });
