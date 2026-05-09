@@ -20,6 +20,8 @@ export const aliceElizaRuntimePatchRelativePath =
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
+const pluginSqlPgliteManagerRelativePath =
+  "plugins/plugin-sql/typescript/pglite/manager.ts";
 const lifeOpsSourceRelativePaths = [
   "plugins/app-lifeops/src",
   "apps/app-lifeops/src",
@@ -163,6 +165,203 @@ export function isAliceLifeOpsCalendarActionPatched(source) {
       "subActions: [\n    calendarAction,\n    proposeMeetingTimesAction",
     )
   );
+}
+
+export function isAlicePgliteContainerLockPatchPatched(source) {
+  return (
+    source.includes("type PgliteLockFile = {") &&
+    source.includes("private getCurrentProcessStartedAtMs(): number") &&
+    source.includes("private isLockFileFromPreviousProcess(") &&
+    source.includes("const previousProcessLock = this.isLockFileFromPreviousProcess(") &&
+    source.includes("pid && this.isPidRunning(pid) && !previousProcessLock") &&
+    source.includes("Removed stale PGlite postmaster.pid from prior container process")
+  );
+}
+
+function patchAlicePgliteContainerLockSource(source) {
+  if (isAlicePgliteContainerLockPatchPatched(source)) {
+    return source;
+  }
+
+  let next = source;
+  const importAnchor = `  openSync,
+  readFileSync,
+  unlinkSync,
+`;
+  if (!next.includes(importAnchor)) {
+    throw new Error("plugin-sql PGlite manager fs import anchor drifted");
+  }
+  next = next.replace(
+    importAnchor,
+    `  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+`,
+  );
+
+  const typeAnchor = `type PglitePidFileStatus =
+  | "missing"
+  | "active"
+  | "active-unconfirmed"
+  | "cleared-stale"
+  | "cleared-malformed"
+  | "check-failed";
+
+`;
+  if (!next.includes(typeAnchor)) {
+    throw new Error("plugin-sql PGlite manager pid status anchor drifted");
+  }
+  next = next.replace(
+    typeAnchor,
+    `${typeAnchor}type PgliteLockFile = {
+  pid?: unknown;
+  createdAt?: unknown;
+};
+
+`,
+  );
+
+  const lockPidAnchor = `  private getLockPid(lockPath: string): number | null {
+    try {
+      const raw = readFileSync(lockPath, "utf-8");
+      const parsed = JSON.parse(raw) as { pid?: unknown };
+      return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : null;
+    } catch {
+      return null;
+    }
+  }
+
+`;
+  if (!next.includes(lockPidAnchor)) {
+    throw new Error("plugin-sql PGlite manager lock pid anchor drifted");
+  }
+  next = next.replace(
+    lockPidAnchor,
+    `  private getLockInfo(lockPath: string): PgliteLockFile | null {
+    try {
+      const raw = readFileSync(lockPath, "utf-8");
+      const parsed = JSON.parse(raw) as PgliteLockFile;
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private getLockPid(lockInfo: PgliteLockFile | null): number | null {
+    const pid = lockInfo?.pid;
+    return typeof pid === "number" && pid > 0 ? pid : null;
+  }
+
+  private getCurrentProcessStartedAtMs(): number {
+    return Date.now() - process.uptime() * 1000;
+  }
+
+  private isTimestampFromPreviousProcess(timestampMs: number): boolean {
+    return timestampMs + 1000 < this.getCurrentProcessStartedAtMs();
+  }
+
+  private isLockFileFromPreviousProcess(lockPath: string, lockInfo: PgliteLockFile | null): boolean {
+    const createdAt = lockInfo?.createdAt;
+    if (typeof createdAt === "string") {
+      const createdAtMs = Date.parse(createdAt);
+      if (Number.isFinite(createdAtMs) && this.isTimestampFromPreviousProcess(createdAtMs)) {
+        return true;
+      }
+    }
+
+    try {
+      return this.isTimestampFromPreviousProcess(statSync(lockPath).mtimeMs);
+    } catch {
+      return false;
+    }
+  }
+
+  private isPidFileFromPreviousProcess(pidPath: string): boolean {
+    try {
+      return this.isTimestampFromPreviousProcess(statSync(pidPath).mtimeMs);
+    } catch {
+      return false;
+    }
+  }
+
+`,
+  );
+
+  const lockCheckAnchor = `        const pid = this.getLockPid(lockPath);
+        if (pid && this.isPidRunning(pid)) {
+`;
+  if (!next.includes(lockCheckAnchor)) {
+    throw new Error("plugin-sql PGlite manager active lock anchor drifted");
+  }
+  next = next.replace(
+    lockCheckAnchor,
+    `        const lockInfo = this.getLockInfo(lockPath);
+        const pid = this.getLockPid(lockInfo);
+        const previousProcessLock = this.isLockFileFromPreviousProcess(lockPath, lockInfo);
+        if (pid && this.isPidRunning(pid) && !previousProcessLock) {
+`,
+  );
+
+  const lockLogAnchor = `{ src: "plugin:sql", dataDir, lockPath, pid },`;
+  if (!next.includes(lockLogAnchor)) {
+    throw new Error("plugin-sql PGlite manager lock log anchor drifted");
+  }
+  next = next.replace(
+    lockLogAnchor,
+    `{ src: "plugin:sql", dataDir, lockPath, pid, previousProcessLock },`,
+  );
+
+  const pidFileAnchor = `      try {
+        process.kill(pid, 0);
+`;
+  if (!next.includes(pidFileAnchor)) {
+    throw new Error("plugin-sql PGlite manager postmaster pid anchor drifted");
+  }
+  next = next.replace(
+    pidFileAnchor,
+    `      if (this.isPidFileFromPreviousProcess(pidPath)) {
+        unlinkSync(pidPath);
+        logger.info(
+          { src: "plugin:sql", dataDir, pid },
+          "Removed stale PGlite postmaster.pid from prior container process"
+        );
+        return "cleared-stale";
+      }
+
+${pidFileAnchor}`,
+  );
+
+  if (!isAlicePgliteContainerLockPatchPatched(next)) {
+    throw new Error("plugin-sql PGlite manager patch applied but contract is absent");
+  }
+  return next;
+}
+
+export function applyAlicePgliteContainerLockPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const managerPath = path.join(elizaRoot, pluginSqlPgliteManagerRelativePath);
+  if (!existsSync(managerPath)) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-sql PGlite manager source absent; skipping",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(managerPath, "utf8");
+  const after = patchAlicePgliteContainerLockSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-sql PGlite container lock patch already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(managerPath, after);
+  log("[alice-eliza-runtime-patches] patched plugin-sql PGlite container lock recovery");
+  return "applied";
 }
 
 function patchAliceLifeOpsCalendarActionSource(source) {
@@ -716,6 +915,7 @@ export function applyAliceElizaRuntimePatches({
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
+    applyAlicePgliteContainerLockPatch({ elizaRoot, log }),
     applyAliceLifeOpsCalendarActionPatch({ elizaRoot, log }),
     applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),
     applyAliceLifeOpsNativeActivityTrackerPatch({ elizaRoot, log }),

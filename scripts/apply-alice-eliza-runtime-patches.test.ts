@@ -15,8 +15,10 @@ import {
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceLifeOpsCalendarActionPatch,
   applyAliceLifeOpsNativeActivityTrackerPatch,
+  applyAlicePgliteContainerLockPatch,
   aliceElizaRuntimePatchRelativePath,
   isAliceLifeOpsCalendarActionPatched,
+  isAlicePgliteContainerLockPatchPatched,
   isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
   rewriteRelativeTsRuntimeSpecifiers,
@@ -241,6 +243,123 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceLifeOpsCalendarActionPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches plugin-sql PGlite locks for Kubernetes PID reuse", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-pglite-lock-patch-"),
+    );
+    try {
+      const managerDir = path.join(
+        tempDir,
+        "plugins",
+        "plugin-sql",
+        "typescript",
+        "pglite",
+      );
+      mkdirSync(managerDir, { recursive: true });
+      const managerPath = path.join(managerDir, "manager.ts");
+      writeFileSync(
+        managerPath,
+        [
+          "import {",
+          "  closeSync,",
+          "  existsSync,",
+          "  mkdirSync,",
+          "  openSync,",
+          "  readFileSync,",
+          "  unlinkSync,",
+          "  writeFileSync,",
+          '} from "node:fs";',
+          "",
+          "type PglitePidFileStatus =",
+          '  | "missing"',
+          '  | "active"',
+          '  | "active-unconfirmed"',
+          '  | "cleared-stale"',
+          '  | "cleared-malformed"',
+          '  | "check-failed";',
+          "",
+          "export class PGliteClientManager {",
+          "  private getLockPid(lockPath: string): number | null {",
+          "    try {",
+          '      const raw = readFileSync(lockPath, "utf-8");',
+          "      const parsed = JSON.parse(raw) as { pid?: unknown };",
+          '      return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : null;',
+          "    } catch {",
+          "      return null;",
+          "    }",
+          "  }",
+          "",
+          "  private isPidRunning(pid: number): boolean {",
+          "    return pid > 0;",
+          "  }",
+          "",
+          "  private acquireDataDirLockIfNeeded(dataDir: string, lockPath: string): void {",
+          "    try {",
+          '      openSync(lockPath, "wx");',
+          "    } catch (err) {",
+          "        const pid = this.getLockPid(lockPath);",
+          "        if (pid && this.isPidRunning(pid)) {",
+          "          throw this.createActiveLockError(",
+          "            dataDir,",
+          "            new Error(`PGlite lock file is held by running process ${pid}`)",
+          "          );",
+          "        }",
+          "        unlinkSync(lockPath);",
+          "        logger.info(",
+          '          { src: "plugin:sql", dataDir, lockPath, pid },',
+          '          "Removed stale PGlite lock file"',
+          "        );",
+          "    }",
+          "  }",
+          "",
+          "  private reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {",
+          '    const pidPath = `${dataDir}/postmaster.pid`;',
+          '    const content = readFileSync(pidPath, "utf-8");',
+          '    const firstLine = content.split("\\n")[0]?.trim();',
+          "    const pid = parseInt(firstLine, 10);",
+          "    if (Number.isNaN(pid) || pid <= 0) {",
+          "      unlinkSync(pidPath);",
+          "      return \"cleared-malformed\";",
+          "    }",
+          "      try {",
+          "        process.kill(pid, 0);",
+          "        return \"active\";",
+          "      } catch {",
+          "        return \"cleared-stale\";",
+          "      }",
+          "  }",
+          "",
+          "  private createActiveLockError(dataDir: string, cause: unknown): Error {",
+          "    return new Error(String(cause));",
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAlicePgliteContainerLockPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(managerPath, "utf8");
+      expect(isAlicePgliteContainerLockPatchPatched(patched)).toBe(true);
+      expect(patched).toContain("statSync");
+      expect(patched).toContain("previousProcessLock");
+      expect(patched).toContain("!previousProcessLock");
+
+      expect(
+        applyAlicePgliteContainerLockPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
