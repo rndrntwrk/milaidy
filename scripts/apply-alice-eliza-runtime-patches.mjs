@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   statSync,
@@ -21,6 +22,79 @@ const lifeOpsSourceRelativePaths = [
   "plugins/app-lifeops/src",
   "apps/app-lifeops/src",
 ];
+const nativeActivityTrackerHelperRelativePath =
+  "activity-profile/native-activity-tracker.ts";
+const nativeActivityTrackerHelperSource = `export type ActivityEventKind = "activate" | "deactivate";
+
+export interface ActivityCollectorEvent {
+  ts: number;
+  event: ActivityEventKind;
+  bundleId: string;
+  appName: string;
+  windowTitle?: string;
+}
+
+export interface ActivityCollectorIdleSample {
+  ts: number;
+  event: "hid_idle";
+  idleSeconds: number;
+}
+
+export interface ActivityCollectorExit {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  clean: boolean;
+  reason: string;
+}
+
+export interface ActivityCollectorHandle {
+  stop(): Promise<void>;
+  readonly pid: number | null;
+}
+
+export interface ActivityCollectorOptions {
+  binaryPath?: string;
+  onEvent: (event: ActivityCollectorEvent) => void;
+  onIdleSample?: (sample: ActivityCollectorIdleSample) => void;
+  onExit?: (exit: ActivityCollectorExit) => void;
+  onFatal?: (reason: string) => void;
+}
+
+export interface NativeActivityTrackerModule {
+  isSupportedPlatform(): boolean;
+  startActivityCollector(
+    options: ActivityCollectorOptions,
+  ): ActivityCollectorHandle;
+}
+
+type NativeActivityTrackerImporter =
+  () => Promise<NativeActivityTrackerModule>;
+
+export function isSupportedPlatform(): boolean {
+  return process.platform === "darwin";
+}
+
+export async function loadNativeActivityTracker({
+  importer = () => import("@elizaos/native-activity-tracker"),
+  log = (message: string, error: unknown) => {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.warn(\`\${message} \${detail}\`);
+  },
+}: {
+  importer?: NativeActivityTrackerImporter;
+  log?: (message: string, error: unknown) => void;
+} = {}): Promise<NativeActivityTrackerModule | null> {
+  try {
+    return await importer();
+  } catch (error) {
+    log(
+      "[activity-tracker] Native activity tracker package unavailable; macOS focus reports are disabled.",
+      error,
+    );
+    return null;
+  }
+}
+`;
 
 function runGitApply(args, { cwd, allowFailure = false } = {}) {
   const result = spawnSync("git", args, {
@@ -137,6 +211,172 @@ export function applyAliceLifeOpsRuntimeImportPatch({
   return "applied";
 }
 
+function patchLifeOpsFile(filePath, patch) {
+  const before = readFileSync(filePath, "utf8");
+  const after = patch(before);
+  if (after === before) {
+    return false;
+  }
+  writeFileSync(filePath, after);
+  return true;
+}
+
+function patchNativeActivityTrackerScreenTimeImport(source) {
+  const directImport =
+    'import { isSupportedPlatform } from "@elizaos/native-activity-tracker";';
+  const optionalImport =
+    'import { isSupportedPlatform } from "../activity-profile/native-activity-tracker.js";';
+
+  if (source.includes(optionalImport)) {
+    return source;
+  }
+  if (!source.includes(directImport)) {
+    throw new Error(
+      "app-lifeops screen-time native activity tracker import drifted",
+    );
+  }
+  return source.replace(directImport, optionalImport);
+}
+
+function patchNativeActivityTrackerServiceImport(source) {
+  const directImport = `import {
+  type ActivityCollectorEvent,
+  type ActivityCollectorHandle,
+  type ActivityCollectorIdleSample,
+  isSupportedPlatform,
+  startActivityCollector,
+} from "@elizaos/native-activity-tracker";`;
+  const optionalImport = `import {
+  type ActivityCollectorEvent,
+  type ActivityCollectorHandle,
+  type ActivityCollectorIdleSample,
+  isSupportedPlatform,
+  loadNativeActivityTracker,
+} from "./native-activity-tracker.js";`;
+
+  if (source.includes(optionalImport)) {
+    return source;
+  }
+  if (!source.includes(directImport)) {
+    throw new Error(
+      "app-lifeops activity tracker service native import drifted",
+    );
+  }
+  return source.replace(directImport, optionalImport);
+}
+
+function patchNativeActivityTrackerServiceStartup(source) {
+  const directStartup = `    try {
+      await LifeOpsRepository.bootstrapSchema(this.runtime);
+      this.handle = startActivityCollector({`;
+  const optionalStartup = `    try {
+      const tracker = await loadNativeActivityTracker({
+        log: (message, error) => {
+          logger.warn(
+            { err: error instanceof Error ? error.message : String(error) },
+            message,
+          );
+        },
+      });
+      if (!tracker) {
+        this.mode = "failed";
+        return;
+      }
+
+      await LifeOpsRepository.bootstrapSchema(this.runtime);
+      this.handle = tracker.startActivityCollector({`;
+
+  if (source.includes(optionalStartup)) {
+    return source;
+  }
+  if (!source.includes(directStartup)) {
+    throw new Error(
+      "app-lifeops activity tracker service startup block drifted",
+    );
+  }
+  return source.replace(directStartup, optionalStartup);
+}
+
+export function applyAliceLifeOpsNativeActivityTrackerPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  let patchedFiles = 0;
+  let inspectedDirs = 0;
+
+  for (const relativePath of lifeOpsSourceRelativePaths) {
+    const sourceDir = path.join(elizaRoot, relativePath);
+    if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
+      continue;
+    }
+
+    inspectedDirs += 1;
+
+    const helperPath = path.join(
+      sourceDir,
+      nativeActivityTrackerHelperRelativePath,
+    );
+    mkdirSync(path.dirname(helperPath), { recursive: true });
+    if (
+      !existsSync(helperPath) ||
+      readFileSync(helperPath, "utf8") !== nativeActivityTrackerHelperSource
+    ) {
+      writeFileSync(helperPath, nativeActivityTrackerHelperSource);
+      patchedFiles += 1;
+    }
+
+    const screenTimePath = path.join(sourceDir, "actions", "screen-time.ts");
+    if (existsSync(screenTimePath)) {
+      if (
+        patchLifeOpsFile(
+          screenTimePath,
+          patchNativeActivityTrackerScreenTimeImport,
+        )
+      ) {
+        patchedFiles += 1;
+      }
+    }
+
+    const servicePath = path.join(
+      sourceDir,
+      "activity-profile",
+      "activity-tracker-service.ts",
+    );
+    if (existsSync(servicePath)) {
+      if (
+        patchLifeOpsFile(
+          servicePath,
+          (source) =>
+            patchNativeActivityTrackerServiceStartup(
+              patchNativeActivityTrackerServiceImport(source),
+            ),
+        )
+      ) {
+        patchedFiles += 1;
+      }
+    }
+  }
+
+  if (inspectedDirs === 0) {
+    log(
+      "[alice-eliza-runtime-patches] app-lifeops native activity tracker source absent; skipping",
+    );
+    return "skipped";
+  }
+
+  if (patchedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] app-lifeops native activity tracker imports already optional",
+    );
+    return "already-applied";
+  }
+
+  log(
+    `[alice-eliza-runtime-patches] patched app-lifeops native activity tracker imports in ${patchedFiles} file(s)`,
+  );
+  return "applied";
+}
+
 function applyAliceRuntimeApiBindPatch({
   rootDir,
   elizaRoot,
@@ -202,6 +442,7 @@ export function applyAliceElizaRuntimePatches({
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),
+    applyAliceLifeOpsNativeActivityTrackerPatch({ elizaRoot, log }),
   ];
 
   return results.includes("applied")

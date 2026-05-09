@@ -1,10 +1,18 @@
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAliceLifeOpsNativeActivityTrackerPatch,
   aliceElizaRuntimePatchRelativePath,
   isAliceRuntimeApiBindPatched,
   rewriteRelativeTsRuntimeSpecifiers,
@@ -75,5 +83,88 @@ describe("Alice Eliza runtime patch contract", () => {
         'import { external } from "@elizaos/core";',
       ].join("\n"),
     );
+  });
+
+  it("makes LifeOps native activity tracker imports optional on Linux staging", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-lifeops-native-tracker-"),
+    );
+    try {
+      const sourceDir = path.join(tempDir, "plugins", "app-lifeops", "src");
+      const actionsDir = path.join(sourceDir, "actions");
+      const activityDir = path.join(sourceDir, "activity-profile");
+      mkdirSync(actionsDir, { recursive: true });
+      mkdirSync(activityDir, { recursive: true });
+      writeFileSync(
+        path.join(actionsDir, "screen-time.ts"),
+        [
+          'import { logger } from "@elizaos/core";',
+          'import { isSupportedPlatform } from "@elizaos/native-activity-tracker";',
+          "export const supported = isSupportedPlatform();",
+        ].join("\n"),
+      );
+      writeFileSync(
+        path.join(activityDir, "activity-tracker-service.ts"),
+        [
+          'import { logger } from "@elizaos/core";',
+          "import {",
+          "  type ActivityCollectorEvent,",
+          "  type ActivityCollectorHandle,",
+          "  type ActivityCollectorIdleSample,",
+          "  isSupportedPlatform,",
+          "  startActivityCollector,",
+          '} from "@elizaos/native-activity-tracker";',
+          "async function startCollector() {",
+          "    try {",
+          "      await LifeOpsRepository.bootstrapSchema(this.runtime);",
+          "      this.handle = startActivityCollector({",
+          "        onEvent: (event) => this.enqueueEvent(event),",
+          "      });",
+          "    } catch {}",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceLifeOpsNativeActivityTrackerPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const screenTime = readFileSync(
+        path.join(actionsDir, "screen-time.ts"),
+        "utf8",
+      );
+      const service = readFileSync(
+        path.join(activityDir, "activity-tracker-service.ts"),
+        "utf8",
+      );
+      const helper = readFileSync(
+        path.join(activityDir, "native-activity-tracker.ts"),
+        "utf8",
+      );
+
+      expect(screenTime).toContain(
+        'from "../activity-profile/native-activity-tracker.js";',
+      );
+      expect(service).toContain('from "./native-activity-tracker.js";');
+      expect(service).toContain("const tracker = await loadNativeActivityTracker");
+      expect(service).toContain("tracker.startActivityCollector({");
+      expect(helper).toContain(
+        'import("@elizaos/native-activity-tracker")',
+      );
+      expect(screenTime).not.toContain("@elizaos/native-activity-tracker");
+      expect(service).not.toContain("@elizaos/native-activity-tracker");
+
+      expect(
+        applyAliceLifeOpsNativeActivityTrackerPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
