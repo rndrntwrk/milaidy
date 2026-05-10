@@ -1,8 +1,8 @@
 diff --git a/packages/app-core/src/runtime/eliza.ts b/packages/app-core/src/runtime/eliza.ts
-index 9becb337a0..b20476b87c 100644
+index 71f9f391a2..75580e284d 100644
 --- a/packages/app-core/src/runtime/eliza.ts
 +++ b/packages/app-core/src/runtime/eliza.ts
-@@ -119,6 +119,68 @@ function isAutonomyService(value: unknown): value is AutonomyServiceLike {
+@@ -113,6 +113,68 @@ function isAutonomyService(value: unknown): value is AutonomyServiceLike {
  /** Guards against registering signal handlers more than once. */
  let signalHandlersRegistered = false;
  
@@ -71,7 +71,7 @@ index 9becb337a0..b20476b87c 100644
  interface EntityLike {
    id: string;
    agentId?: string;
-@@ -1290,6 +1352,10 @@ export async function startEliza(
+@@ -1065,6 +1127,10 @@ export async function startEliza(
    options?: StartElizaOptionsExt,
  ): Promise<Awaited<ReturnType<typeof upstreamStartEliza>>> {
    syncAppEnvToEliza();
@@ -82,7 +82,7 @@ index 9becb337a0..b20476b87c 100644
    // Eliza app: load PTY / coding-swarm orchestration unless explicitly opted out.
    const orchRaw = process.env.ELIZA_AGENT_ORCHESTRATOR?.trim().toLowerCase();
    if (orchRaw !== "0" && orchRaw !== "false" && orchRaw !== "no") {
-@@ -1306,47 +1372,59 @@ export async function startEliza(
+@@ -1081,47 +1147,59 @@ export async function startEliza(
      }
  
      if (options?.serverOnly) {
@@ -181,7 +181,7 @@ index 9becb337a0..b20476b87c 100644
  
        // WHY: `startApiServer` may bind a different port than requested (busy
        // socket, upstream policy). Shells, scripts, and follow-up code reading
-@@ -1364,10 +1442,60 @@ export async function startEliza(
+@@ -1139,10 +1217,60 @@ export async function startEliza(
        } catch {}
  
        logger.info(
@@ -245,15 +245,26 @@ index 9becb337a0..b20476b87c 100644
  
        const keepAlive = setInterval(() => {}, 1 << 30);
        let isCleaningUp = false;
-@@ -1434,6 +1562,7 @@ export async function startEliza(
-         } catch {
-           /* non-critical — best effort */
+@@ -1172,6 +1300,18 @@ export async function startEliza(
+           }
+           _triggerEventBridge = null;
          }
++        // Stop the n8n sidecar if it was started during this session. The
++        // singleton is lazily constructed, so this is a no-op when n8n was
++        // never used.
++        try {
++          const { disposeN8nSidecar } = await import(
++            "../services/n8n-sidecar.js"
++          );
++          await disposeN8nSidecar();
++        } catch {
++          /* non-critical — best effort */
++        }
 +        await apiServerHandle.close().catch(() => undefined);
          process.exit(0);
        };
  
-@@ -1445,8 +1574,23 @@ export async function startEliza(
+@@ -1183,8 +1323,23 @@ export async function startEliza(
        return currentRuntime;
      }
  
