@@ -17,6 +17,7 @@ import {
   applyAliceAppCoreOpenAccessPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceCoreBasicCapabilitiesBrowserSafePatch,
+  applyAliceCoreBuildBrowserExternalsPatch,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceKubeHealthReadinessPatch,
   applyAliceLifeOpsCalendarActionPatch,
@@ -400,6 +401,51 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceCoreBasicCapabilitiesBrowserSafePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches core build.ts to externalize fs-extra and graceful-fs in the browser dist", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-core-browser-externals-"),
+    );
+    try {
+      const dir = path.join(tempDir, "packages", "core");
+      mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "build.ts");
+      const original = [
+        "// Browser-specific externals (these should be provided by the host environment)",
+        "const browserExternals = [",
+        "\t// These will be loaded via CDN or bundled by the consuming app",
+        '\t"sharp", // Image processing - not available in browser',
+        '\t"@hapi/shot", // Test utility - not needed in browser',
+        "];",
+      ].join("\n");
+      writeFileSync(filePath, original);
+
+      expect(
+        applyAliceCoreBuildBrowserExternalsPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(filePath, "utf8");
+      expect(patched).toContain('"fs-extra", // [milaidy:browser-externals]');
+      expect(patched).toContain(
+        '"graceful-fs", // [milaidy:browser-externals]',
+      );
+      // Existing externals must remain.
+      expect(patched).toContain('"sharp", // Image processing');
+      expect(patched).toContain('"@hapi/shot", // Test utility');
+
+      expect(
+        applyAliceCoreBuildBrowserExternalsPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

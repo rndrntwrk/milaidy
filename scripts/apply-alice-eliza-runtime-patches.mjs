@@ -26,6 +26,7 @@ const appCoreTrustedLocalRequestRelativePath =
   "packages/app-core/src/api/trusted-local-request.ts";
 const coreBasicCapabilitiesRelativePath =
   "packages/core/src/features/basic-capabilities/index.ts";
+const coreBuildRelativePath = "packages/core/build.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
@@ -1546,6 +1547,77 @@ export function applyAliceCoreBasicCapabilitiesBrowserSafePatch({
   return "applied";
 }
 
+function patchAliceCoreBuildBrowserExternalsSource(source) {
+  const safeMarker = '"fs-extra", // [milaidy:browser-externals]';
+  if (source.includes(safeMarker)) {
+    return source;
+  }
+
+  const anchor = `// Browser-specific externals (these should be provided by the host environment)
+const browserExternals = [
+\t// These will be loaded via CDN or bundled by the consuming app
+\t"sharp", // Image processing - not available in browser`;
+
+  if (!source.includes(anchor)) {
+    throw new Error(
+      "core/build.ts browserExternals anchor drifted",
+    );
+  }
+
+  /* When bun build runs without fs-extra in browserExternals, it resolves and
+   * inlines the fs-extra source code directly into dist/browser/index.browser.js
+   * (along with its graceful-fs dep). graceful-fs's gracefulify() reads
+   * fs.realpath.native at module init; in a browser where fs is stubbed empty,
+   * that lookup throws TypeError synchronously and kills SPA boot before React
+   * mounts. Marking fs-extra and graceful-fs as externals leaves bare
+   * `import "fs-extra"` / `import "graceful-fs"` in the dist, which the SPA's
+   * Vite stub plugin (apps/app/vite/native-module-stub-plugin.ts) catches and
+   * replaces with a Proxy noop stub. This is the root cause of the
+   * staging-alice white-screen crash. */
+  const replacement = `// Browser-specific externals (these should be provided by the host environment)
+const browserExternals = [
+\t// [milaidy:browser-externals] Mark fs-extra and graceful-fs as external so
+\t// they are NOT inlined into dist/browser/index.browser.js. graceful-fs's
+\t// gracefulify() reads fs.realpath.native at module init; in a browser where
+\t// fs is stubbed empty that lookup throws TypeError and kills SPA boot.
+\t// Leaving these as bare imports lets the SPA's Vite stub plugin (apps/app/
+\t// vite/native-module-stub-plugin.ts) replace them with a Proxy noop stub.
+\t"fs-extra", // [milaidy:browser-externals]
+\t"graceful-fs", // [milaidy:browser-externals]
+\t// These will be loaded via CDN or bundled by the consuming app
+\t"sharp", // Image processing - not available in browser`;
+
+  return source.replace(anchor, replacement);
+}
+
+export function applyAliceCoreBuildBrowserExternalsPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const filePath = path.join(elizaRoot, coreBuildRelativePath);
+  if (!existsSync(filePath)) {
+    log(
+      "[alice-eliza-runtime-patches] core build.ts absent; skipping browser-externals patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(filePath, "utf8");
+  const after = patchAliceCoreBuildBrowserExternalsSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] core build.ts browser-externals patch already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(filePath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched core build.ts to externalize fs-extra and graceful-fs in the browser dist",
+  );
+  return "applied";
+}
+
 function patchAliceBundledKnowledgeStartupDeferralSource(source) {
   if (isAliceBundledKnowledgeStartupDeferralPatched(source)) {
     return source;
@@ -1795,6 +1867,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
     applyAliceCoreBasicCapabilitiesBrowserSafePatch({ elizaRoot, log }),
+    applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
