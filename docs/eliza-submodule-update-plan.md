@@ -30,14 +30,15 @@ Mapping every active patch in `scripts/apply-alice-eliza-runtime-patches.mjs` to
 | `applyAliceKubeHealthReadinessPatch` | `packages/app-core/src/api/kube-health.ts` | **0** | unchanged | NONE |
 | `applyAliceBundledKnowledgeStartupDeferralPatch` | `packages/agent/src/runtime/eliza.ts` | **36** | `function trimEnvString` still present; surrounding context will likely have shifted | **HIGH — highest churn file** |
 | `applyAliceTelegramAccountAuthResolverPatch` | `packages/agent/src/runtime/plugin-resolver.ts` | 18 | not probed yet | MEDIUM-HIGH |
-| `applyAlicePgliteContainerLockPatch` | `plugins/plugin-sql/typescript/pglite/manager.ts` | not probed yet | not probed yet | UNKNOWN |
-| `applyAliceLifeOpsCalendarActionPatch` | `plugins/app-lifeops/src/...` | not probed yet | not probed yet | UNKNOWN |
-| `applyAliceLifeOpsRuntimeImportPatch` | `plugins/app-lifeops/src/...` | not probed yet | not probed yet | UNKNOWN |
-| `applyAliceLifeOpsNativeActivityTrackerPatch` | `plugins/app-lifeops/src/...` | not probed yet | not probed yet | UNKNOWN |
+| `applyAlicePgliteContainerLockPatch` | `plugins/plugin-sql/typescript/pglite/manager.ts` | 1 | not probed yet | LOW |
+| `applyAliceLifeOpsCalendarActionPatch` | `plugins/app-lifeops/src/actions/calendar.ts` | (within 92 dir-level) | `calendarAction as googleCalendarAction` still present at upstream | LOW |
+| `applyAliceLifeOpsRuntimeImportPatch` | `plugins/app-lifeops/src/...` | (within 92 dir-level) | not probed yet | MEDIUM-HIGH (high dir churn) |
+| `applyAliceLifeOpsNativeActivityTrackerPatch` | `activity-profile/native-activity-tracker.ts` | **target file deleted upstream** | upstream replaced with `activity-tracker-{repo,reporting,service}.ts` family | **HIGH — file gone, patch must be rewritten or retired** |
 
-**Two definitively-broken patches**:
+**Three definitively-broken patches**:
 1. `applyAliceAppCoreOpenAccessPatch` — the `isCloudProvisionedByEnv()` call site no longer exists at the upstream tip; the local-trust logic appears refactored.
 2. `applyAliceAppCoreCodingAgentsFallbackPatch` — handleCompatRoute structure intact but the per-route anchor block has shifted; needs new line context.
+3. `applyAliceLifeOpsNativeActivityTrackerPatch` — target file `activity-profile/native-activity-tracker.ts` deleted upstream; replaced by `activity-tracker-{repo,reporting,service}.ts` family. Patch must be either rewritten against the new file structure or retired if its purpose is now upstream's default.
 
 ## Phased execution
 
