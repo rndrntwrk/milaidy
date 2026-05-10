@@ -904,6 +904,16 @@ function nativeModuleStubPlugin(): Plugin {
     "electron",
     "undici",
     "@elizaos/plugin-local-embedding",
+    // mammoth (statically imported from @elizaos/core/src/features/knowledge/
+    // utils.ts) calls fs.readFile.bind(fs) inside its DocumentXmlReader factory
+    // at module init. In a browser where fs is stubbed empty that lookup throws
+    // TypeError and kills SPA boot. The paired core/build.ts patch externalizes
+    // mammoth in the dist; this entry stubs it in the SPA build so the bare
+    // import emitted by core gets replaced with a Proxy noop instead of being
+    // resolved and bundled by Vite. The shared eliza/packages/app stub plugin
+    // has the same entry; both are needed because each Vite config runs its
+    // own copy of nativeModuleStubPlugin.
+    "mammoth",
   ]);
   const nativeScopeRe = /^@node-llama-cpp\//;
 
