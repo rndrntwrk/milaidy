@@ -25,7 +25,7 @@ Mapping every active patch in `scripts/apply-alice-eliza-runtime-patches.mjs` to
 | `applyAliceCoreBasicCapabilitiesBrowserSafePatch` | `packages/core/src/features/basic-capabilities/index.ts` | 11 | `} from "../plugin-manager/index.ts"` still present (count=1) | MEDIUM — anchor block surrounding the re-export is 11 lines; comment text in alice version may differ from upstream now |
 | `applyAliceAppCoreCodingAgentsFallbackPatch` | `packages/app-core/src/api/server.ts` | 7 | `handleCompatRoute` still present, but the specific anchor matching `url.pathname === "/api/coding-agents"` resolution context likely shifted | **HIGH — rebuild required** |
 | `applyAliceAppCoreCompanionStagePatch` | same file | (same 7) | structurally similar — `url.pathname` checks still appear 15× in upstream version | MEDIUM — companion-stage block must be re-located |
-| `applyAliceAppCoreOpenAccessPatch` | `packages/app-core/src/api/trusted-local-request.ts` | 1 | `isCloudProvisionedByEnv()` check **NOT FOUND at upstream tip** | **HIGH — file likely refactored** |
+| `applyAliceAppCoreOpenAccessPatch` | `packages/app-core/src/api/trusted-local-request.ts` | (file deleted) | **target file deleted upstream**; `isTrustedLocalRequest` moved into `packages/app-core/src/api/compat-route-shared.ts` | **HIGH — patch must re-target to compat-route-shared.ts; on a clean submodule bump this patch silently skips and the open-access bypass disappears, so /api/auth/status returns required:true and SPA falls back into pairing flow** |
 | `applyAliceAppViteStubMammothPatch` (eliza-side) | `packages/app/vite/native-module-stub-plugin.ts` | 4 | `"node-llama-cpp"`, `"fs-extra"` still present in nativePackages | LOW |
 | `applyAliceKubeHealthReadinessPatch` | `packages/app-core/src/api/kube-health.ts` | **0** | unchanged | NONE |
 | `applyAliceBundledKnowledgeStartupDeferralPatch` | `packages/agent/src/runtime/eliza.ts` | **36** | `function trimEnvString` still present; surrounding context will likely have shifted | **HIGH — highest churn file** |
@@ -35,10 +35,12 @@ Mapping every active patch in `scripts/apply-alice-eliza-runtime-patches.mjs` to
 | `applyAliceLifeOpsRuntimeImportPatch` | `plugins/app-lifeops/src/...` | (within 92 dir-level) | not probed yet | MEDIUM-HIGH (high dir churn) |
 | `applyAliceLifeOpsNativeActivityTrackerPatch` | `activity-profile/native-activity-tracker.ts` | **target file deleted upstream** | upstream replaced with `activity-tracker-{repo,reporting,service}.ts` family | **HIGH — file gone, patch must be rewritten or retired** |
 
-**Three definitively-broken patches**:
-1. `applyAliceAppCoreOpenAccessPatch` — the `isCloudProvisionedByEnv()` call site no longer exists at the upstream tip; the local-trust logic appears refactored.
-2. `applyAliceAppCoreCodingAgentsFallbackPatch` — handleCompatRoute structure intact but the per-route anchor block has shifted; needs new line context.
-3. `applyAliceLifeOpsNativeActivityTrackerPatch` — target file `activity-profile/native-activity-tracker.ts` deleted upstream; replaced by `activity-tracker-{repo,reporting,service}.ts` family. Patch must be either rewritten against the new file structure or retired if its purpose is now upstream's default.
+**Three definitively-broken patches** (two target files deleted, one anchor drifted):
+1. `applyAliceAppCoreOpenAccessPatch` — **target file deleted**. `packages/app-core/src/api/trusted-local-request.ts` no longer exists at upstream tip; `isTrustedLocalRequest` now lives in `compat-route-shared.ts`. On a naive submodule bump this patch returns `"skipped"` silently (the file-existence check at the top of the patch function), and the open-access bypass evaporates — `/api/auth/status` flips back to `required:true, pairingEnabled:true` for external requests and the SPA falls back into the pairing flow we just escaped. The patch must be re-targeted to `compat-route-shared.ts` and the new anchor located inside that file's `isTrustedLocalRequest`.
+2. `applyAliceAppCoreCodingAgentsFallbackPatch` — handleCompatRoute structure intact upstream but the per-route anchor block has shifted; needs new line context.
+3. `applyAliceLifeOpsNativeActivityTrackerPatch` — **target file deleted**. `plugins/app-lifeops/src/activity-profile/native-activity-tracker.ts` gone upstream; replaced by the `activity-tracker-{repo,reporting,service}.ts` family. Same silent-skip behavior as #1 if not re-targeted.
+
+**Silent-skip is the danger pattern.** Patches that throw on anchor drift fail the deploy loudly and give a clear error. Patches whose target file is deleted return `"skipped"` per the existsSync guard at the top of each apply function — the deploy succeeds but the patched behavior is gone. **Mandatory mitigation**: before any submodule bump deploys, audit every patch's target file existence at the new pin; any patch returning "skipped" that we did not intend to retire must be re-targeted before deploy.
 
 ## Phased execution
 
