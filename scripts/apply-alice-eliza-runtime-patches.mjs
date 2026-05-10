@@ -743,6 +743,12 @@ const aliceUpstreamSourceMainPackageRelativePaths = [
   "packages/shared",
   "packages/ui",
   "packages/vault",
+  // plugin-computeruse: imported statically by eliza/packages/agent/src/api
+  // (server-route-dispatch.ts, index.ts, server.ts) so it MUST resolve at
+  // runtime even though milaidy doesn't actively use the compute-use
+  // surface in staging. Added as a workspace; source-main lets bun resolve
+  // its main to ./src/index.ts directly without the dist build step.
+  "plugins/plugin-computeruse",
 ];
 const aliceUpstreamSourceMainSentinel = "0.0.0-milady-source-main";
 
