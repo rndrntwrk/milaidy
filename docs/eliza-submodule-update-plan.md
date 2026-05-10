@@ -137,3 +137,81 @@ Each item below is explicitly preserved by this plan:
 - Merge probe to alice without you reviewing the re-anchor diffs
 - Touch production at any point during this plan
 - Do the eliza bump in a single autonomous session — Phase 1+2 alone could take hours of manual re-anchoring across 8+ patches; each re-anchor needs careful inspection of upstream source
+
+## Appendix A: pre-drafted re-anchors (against upstream/develop tip `be182cc913b3`)
+
+These are research-only sketches captured during the planning probe. They will be re-validated against whichever target commit you actually pick in Phase 0; if the chosen pin is different, the surrounding context may need adjustment. Treat as starting points, not finished patches.
+
+### A.1 — `applyAliceAppCoreOpenAccessPatch` re-target
+
+**Old (alice):** modifies `packages/app-core/src/api/trusted-local-request.ts` (file deleted at upstream tip).
+
+**New (upstream):** modifies `packages/app-core/src/api/compat-route-shared.ts` line 239+. The function body at upstream is structurally identical to the old trusted-local-request.ts version, with one extra gate at the top: `if (isLocalAuthRequiredByEnv()) return false;`.
+
+**Suggested new patch script changes:**
+
+```mjs
+// path constant — replace the deleted file with the relocated one
+const appCoreCompatRouteSharedRelativePath =
+  "packages/app-core/src/api/compat-route-shared.ts";
+
+// new anchor (matches upstream content)
+const anchor = `export function isTrustedLocalRequest(
+  req: Pick<http.IncomingMessage, "headers" | "socket">,
+): boolean {
+  if (isLocalAuthRequiredByEnv()) return false;
+  if (isCloudProvisionedByEnv()) return false;`;
+
+// new replacement — insert MILADY_OPEN_ACCESS gate at the very top
+const replacement = `export function isTrustedLocalRequest(
+  req: Pick<http.IncomingMessage, "headers" | "socket">,
+): boolean {
+  // [milaidy:open-access] Staging-only escape hatch ...
+  if (process.env.MILADY_OPEN_ACCESS === "1") return true;
+  if (isLocalAuthRequiredByEnv()) return false;
+  if (isCloudProvisionedByEnv()) return false;`;
+```
+
+The unit test fixture in `scripts/apply-alice-eliza-runtime-patches.test.ts` needs the same shape update (new file path + new anchor pre-state).
+
+### A.2 — `applyAliceAppCoreCodingAgentsFallbackPatch` re-anchor
+
+**Old (alice):** anchor includes `url.pathname === "/api/coding-agents"` somewhere inside `handleCompatRoute`.
+
+**Upstream tip:** `handleCompatRoute` is at line 574 of `packages/app-core/src/api/server.ts`; 15 different `url.pathname` checks live inside it. The exact insertion point for the coding-agents fallback needs to be re-located against this new structure. **Inspection required during Phase 1** — the plan can't pre-resolve this without reading the function body in detail (which is its own multi-page chunk).
+
+### A.3 — `applyAliceLifeOpsNativeActivityTrackerPatch` retire-or-rewrite decision
+
+**Old (alice):** patches `plugins/app-lifeops/src/activity-profile/native-activity-tracker.ts` (deleted upstream).
+
+**Upstream tip:** the activity-tracker concern has been split into `activity-tracker-repo.ts`, `activity-tracker-reporting.ts`, `activity-tracker-service.ts`. **Phase 1 must read the original alice patch's intent** (what behavior it was modifying) and then decide:
+
+- (a) Re-target to one of the new activity-tracker-* files if the same behavior gap still exists, OR
+- (b) Retire the patch entirely if upstream's restructure already provides the behavior we needed
+
+Without reading the patch's full diff against the original file, we can't distinguish (a) from (b) in this plan.
+
+## Appendix B: pre-deploy file-existence audit
+
+Before Phase 3 deploy, run this audit script against the post-bump submodule state to surface every silent-skip patch:
+
+```bash
+cd milaidy/eliza
+for f in \
+  "packages/core/build.ts" \
+  "packages/core/src/features/basic-capabilities/index.ts" \
+  "packages/app-core/src/api/server.ts" \
+  "packages/app-core/src/api/trusted-local-request.ts" \
+  "packages/app/vite/native-module-stub-plugin.ts" \
+  "packages/app-core/src/api/kube-health.ts" \
+  "packages/agent/src/runtime/eliza.ts" \
+  "packages/agent/src/runtime/plugin-resolver.ts" \
+  "plugins/plugin-sql/typescript/pglite/manager.ts" \
+  "plugins/app-lifeops/src/actions/calendar.ts" \
+  "plugins/app-lifeops/src/activity-profile/native-activity-tracker.ts" \
+  ; do
+  test -f "$f" && echo "  EXISTS  $f" || echo "  MISSING $f  ← patch will silent-skip"
+done
+```
+
+Any `MISSING` line maps to a patch that will silent-skip and lose its behavior. Compare to the patch chain registry in `scripts/apply-alice-eliza-runtime-patches.mjs` orchestrator and re-target every patch that's not deliberately retired.
