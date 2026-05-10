@@ -739,6 +739,95 @@ export function applyAliceTelegramSourcePackageJsonExportPatch({
   return "applied";
 }
 
+const aliceUpstreamSourceMainPackageRelativePaths = [
+  "packages/shared",
+  "packages/ui",
+  "packages/vault",
+];
+const aliceUpstreamSourceMainSentinel = "0.0.0-milady-source-main";
+
+export function isAliceUpstreamSourceMainPatched(packageJson) {
+  return packageJson?.version === aliceUpstreamSourceMainSentinel;
+}
+
+export function applyAliceUpstreamPackageSourceMainPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  let patchedFiles = 0;
+  let inspectedFiles = 0;
+  let alreadyApplied = 0;
+
+  for (const pkgRelativePath of aliceUpstreamSourceMainPackageRelativePaths) {
+    const packageJsonPath = path.join(
+      elizaRoot,
+      pkgRelativePath,
+      "package.json",
+    );
+    const srcEntryPath = path.join(elizaRoot, pkgRelativePath, "src/index.ts");
+    if (!existsSync(packageJsonPath)) continue;
+    if (!existsSync(srcEntryPath)) {
+      // Source entry missing — leave the dist-main alone and let the deploy
+      // fall back to whatever upstream ships.
+      continue;
+    }
+    inspectedFiles += 1;
+    const sourceText = readFileSync(packageJsonPath, "utf8");
+    const packageJson = JSON.parse(sourceText);
+
+    if (isAliceUpstreamSourceMainPatched(packageJson)) {
+      alreadyApplied += 1;
+      continue;
+    }
+
+    packageJson.version = aliceUpstreamSourceMainSentinel;
+    packageJson.main = "./src/index.ts";
+    packageJson.types = "./src/index.ts";
+    packageJson.exports = {
+      ".": {
+        types: "./src/index.ts",
+        bun: "./src/index.ts",
+        import: "./src/index.ts",
+        default: "./src/index.ts",
+      },
+      "./package.json": "./package.json",
+      "./*": {
+        types: "./src/*.ts",
+        bun: "./src/*.ts",
+        import: "./src/*.ts",
+        default: "./src/*.ts",
+      },
+    };
+    if (!packageJson.type) {
+      packageJson.type = "module";
+    }
+
+    const trailingNewline = sourceText.endsWith("\n") ? "\n" : "";
+    writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify(packageJson, null, 2)}${trailingNewline}`,
+    );
+    patchedFiles += 1;
+  }
+
+  if (inspectedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] no upstream eliza source-main targets present; skipping source-main patch",
+    );
+    return "skipped";
+  }
+  if (patchedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] upstream eliza source-main exports already patched",
+    );
+    return "already-applied";
+  }
+  log(
+    `[alice-eliza-runtime-patches] rerouted ${patchedFiles} upstream eliza package.json file(s) to TS source (shared/ui/vault main: src/index.ts)`,
+  );
+  return "applied";
+}
+
 const aliceAppPluginRegisterExportRelativePaths = [
   "plugins/app-wallet",
   "plugins/app-contacts",
@@ -2258,6 +2347,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
+    applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
     applyAliceAppPluginRegisterExportPatch({ elizaRoot, log }),
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
