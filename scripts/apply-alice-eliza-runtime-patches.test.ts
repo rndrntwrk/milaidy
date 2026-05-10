@@ -17,7 +17,9 @@ import {
   applyAliceAppCoreOpenAccessPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceCoreBasicCapabilitiesBrowserSafePatch,
+  applyAliceAppViteStubMammothPatch,
   applyAliceCoreBuildBrowserExternalsPatch,
+  applyAliceCoreBuildBrowserExternalsMammothPatch,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceKubeHealthReadinessPatch,
   applyAliceLifeOpsCalendarActionPatch,
@@ -446,6 +448,99 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceCoreBuildBrowserExternalsPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches core build.ts to also externalize mammoth in the browser dist (composes after the fs-extra externalization)", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-core-mammoth-externals-"),
+    );
+    try {
+      const dir = path.join(tempDir, "packages", "core");
+      mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "build.ts");
+      // Simulate the post-fs-extra-patch state.
+      const original = [
+        "// Browser-specific externals (these should be provided by the host environment)",
+        "const browserExternals = [",
+        "\t// [milaidy:browser-externals] Mark fs-extra and graceful-fs as external...",
+        '\t"fs-extra", // [milaidy:browser-externals]',
+        '\t"graceful-fs", // [milaidy:browser-externals]',
+        "\t// These will be loaded via CDN or bundled by the consuming app",
+        '\t"sharp", // Image processing - not available in browser',
+        "];",
+      ].join("\n");
+      writeFileSync(filePath, original);
+
+      expect(
+        applyAliceCoreBuildBrowserExternalsMammothPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(filePath, "utf8");
+      expect(patched).toContain(
+        '"mammoth", // [milaidy:browser-externals-mammoth]',
+      );
+      // The fs-extra/graceful-fs sentinels must remain.
+      expect(patched).toContain('"fs-extra", // [milaidy:browser-externals]');
+      expect(patched).toContain(
+        '"graceful-fs", // [milaidy:browser-externals]',
+      );
+      // sharp must remain.
+      expect(patched).toContain('"sharp", // Image processing');
+
+      expect(
+        applyAliceCoreBuildBrowserExternalsMammothPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches the app vite native-module-stub-plugin to stub mammoth", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-vite-stub-mammoth-"),
+    );
+    try {
+      const dir = path.join(tempDir, "packages", "app", "vite");
+      mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "native-module-stub-plugin.ts");
+      const original = [
+        "  const nativePackages = new Set([",
+        '    "node-llama-cpp",',
+        '    "fs-extra",',
+        '    "pty-state-capture",',
+        "  ]);",
+      ].join("\n");
+      writeFileSync(filePath, original);
+
+      expect(
+        applyAliceAppViteStubMammothPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(filePath, "utf8");
+      expect(patched).toContain('"mammoth", // [milaidy:vite-stub-mammoth]');
+      // Existing entries must remain in order.
+      expect(patched).toContain('"node-llama-cpp",');
+      expect(patched).toContain('"fs-extra",');
+      expect(patched).toContain('"pty-state-capture",');
+
+      expect(
+        applyAliceAppViteStubMammothPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
