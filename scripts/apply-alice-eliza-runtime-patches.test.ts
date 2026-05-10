@@ -20,6 +20,8 @@ import {
   applyAliceAppViteStubMammothPatch,
   applyAliceCoreBuildBrowserExternalsPatch,
   applyAliceCoreBuildBrowserExternalsMammothPatch,
+  applyAliceAppPluginRegisterExportPatch,
+  isAliceAppPluginRegisterExportPatched,
   applyAliceBrowserBridgeWorkspaceStubPatch,
   isAliceBrowserBridgeWorkspaceStubPatched,
   applyAliceTelegramAccountAuthResolverPatch,
@@ -860,6 +862,77 @@ describe("Alice Eliza runtime patch contract", () => {
     try {
       expect(
         applyAliceTelegramSourcePackageJsonExportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("skipped");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("adds ./register exports to app-plugin package.json files for static SPA imports", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-app-register-exports-"),
+    );
+    try {
+      const plugins = ["app-wallet", "app-contacts", "app-phone", "app-wifi"];
+      for (const plugin of plugins) {
+        const pluginDir = path.join(tempDir, "plugins", plugin);
+        mkdirSync(pluginDir, { recursive: true });
+        writeFileSync(
+          path.join(pluginDir, "package.json"),
+          `${JSON.stringify(
+            {
+              name: `@elizaos/${plugin}`,
+              main: "./dist/index.js",
+              exports: { ".": "./dist/index.js" },
+            },
+            null,
+            2,
+          )}\n`,
+        );
+      }
+
+      expect(
+        applyAliceAppPluginRegisterExportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      for (const plugin of plugins) {
+        const patched = JSON.parse(
+          readFileSync(
+            path.join(tempDir, "plugins", plugin, "package.json"),
+            "utf8",
+          ),
+        );
+        expect(isAliceAppPluginRegisterExportPatched(patched)).toBe(true);
+        const registerExport = patched.exports["./register"];
+        expect(registerExport.import).toBe("./dist/register.js");
+        expect(registerExport.default).toBe("./dist/register.js");
+        expect(patched.exports["."]).toBe("./dist/index.js");
+      }
+
+      expect(
+        applyAliceAppPluginRegisterExportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips the app-register-exports patch when no app plugins are present", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-app-register-absent-"),
+    );
+    try {
+      expect(
+        applyAliceAppPluginRegisterExportPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

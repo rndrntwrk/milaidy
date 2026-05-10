@@ -739,6 +739,87 @@ export function applyAliceTelegramSourcePackageJsonExportPatch({
   return "applied";
 }
 
+const aliceAppPluginRegisterExportRelativePaths = [
+  "plugins/app-wallet",
+  "plugins/app-contacts",
+  "plugins/app-phone",
+  "plugins/app-wifi",
+];
+
+export function isAliceAppPluginRegisterExportPatched(packageJson) {
+  return (
+    packageJson?.exports &&
+    typeof packageJson.exports === "object" &&
+    !Array.isArray(packageJson.exports) &&
+    packageJson.exports["./register"] !== undefined
+  );
+}
+
+export function applyAliceAppPluginRegisterExportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  let patchedFiles = 0;
+  let inspectedFiles = 0;
+  let alreadyApplied = 0;
+
+  for (const pluginRelativePath of aliceAppPluginRegisterExportRelativePaths) {
+    const packageJsonPath = path.join(
+      elizaRoot,
+      pluginRelativePath,
+      "package.json",
+    );
+    if (!existsSync(packageJsonPath)) {
+      continue;
+    }
+    inspectedFiles += 1;
+    const sourceText = readFileSync(packageJsonPath, "utf8");
+    const packageJson = JSON.parse(sourceText);
+
+    if (isAliceAppPluginRegisterExportPatched(packageJson)) {
+      alreadyApplied += 1;
+      continue;
+    }
+
+    if (
+      !packageJson.exports ||
+      typeof packageJson.exports !== "object" ||
+      Array.isArray(packageJson.exports)
+    ) {
+      packageJson.exports = { ".": packageJson.main ?? "./dist/index.js" };
+    }
+    packageJson.exports["./register"] = {
+      types: "./dist/register.d.ts",
+      import: "./dist/register.js",
+      default: "./dist/register.js",
+    };
+
+    const trailingNewline = sourceText.endsWith("\n") ? "\n" : "";
+    writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify(packageJson, null, 2)}${trailingNewline}`,
+    );
+    patchedFiles += 1;
+  }
+
+  if (inspectedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] no app plugin packages found; skipping register exports patch",
+    );
+    return "skipped";
+  }
+  if (patchedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] app plugin register exports already patched",
+    );
+    return "already-applied";
+  }
+  log(
+    `[alice-eliza-runtime-patches] patched register exports on ${patchedFiles} app plugin package.json file(s)`,
+  );
+  return "applied";
+}
+
 const browserBridgeStubRelativePath = "plugins/plugin-browser-bridge";
 const browserBridgeStubMarker = "// [milaidy:browser-bridge-stub]";
 
@@ -2178,6 +2259,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
+    applyAliceAppPluginRegisterExportPatch({ elizaRoot, log }),
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     // applyAliceBundledKnowledgeStartupDeferralPatch retired against upstream
