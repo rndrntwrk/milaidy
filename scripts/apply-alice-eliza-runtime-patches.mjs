@@ -756,9 +756,11 @@ const aliceUpstreamSourceMainPackageRelativePaths = [
   "plugins/plugin-computeruse",
   "plugins/plugin-discord",
   "plugins/plugin-elizacloud",
+  "plugins/plugin-imessage",
   "plugins/plugin-local-inference",
   "plugins/plugin-mcp",
   "plugins/plugin-streaming",
+  "plugins/plugin-whatsapp",
   "plugins/plugin-workflow",
   "plugins/plugin-x402",
 ];
