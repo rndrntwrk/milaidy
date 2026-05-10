@@ -740,6 +740,9 @@ export function applyAliceTelegramSourcePackageJsonExportPatch({
 }
 
 const aliceUpstreamSourceMainPackageRelativePaths = [
+  "cloud/packages/billing",
+  "cloud/packages/sdk",
+  "cloud/packages/ui",
   "packages/cloud-routing",
   "packages/elizaos",
   "packages/scenario-runner",
