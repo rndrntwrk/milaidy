@@ -739,6 +739,134 @@ export function applyAliceTelegramSourcePackageJsonExportPatch({
   return "applied";
 }
 
+const browserBridgeStubRelativePath = "plugins/plugin-browser-bridge";
+const browserBridgeStubMarker = "// [milaidy:browser-bridge-stub]";
+
+const browserBridgeStubModuleSource = `${browserBridgeStubMarker}
+const action = Object.freeze({
+  name: "BROWSER_BRIDGE_UNAVAILABLE",
+  description: "Agent Browser Bridge is unavailable in this build.",
+  validate: async () => false,
+  handler: async () => ({
+    text: "Agent Browser Bridge is unavailable in this build.",
+    success: false,
+    values: { success: false, error: "BROWSER_BRIDGE_UNAVAILABLE" },
+    data: { error: "BROWSER_BRIDGE_UNAVAILABLE" },
+  }),
+  parameters: [],
+  examples: [],
+});
+
+export const BROWSER_BRIDGE_ROUTE_SERVICE_TYPE = "browser-bridge-route-service";
+export const browserBridgeActions = [];
+export const browserBridgeInstallAction = action;
+export const browserBridgeOpenManagerAction = action;
+export const browserBridgePlugin = Object.freeze({
+  name: "@elizaos/plugin-browser-bridge",
+  description: "Agent Browser Bridge stub for builds without upstream plugin source.",
+  actions: [],
+  routes: [],
+});
+export const browserBridgeRefreshAction = action;
+export const browserBridgeRevealFolderAction = action;
+export const browserBridgeSchema = {};
+
+export async function buildBrowserBridgeCompanionPackage() { return {}; }
+export function getBrowserBridgeCompanionPackageStatus() { return {}; }
+export async function handleBrowserBridgeRoutes() { return false; }
+export async function openBrowserBridgeCompanionManager() { return false; }
+export async function openBrowserBridgeCompanionPackagePath() { return { path: "" }; }
+
+export default browserBridgePlugin;
+`;
+
+const browserBridgeStubContractsSource = `${browserBridgeStubMarker}
+export const browserBridgeContracts = Object.freeze({});
+export default browserBridgeContracts;
+`;
+
+const browserBridgeStubSchemaSource = `${browserBridgeStubMarker}
+export const browserBridgeSchema = Object.freeze({});
+export default browserBridgeSchema;
+`;
+
+const browserBridgeStubPackageJson = {
+  name: "@elizaos/plugin-browser-bridge",
+  version: "0.0.0-milady-stub",
+  type: "module",
+  main: "./dist/index.js",
+  types: "./dist/index.d.ts",
+  exports: {
+    "./package.json": "./package.json",
+    ".": "./dist/index.js",
+    "./contracts": "./dist/contracts.js",
+    "./schema": "./dist/schema.js",
+  },
+  private: true,
+};
+
+export function isAliceBrowserBridgeWorkspaceStubPatched(elizaRoot) {
+  const distIndex = path.join(
+    elizaRoot,
+    browserBridgeStubRelativePath,
+    "dist",
+    "index.js",
+  );
+  if (!existsSync(distIndex)) return false;
+  return readFileSync(distIndex, "utf8").includes(browserBridgeStubMarker);
+}
+
+export function applyAliceBrowserBridgeWorkspaceStubPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const stubDir = path.join(elizaRoot, browserBridgeStubRelativePath);
+  const packageJsonPath = path.join(stubDir, "package.json");
+
+  if (existsSync(packageJsonPath) && !isAliceBrowserBridgeWorkspaceStubPatched(elizaRoot)) {
+    log(
+      "[alice-eliza-runtime-patches] browser-bridge plugin source already present from upstream; skipping stub",
+    );
+    return "skipped";
+  }
+
+  if (isAliceBrowserBridgeWorkspaceStubPatched(elizaRoot)) {
+    log(
+      "[alice-eliza-runtime-patches] browser-bridge workspace stub already in place",
+    );
+    return "already-applied";
+  }
+
+  const srcDir = path.join(stubDir, "src");
+  const distDir = path.join(stubDir, "dist");
+  mkdirSync(srcDir, { recursive: true });
+  mkdirSync(distDir, { recursive: true });
+
+  writeFileSync(
+    packageJsonPath,
+    `${JSON.stringify(browserBridgeStubPackageJson, null, 2)}\n`,
+  );
+  writeFileSync(path.join(srcDir, "index.js"), browserBridgeStubModuleSource);
+  writeFileSync(path.join(distDir, "index.js"), browserBridgeStubModuleSource);
+  writeFileSync(
+    path.join(distDir, "contracts.js"),
+    browserBridgeStubContractsSource,
+  );
+  writeFileSync(
+    path.join(distDir, "schema.js"),
+    browserBridgeStubSchemaSource,
+  );
+  writeFileSync(
+    path.join(distDir, "index.d.ts"),
+    `${browserBridgeStubMarker}\nexport {};\n`,
+  );
+
+  log(
+    "[alice-eliza-runtime-patches] wrote browser-bridge workspace stub (upstream plugins/plugin-browser-bridge was removed)",
+  );
+  return "applied";
+}
+
 export function applyAliceLifeOpsCalendarActionPatch({
   elizaRoot,
   log = console.log,
@@ -2049,6 +2177,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
+    applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     // applyAliceBundledKnowledgeStartupDeferralPatch retired against upstream
