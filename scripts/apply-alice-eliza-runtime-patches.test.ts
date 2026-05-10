@@ -20,6 +20,8 @@ import {
   applyAliceAppViteStubMammothPatch,
   applyAliceCoreBuildBrowserExternalsPatch,
   applyAliceCoreBuildBrowserExternalsMammothPatch,
+  applyAliceBrowserBridgeWorkspaceStubPatch,
+  isAliceBrowserBridgeWorkspaceStubPatched,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceTelegramSourcePackageJsonExportPatch,
   isAliceTelegramSourcePackageJsonExportPatched,
@@ -858,6 +860,77 @@ describe("Alice Eliza runtime patch contract", () => {
     try {
       expect(
         applyAliceTelegramSourcePackageJsonExportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("skipped");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("creates a workspace stub for the removed upstream plugin-browser-bridge plugin", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-browser-bridge-stub-"),
+    );
+    try {
+      expect(
+        applyAliceBrowserBridgeWorkspaceStubPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      expect(isAliceBrowserBridgeWorkspaceStubPatched(tempDir)).toBe(true);
+
+      const stubDir = path.join(tempDir, "plugins", "plugin-browser-bridge");
+      const packageJson = JSON.parse(
+        readFileSync(path.join(stubDir, "package.json"), "utf8"),
+      );
+      expect(packageJson.name).toBe("@elizaos/plugin-browser-bridge");
+      expect(packageJson.main).toBe("./dist/index.js");
+      expect(packageJson.exports["."]).toBe("./dist/index.js");
+      expect(packageJson.exports["./contracts"]).toBe("./dist/contracts.js");
+      expect(packageJson.exports["./schema"]).toBe("./dist/schema.js");
+
+      // Required by deploy-555-bot-staging.sh container build's
+      // `test -f /src/milaidy/eliza/plugins/plugin-browser-bridge/src/index.js`.
+      expect(
+        readFileSync(path.join(stubDir, "src", "index.js"), "utf8"),
+      ).toContain("[milaidy:browser-bridge-stub]");
+
+      // Required entries for materialize_pkg + post-materialize contracts.
+      for (const entry of ["dist/index.js", "dist/contracts.js", "dist/schema.js"]) {
+        expect(
+          readFileSync(path.join(stubDir, entry), "utf8"),
+        ).toContain("[milaidy:browser-bridge-stub]");
+      }
+
+      expect(
+        applyAliceBrowserBridgeWorkspaceStubPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips the browser-bridge workspace stub when upstream source is present", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-browser-bridge-present-"),
+    );
+    try {
+      const stubDir = path.join(tempDir, "plugins", "plugin-browser-bridge");
+      mkdirSync(stubDir, { recursive: true });
+      writeFileSync(
+        path.join(stubDir, "package.json"),
+        `${JSON.stringify({ name: "@elizaos/plugin-browser-bridge", version: "1.0.0" }, null, 2)}\n`,
+      );
+
+      expect(
+        applyAliceBrowserBridgeWorkspaceStubPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
