@@ -782,11 +782,21 @@ export function applyAliceUpstreamPackageSourceMainPatch({
       pkgRelativePath,
       "package.json",
     );
-    const srcEntryPath = path.join(elizaRoot, pkgRelativePath, "src/index.ts");
     if (!existsSync(packageJsonPath)) continue;
-    if (!existsSync(srcEntryPath)) {
-      // Source entry missing — leave the dist-main alone and let the deploy
-      // fall back to whatever upstream ships.
+    // Detect entry layout. Most upstream plugins use src/index.ts, but a few
+    // (notably plugin-discord) ship index.ts at the package root with no src/
+    // subdirectory at all. Pick whichever exists; skip if neither.
+    const srcEntryPath = path.join(elizaRoot, pkgRelativePath, "src/index.ts");
+    const flatEntryPath = path.join(elizaRoot, pkgRelativePath, "index.ts");
+    let entryRelative;
+    let isFlatLayout;
+    if (existsSync(srcEntryPath)) {
+      entryRelative = "./src/index.ts";
+      isFlatLayout = false;
+    } else if (existsSync(flatEntryPath)) {
+      entryRelative = "./index.ts";
+      isFlatLayout = true;
+    } else {
       continue;
     }
     inspectedFiles += 1;
@@ -799,22 +809,29 @@ export function applyAliceUpstreamPackageSourceMainPatch({
     }
 
     packageJson.version = aliceUpstreamSourceMainSentinel;
-    packageJson.main = "./src/index.ts";
-    packageJson.types = "./src/index.ts";
+    packageJson.main = entryRelative;
+    packageJson.types = entryRelative;
     packageJson.exports = {
       ".": {
-        types: "./src/index.ts",
-        bun: "./src/index.ts",
-        import: "./src/index.ts",
-        default: "./src/index.ts",
+        types: entryRelative,
+        bun: entryRelative,
+        import: entryRelative,
+        default: entryRelative,
       },
       "./package.json": "./package.json",
-      "./*": {
-        types: "./src/*.ts",
-        bun: "./src/*.ts",
-        import: "./src/*.ts",
-        default: "./src/*.ts",
-      },
+      "./*": isFlatLayout
+        ? {
+            types: "./*.ts",
+            bun: "./*.ts",
+            import: "./*.ts",
+            default: "./*.ts",
+          }
+        : {
+            types: "./src/*.ts",
+            bun: "./src/*.ts",
+            import: "./src/*.ts",
+            default: "./src/*.ts",
+          },
     };
     if (!packageJson.type) {
       packageJson.type = "module";
