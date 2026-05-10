@@ -622,8 +622,7 @@ export default { TelegramAccountAuthSession, loadTelegramAccountSessionString, d
     packageRoot: params.packageRoot,
     stagedPackageRoot,
   });
-
-  return stagedPackageRoot;
+  const shouldLinkHoistedWorkspaceDeps =
 `;
   const stagedImportPatch = `  await ensureStagedPackageDependencies({
     installRoot: params.installRoot,
@@ -632,8 +631,7 @@ export default { TelegramAccountAuthSession, loadTelegramAccountSessionString, d
     stagedPackageRoot,
   });
   await ensureTelegramAccountAuthExportCompat(stagedInstallRoot);
-
-  return stagedPackageRoot;
+  const shouldLinkHoistedWorkspaceDeps =
 `;
   if (!next.includes(stagedImportAnchor)) {
     throw new Error("plugin-resolver staged import anchor drifted");
@@ -680,6 +678,63 @@ export function applyAliceTelegramAccountAuthResolverPatch({
   writeFileSync(resolverPath, after);
   log(
     "[alice-eliza-runtime-patches] patched telegram account-auth resolver compatibility",
+  );
+  return "applied";
+}
+
+const telegramSourcePackageRelativePath =
+  "plugins/plugin-telegram/package.json";
+const telegramSourceAccountAuthExport = "./account-auth-service";
+const telegramSourceAccountAuthTarget = "./dist/account-auth-service.js";
+
+export function isAliceTelegramSourcePackageJsonExportPatched(packageJson) {
+  return (
+    packageJson?.exports &&
+    typeof packageJson.exports === "object" &&
+    !Array.isArray(packageJson.exports) &&
+    packageJson.exports[telegramSourceAccountAuthExport] ===
+      telegramSourceAccountAuthTarget
+  );
+}
+
+export function applyAliceTelegramSourcePackageJsonExportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const packageJsonPath = path.join(
+    elizaRoot,
+    telegramSourcePackageRelativePath,
+  );
+  if (!existsSync(packageJsonPath)) {
+    log(
+      "[alice-eliza-runtime-patches] telegram source package.json absent; skipping source export patch",
+    );
+    return "skipped";
+  }
+
+  const sourceText = readFileSync(packageJsonPath, "utf8");
+  const packageJson = JSON.parse(sourceText);
+
+  if (isAliceTelegramSourcePackageJsonExportPatched(packageJson)) {
+    log(
+      "[alice-eliza-runtime-patches] telegram source package.json account-auth-service export already present",
+    );
+    return "already-applied";
+  }
+
+  if (!packageJson.exports || typeof packageJson.exports !== "object" || Array.isArray(packageJson.exports)) {
+    packageJson.exports = { ".": packageJson.main ?? "./dist/index.js" };
+  }
+  packageJson.exports[telegramSourceAccountAuthExport] =
+    telegramSourceAccountAuthTarget;
+
+  const trailingNewline = sourceText.endsWith("\n") ? "\n" : "";
+  writeFileSync(
+    packageJsonPath,
+    `${JSON.stringify(packageJson, null, 2)}${trailingNewline}`,
+  );
+  log(
+    "[alice-eliza-runtime-patches] patched telegram source package.json to expose account-auth-service",
   );
   return "applied";
 }
@@ -1994,6 +2049,8 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
+    applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
+    applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     // applyAliceBundledKnowledgeStartupDeferralPatch retired against upstream
     // be182cc913b3+ — `seedBundledKnowledge` no longer exists in upstream's
     // packages/agent/src/runtime/eliza.ts (removed during the 866-commit
@@ -2002,18 +2059,14 @@ export function applyAliceElizaRuntimePatches({
     // moot because upstream doesn't seed bundled knowledge from the agent
     // runtime at all. Companion contract guards in 555stream's
     // deploy-555-bot-staging.sh have been removed in lockstep.
-    // The five patches below are retired against the upstream eliza
-    // be182cc913b3+ bump because their anchors no longer match (telegram
-    // account-auth resolver), or their target files have been deleted/moved
-    // upstream (pglite manager, lifeops native-activity-tracker), or their
-    // upstream restructure makes the original behavior moot (lifeops
+    // The four patches below are retired against the upstream eliza
+    // be182cc913b3+ bump because their target files have been deleted/moved
+    // upstream (pglite manager, lifeops native-activity-tracker), or because
+    // the upstream restructure makes the original behavior moot (lifeops
     // calendar/runtime-import). Each can be revived in a focused follow-up
-    // by re-anchoring against the new upstream source. Companion contract
-    // guards in 555stream's deploy-555-bot-staging.sh have been removed in
-    // lockstep. The behaviors most at risk:
+    // by re-anchoring against the new upstream source. The behaviors most
+    // at risk:
     //
-    //   - Telegram account-auth resolver: only matters when Alice runs the
-    //     telegram channel; staging deploy doesn't exercise that path.
     //   - Pglite container-lock: database lockfile arbitration; on EKS we
     //     run pgvector via the timescaledb pod, not pglite, so this is
     //     orthogonal to the staging-alice path.
@@ -2021,7 +2074,6 @@ export function applyAliceElizaRuntimePatches({
     //     of @elizaos/app-lifeops. Upstream substantially restructured the
     //     activity-profile area; the original patches' targets are gone.
     //
-    // applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     // applyAlicePgliteContainerLockPatch({ elizaRoot, log }),
     // applyAliceLifeOpsCalendarActionPatch({ elizaRoot, log }),
     // applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),

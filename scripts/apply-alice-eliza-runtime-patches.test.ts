@@ -21,6 +21,8 @@ import {
   applyAliceCoreBuildBrowserExternalsPatch,
   applyAliceCoreBuildBrowserExternalsMammothPatch,
   applyAliceTelegramAccountAuthResolverPatch,
+  applyAliceTelegramSourcePackageJsonExportPatch,
+  isAliceTelegramSourcePackageJsonExportPatched,
   applyAliceKubeHealthReadinessPatch,
   applyAliceLifeOpsCalendarActionPatch,
   applyAliceLifeOpsNativeActivityTrackerPatch,
@@ -751,6 +753,12 @@ describe("Alice Eliza runtime patch contract", () => {
           "    packageRoot: params.packageRoot,",
           "    stagedPackageRoot,",
           "  });",
+          "  const shouldLinkHoistedWorkspaceDeps =",
+          '    stageAllHoistedNodeModulesEnabled() ||',
+          '    params.packageName.startsWith("@elizaos/app-");',
+          "  if (shouldLinkHoistedWorkspaceDeps) {",
+          "    // hoist links",
+          "  }",
           "",
           "  return stagedPackageRoot;",
           "}",
@@ -788,6 +796,72 @@ describe("Alice Eliza runtime patch contract", () => {
           log: () => undefined,
         }),
       ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("adds the account-auth-service export to the telegram source package.json", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-telegram-source-pkgjson-"),
+    );
+    try {
+      const pluginDir = path.join(tempDir, "plugins", "plugin-telegram");
+      mkdirSync(pluginDir, { recursive: true });
+      const packageJsonPath = path.join(pluginDir, "package.json");
+      writeFileSync(
+        packageJsonPath,
+        `${JSON.stringify(
+          {
+            name: "@elizaos/plugin-telegram",
+            main: "./dist/index.js",
+            exports: {
+              ".": "./dist/index.js",
+              "./package.json": "./package.json",
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      expect(
+        applyAliceTelegramSourcePackageJsonExportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+      expect(isAliceTelegramSourcePackageJsonExportPatched(patched)).toBe(true);
+      expect(patched.exports["./account-auth-service"]).toBe(
+        "./dist/account-auth-service.js",
+      );
+      expect(patched.exports["."]).toBe("./dist/index.js");
+      expect(patched.exports["./package.json"]).toBe("./package.json");
+
+      expect(
+        applyAliceTelegramSourcePackageJsonExportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips the telegram source package.json patch when the file is absent", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-telegram-source-pkgjson-absent-"),
+    );
+    try {
+      expect(
+        applyAliceTelegramSourcePackageJsonExportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("skipped");
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
