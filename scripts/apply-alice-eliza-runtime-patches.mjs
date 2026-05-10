@@ -27,6 +27,8 @@ const appCoreTrustedLocalRequestRelativePath =
 const coreBasicCapabilitiesRelativePath =
   "packages/core/src/features/basic-capabilities/index.ts";
 const coreBuildRelativePath = "packages/core/build.ts";
+const appViteNativeStubRelativePath =
+  "packages/app/vite/native-module-stub-plugin.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
@@ -1618,6 +1620,125 @@ export function applyAliceCoreBuildBrowserExternalsPatch({
   return "applied";
 }
 
+function patchAliceCoreBuildBrowserExternalsMammothSource(source) {
+  const safeMarker = '"mammoth", // [milaidy:browser-externals-mammoth]';
+  if (source.includes(safeMarker)) {
+    return source;
+  }
+
+  /* The browser-externals patch (apply order #4 in this chain) inserted
+   * fs-extra and graceful-fs into browserExternals already. Anchor against
+   * THAT post-state so this patch composes after it. */
+  const anchor = `\t"fs-extra", // [milaidy:browser-externals]
+\t"graceful-fs", // [milaidy:browser-externals]`;
+
+  if (!source.includes(anchor)) {
+    throw new Error(
+      "core/build.ts post-fs-extra browserExternals anchor drifted; the prior browser-externals patch must run first",
+    );
+  }
+
+  /* features/knowledge/utils.ts statically imports mammoth at line 3.
+   * mammoth is a Node-only docx parser that calls fs.readFile.bind at
+   * module init (its DocumentXmlReader factory). When bundled into the
+   * browser dist via index.browser.ts -> features/knowledge/index ->
+   * utils, the .bind on undefined fs.readFile throws TypeError and kills
+   * SPA boot the same way fs-extra/graceful-fs did. Externalizing mammoth
+   * leaves a bare `import "mammoth"` in the dist; a paired Vite stub
+   * patch adds mammoth to nativePackages so the SPA build replaces it
+   * with a Proxy noop. */
+  const replacement = `\t"fs-extra", // [milaidy:browser-externals]
+\t"graceful-fs", // [milaidy:browser-externals]
+\t"mammoth", // [milaidy:browser-externals-mammoth]`;
+
+  return source.replace(anchor, replacement);
+}
+
+export function applyAliceCoreBuildBrowserExternalsMammothPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const filePath = path.join(elizaRoot, coreBuildRelativePath);
+  if (!existsSync(filePath)) {
+    log(
+      "[alice-eliza-runtime-patches] core build.ts absent; skipping mammoth-externals patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(filePath, "utf8");
+  const after = patchAliceCoreBuildBrowserExternalsMammothSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] core build.ts mammoth-externals patch already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(filePath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched core build.ts to externalize mammoth in the browser dist",
+  );
+  return "applied";
+}
+
+function patchAliceAppViteStubMammothSource(source) {
+  const safeMarker = '"mammoth", // [milaidy:vite-stub-mammoth]';
+  if (source.includes(safeMarker)) {
+    return source;
+  }
+
+  const anchor = `    "node-llama-cpp",
+    "fs-extra",`;
+
+  if (!source.includes(anchor)) {
+    throw new Error(
+      "app/vite/native-module-stub-plugin.ts nativePackages anchor drifted",
+    );
+  }
+
+  /* Add mammoth to the SPA's Vite stub plugin so the bare `import "mammoth"`
+   * left in @elizaos/core's browser dist (after the paired core/build.ts
+   * mammoth-externals patch) gets replaced with a Proxy noop stub instead
+   * of being resolved and bundled by Vite. The default load() branch
+   * returns a generic noop Proxy for any nativePackages entry that
+   * doesn't have a specific stub generator, which is the right shape for
+   * mammoth (consumers only call its API, never inspect its export shape). */
+  const replacement = `    "node-llama-cpp",
+    "fs-extra",
+    "mammoth", // [milaidy:vite-stub-mammoth]`;
+
+  return source.replace(anchor, replacement);
+}
+
+export function applyAliceAppViteStubMammothPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const filePath = path.join(elizaRoot, appViteNativeStubRelativePath);
+  if (!existsSync(filePath)) {
+    log(
+      "[alice-eliza-runtime-patches] app vite native-module-stub-plugin absent; skipping mammoth stub patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(filePath, "utf8");
+  const after = patchAliceAppViteStubMammothSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] app vite mammoth stub patch already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(filePath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched app vite native-module-stub-plugin to stub mammoth",
+  );
+  return "applied";
+}
+
 function patchAliceBundledKnowledgeStartupDeferralSource(source) {
   if (isAliceBundledKnowledgeStartupDeferralPatched(source)) {
     return source;
@@ -1868,6 +1989,8 @@ export function applyAliceElizaRuntimePatches({
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
     applyAliceCoreBasicCapabilitiesBrowserSafePatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
+    applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
+    applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
