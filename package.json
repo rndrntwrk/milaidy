@@ -59,6 +59,7 @@
     "eliza/plugins/plugin-app-control",
     "eliza/plugins/plugin-browser-bridge",
     "eliza/plugins/plugin-commands",
+    "eliza/plugins/plugin-computeruse",
     "eliza/plugins/plugin-discord",
     "eliza/plugins/plugin-edge-tts",
     "eliza/plugins/plugin-elizacloud",
