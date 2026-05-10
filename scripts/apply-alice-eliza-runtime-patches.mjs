@@ -740,9 +740,14 @@ export function applyAliceTelegramSourcePackageJsonExportPatch({
 }
 
 const aliceUpstreamSourceMainPackageRelativePaths = [
+  "packages/cloud-routing",
+  "packages/elizaos",
+  "packages/scenario-runner",
   "packages/shared",
+  "packages/skills",
   "packages/ui",
   "packages/vault",
+  "packages/workflows",
   // The plugins below are imported statically from eliza/packages/agent/src
   // or eliza/packages/app-core/src and survive tsdown's pluginExternal regex
   // into the bundled dist/entry.js. They MUST resolve at runtime under

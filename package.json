@@ -304,7 +304,6 @@
     "@elizaos/plugin-discord": "workspace:*",
     "@elizaos/plugin-openai": "workspace:*",
     "@elizaos/plugin-streaming": "workspace:*",
-    "@elizaos/plugin-whatsapp": "workspace:*",
     "@elizaos/plugin-workflow": "workspace:*",
     "@elizaos/plugin-x402": "workspace:*",
     "@elizaos/plugin-openrouter": "2.0.0-alpha.13",
