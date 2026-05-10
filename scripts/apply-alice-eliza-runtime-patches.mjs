@@ -743,12 +743,24 @@ const aliceUpstreamSourceMainPackageRelativePaths = [
   "packages/shared",
   "packages/ui",
   "packages/vault",
-  // plugin-computeruse: imported statically by eliza/packages/agent/src/api
-  // (server-route-dispatch.ts, index.ts, server.ts) so it MUST resolve at
-  // runtime even though milaidy doesn't actively use the compute-use
-  // surface in staging. Added as a workspace; source-main lets bun resolve
-  // its main to ./src/index.ts directly without the dist build step.
+  // The plugins below are imported statically from eliza/packages/agent/src
+  // or eliza/packages/app-core/src and survive tsdown's pluginExternal regex
+  // into the bundled dist/entry.js. They MUST resolve at runtime under
+  // Node + tsx (the production container runtime). Each gets its main
+  // rewritten to ./src/index.ts via the source-main patch and is
+  // materialized into node_modules by stream's deploy script.
+  "plugins/plugin-aosp-local-inference",
+  "plugins/plugin-browser",
+  "plugins/plugin-capacitor-bridge",
+  "plugins/plugin-coding-tools",
   "plugins/plugin-computeruse",
+  "plugins/plugin-discord",
+  "plugins/plugin-elizacloud",
+  "plugins/plugin-local-inference",
+  "plugins/plugin-mcp",
+  "plugins/plugin-streaming",
+  "plugins/plugin-workflow",
+  "plugins/plugin-x402",
 ];
 const aliceUpstreamSourceMainSentinel = "0.0.0-milady-source-main";
 
