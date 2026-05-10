@@ -96,6 +96,31 @@ const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
 
+/**
+ * Detect MiladyOS — a custom AOSP product distribution that appends
+ * `MiladyOS/<tag>` to its user agent and is only built for Android.
+ * Returns false on every other platform (iOS, desktop, stock Android,
+ * server-rendered SPA bundles served to plain browsers).
+ *
+ * The user-agent suffix is set by `MainActivity` when
+ * `ro.miladyos.product` is configured by the AOSP product config; the
+ * regex matches the same `\bMiladyOS\/` pattern as
+ * `hasMiladyOSMarker` in
+ * `eliza/packages/app-core/src/components/apps/overlay-app-registry.ts`,
+ * keeping detection consistent across the SPA's two call sites and the
+ * overlay-app registry.
+ */
+function isMiladyOS(): boolean {
+  if (!isAndroid) return false;
+  if (
+    typeof navigator === "undefined" ||
+    typeof navigator.userAgent !== "string"
+  ) {
+    return false;
+  }
+  return /\bMiladyOS\//.test(navigator.userAgent);
+}
+
 async function registerMiladyOsSystemApps(): Promise<void> {
   if (!isMiladyOS()) return;
   await Promise.all([
