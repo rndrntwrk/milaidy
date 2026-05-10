@@ -191,6 +191,27 @@ The unit test fixture in `scripts/apply-alice-eliza-runtime-patches.test.ts` nee
 
 Without reading the patch's full diff against the original file, we can't distinguish (a) from (b) in this plan.
 
+## Appendix B-results: actual audit run against `be182cc913b3`
+
+Already executed during plan drafting. **Four patches will silent-skip** on a naive bump, not just the two highlighted earlier:
+
+```
+EXISTS  packages/core/build.ts
+EXISTS  packages/core/src/features/basic-capabilities/index.ts
+EXISTS  packages/app-core/src/api/server.ts
+MISSING packages/app-core/src/api/trusted-local-request.ts          ← open-access patch silent-skips
+EXISTS  packages/app/vite/native-module-stub-plugin.ts
+MISSING packages/app-core/src/api/kube-health.ts                    ← kube-health-readiness patch silent-skips
+EXISTS  packages/agent/src/runtime/eliza.ts
+EXISTS  packages/agent/src/runtime/plugin-resolver.ts
+MISSING plugins/plugin-sql/typescript/pglite/manager.ts             ← pglite-container-lock patch silent-skips
+EXISTS  plugins/app-lifeops/src/actions/calendar.ts
+MISSING plugins/app-lifeops/src/activity-profile/native-activity-tracker.ts  ← activity-tracker patch silent-skips
+EXISTS  packages/shared/src/i18n/keyword-matching.ts
+```
+
+The kube-health one matters most operationally — that patch governs how the bot signals readiness to k8s. If it silent-skips, the pod's readiness probe behavior regresses to upstream defaults. Phase 1 must locate where kube-health logic lives at upstream tip and re-target accordingly. Same exercise for plugin-sql pglite manager.
+
 ## Appendix B: pre-deploy file-existence audit
 
 Before Phase 3 deploy, run this audit script against the post-bump submodule state to surface every silent-skip patch:
