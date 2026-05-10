@@ -1994,12 +1994,38 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
-    applyAliceBundledKnowledgeStartupDeferralPatch({ elizaRoot, log }),
-    applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
-    applyAlicePgliteContainerLockPatch({ elizaRoot, log }),
-    applyAliceLifeOpsCalendarActionPatch({ elizaRoot, log }),
-    applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),
-    applyAliceLifeOpsNativeActivityTrackerPatch({ elizaRoot, log }),
+    // applyAliceBundledKnowledgeStartupDeferralPatch retired against upstream
+    // be182cc913b3+ — `seedBundledKnowledge` no longer exists in upstream's
+    // packages/agent/src/runtime/eliza.ts (removed during the 866-commit
+    // upstream catch-up). The behaviour the patch was guarding (avoid
+    // synchronous bundled-knowledge seeding during server startup) is now
+    // moot because upstream doesn't seed bundled knowledge from the agent
+    // runtime at all. Companion contract guards in 555stream's
+    // deploy-555-bot-staging.sh have been removed in lockstep.
+    // The five patches below are retired against the upstream eliza
+    // be182cc913b3+ bump because their anchors no longer match (telegram
+    // account-auth resolver), or their target files have been deleted/moved
+    // upstream (pglite manager, lifeops native-activity-tracker), or their
+    // upstream restructure makes the original behavior moot (lifeops
+    // calendar/runtime-import). Each can be revived in a focused follow-up
+    // by re-anchoring against the new upstream source. Companion contract
+    // guards in 555stream's deploy-555-bot-staging.sh have been removed in
+    // lockstep. The behaviors most at risk:
+    //
+    //   - Telegram account-auth resolver: only matters when Alice runs the
+    //     telegram channel; staging deploy doesn't exercise that path.
+    //   - Pglite container-lock: database lockfile arbitration; on EKS we
+    //     run pgvector via the timescaledb pod, not pglite, so this is
+    //     orthogonal to the staging-alice path.
+    //   - LifeOps calendar/runtime-import/activity-tracker: feature surface
+    //     of @elizaos/app-lifeops. Upstream substantially restructured the
+    //     activity-profile area; the original patches' targets are gone.
+    //
+    // applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
+    // applyAlicePgliteContainerLockPatch({ elizaRoot, log }),
+    // applyAliceLifeOpsCalendarActionPatch({ elizaRoot, log }),
+    // applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),
+    // applyAliceLifeOpsNativeActivityTrackerPatch({ elizaRoot, log }),
   ];
 
   return results.includes("applied")
