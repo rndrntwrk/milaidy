@@ -1,72 +1,212 @@
-import { ErrorBoundary } from "@miladyai/app-core/components";
-import "@miladyai/app-core/styles/styles.css";
-import "@miladyai/app-core/styles/brand-gold.css";
-import "@elizaos/app-wallet/register";
-
-import "./native-plugin-entrypoints";
+import { App, ErrorBoundary } from "@elizaos/app-core";
+import "@elizaos/app-core/styles/styles.css";
+import "@elizaos/app-core/styles/brand-gold.css";
 
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { Keyboard } from "@capacitor/keyboard";
-import { StatusBar, Style } from "@capacitor/status-bar";
-import { App } from "@miladyai/app-core/App";
-import { client } from "@miladyai/app-core/api";
+import { Keyboard, KeyboardResize } from "@capacitor/keyboard";
+import { Preferences } from "@capacitor/preferences";
+import { client } from "@elizaos/app-core";
 import {
   initializeCapacitorBridge,
   subscribeDesktopBridgeEvent,
   initializeStorageBridge,
   isElectrobunRuntime,
-} from "@miladyai/app-core/bridge";
-import { CharacterEditor } from "@miladyai/app-core/components";
-import type { BrandingConfig } from "@miladyai/app-core/config";
+} from "@elizaos/app-core";
+import type { BrandingConfig } from "@elizaos/app-core";
+import { MILADY_DEFAULT_THEME } from "@elizaos/shared";
 import {
   type AppBootConfig,
   getBootConfig,
+  ANDROID_LOCAL_AGENT_API_BASE,
+  MOBILE_RUNTIME_MODE_STORAGE_KEY,
+  normalizeMobileRuntimeMode,
+  preSeedAndroidLocalRuntimeIfFresh,
   setBootConfig,
-} from "@miladyai/app-core/config";
+} from "@elizaos/app-core";
 import {
   AGENT_READY_EVENT,
   APP_PAUSE_EVENT,
   APP_RESUME_EVENT,
   COMMAND_PALETTE_EVENT,
   CONNECT_EVENT,
-  dispatchMiladyEvent,
+  dispatchAppEvent,
+  MOBILE_RUNTIME_MODE_CHANGED_EVENT,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
-} from "@miladyai/app-core/events";
+} from "@elizaos/app-core";
 import {
   applyForceFreshOnboardingReset,
   applyLaunchConnectionFromUrl,
-  dispatchQueuedLifeOpsGithubCallbackFromUrl,
-  getBroadcastChannel,
-  getBroadcastMode,
+  applyLaunchConnection,
   installDesktopPermissionsClientPatch,
   installForceFreshOnboardingClientPatch,
   installLocalProviderCloudPreferencePatch,
-  isBroadcastWindow as isBroadcastWindowShared,
+  isAppWindowRoute,
   isDetachedWindowShell,
+  getWindowNavigationPath,
   resolveWindowShellRoute,
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
-} from "@miladyai/app-core/platform";
+} from "@elizaos/app-core";
+import { AppWindowRenderer } from "@elizaos/app-core";
+import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
+import type { ShareTargetPayload } from "@elizaos/app-core/platform";
 import {
   DESKTOP_TRAY_MENU_ITEMS,
   DesktopOnboardingRuntime,
   DesktopSurfaceNavigationRuntime,
   DesktopTrayRuntime,
   DetachedShellRoot,
-} from "@miladyai/app-core/shell";
-import { AppProvider } from "@miladyai/app-core/state";
-import { applyUiTheme, loadUiTheme } from "@miladyai/app-core/state";
-import { Agent } from "@miladyai/capacitor-agent";
-import { Desktop } from "@miladyai/capacitor-desktop";
+} from "@elizaos/app-core";
+import { AppProvider } from "@elizaos/app-core";
+import { applyUiTheme, loadUiTheme } from "@elizaos/app-core";
+import { Agent } from "@elizaos/capacitor-agent";
+import { Desktop } from "@elizaos/capacitor-desktop";
+import {
+  startDeviceBridgeClient,
+  type DeviceBridgeClient,
+} from "@elizaos/capacitor-llama";
 import { StrictMode } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { MILADY_ENV_ALIASES } from "./brand-env";
-import { MILADY_CHARACTER_CATALOG } from "./character-catalog";
-import { shouldUseCloudOnlyBranding } from "./cloud-only";
+import { createRoot } from "react-dom/client";
+import { CompanionShell } from "@elizaos/app-companion/ui";
+import {
+  createVectorBrowserRenderer,
+  GlobalEmoteOverlay,
+  InferenceCloudAlertButton,
+  resolveCompanionInferenceNotice,
+  THREE,
+  useCompanionSceneStatus,
+} from "@elizaos/app-companion";
+import "@elizaos/app-companion/register";
+// Side-effect: register LifeOps sidebar widgets + client methods on ElizaClient.
+import "@elizaos/app-lifeops/widgets";
+// Side-effect: register coding-agent (task-coordinator) slots so app-core
+// slot wrappers (CodingAgentControlChip, PtyConsoleBase, etc.) render the
+// real components instead of nulls.
+import "@elizaos/app-task-coordinator/register-slots";
+// Side-effect: register game operator surfaces + detail extensions.
+import "@elizaos/app-babylon/ui";
+import "@elizaos/app-scape/ui";
+import "@elizaos/app-hyperscape/ui";
+import "@elizaos/app-2004scape/ui";
+import "@elizaos/app-defense-of-the-agents/ui";
+import "@elizaos/app-screenshare/ui";
+import "@clawville/app-clawville/ui";
+import {
+  AppBlockerSettingsCard,
+  LifeOpsBrowserSetupPanel as BrowserBridgeSetupPanel,
+  LifeOpsPageView,
+  WebsiteBlockerSettingsCard,
+} from "@elizaos/app-lifeops/ui";
+import { LifeOpsActivitySignalsEffect } from "@elizaos/app-lifeops/components/LifeOpsActivitySignalsEffect";
+import {
+  ApprovalQueue,
+  StewardLogo,
+  TransactionHistory,
+} from "@elizaos/app-steward/ui";
+import {
+  CodingAgentControlChip,
+  CodingAgentSettingsSection,
+  CodingAgentTasksPanel,
+  PtyConsoleDrawer,
+} from "@elizaos/app-task-coordinator";
+import { FineTuningView } from "@elizaos/app-training/ui";
+import "@elizaos/app-shopify/register";
+import "@elizaos/app-hyperliquid/client";
+import "@elizaos/app-hyperliquid/register";
+import "@elizaos/app-polymarket/client";
+import "@elizaos/app-polymarket/register";
+import "@elizaos/app-vincent/client";
+import { useVincentState } from "@elizaos/app-vincent/ui";
+import "@elizaos/app-vincent/register";
+import "@elizaos/app-wallet/register";
+import "@elizaos/app-workflow-builder/register";
+import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
+import {
+  APP_BRANDING_BASE,
+  APP_CONFIG,
+  APP_LOG_PREFIX,
+  APP_NAMESPACE,
+  APP_URL_SCHEME,
+} from "./app-config";
+import { APP_ENV_ALIASES, APP_ENV_PREFIX } from "./brand-env";
+import { APP_CHARACTER_CATALOG } from "./character-catalog";
+import {
+  apiBaseToDeviceBridgeUrl,
+  type IosRuntimeConfig,
+  type IosRuntimeMode,
+  resolveIosRuntimeConfig,
+} from "@elizaos/app-core";
 
-const MILADY_BRANDING: Partial<BrandingConfig> = {
+// CharacterEditor is statically re-exported by `@elizaos/app-core/browser`,
+// so the previous `lazy()` wrapper here was eagerly merged back into the
+// main chunk by Rollup. Static import keeps the load path honest.
+import { CharacterEditor } from "@elizaos/app-core/components/character/CharacterEditor";
+
+declare global {
+  interface Window {
+    __ELIZA_APP_SHARE_QUEUE__?: ShareTargetPayload[];
+    __ELIZA_APP_CHARACTER_EDITOR__?: typeof CharacterEditor;
+    __ELIZA_APP_API_BASE__?: string;
+    __ELIZA_API_BASE__?: string;
+    __ELIZAOS_APP_BOOT_CONFIG__?: AppBootConfig;
+    __ELIZA_APP_BOOT_CONFIG__?: AppBootConfig;
+  }
+}
+
+const BRANDED_WINDOW_KEYS = {
+  apiBase: `__${APP_ENV_PREFIX}_API_BASE__`,
+  characterEditor: `__${APP_ENV_PREFIX}_CHARACTER_EDITOR__`,
+  shareQueue: `__${APP_ENV_PREFIX}_SHARE_QUEUE__`,
+} as const;
+
+type AppCompatWindow = Window &
+  Record<string, unknown> & {
+    __ELIZA_APP_SHARE_QUEUE__?: ShareTargetPayload[];
+    __ELIZA_APP_CHARACTER_EDITOR__?: typeof CharacterEditor;
+    __ELIZA_APP_API_BASE__?: string;
+    __ELIZA_API_BASE__?: string;
+    __ELIZAOS_APP_BOOT_CONFIG__?: AppBootConfig;
+    __ELIZA_APP_BOOT_CONFIG__?: AppBootConfig;
+  };
+
+function getAppWindow(): AppCompatWindow {
+  return window as unknown as AppCompatWindow;
+}
+
+// True when the APK is running on the AOSP MiladyOS variant. Detection:
+// MainActivity.applyMiladyOSUserAgentSuffix appends `MiladyOS/<tag>` to the
+// WebView user-agent when `ro.miladyos.product` is set by the AOSP product
+// config. The upstream elizaOS layer reads its own `ElizaOS/<tag>` marker
+// from the same place; this helper only cares about the Milady-brand layer.
+function isMiladyOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /\bMiladyOS\//.test(navigator.userAgent ?? "");
+}
+
+function getInjectedAppApiBase(): string | undefined {
+  const appWindow = getAppWindow();
+  const brandedApiBase = appWindow[BRANDED_WINDOW_KEYS.apiBase];
+  const bootConfig =
+    appWindow.__ELIZAOS_APP_BOOT_CONFIG__ ??
+    appWindow.__ELIZA_APP_BOOT_CONFIG__;
+  return (
+    appWindow.__ELIZA_APP_API_BASE__ ??
+    (typeof brandedApiBase === "string" ? brandedApiBase : undefined) ??
+    bootConfig?.apiBase ??
+    appWindow.__ELIZA_API_BASE__
+  );
+}
+
+const APP_BRANDING: Partial<BrandingConfig> = {
+  ...APP_BRANDING_BASE,
+  theme: MILADY_DEFAULT_THEME,
+  // ── alice: milady-ai branding (preserved from MILADY_BRANDING) ──
+  // Upstream has been migrating org refs from milady-ai/* → elizaOS/*; alice
+  // keeps the milady-ai naming for the consumer-facing brand surface. If/when
+  // the brand is officially renamed, drop these overrides and rely entirely
+  // on APP_BRANDING_BASE.
   appName: "Milady",
   orgName: "milady-ai",
   repoName: "milady",
@@ -81,9 +221,9 @@ const MILADY_BRANDING: Partial<BrandingConfig> = {
   // other hosts inject an explicit API base before React boots, and that host
   // backend should control onboarding capabilities instead.
   cloudOnly: shouldUseCloudOnlyBranding({
-    isDev: import.meta.env.DEV,
+    isDev: import.meta.env.DEV ?? false,
     injectedApiBase:
-      typeof window === "undefined" ? undefined : window.__MILADY_API_BASE__,
+      typeof window === "undefined" ? undefined : getInjectedAppApiBase(),
     isNativePlatform: Capacitor.isNativePlatform(),
   }),
 };
@@ -95,31 +235,12 @@ const platform = Capacitor.getPlatform();
 const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
+const IOS_RUNTIME_ENV_CONFIG = resolveIosRuntimeConfig(import.meta.env);
+const DEVICE_BRIDGE_ID_KEY = "milady_device_bridge_id";
 
-/**
- * Detect MiladyOS — a custom AOSP product distribution that appends
- * `MiladyOS/<tag>` to its user agent and is only built for Android.
- * Returns false on every other platform (iOS, desktop, stock Android,
- * server-rendered SPA bundles served to plain browsers).
- *
- * The user-agent suffix is set by `MainActivity` when
- * `ro.miladyos.product` is configured by the AOSP product config; the
- * regex matches the same `\bMiladyOS\/` pattern as
- * `hasMiladyOSMarker` in
- * `eliza/packages/app-core/src/components/apps/overlay-app-registry.ts`,
- * keeping detection consistent across the SPA's two call sites and the
- * overlay-app registry.
- */
-function isMiladyOS(): boolean {
-  if (!isAndroid) return false;
-  if (
-    typeof navigator === "undefined" ||
-    typeof navigator.userAgent !== "string"
-  ) {
-    return false;
-  }
-  return /\bMiladyOS\//.test(navigator.userAgent);
-}
+let mobileDeviceBridgeClient: DeviceBridgeClient | null = null;
+let mobileDeviceBridgeStartPromise: Promise<void> | null = null;
+let mobileRuntimeModeListenerInstalled = false;
 
 async function registerMiladyOsSystemApps(): Promise<void> {
   if (!isMiladyOS()) return;
@@ -134,37 +255,10 @@ function isDesktopPlatform(): boolean {
   return isElectrobunRuntime();
 }
 
-function isWebPlatform(): boolean {
-  return platform === "web" && !isElectrobunRuntime();
-}
-
-interface ShareTargetFile {
-  name: string;
-  path?: string;
-}
-
-interface ShareTargetPayload {
-  source?: string;
-  title?: string;
-  text?: string;
-  url?: string;
-  files?: ShareTargetFile[];
-}
-
-declare global {
-  interface Window {
-    __MILADY_SHARE_QUEUE__?: ShareTargetPayload[];
-    __MILADY_CHARACTER_EDITOR__?: typeof CharacterEditor;
-    __MILADY_API_BASE__?: string;
-    __MILADY_REACT_ROOT__?: Root;
-    __MILADY_APP_BOOT_PROMISE__?: Promise<void>;
-  }
-}
-
 const windowShellRoute = resolveWindowShellRoute();
 
 /**
- * Adds `milady-electrobun-frameless` for CSS `-webkit-app-region` (Chromium/CEF).
+ * Adds `eliza-electrobun-frameless` for CSS `-webkit-app-region` (Chromium/CEF).
  * macOS WKWebView move/resize are still driven by native overlays in
  * window-effects.mm; this class mainly marks the shell and helps non-WK engines.
  */
@@ -177,71 +271,66 @@ function shouldEnableElectrobunMacWindowDrag(): boolean {
 }
 
 if (shouldEnableElectrobunMacWindowDrag()) {
-  document.documentElement.classList.add("milady-electrobun-frameless");
+  document.documentElement.classList.add("eliza-electrobun-frameless");
 }
 
 // Dev escape hatch: ?reset forces a truly fresh onboarding session by clearing
 // persisted state and temporarily suppressing stale backend resume config.
 if (shouldInstallMainWindowOnboardingPatches(windowShellRoute)) {
   applyForceFreshOnboardingReset();
-  installForceFreshOnboardingClientPatch(client as never);
+  installForceFreshOnboardingClientPatch(client);
 }
-installLocalProviderCloudPreferencePatch(client as never);
-installDesktopPermissionsClientPatch(client as never);
+installLocalProviderCloudPreferencePatch(client);
+installDesktopPermissionsClientPatch(client);
 
 // Register custom character editor for app-core's ViewRouter to pick up
-window.__MILADY_CHARACTER_EDITOR__ = CharacterEditor;
+window.__ELIZA_APP_CHARACTER_EDITOR__ = CharacterEditor;
+getAppWindow()[BRANDED_WINDOW_KEYS.characterEditor] = CharacterEditor;
 
-import { getStylePresets } from "@miladyai/shared/onboarding-presets";
-import { resolveDefaultSpeechCapabilitiesForAvatarIndex } from "@miladyai/shared/onboarding-presets";
+import { getStylePresets } from "@elizaos/shared/onboarding-presets";
 
 // Derive VRM roster from STYLE_PRESETS so character names stay in one place.
-const MILADY_STYLE_PRESETS = getStylePresets();
+const APP_STYLE_PRESETS = getStylePresets();
 
-const MILADY_VRM_ASSETS = MILADY_STYLE_PRESETS.slice()
+const APP_VRM_ASSETS = APP_STYLE_PRESETS.slice()
   .sort((a, b) => a.avatarIndex - b.avatarIndex)
-  .map((p) => ({
-    title: p.name,
-    slug: `milady-${p.avatarIndex}`,
-    speechCapabilities: resolveDefaultSpeechCapabilitiesForAvatarIndex(
-      p.avatarIndex,
-    ),
-    ...(p.avatarIndex === 9 ? { cameraDistanceScale: 1.3 } : {}),
-  }));
+  .map((p) => ({ title: p.name, slug: `${APP_NAMESPACE}-${p.avatarIndex}` }));
 
-// When the SPA is served at `/broadcast/:channel` (no trailing slash), the
-// document base URL is `<origin>/broadcast/`, and `resolveAppAssetUrl()`'s
-// runtime fallback would build asset URLs like
-// `<origin>/broadcast/vrm-decoders/draco/...` — which 404 because public
-// assets live at `<origin>/<asset>`. Pin the asset base to the document
-// root so DRACO / Meshopt decoders, fonts, VRMs, and any other
-// `resolveAppAssetUrl()` consumer load from `/<asset>` instead of
-// `/broadcast/<asset>`. The companion `<base href="/">` injection in
-// static-file-server only fixes HTML-level relative URLs (script src,
-// link href); JS code that resolves relative paths against
-// `window.location.href` (e.g. via `import.meta.env.BASE_URL`, which is
-// `"./"` for this Vite build) bypasses `<base>` and needs this override.
-// Same SPA bundle ships across desktop / mobile / web, so this only
-// kicks in for the web broadcast surface.
-const broadcastAssetBaseOverride =
-  typeof window !== "undefined" &&
-  window.location.pathname.startsWith("/broadcast/")
-    ? `${window.location.origin}/`
-    : undefined;
-
-const miladyBootConfig: AppBootConfig = {
-  branding: MILADY_BRANDING,
+const appBootConfig: AppBootConfig = {
+  ...getBootConfig(),
+  branding: APP_BRANDING,
+  defaultApps: APP_CONFIG.defaultApps,
   assetBaseUrl:
-    broadcastAssetBaseOverride ||
     (import.meta.env.VITE_ASSET_BASE_URL as string | undefined)?.trim() ||
     undefined,
-  cloudApiBase:
-    (import.meta.env.VITE_CLOUD_BASE as string) ?? "https://www.elizacloud.ai",
-  vrmAssets: MILADY_VRM_ASSETS,
-  onboardingStyles: MILADY_STYLE_PRESETS,
+  cloudApiBase: IOS_RUNTIME_ENV_CONFIG.cloudApiBase,
+  vrmAssets: APP_VRM_ASSETS,
+  onboardingStyles: APP_STYLE_PRESETS,
   characterEditor: CharacterEditor,
-  characterCatalog: MILADY_CHARACTER_CATALOG,
-  envAliases: MILADY_ENV_ALIASES,
+  companionShell: CompanionShell,
+  resolveCompanionInferenceNotice,
+  companionInferenceAlertButton: InferenceCloudAlertButton,
+  companionGlobalOverlay: GlobalEmoteOverlay,
+  useCompanionSceneStatus,
+  companionVectorBrowser: {
+    THREE,
+    createVectorBrowserRenderer,
+  },
+  codingAgentTasksPanel: CodingAgentTasksPanel,
+  codingAgentSettingsSection: CodingAgentSettingsSection,
+  codingAgentControlChip: CodingAgentControlChip,
+  ptyConsoleDrawer: PtyConsoleDrawer,
+  fineTuningView: FineTuningView,
+  useVincentState,
+  stewardLogo: StewardLogo,
+  stewardApprovalQueue: ApprovalQueue,
+  stewardTransactionHistory: TransactionHistory,
+  characterCatalog: APP_CHARACTER_CATALOG,
+  envAliases: APP_ENV_ALIASES,
+  lifeOpsPageView: LifeOpsPageView,
+  lifeOpsBrowserSetupPanel: BrowserBridgeSetupPanel,
+  appBlockerSettingsCard: AppBlockerSettingsCard,
+  websiteBlockerSettingsCard: WebsiteBlockerSettingsCard,
   clientMiddleware: {
     forceFreshOnboarding:
       shouldInstallMainWindowOnboardingPatches(windowShellRoute),
@@ -250,23 +339,95 @@ const miladyBootConfig: AppBootConfig = {
   },
 };
 
-setBootConfig(miladyBootConfig);
+// Self-hosted bot bootstrap. The token is read from the URL fragment
+// (#token=...), so it never reaches the server, access log, or Referer
+// headers. Once read, it persists in localStorage scoped to this origin.
+const SELF_HOSTED_TOKEN_KEY = "milady:self-hosted-api-token";
+const STALE_BOOTSTRAP_KEYS = [
+  "elizaos:agent-profiles",
+  "elizaos:active-server",
+  MOBILE_RUNTIME_MODE_STORAGE_KEY,
+] as const;
+try {
+  const url = new URL(window.location.href);
+  const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  const fragmentToken = new URLSearchParams(hash).get("token")?.trim() ?? null;
+  const hasQueryToken = url.searchParams.has("token");
+  if (hasQueryToken) {
+    console.error(
+      "[milady] Refusing insecure ?token=... bootstrap. Use #token=... instead.",
+    );
+  }
+  let bootstrapToken: string | null = fragmentToken;
+  if (fragmentToken) {
+    for (const key of STALE_BOOTSTRAP_KEYS) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {}
+    }
+    try {
+      window.localStorage.setItem(SELF_HOSTED_TOKEN_KEY, fragmentToken);
+    } catch {}
+  }
+  if (fragmentToken || hasQueryToken) {
+    url.hash = "";
+    url.searchParams.delete("token");
+    window.history.replaceState({}, "", url.toString());
+  }
+  if (!bootstrapToken) {
+    try {
+      const saved = window.localStorage.getItem(SELF_HOSTED_TOKEN_KEY)?.trim();
+      if (saved) bootstrapToken = saved;
+    } catch {}
+  }
+  if (bootstrapToken) {
+    appBootConfig.apiToken = bootstrapToken;
+    appBootConfig.apiBase ??= window.location.origin;
+    try {
+      client.setToken(bootstrapToken);
+    } catch {}
+  }
+} catch {}
+setBootConfig(appBootConfig);
+
+function getShareQueue(): ShareTargetPayload[] {
+  const appWindow = getAppWindow();
+  const brandedQueue = appWindow[BRANDED_WINDOW_KEYS.shareQueue];
+  const existing =
+    appWindow.__ELIZA_APP_SHARE_QUEUE__ ??
+    (Array.isArray(brandedQueue)
+      ? (brandedQueue as ShareTargetPayload[])
+      : undefined);
+  if (existing) {
+    appWindow.__ELIZA_APP_SHARE_QUEUE__ = existing;
+    appWindow[BRANDED_WINDOW_KEYS.shareQueue] = existing;
+    return existing;
+  }
+  const queue: ShareTargetPayload[] = [];
+  appWindow.__ELIZA_APP_SHARE_QUEUE__ = queue;
+  appWindow[BRANDED_WINDOW_KEYS.shareQueue] = queue;
+  return queue;
+}
 
 function dispatchShareTarget(payload: ShareTargetPayload): void {
-  if (!window.__MILADY_SHARE_QUEUE__) {
-    window.__MILADY_SHARE_QUEUE__ = [];
-  }
-  window.__MILADY_SHARE_QUEUE__.push(payload);
-  dispatchMiladyEvent(SHARE_TARGET_EVENT, payload);
+  getShareQueue().push(payload);
+  dispatchAppEvent(SHARE_TARGET_EVENT, payload);
+}
+
+function logNativePluginUnavailable(pluginName: string, error: unknown): void {
+  console.warn(
+    `${APP_LOG_PREFIX} ${pluginName} plugin not available:`,
+    error instanceof Error ? error.message : error,
+  );
 }
 
 async function initializeAgent(): Promise<void> {
   try {
     const status = await Agent.getStatus();
-    dispatchMiladyEvent(AGENT_READY_EVENT, status);
+    dispatchAppEvent(AGENT_READY_EVENT, status);
   } catch (err) {
     console.warn(
-      "[Milady] Agent not available:",
+      `${APP_LOG_PREFIX} Agent not available:`,
       err instanceof Error ? err.message : err,
     );
   }
@@ -277,24 +438,17 @@ async function initializePlatform(): Promise<void> {
   initializeCapacitorBridge();
 
   if (isIOS || isAndroid) {
-    await initializeStatusBar();
+    await import("@elizaos/app-core/platform/native-plugin-entrypoints");
     await initializeKeyboard();
     initializeAppLifecycle();
+    initializeMobileRuntimeModeListener();
+    void initializeMobileDeviceBridge();
   }
 
   if (isDesktopPlatform()) {
     await initializeDesktopShell();
   } else {
     await initializeAgent();
-  }
-}
-
-async function initializeStatusBar(): Promise<void> {
-  await StatusBar.setStyle({ style: Style.Dark });
-
-  if (isAndroid) {
-    await StatusBar.setOverlaysWebView({ overlay: true });
-    await StatusBar.setBackgroundColor({ color: "#0a0a0a" });
   }
 }
 
@@ -320,29 +474,45 @@ async function initializeKeyboard(): Promise<void> {
 }
 
 function initializeAppLifecycle(): void {
-  CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-    if (isActive) {
-      dispatchMiladyEvent(APP_RESUME_EVENT);
-    } else {
-      dispatchMiladyEvent(APP_PAUSE_EVENT);
-    }
+  void Promise.resolve(
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) {
+        dispatchAppEvent(APP_RESUME_EVENT);
+      } else {
+        dispatchAppEvent(APP_PAUSE_EVENT);
+      }
+    }),
+  ).catch((error) => {
+    logNativePluginUnavailable("App", error);
   });
 
-  CapacitorApp.addListener("backButton", ({ canGoBack }) => {
-    if (canGoBack) {
-      window.history.back();
-    }
+  void Promise.resolve(
+    CapacitorApp.addListener("backButton", ({ canGoBack }) => {
+      if (canGoBack) {
+        window.history.back();
+      }
+    }),
+  ).catch((error) => {
+    logNativePluginUnavailable("App", error);
   });
 
-  CapacitorApp.addListener("appUrlOpen", ({ url }) => {
-    handleDeepLink(url);
+  void Promise.resolve(
+    CapacitorApp.addListener("appUrlOpen", ({ url }) => {
+      handleDeepLink(url);
+    }),
+  ).catch((error) => {
+    logNativePluginUnavailable("App", error);
   });
 
-  CapacitorApp.getLaunchUrl().then((result) => {
-    if (result?.url) {
-      handleDeepLink(result.url);
-    }
-  });
+  void CapacitorApp.getLaunchUrl()
+    .then((result) => {
+      if (result?.url) {
+        handleDeepLink(result.url);
+      }
+    })
+    .catch((error) => {
+      logNativePluginUnavailable("App", error);
+    });
 }
 
 function handleDeepLink(url: string): void {
@@ -353,12 +523,30 @@ function handleDeepLink(url: string): void {
     return;
   }
 
-  if (parsed.protocol !== "milady:") return;
-  const path = (parsed.pathname || parsed.host || "").replace(/^\/+/, "");
+  if (parsed.protocol !== `${APP_URL_SCHEME}:`) return;
+  const path = getDeepLinkPath(parsed);
 
   switch (path) {
     case "chat":
       window.location.hash = "#chat";
+      break;
+    case "phone":
+    case "phone/call":
+      setHashRoute("phone", parsed.searchParams);
+      break;
+    case "messages":
+    case "messages/compose":
+      setHashRoute("messages", parsed.searchParams);
+      break;
+    case "contacts":
+      setHashRoute("contacts", parsed.searchParams);
+      break;
+    case "wallet":
+    case "inventory":
+      setHashRoute("wallet", parsed.searchParams);
+      break;
+    case "browser":
+      setHashRoute("browser", parsed.searchParams);
       break;
     case "lifeops":
       window.location.hash = "#lifeops";
@@ -378,16 +566,26 @@ function handleDeepLink(url: string): void {
             validatedUrl.protocol !== "http:"
           ) {
             console.error(
-              "[Milady] Invalid gateway URL protocol:",
+              `${APP_LOG_PREFIX} Invalid gateway URL protocol:`,
               validatedUrl.protocol,
             );
             break;
           }
-          dispatchMiladyEvent(CONNECT_EVENT, {
-            gatewayUrl: validatedUrl.href,
+          const token =
+            parsed.searchParams.get("token") ??
+            parsed.searchParams.get("accessToken") ??
+            null;
+          const connection = applyLaunchConnection({
+            kind: "remote",
+            apiBase: validatedUrl.href,
+            token,
+          });
+          dispatchAppEvent(CONNECT_EVENT, {
+            gatewayUrl: connection.apiBase,
+            token: connection.token ?? undefined,
           });
         } catch {
-          console.error("[Milady] Invalid gateway URL format");
+          console.error(`${APP_LOG_PREFIX} Invalid gateway URL format`);
         }
       }
       break;
@@ -419,9 +617,20 @@ function handleDeepLink(url: string): void {
       break;
     }
     default:
-      console.warn("[Milady] Unknown deep link path:", path);
+      console.warn(`${APP_LOG_PREFIX} Unknown deep link path:`, path);
       break;
   }
+}
+
+function getDeepLinkPath(parsed: URL): string {
+  const host = parsed.host.replace(/^\/+|\/+$/g, "");
+  const pathname = parsed.pathname.replace(/^\/+|\/+$/g, "");
+  return [host, pathname].filter(Boolean).join("/");
+}
+
+function setHashRoute(route: string, params: URLSearchParams): void {
+  const query = params.toString();
+  window.location.hash = query ? `#${route}?${query}` : `#${route}`;
 }
 
 async function initializeDesktopShell(): Promise<void> {
@@ -441,7 +650,7 @@ async function initializeDesktopShell(): Promise<void> {
 
   await Desktop.addListener("shortcutPressed", (event: { id: string }) => {
     if (event.id === "command-palette") {
-      dispatchMiladyEvent(COMMAND_PALETTE_EVENT);
+      dispatchAppEvent(COMMAND_PALETTE_EVENT);
     }
   });
 
@@ -452,7 +661,7 @@ async function initializeDesktopShell(): Promise<void> {
   await Desktop.addListener(
     "trayMenuClick",
     (event: { itemId: string; checked?: boolean }) => {
-      dispatchMiladyEvent(TRAY_ACTION_EVENT, event);
+      dispatchAppEvent(TRAY_ACTION_EVENT, event);
     },
   );
 
@@ -490,26 +699,56 @@ function setupPlatformStyles(): void {
   root.style.setProperty("--keyboard-height", "0px");
 }
 
+function isPhoneCompanionMode(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(
+    window.location.search || window.location.hash.split("?")[1] || "",
+  );
+  return params.get("mode") === "companion";
+}
+
+function resolveAppWindowSlug(): string | null {
+  if (!isAppWindowRoute()) return null;
+  const path = getWindowNavigationPath();
+  if (!path.startsWith("/apps/")) return null;
+  // Take only the first path segment after /apps/. URLs like
+  // `/apps/plugins/extra` would otherwise yield a malformed slug
+  // ("plugins/extra") that no descriptor can match.
+  const slug = path
+    .slice("/apps/".length)
+    .replace(/[?#].*$/, "")
+    .split("/")[0];
+  return slug.length > 0 ? slug : null;
+}
+
 function mountReactApp(): void {
   const rootEl = document.getElementById("root");
   if (!rootEl) throw new Error("Root element #root not found");
 
-  const root = window.__MILADY_REACT_ROOT__ ?? createRoot(rootEl);
-  window.__MILADY_REACT_ROOT__ = root;
+  const phoneCompanion = isPhoneCompanionMode();
+  const detachedShell = isDetachedWindowShell(windowShellRoute);
+  const appWindowSlug = detachedShell ? null : resolveAppWindowSlug();
 
-  root.render(
+  createRoot(rootEl).render(
     <ErrorBoundary>
       <StrictMode>
-        <AppProvider branding={MILADY_BRANDING}>
-          {isDetachedWindowShell(windowShellRoute) ? (
-            <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
+        <AppProvider branding={APP_BRANDING}>
+          {phoneCompanion ? (
+            <CompanionShell tab="companion" actionNotice={null} />
+          ) : detachedShell ? (
+            <div className="flex h-[100dvh] min-h-0 w-full max-w-full flex-col overflow-hidden">
               <DetachedShellRoot route={windowShellRoute} />
+            </div>
+          ) : appWindowSlug ? (
+            <div className="flex h-[100dvh] min-h-0 w-full max-w-full flex-col overflow-hidden">
+              <AppWindowRenderer slug={appWindowSlug} />
             </div>
           ) : (
             <>
               <DesktopOnboardingRuntime />
               <DesktopSurfaceNavigationRuntime />
               <DesktopTrayRuntime />
+              <LifeOpsActivitySignalsEffect />
               <App />
             </>
           )}
@@ -525,17 +764,6 @@ function isPopoutWindow(): boolean {
     window.location.search || window.location.hash.split("?")[1] || "",
   );
   return params.has("popout");
-}
-
-/**
- * Broadcast window detection is shared across the codebase via
- * `@miladyai/app-core/platform` — `isBroadcastWindowShared` wraps the
- * canonical path-aware + query-fallback detector so this file doesn't
- * maintain its own duplicate. Use `getBroadcastMode()` to distinguish
- * public viewer from internal capture below.
- */
-function isBroadcastWindow(): boolean {
-  return isBroadcastWindowShared();
 }
 
 /**
@@ -564,13 +792,16 @@ function validateAndSetApiBase(apiBase: string): void {
     ) {
       setBootConfig({ ...getBootConfig(), apiBase });
     } else {
-      console.warn("[Milady] Rejected non-local apiBase:", host);
+      console.warn(`${APP_LOG_PREFIX} Rejected non-local apiBase:`, host);
     }
   } catch {
     if (apiBase.startsWith("/") && !apiBase.startsWith("//")) {
       setBootConfig({ ...getBootConfig(), apiBase });
     } else {
-      console.warn("[Milady] Rejected invalid relative apiBase:", apiBase);
+      console.warn(
+        `${APP_LOG_PREFIX} Rejected invalid relative apiBase:`,
+        apiBase,
+      );
     }
   }
 }
@@ -588,18 +819,175 @@ function injectDetachedShellApiBase(): void {
   if (apiBase) validateAndSetApiBase(apiBase);
 }
 
+function mobileModeToIosRuntimeMode(
+  mode: ReturnType<typeof normalizeMobileRuntimeMode>,
+): IosRuntimeMode | null {
+  return mode === "remote-mac" ||
+    mode === "cloud" ||
+    mode === "cloud-hybrid" ||
+    mode === "local"
+    ? mode
+    : null;
+}
+
+function getCurrentIosRuntimeConfig(): IosRuntimeConfig {
+  if (typeof window === "undefined") return IOS_RUNTIME_ENV_CONFIG;
+  try {
+    const mode = mobileModeToIosRuntimeMode(
+      normalizeMobileRuntimeMode(
+        window.localStorage.getItem(MOBILE_RUNTIME_MODE_STORAGE_KEY),
+      ),
+    );
+    if (!mode) return IOS_RUNTIME_ENV_CONFIG;
+    return { ...IOS_RUNTIME_ENV_CONFIG, mode };
+  } catch {
+    return IOS_RUNTIME_ENV_CONFIG;
+  }
+}
+
+function applyBuildTimeIosConnection(): void {
+  if (!isNative) return;
+  if (!IOS_RUNTIME_ENV_CONFIG.apiBase && !IOS_RUNTIME_ENV_CONFIG.apiToken)
+    return;
+
+  const current = getBootConfig();
+  const next: AppBootConfig = {
+    ...current,
+    ...(IOS_RUNTIME_ENV_CONFIG.apiToken
+      ? { apiToken: IOS_RUNTIME_ENV_CONFIG.apiToken }
+      : {}),
+  };
+  setBootConfig(next);
+
+  if (IOS_RUNTIME_ENV_CONFIG.apiBase) {
+    validateAndSetApiBase(IOS_RUNTIME_ENV_CONFIG.apiBase);
+  }
+}
+
+async function getOrCreateDeviceBridgeId(): Promise<string> {
+  const existing = await Preferences.get({ key: DEVICE_BRIDGE_ID_KEY });
+  if (existing.value?.trim()) return existing.value.trim();
+
+  const prefix = isAndroid ? "android" : isIOS ? "ios" : "mobile";
+  const generated =
+    globalThis.crypto?.randomUUID?.() ??
+    `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  await Preferences.set({ key: DEVICE_BRIDGE_ID_KEY, value: generated });
+  return generated;
+}
+
+function resolveDeviceBridgeUrl(config: IosRuntimeConfig): string | null {
+  if (config.deviceBridgeUrl) {
+    return config.deviceBridgeUrl;
+  }
+  // cloud-hybrid: paired phone dials a remote agent via the cloud apiBase.
+  // Android local: the foreground agent service owns the loopback API and the
+  // WebView dials its device bridge for native llama.cpp calls.
+  // iOS local: requests are handled by the in-process ITTP route kernel, so a
+  // loopback WebSocket bridge is both unnecessary and unsafe in simulator runs
+  // where host-level adb port forwarding can expose another device's agent.
+  if (config.mode === "local" && isIOS) return null;
+  if (config.mode === "local" && isAndroid) {
+    return apiBaseToDeviceBridgeUrl(ANDROID_LOCAL_AGENT_API_BASE);
+  }
+  if (config.mode !== "cloud-hybrid" && config.mode !== "local") return null;
+  const apiBase = getBootConfig().apiBase?.trim();
+  if (!apiBase) return null;
+  try {
+    return apiBaseToDeviceBridgeUrl(apiBase);
+  } catch {
+    return null;
+  }
+}
+
+async function initializeMobileDeviceBridge(): Promise<void> {
+  const runtimeConfig = getCurrentIosRuntimeConfig();
+  if (
+    !isNative ||
+    (runtimeConfig.mode !== "cloud-hybrid" && runtimeConfig.mode !== "local")
+  ) {
+    return;
+  }
+  if (mobileDeviceBridgeClient) return;
+  if (mobileDeviceBridgeStartPromise) return;
+
+  const agentUrl = resolveDeviceBridgeUrl(runtimeConfig);
+  if (!agentUrl) return;
+
+  mobileDeviceBridgeStartPromise = (async () => {
+    try {
+      const deviceId = await getOrCreateDeviceBridgeId();
+      mobileDeviceBridgeClient = startDeviceBridgeClient({
+        agentUrl,
+        ...(runtimeConfig.deviceBridgeToken
+          ? { pairingToken: runtimeConfig.deviceBridgeToken }
+          : {}),
+        deviceId,
+        onStateChange: (state, detail) => {
+          console.info(
+            `${APP_LOG_PREFIX} Device bridge ${state}`,
+            detail ?? "",
+          );
+        },
+      });
+    } catch (error) {
+      console.warn(
+        `${APP_LOG_PREFIX} Device bridge unavailable:`,
+        error instanceof Error ? error.message : error,
+      );
+    } finally {
+      mobileDeviceBridgeStartPromise = null;
+    }
+  })();
+
+  await mobileDeviceBridgeStartPromise;
+}
+
+function stopMobileDeviceBridge(): void {
+  mobileDeviceBridgeClient?.stop();
+  mobileDeviceBridgeClient = null;
+}
+
+function initializeMobileRuntimeModeListener(): void {
+  if (!isNative || mobileRuntimeModeListenerInstalled) return;
+  mobileRuntimeModeListenerInstalled = true;
+  document.addEventListener(MOBILE_RUNTIME_MODE_CHANGED_EVENT, () => {
+    const mode = getCurrentIosRuntimeConfig().mode;
+    if (mode === "cloud-hybrid" || mode === "local") {
+      stopMobileDeviceBridge();
+      void initializeMobileDeviceBridge();
+      return;
+    }
+    stopMobileDeviceBridge();
+  });
+}
+
 function applyStoredDetachedShellTheme(): void {
   applyUiTheme(loadUiTheme());
 }
 
-async function runMain(): Promise<void> {
+async function initializeStatusBar(): Promise<void> {
+  if (!isNative) return;
+  try {
+    const { StatusBar, Style } = await import("@capacitor/status-bar");
+    await StatusBar.setStyle({ style: Style.Dark });
+    await StatusBar.setOverlaysWebView({ overlay: true });
+    await StatusBar.setBackgroundColor({ color: "#0a0a0a" });
+  } catch {
+    // StatusBar plugin unavailable on this platform — non-fatal.
+  }
+}
+
+async function main(): Promise<void> {
   setupPlatformStyles();
+  await initializeStatusBar();
+  applyBuildTimeIosConnection();
 
   try {
     await applyLaunchConnectionFromUrl();
   } catch (err) {
     console.error(
-      "[Milady] Failed to apply managed cloud launch session:",
+      `${APP_LOG_PREFIX} Failed to apply managed cloud launch session:`,
       err instanceof Error ? err.message : err,
     );
   }
@@ -626,127 +1014,6 @@ async function runMain(): Promise<void> {
     return;
   }
 
-  if (isBroadcastWindow()) {
-    // Broadcast mode is served by two transports that share the same
-    // renderer code (BroadcastShell → CompanionSceneHost) but have
-    // opposite trust levels:
-    //
-    //   PUBLIC  — alice.rndrntwrk.com/broadcast/:channel
-    //     Unauthenticated. Cloudflare Access bypass on /broadcast/*.
-    //     Must not mount LiveKitBroadcastPublisher, must not call
-    //     mutation APIs, must not consume apiToken (there is no
-    //     intended auth for this surface), must not mark onboarding
-    //     complete via the shared localStorage flag.
-    //
-    //   CAPTURE — http://alice-bot:3000/broadcast/:channel
-    //     Internal-only. Never reaches Cloudflare. Puppeteer injects
-    //     `window.__injectedShowConfig` before navigation.
-    //     Needs the onboarding-skip marker, the __agentShowControl
-    //     handshake global, and the apiToken bridge so LiveKit
-    //     publishing and WS-backed scene sync work.
-    //
-    // `getBroadcastMode()` distinguishes them purely by the presence
-    // of `window.__injectedShowConfig` (which the browser runtime
-    // sets before any script runs when Puppeteer calls
-    // evaluateOnNewDocument). A public viewer cannot spoof it —
-    // document content and query params have no way to produce a
-    // pre-script global.
-    const broadcastMode = getBroadcastMode();
-    console.log(
-      `[boot] broadcast mode=${broadcastMode} channel=${getBroadcastChannel() ?? "(none)"}`,
-    );
-
-    if (broadcastMode === "capture") {
-      // Set the 555stream capture-service "React mounted" handshake
-      // marker SYNCHRONOUSLY, before React mounts. The capture worker
-      // uses `page.waitForFunction(() => typeof window.__agentShowControl
-      // !== 'undefined')` as its primary ready gate. Setting the
-      // global here eliminates the race between React commit and the
-      // worker's 20s timeout.
-      //
-      // Only the capture transport sets this — a public viewer has no
-      // capture-service on the other side waiting for a handshake.
-      (
-        window as unknown as { __agentShowControl?: Record<string, unknown> }
-      ).__agentShowControl = { source: "broadcast-boot" };
-
-      // Teach the startup coordinator that onboarding is already
-      // complete. milaidy's SPA treats each browser as a personal
-      // install to onboard, but alice-bot is server-side/single-
-      // tenant/always-on — a fresh Chromium in the capture-service
-      // pod has empty localStorage, so the coordinator would
-      // transition to `onboarding-required` and render the character-
-      // select screen instead of the companion.
-      //
-      // Only the capture transport flips this flag — public viewers
-      // are non-operator surfaces and we don't want writing to the
-      // browser's own localStorage under a user-visible URL.
-      try {
-        localStorage.setItem("eliza:onboarding-complete", "1");
-      } catch {
-        /* storage unavailable — coordinator has its own try/catch */
-      }
-
-      // Bridge alice-bot auth into the SPA's API client.
-      // Only meaningful under the capture transport: WS + privileged
-      // REST need credentials so scene-state sync + emote replay
-      // work. Public viewers never authenticate — any apiToken
-      // query on the public URL is rejected here explicitly.
-      //
-      // Precedence:
-      //   1. `?apiToken=` — explicit override for internal debugging
-      //   2. `__injectedShowConfig.apiToken` — the real alice-bot API token
-      //      injected by capture-service/control-plane
-      //   3. `__injectedShowConfig.wsToken` — legacy renderer JWT fallback
-      //      kept only for auth-disabled migrations
-      {
-        const params = new URLSearchParams(
-          window.location.search || window.location.hash.split("?")[1] || "",
-        );
-        const urlToken = params.get("apiToken");
-        if (urlToken) {
-          setBootConfig({ ...getBootConfig(), apiToken: urlToken });
-        } else {
-          try {
-            const injectedConfig = (
-              window as unknown as {
-                __injectedShowConfig?: { apiToken?: string; wsToken?: string };
-              }
-            ).__injectedShowConfig;
-            if (injectedConfig?.apiToken) {
-              setBootConfig({
-                ...getBootConfig(),
-                apiToken: injectedConfig.apiToken,
-              });
-            } else if (injectedConfig?.wsToken) {
-              setBootConfig({
-                ...getBootConfig(),
-                apiToken: injectedConfig.wsToken,
-              });
-            }
-          } catch {
-            /* injectedShowConfig not available */
-          }
-        }
-      }
-
-      injectPopoutApiBase();
-    } else {
-      // PUBLIC broadcast viewer. Intentionally skip the capture-only
-      // side-effects above. No apiToken bridge even if the URL carries
-      // one — any `?apiToken=` on the public surface is refused by
-      // ignoring it here, which closes one obvious exfiltration shape.
-      //
-      // Still call the apiBase injector for development flexibility
-      // (it only accepts same-origin / private-network / HTTPS bases
-      // per its own allowlist, so this is safe for a public URL).
-      injectPopoutApiBase();
-    }
-
-    mountReactApp();
-    return;
-  }
-
   if (isDetachedWindowShell(windowShellRoute)) {
     injectDetachedShellApiBase();
     applyStoredDetachedShellTheme();
@@ -761,30 +1028,10 @@ async function runMain(): Promise<void> {
   await initializePlatform();
 }
 
-function main(): Promise<void> {
-  if (window.__MILADY_APP_BOOT_PROMISE__) {
-    return window.__MILADY_APP_BOOT_PROMISE__;
-  }
-
-  const bootPromise = runMain().catch((err) => {
-    delete window.__MILADY_APP_BOOT_PROMISE__;
-    throw err;
-  });
-  window.__MILADY_APP_BOOT_PROMISE__ = bootPromise;
-  return bootPromise;
-}
-
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", main);
 } else {
   main();
 }
 
-export {
-  isAndroid,
-  isDesktopPlatform as isDesktop,
-  isIOS,
-  isNative,
-  isWebPlatform as isWeb,
-  platform,
-};
+export { isAndroid, isDesktopPlatform as isDesktop, isIOS, isNative, platform };
