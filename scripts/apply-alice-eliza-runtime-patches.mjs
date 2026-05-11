@@ -697,6 +697,71 @@ export function isAliceTelegramSourcePackageJsonExportPatched(packageJson) {
   );
 }
 
+const elizacloudIndexRelativePath = "plugins/plugin-elizacloud/src/index.ts";
+const elizacloudReexportsSentinel =
+  "// [milaidy:elizacloud-agent-export-compat]";
+const elizacloudAgentReexports = `${elizacloudReexportsSentinel}
+// eliza/packages/agent/src statically imports several @elizaos/plugin-elizacloud
+// symbols (getOrCreateClientAddressKey, resolveCloudApiKey, ...) that live in
+// the plugin's submodules but aren't re-exported from src/index.ts in the
+// upstream pin. Without these re-exports, Node ESM throws
+// "does not provide an export named ..." when the agent's bundled entry
+// resolves the externalized import at runtime.
+export {
+  getOrCreateClientAddressKey,
+  persistCloudWalletCache,
+  provisionCloudWalletsBestEffort,
+} from "./cloud/cloud-wallet";
+export {
+  normalizeCloudSecret,
+  resolveCloudApiKey,
+} from "./cloud/cloud-api-key";
+export {
+  clearCloudSecrets,
+  getCloudSecret,
+} from "./lib/cloud-secrets";
+export {
+  __resetCloudBaseUrlCache,
+  ensureCloudTtsApiKeyAlias,
+  handleCloudTtsPreviewRoute,
+  mirrorCompatHeaders,
+  resolveCloudTtsBaseUrl,
+  resolveElevenLabsApiKeyForCloudMode,
+} from "./lib/server-cloud-tts";
+`;
+
+export function isAliceElizacloudReexportPatched(source) {
+  return source.includes(elizacloudReexportsSentinel);
+}
+
+export function applyAliceElizacloudReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, elizacloudIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-elizacloud source absent; skipping reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceElizacloudReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-elizacloud agent-export-compat reexports already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${elizacloudAgentReexports}`
+    : `${source}\n\n${elizacloudAgentReexports}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched plugin-elizacloud/src/index.ts to re-export agent-needed cloud-wallet / cloud-api-key / lib symbols",
+  );
+  return "applied";
+}
+
 export function applyAliceTelegramSourcePackageJsonExportPatch({
   elizaRoot,
   log = console.log,
@@ -2398,6 +2463,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppPluginRegisterExportPatch({ elizaRoot, log }),
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
+    applyAliceElizacloudReexportPatch({ elizaRoot, log }),
     // applyAliceBundledKnowledgeStartupDeferralPatch retired against upstream
     // be182cc913b3+ — `seedBundledKnowledge` no longer exists in upstream's
     // packages/agent/src/runtime/eliza.ts (removed during the 866-commit
