@@ -105,7 +105,7 @@ function run(command, args, cwd = repoRoot) {
   });
 }
 
-if (!isLocalElizaDisabled()) {
+if (isLocalElizaDisabled()) {
   // Upstream: packages-mode path — delegate to the elizaOS app-core script
   await run(node, [
     "scripts/run-eliza-app-core-script.mjs",
