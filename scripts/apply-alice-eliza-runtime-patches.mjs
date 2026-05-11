@@ -701,33 +701,20 @@ const elizacloudIndexRelativePath = "plugins/plugin-elizacloud/src/index.ts";
 const elizacloudReexportsSentinel =
   "// [milaidy:elizacloud-agent-export-compat]";
 const elizacloudAgentReexports = `${elizacloudReexportsSentinel}
-// eliza/packages/agent/src statically imports several @elizaos/plugin-elizacloud
-// symbols (getOrCreateClientAddressKey, resolveCloudApiKey, ...) that live in
-// the plugin's submodules but aren't re-exported from src/index.ts in the
-// upstream pin. Without these re-exports, Node ESM throws
-// "does not provide an export named ..." when the agent's bundled entry
-// resolves the externalized import at runtime.
+// eliza/packages/agent/src statically imports getOrCreateClientAddressKey,
+// persistCloudWalletCache, and provisionCloudWalletsBestEffort from
+// @elizaos/plugin-elizacloud. The other symbols the agent references
+// (resolveCloudApiKey, ensureCloudTtsApiKeyAlias, etc.) ARE already
+// re-exported by the plugin's src/index.ts; only the three cloud-wallet
+// helpers below are missing. Adding them here as named re-exports
+// (rather than wildcard \`export * from "./cloud/cloud-wallet"\` because
+// cloud-wallet also exports identifiers that collide with names already
+// declared at the top level of src/index.ts).
 export {
   getOrCreateClientAddressKey,
   persistCloudWalletCache,
   provisionCloudWalletsBestEffort,
 } from "./cloud/cloud-wallet";
-export {
-  normalizeCloudSecret,
-  resolveCloudApiKey,
-} from "./cloud/cloud-api-key";
-export {
-  clearCloudSecrets,
-  getCloudSecret,
-} from "./lib/cloud-secrets";
-export {
-  __resetCloudBaseUrlCache,
-  ensureCloudTtsApiKeyAlias,
-  handleCloudTtsPreviewRoute,
-  mirrorCompatHeaders,
-  resolveCloudTtsBaseUrl,
-  resolveElevenLabsApiKeyForCloudMode,
-} from "./lib/server-cloud-tts";
 `;
 
 export function isAliceElizacloudReexportPatched(source) {
