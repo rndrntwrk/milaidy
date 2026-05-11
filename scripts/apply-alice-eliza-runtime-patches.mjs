@@ -697,6 +697,76 @@ export function isAliceTelegramSourcePackageJsonExportPatched(packageJson) {
   );
 }
 
+const appTrainingIndexRelativePath = "plugins/app-training/src/index.ts";
+const appTrainingNodeSafeSentinel = "// [milaidy:app-training-node-safe-index]";
+const appTrainingNodeSafeBanner = `${appTrainingNodeSafeSentinel}
+// eliza/packages/app-core/src/runtime/eliza.ts loads this package via
+// \`await import("@elizaos/app-training")\` to register training runtime hooks.
+// Upstream's src/index.ts also re-exports the React UI surface
+// (\`./ui/index.js\` and \`./ui/FineTuningView.js\`), which transitively imports
+// \`@elizaos/ui\` whose src/index.ts has a top-level
+// \`import "./styles/styles.css"\` side-effect. Node ESM has no .css loader at
+// production runtime (Bun + tsx), so loading the package root in Node throws
+// "Unknown file extension '.css'" and the agent's loader catches it as
+// "@elizaos/app-training not installed, skipping runtime hooks" — which fails
+// the deploy script's startup log contract.
+//
+// This Node-safe variant drops only the two UI re-exports. Browser/SPA
+// consumers can still reach FineTuningView via the wildcard subpath
+// \`@elizaos/app-training/ui/FineTuningView\` (exposed by the source-main
+// patch's "./*" exports entry).
+`;
+const appTrainingUiReexportLines = [
+  'export * from "./ui/index.js";',
+  'export * from "./ui/FineTuningView.js";',
+];
+
+export function isAliceAppTrainingNodeSafeIndexPatched(source) {
+  return source.includes(appTrainingNodeSafeSentinel);
+}
+
+export function applyAliceAppTrainingNodeSafeIndexPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, appTrainingIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] plugins/app-training/src/index.ts absent; skipping node-safe-index patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceAppTrainingNodeSafeIndexPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] plugins/app-training/src/index.ts node-safe-index already applied",
+    );
+    return "already-applied";
+  }
+  let next = source;
+  let removed = 0;
+  for (const line of appTrainingUiReexportLines) {
+    if (next.includes(`${line}\n`)) {
+      next = next.replace(`${line}\n`, "");
+      removed += 1;
+    } else if (next.includes(line)) {
+      next = next.replace(line, "");
+      removed += 1;
+    }
+  }
+  if (removed === 0) {
+    log(
+      "[alice-eliza-runtime-patches] no app-training UI re-exports found to strip; writing sentinel only (upstream already Node-safe?)",
+    );
+  }
+  next = `${appTrainingNodeSafeBanner}${next}`;
+  writeFileSync(indexPath, next);
+  log(
+    `[alice-eliza-runtime-patches] patched plugins/app-training/src/index.ts to remove ${removed} UI re-export(s) for Node-safe runtime load`,
+  );
+  return "applied";
+}
+
 const elizacloudIndexRelativePath = "plugins/plugin-elizacloud/src/index.ts";
 const elizacloudReexportsSentinel =
   "// [milaidy:elizacloud-agent-export-compat]";
@@ -2534,6 +2604,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAliceElizacloudReexportPatch({ elizaRoot, log }),
+    applyAliceAppTrainingNodeSafeIndexPatch({ elizaRoot, log }),
     // applyAliceBundledKnowledgeStartupDeferralPatch retired against upstream
     // be182cc913b3+ — `seedBundledKnowledge` no longer exists in upstream's
     // packages/agent/src/runtime/eliza.ts (removed during the 866-commit
