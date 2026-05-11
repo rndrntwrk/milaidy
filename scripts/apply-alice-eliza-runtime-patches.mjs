@@ -831,10 +831,29 @@ const aliceUpstreamSourceMainPackageRelativePaths = [
   "plugins/plugin-workflow",
   "plugins/plugin-x402",
 ];
-const aliceUpstreamSourceMainSentinel = "0.0.0-milady-source-main";
+// Previous versions of this patch used `version: "0.0.0-milady-source-main"` as
+// the idempotence marker, which mutated the workspace package's identity and
+// broke any script that read `version` from these manifests (e.g.
+// install-published-workspace-fallback-deps.sh reading @elizaos/ui@<version>).
+// We now use a private top-level field for the sentinel and leave `version`
+// alone. The legacy value is still recognized as "already patched" so a stale
+// local checkout doesn't get re-processed.
+const aliceUpstreamSourceMainSentinelLegacyVersion = "0.0.0-milady-source-main";
+const aliceUpstreamSourceMainSentinelField = "_aliceSourceMainSentinel";
+const aliceUpstreamSourceMainSentinelValue = "v1";
 
 export function isAliceUpstreamSourceMainPatched(packageJson) {
-  return packageJson?.version === aliceUpstreamSourceMainSentinel;
+  if (!packageJson || typeof packageJson !== "object") return false;
+  if (
+    packageJson[aliceUpstreamSourceMainSentinelField] ===
+    aliceUpstreamSourceMainSentinelValue
+  ) {
+    return true;
+  }
+  if (packageJson.version === aliceUpstreamSourceMainSentinelLegacyVersion) {
+    return true;
+  }
+  return false;
 }
 
 export function applyAliceUpstreamPackageSourceMainPatch({
@@ -877,31 +896,89 @@ export function applyAliceUpstreamPackageSourceMainPatch({
       continue;
     }
 
-    packageJson.version = aliceUpstreamSourceMainSentinel;
+    const rootExport = {
+      types: entryRelative,
+      bun: entryRelative,
+      import: entryRelative,
+      default: entryRelative,
+    };
+    const wildcardExport = isFlatLayout
+      ? {
+          types: "./*.ts",
+          bun: "./*.ts",
+          import: "./*.ts",
+          default: "./*.ts",
+        }
+      : {
+          types: "./src/*.ts",
+          bun: "./src/*.ts",
+          import: "./src/*.ts",
+          default: "./src/*.ts",
+        };
+    const newExports = {
+      ".": rootExport,
+      "./package.json": "./package.json",
+      "./*": wildcardExport,
+    };
+
+    // Preserve any other subpath exports declared upstream (e.g. "./plugin",
+    // "./config/app-config") by remapping each to its source-equivalent. A
+    // wholesale overwrite would drop them; explicit per-subpath entries are
+    // clearer and safer than relying on the "./*" wildcard alone.
+    const originalExports = packageJson.exports;
+    if (
+      originalExports &&
+      typeof originalExports === "object" &&
+      !Array.isArray(originalExports)
+    ) {
+      for (const subpath of Object.keys(originalExports)) {
+        if (
+          subpath === "." ||
+          subpath === "./package.json" ||
+          subpath === "./*"
+        ) {
+          continue;
+        }
+        if (typeof subpath !== "string" || !subpath.startsWith("./")) continue;
+        const subSuffix = subpath.slice(2);
+        if (subSuffix.includes("*")) continue;
+        const baseRel = isFlatLayout ? subSuffix : `src/${subSuffix}`;
+        const flatCandidate = path.join(
+          elizaRoot,
+          pkgRelativePath,
+          `${baseRel}.ts`,
+        );
+        const dirCandidate = path.join(
+          elizaRoot,
+          pkgRelativePath,
+          baseRel,
+          "index.ts",
+        );
+        let sourceTarget;
+        if (existsSync(flatCandidate)) {
+          sourceTarget = isFlatLayout
+            ? `./${subSuffix}.ts`
+            : `./src/${subSuffix}.ts`;
+        } else if (existsSync(dirCandidate)) {
+          sourceTarget = isFlatLayout
+            ? `./${subSuffix}/index.ts`
+            : `./src/${subSuffix}/index.ts`;
+        }
+        if (!sourceTarget) continue;
+        newExports[subpath] = {
+          types: sourceTarget,
+          bun: sourceTarget,
+          import: sourceTarget,
+          default: sourceTarget,
+        };
+      }
+    }
+
+    packageJson[aliceUpstreamSourceMainSentinelField] =
+      aliceUpstreamSourceMainSentinelValue;
     packageJson.main = entryRelative;
     packageJson.types = entryRelative;
-    packageJson.exports = {
-      ".": {
-        types: entryRelative,
-        bun: entryRelative,
-        import: entryRelative,
-        default: entryRelative,
-      },
-      "./package.json": "./package.json",
-      "./*": isFlatLayout
-        ? {
-            types: "./*.ts",
-            bun: "./*.ts",
-            import: "./*.ts",
-            default: "./*.ts",
-          }
-        : {
-            types: "./src/*.ts",
-            bun: "./src/*.ts",
-            import: "./src/*.ts",
-            default: "./src/*.ts",
-          },
-    };
+    packageJson.exports = newExports;
     if (!packageJson.type) {
       packageJson.type = "module";
     }
