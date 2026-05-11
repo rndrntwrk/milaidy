@@ -795,6 +795,7 @@ const aliceUpstreamSourceMainPackageRelativePaths = [
   "cloud/packages/billing",
   "cloud/packages/sdk",
   "cloud/packages/ui",
+  "packages/app-core",
   "packages/cloud-routing",
   "packages/elizaos",
   "packages/scenario-runner",
@@ -803,12 +804,17 @@ const aliceUpstreamSourceMainPackageRelativePaths = [
   "packages/ui",
   "packages/vault",
   "packages/workflows",
-  // The plugins below are imported statically from eliza/packages/agent/src
-  // or eliza/packages/app-core/src and survive tsdown's pluginExternal regex
-  // into the bundled dist/entry.js. They MUST resolve at runtime under
-  // Node + tsx (the production container runtime). Each gets its main
-  // rewritten to ./src/index.ts via the source-main patch and is
-  // materialized into node_modules by stream's deploy script.
+  // The plugins below are imported (statically or dynamically) from
+  // eliza/packages/agent/src or eliza/packages/app-core/src and either
+  // survive tsdown's pluginExternal regex into the bundled dist/entry.js
+  // or are dynamic imports of string-literal module IDs that cannot be
+  // bundled. They MUST resolve at runtime under Node + tsx (the
+  // production container runtime). Each gets its main rewritten to
+  // ./src/index.ts via the source-main patch and is materialized into
+  // node_modules by stream's deploy script.
+  "plugins/app-elizamaker",
+  "plugins/app-steward",
+  "plugins/app-training",
   "plugins/plugin-aosp-local-inference",
   "plugins/plugin-browser",
   "plugins/plugin-capacitor-bridge",
