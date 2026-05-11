@@ -1,7 +1,20 @@
 node_modules
+/eliza/
+.eliza-repo-setup.lock
 **/node_modules/
 .env
 .env.worktree
+**/.env
+**/.env.*
+**/.env.local
+**/.env.*.local
+**/.env.development
+**/.env.production
+**/.env.preview
+**/.env.dev
+!**/.env.example
+**/.vercel
+**/.vercel/
 dist
 storybook-static
 coverage
@@ -17,22 +30,28 @@ apps/app/electrobun/build/
 *.bun-build
 **/*.bun-build
 *.tsbuildinfo
+eliza/packages/elizaos/templates/
+eliza/packages/elizaos/templates-manifest.json
 apps/app/electron/tsc-out/
 # Android build output (capacitor plugins, main app)
 **/android/build/
 
 # TypeScript declaration build outputs inside source dirs
-packages/*/src/**/*.d.ts
-!packages/app-core/src/ambient-modules.d.ts
-packages/*/src/**/*.d.ts.map
+eliza/packages/*/src/**/*.d.ts
+!eliza/packages/app-core/src/ambient-modules.d.ts
+# Ambient declaration shims for `@elizaos/core/roles` — the published
+# alpha dist-tag doesn't ship the subpath exports field, so each
+# package that imports it needs its own per-package .d.ts.
+!eliza/packages/shared/src/elizaos-core-roles.d.ts
+eliza/packages/*/src/**/*.d.ts.map
 # Local ./eliza checkout — only @elizaos/core typescript sources had stray emit (see eliza/.gitignore)
 eliza/packages/core/src/**/*.d.ts
 eliza/packages/core/src/**/*.d.ts.map
 src/plugins/**/*.d.ts
 src/plugins/**/*.d.ts.map
 
-# Compiled JS build outputs inside source dirs (packages/ui uses tsx source directly)
-packages/ui/src/**/*.js
+# Compiled JS build outputs inside source dirs (app-core/ui uses tsx source directly)
+eliza/packages/app-core/src/ui/**/*.js
 
 # Lock files (managed at repo root)
 package-lock.json
@@ -42,19 +61,34 @@ pnpm-lock.yaml
 
 # Docker overrides
 docker-compose.extra.yml
+# Copied from deploy/.dockerignore.ci for local `docker build` (context root)
+.dockerignore
 
 # UI test artifacts
 apps/ui/src/ui/__screenshots__/
 apps/ui/playwright-report/
 apps/ui/test-results/
+eliza/packages/app-core/src/ui/test-results/
+eliza/packages/app-core/src/ui/e2e/visual-regression.spec.ts-snapshots/
 
 # Vendored repos (clone separately if needed)
 vendor/
+# MiladyOS AOSP product layer (tracked); exception to `vendor/` above.
+!os/android/vendor/
+# Built elsewhere — run `bun run build:android:system` before sync/validate.
+os/android/vendor/milady/apps/Milady/Milady.apk
+os/android/vendor/milady/apps/Milady/*.apk.idsig
+os/android/vendor/eliza/apps/Eliza/Eliza.apk
+os/android/vendor/eliza/apps/Eliza/*.apk.idsig
+
+# Local scratch / backup patches and tarballs.
+.preserve/
 
 # Local untracked files
 .local/
 .vscode/
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 .claude/skills/
 .git-workspace/
 IDENTITY.md
@@ -64,6 +98,13 @@ USER.md
 .eliza.broken.*/
 .milady-repo-setup.lock
 .milady/desktop-dev-console.log
+.milady/*.png
+.milady/gmail-fixtures/
+.milady/avd-signed/
+reports/avd-smoke/
+reports/aosp-cuttlefish/
+reports/e2e-*/
+test/mocks/fixtures/*.raw.json
 .turbo/
 skills/.cache/
 apps/app/electron/.eliza
@@ -86,6 +127,11 @@ biome-report.json
 # Local audit outputs
 report/
 
+# Action benchmark reports (local eval output; never committed)
+/action-benchmark-report/
+/action-benchmark-report-*/
+/action-benchmark-report*.md
+
 # Agent learning docs & knowledge base
 knowledge/
 !src/knowledge/
@@ -93,15 +139,12 @@ src/knowledge/*
 !src/knowledge/history.ts
 !src/knowledge/history.md
 scripts/knowledge-loop.mjs
-# Foundry build artifacts (keep source .sol, foundry.toml, lib/)
-test/contracts/out/
-test/contracts/cache/
 **/__pycache__/
 apps/app/test-results/
 # WhatsApp session files (Baileys auth state)
 /auth/
 :memory:/
-benchmarks/results/
+eliza/packages/benchmarks/app-eval/results/
 !docs/plugins/
 
 # Electrobun compiled native binaries (built locally, not committed)
@@ -110,6 +153,7 @@ apps/app/electrobun/src/libMacWindowEffects.dylib
 apps/app/electrobun/src/preload.js
 # Electrobun build artifacts (created by `electrobun build`)
 apps/app/electrobun/artifacts/
+**/electrobun/artifacts/*.tar.zst
 
 # Electron build directories
 apps/app/electron/app-build/
@@ -135,31 +179,74 @@ e2e-screenshots/
 data/
 .avatar-clone-tmp
 
+# Plugin repos owned by the embedded eliza checkout. These are registered in
+# eliza/.gitmodules and should not be added to the outer milady index.
+eliza/plugins/plugin-agent-skills/
+eliza/plugins/plugin-anthropic/
+eliza/plugins/plugin-cli/
+eliza/plugins/plugin-commands/
+eliza/plugins/plugin-cron/
+eliza/plugins/plugin-discord/
+eliza/plugins/plugin-edge-tts/
+eliza/plugins/plugin-elizacloud/
+eliza/plugins/plugin-evm/
+eliza/plugins/plugin-google-genai/
+eliza/plugins/plugin-groq/
+eliza/plugins/plugin-imessage/
+eliza/plugins/plugin-local-ai/
+eliza/plugins/plugin-local-embedding/
+eliza/plugins/plugin-music-library/
+eliza/plugins/plugin-music-player/
+eliza/plugins/plugin-ollama/
+eliza/plugins/plugin-openai/
+eliza/plugins/plugin-openrouter/
+eliza/plugins/plugin-pdf/
+eliza/plugins/plugin-shell/
+eliza/plugins/plugin-shopify/
+eliza/plugins/plugin-solana/
+eliza/plugins/plugin-sql/
+eliza/plugins/plugin-telegram/
+eliza/plugins/plugin-whatsapp/
+
 # Debug PTY captures from plugin-agent-orchestrator (PARALLAX_DEBUG_CAPTURE=1)
 .parallax/
 .worktrees/
 .claude/worktrees/
 
 # Generated raw avatar/animation assets from local setup hooks (non-source)
-apps/app/public/animations/**/*.fbx
-apps/app/public/animations/**/*.glb
-apps/app/public/animations/*.fbx
-apps/app/public/animations/*.glb
-apps/app/public/vrms/**/*.vrm
-apps/app/public/vrms/*.vrm
-apps/app/public/vrms/imported-avatars.json
-apps/app/public/vrms/backgrounds/*.png
-apps/app/public/vrms/previews/*.png
-apps/app/public/vrms/backgrounds/*.jpg
-apps/app/public/vrms/previews/*.jpg
-apps/app/public/vrms/*.jpg
-apps/app/ios/App/build*/
+# Companion plugin owns these assets; ensure-avatars.mjs populates them.
+eliza/apps/app-companion/public/animations/**/*.fbx
+eliza/apps/app-companion/public/animations/**/*.fbx.gz
+eliza/apps/app-companion/public/animations/**/*.glb
+eliza/apps/app-companion/public/animations/**/*.glb.gz
+eliza/apps/app-companion/public/animations/*.fbx
+eliza/apps/app-companion/public/animations/*.fbx.gz
+eliza/apps/app-companion/public/animations/*.glb
+eliza/apps/app-companion/public/animations/*.glb.gz
+eliza/apps/app-companion/public/vrms/**/*.vrm
+eliza/apps/app-companion/public/vrms/**/*.vrm.gz
+eliza/apps/app-companion/public/vrms/*.vrm
+eliza/apps/app-companion/public/vrms/*.vrm.gz
+eliza/apps/app-companion/public/vrms/imported-avatars.json
+eliza/apps/app-companion/public/vrms/backgrounds/*.png
+eliza/apps/app-companion/public/vrms/previews/*.png
+eliza/apps/app-companion/public/vrms/backgrounds/*.jpg
+eliza/apps/app-companion/public/vrms/previews/*.jpg
+eliza/apps/app-companion/public/vrms/*.jpg
+# Capacitor native platform scaffolds — generated by `npx cap add` and
+# `cap sync`. Canonical platform configs live in eliza/packages/app-core/platforms/;
+# run-mobile-build.mjs copies them into these dirs at build time.
+apps/app/ios/
+apps/app/android/
 
 # Ignored caches
 .ruff_cache/
-cache/audio/
-cache/voice/
-cache/audio/
+cache/
+
+# Runtime workspace placeholders (regenerated by agent runtime)
+
+# Docker build artifacts
+.docker-home/
 apps/app/.vite/
 
 # Local tool binaries (e.g. yt-dlp); PATH may prepend this dir in dev
@@ -191,3 +278,51 @@ scripts/bin/yt-dlp_*
 # because it's a developer tool, not product code.
 scripts/codex-sniff.ts
 .tmp-live/
+signal-auth/
+whatsapp-auth/
+test-results/
+# Training pipeline lives entirely outside this repo — both the scripts and
+# the data are mirrored to HuggingFace, NOT to milady's git history. Reasons:
+#   - Datasets + checkpoints (10s of GB to TBs) bloat the repo.
+#   - Trajectory exports may contain user data; gitignoring the whole tree
+#     defends against accidental `git add` of unfiltered records.
+#   - HF Hub is the canonical artifact store: dataset →
+#     elizaos/eliza-toon-v1-sft, models → elizaos/eliza-1-{2b,9b,27b}, the
+#     training pipeline itself → elizaos/eliza-training-pipeline.
+# Sync via training/scripts/push_to_hf.py (dataset),
+# training/scripts/push_model_to_hf.py (models), and
+# training/scripts/push_pipeline_to_hf.py (pipeline source).
+training/
+.milady/
+eliza-beta-prep/
+# Local CI fix scratch checkouts (not part of the project)
+eliza-ci-fix/
+eliza-ci-followup/
+eliza-ci-clean/
+package.json.pre-disable-backup
+
+# ── alice-specific patterns (preserved across upstream merges) ──
+packages/*/src/**/*.d.ts
+!packages/app-core/src/ambient-modules.d.ts
+packages/*/src/**/*.d.ts.map
+# Compiled JS build outputs inside source dirs (packages/ui uses tsx source directly)
+packages/ui/src/**/*.js
+# Foundry build artifacts (keep source .sol, foundry.toml, lib/)
+test/contracts/out/
+test/contracts/cache/
+benchmarks/results/
+apps/app/public/animations/**/*.fbx
+apps/app/public/animations/**/*.glb
+apps/app/public/animations/*.fbx
+apps/app/public/animations/*.glb
+apps/app/public/vrms/**/*.vrm
+apps/app/public/vrms/*.vrm
+apps/app/public/vrms/imported-avatars.json
+apps/app/public/vrms/backgrounds/*.png
+apps/app/public/vrms/previews/*.png
+apps/app/public/vrms/backgrounds/*.jpg
+apps/app/public/vrms/previews/*.jpg
+apps/app/public/vrms/*.jpg
+apps/app/ios/App/build*/
+cache/audio/
+cache/voice/
