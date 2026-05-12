@@ -1357,12 +1357,28 @@ export default defineConfig({
           miladyRoot,
           "eliza/plugins/app-wallet/package.json",
         );
+        // app-lifeops carries dir-style subpath imports (`./platform`,
+        // `./widgets`) that rollup-plugin-commonjs's default resolver
+        // ignores when the package is workspace-symlinked. The patcher
+        // (scripts/apply-alice-eliza-runtime-patches.mjs) adds explicit
+        // `./platform` and `./widgets` exports pointing at the source
+        // tree; registering app-lifeops here makes Vite read those
+        // exports via the workspace alias builder, sidestepping the
+        // commonjs resolver entirely.
+        const appLifeOpsPkgPath = path.resolve(
+          miladyRoot,
+          "eliza/plugins/app-lifeops/package.json",
+        );
 
         const generatedAliases = [
           ...buildWorkspaceExportAliases("@miladyai/app-core", appCorePkgPath),
           ...buildWorkspaceExportAliases("@miladyai/agent", agentPkgPath),
           ...buildWorkspaceExportAliases("@miladyai/shared", sharedPkgPath),
           ...buildWorkspaceExportAliases("@elizaos/app-wallet", appWalletPkgPath),
+          ...buildWorkspaceExportAliases(
+            "@elizaos/app-lifeops",
+            appLifeOpsPkgPath,
+          ),
         ];
 
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");

@@ -52,16 +52,7 @@ import {
   syncDetachedShellLocation,
 } from "@elizaos/app-core";
 import { AppWindowRenderer } from "@elizaos/app-core";
-// Explicit "/platform/index" suffix: rollup-plugin-commonjs's resolver
-// doesn't match the explicit "./platform" subpath export added by
-// scripts/apply-alice-eliza-runtime-patches.mjs (apparently due to a
-// workspace-symlink quirk where the exports field isn't fully honoured),
-// so we route through the wildcard `./*` -> `./dist/*.js` mapping which
-// resolves cleanly to `./dist/platform/index.js`. Upstream
-// milady-ai/milady's main.tsx still uses the no-index form because they
-// ship against published @elizaos/app-lifeops bundles whose exports field
-// vite's standard alias-builder honours correctly.
-import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform/index";
+import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
 import type { ShareTargetPayload } from "@elizaos/app-core/platform";
 import {
   DESKTOP_TRAY_MENU_ITEMS,
@@ -91,8 +82,7 @@ import {
 } from "@elizaos/app-companion";
 import "@elizaos/app-companion/register";
 // Side-effect: register LifeOps sidebar widgets + client methods on ElizaClient.
-// See the note above on platform/index for why "/widgets/index" is needed.
-import "@elizaos/app-lifeops/widgets/index";
+import "@elizaos/app-lifeops/widgets";
 // Side-effect: register coding-agent (task-coordinator) slots so app-core
 // slot wrappers (CodingAgentControlChip, PtyConsoleBase, etc.) render the
 // real components instead of nulls.
