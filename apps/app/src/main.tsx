@@ -1,6 +1,8 @@
 import { App, ErrorBoundary } from "@elizaos/app-core";
-import "@elizaos/app-core/styles/styles.css";
-import "@elizaos/app-core/styles/brand-gold.css";
+// Styles bundled via the @elizaos/ui barrel. The Wave A refactor (eliza
+// commit 5a6f5f337) moved CSS out of @elizaos/app-core/styles/ but
+// didn't update this consumer; the new shape is a single subpath.
+import "@elizaos/ui/styles";
 
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
