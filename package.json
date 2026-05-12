@@ -80,7 +80,6 @@
     "eliza/plugins/plugin-openai",
     "eliza/plugins/plugin-pdf",
     "eliza/plugins/plugin-shell",
-    "eliza/plugins/plugin-signal",
     "eliza/plugins/plugin-sql",
     "eliza/plugins/plugin-streaming",
     "eliza/plugins/plugin-telegram",
