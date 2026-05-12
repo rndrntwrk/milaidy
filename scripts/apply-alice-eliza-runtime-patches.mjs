@@ -1009,6 +1009,120 @@ export function applyAliceUpstreamPackageSourceMainPatch({
   return "applied";
 }
 
+// ── app-lifeops directory-style subpath exports ─────────────────────────
+// Upstream eliza's eliza/plugins/app-lifeops/package.json declares
+// only `"./*": "./dist/*.js"` for subpath exports. The Node subpath-exports
+// wildcard substitutes literally — so an import of
+// `@elizaos/app-lifeops/platform` resolves to `./dist/platform.js`, not
+// to `./dist/platform/index.js`. tsup builds `src/platform/index.ts` to
+// `dist/platform/index.js`, leaving the literal `dist/platform.js` path
+// non-existent. Vite's SPA build fails with:
+//
+//   [vite]: Rollup failed to resolve import "@elizaos/app-lifeops/platform"
+//   from "/src/milaidy/apps/app/src/main.tsx"
+//
+// Upstream milady-ai/milady's main.tsx uses identical imports — they ship
+// against published npm bundles where the exports field has been authored
+// to surface these dir-style subpaths explicitly. In our local-mode build
+// against the eliza submodule, the package metadata is whatever upstream
+// eliza committed, so we patch the local copy to add explicit subpath
+// exports pointing at the source-mode `src/<dir>/index.ts` entries.
+//
+// The subpaths covered here are exactly the ones milaidy's apps/app
+// main.tsx imports today. If a new dir-style subpath import is added to
+// alice or upstream-merged into milaidy, add it to this list.
+const aliceAppLifeOpsDirSubpathPaths = ["platform", "widgets"];
+
+function aliceAppLifeOpsDirSubpathEntry(srcRelative) {
+  return {
+    types: srcRelative,
+    bun: srcRelative,
+    import: srcRelative,
+    default: srcRelative,
+  };
+}
+
+export function isAliceAppLifeOpsDirSubpathExportsPatched(packageJson) {
+  if (!packageJson || typeof packageJson !== "object") return false;
+  const exp = packageJson.exports;
+  if (!exp || typeof exp !== "object" || Array.isArray(exp)) return false;
+  return aliceAppLifeOpsDirSubpathPaths.every(
+    (subpath) => exp[`./${subpath}`] !== undefined,
+  );
+}
+
+export function applyAliceAppLifeOpsDirSubpathExportsPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const packageJsonPath = path.join(
+    elizaRoot,
+    "plugins/app-lifeops/package.json",
+  );
+  if (!existsSync(packageJsonPath)) {
+    log(
+      "[alice-eliza-runtime-patches] app-lifeops package absent; skipping dir-subpath exports patch",
+    );
+    return "skipped";
+  }
+
+  const sourceText = readFileSync(packageJsonPath, "utf8");
+  const packageJson = JSON.parse(sourceText);
+
+  if (isAliceAppLifeOpsDirSubpathExportsPatched(packageJson)) {
+    log(
+      "[alice-eliza-runtime-patches] app-lifeops dir-subpath exports already patched",
+    );
+    return "already-applied";
+  }
+
+  if (
+    !packageJson.exports ||
+    typeof packageJson.exports !== "object" ||
+    Array.isArray(packageJson.exports)
+  ) {
+    packageJson.exports = {};
+  }
+
+  let addedCount = 0;
+  for (const subpath of aliceAppLifeOpsDirSubpathPaths) {
+    const dirIndexPath = path.join(
+      elizaRoot,
+      "plugins/app-lifeops",
+      "src",
+      subpath,
+      "index.ts",
+    );
+    if (!existsSync(dirIndexPath)) {
+      // Upstream may have restructured the directory away (e.g. file moved
+      // up a level). The subpath import in main.tsx will still fail, but
+      // adding a stale export pointing at a missing file would be worse.
+      continue;
+    }
+    const exportTarget = `./src/${subpath}/index.ts`;
+    packageJson.exports[`./${subpath}`] =
+      aliceAppLifeOpsDirSubpathEntry(exportTarget);
+    addedCount += 1;
+  }
+
+  if (addedCount === 0) {
+    log(
+      "[alice-eliza-runtime-patches] app-lifeops no dir-subpath targets present; skipping",
+    );
+    return "skipped";
+  }
+
+  const trailingNewline = sourceText.endsWith("\n") ? "\n" : "";
+  writeFileSync(
+    packageJsonPath,
+    `${JSON.stringify(packageJson, null, 2)}${trailingNewline}`,
+  );
+  log(
+    `[alice-eliza-runtime-patches] added ${addedCount} explicit dir-subpath export(s) on app-lifeops (${aliceAppLifeOpsDirSubpathPaths.join(", ")})`,
+  );
+  return "applied";
+}
+
 const aliceAppPluginRegisterExportRelativePaths = [
   "plugins/app-wallet",
   "plugins/app-contacts",
@@ -2529,6 +2643,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
     applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
+    applyAliceAppLifeOpsDirSubpathExportsPatch({ elizaRoot, log }),
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
     applyAliceAppPluginRegisterExportPatch({ elizaRoot, log }),
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
