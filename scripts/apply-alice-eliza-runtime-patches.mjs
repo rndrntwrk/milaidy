@@ -1084,6 +1084,16 @@ export function applyAliceAppLifeOpsDirSubpathExportsPatch({
     packageJson.exports = {};
   }
 
+  // Build the new explicit subpath entries first, then rebuild the
+  // exports object so they appear BEFORE the `./*` / `./*.css` wildcards.
+  // Node's subpath-exports resolver spec is "longest specific match wins",
+  // but rollup-plugin-commonjs (used by vite) walks the exports object in
+  // declaration order and short-circuits on the first match — which means
+  // `./*` -> `./dist/*.js` claims `./platform` before our `./platform`
+  // entry is ever considered. Inserting the explicit entries above the
+  // wildcards in declaration order gets us the rollup resolver behaviour
+  // we need without breaking Node-spec consumers.
+  const newDirSubpathEntries = {};
   let addedCount = 0;
   for (const subpath of aliceAppLifeOpsDirSubpathPaths) {
     const dirIndexPath = path.join(
@@ -1100,10 +1110,36 @@ export function applyAliceAppLifeOpsDirSubpathExportsPatch({
       continue;
     }
     const exportTarget = `./src/${subpath}/index.ts`;
-    packageJson.exports[`./${subpath}`] =
+    newDirSubpathEntries[`./${subpath}`] =
       aliceAppLifeOpsDirSubpathEntry(exportTarget);
     addedCount += 1;
   }
+
+  // Rebuild exports: keep `.` and `./package.json` first (they're the
+  // canonical anchors), then the new explicit dir subpaths, then any
+  // existing non-wildcard entries (e.g. `./plugin`), then the wildcards
+  // (`./*.css`, `./*`). This order satisfies both the Node spec (which
+  // doesn't care) and the rollup-plugin-commonjs first-match walker
+  // (which does).
+  const isWildcardKey = (key) => typeof key === "string" && key.includes("*");
+  const existingEntries = Object.entries(packageJson.exports);
+  const anchorEntries = existingEntries.filter(
+    ([key]) => key === "." || key === "./package.json",
+  );
+  const otherSpecificEntries = existingEntries.filter(
+    ([key]) =>
+      key !== "." &&
+      key !== "./package.json" &&
+      !isWildcardKey(key) &&
+      !(key in newDirSubpathEntries),
+  );
+  const wildcardEntries = existingEntries.filter(([key]) => isWildcardKey(key));
+  packageJson.exports = Object.fromEntries([
+    ...anchorEntries,
+    ...Object.entries(newDirSubpathEntries),
+    ...otherSpecificEntries,
+    ...wildcardEntries,
+  ]);
 
   if (addedCount === 0) {
     log(
