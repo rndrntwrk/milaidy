@@ -120,6 +120,120 @@ function buildWorkspaceExportAliases(
   return aliases;
 }
 
+// Walk eliza/packages/native-plugins/ and produce Vite aliases for every
+// `@elizaos/capacitor-<name>` package found. Each maps to that package's
+// `src/index.ts` directly, bypassing the package's `main` field (which
+// points at `./dist/plugin.cjs.js`, a file that is NOT built before the
+// SPA vite step). main.tsx imports like `@elizaos/capacitor-agent` and
+// `@elizaos/capacitor-desktop` resolve via these aliases.
+//
+// Adapted from upstream milady-ai/milady's apps/app/vite.config.ts:
+//   - the `Alias` type isn't imported in alice's config (it's just an
+//     anonymous shape), so we keep the same `{ find: RegExp; replacement
+//     : string }` literal used by `buildWorkspaceExportAliases`.
+//   - returns an empty array when the directory doesn't exist (the
+//     submodule may be uninitialised on a fresh clone before
+//     `bun run eliza:local`).
+function resolveNativePluginAliasEntries(): Array<{
+  find: RegExp;
+  replacement: string;
+}> {
+  const nativePluginsRoot = path.join(
+    miladyRoot,
+    "eliza/packages/native-plugins",
+  );
+  if (!fs.existsSync(nativePluginsRoot)) return [];
+
+  return fs
+    .readdirSync(nativePluginsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter(
+      (name) =>
+        fs.existsSync(path.join(nativePluginsRoot, name, "package.json")) &&
+        fs.existsSync(path.join(nativePluginsRoot, name, "src/index.ts")),
+    )
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({
+      find: new RegExp(`^@elizaos/capacitor-${escapeRegExp(name)}$`),
+      replacement: path.join(nativePluginsRoot, `${name}/src/index.ts`),
+    }));
+}
+
+// Walk eliza/plugins/ for every `app-*` subdir that has a `package.json`
+// and run it through `buildWorkspaceExportAliases`. Covers the long list
+// of subpath imports in apps/app/src/main.tsx
+// (`@elizaos/app-companion/ui`, `/register`, `@elizaos/app-2004scape/ui`,
+// `@elizaos/app-babylon/ui`, etc.) without enumerating them by hand.
+//
+// Returns both the alias entries and the set of app names actually found
+// — callers use the name set to build a stub-fallback alias for missing
+// apps that main.tsx imports as side-effects (see `optional-eliza-app-stub`
+// in apps/app/src/).
+function resolveElizaAppAliasEntries(): {
+  aliases: Array<{ find: RegExp; replacement: string }>;
+  realAppNames: string[];
+} {
+  const elizaPluginsRoot = path.join(miladyRoot, "eliza/plugins");
+  if (!fs.existsSync(elizaPluginsRoot)) {
+    return { aliases: [], realAppNames: [] };
+  }
+
+  const aliases: Array<{ find: RegExp; replacement: string }> = [];
+  const realAppNames: string[] = [];
+  for (const entry of fs.readdirSync(elizaPluginsRoot, {
+    withFileTypes: true,
+  })) {
+    if (!entry.isDirectory()) continue;
+    if (!entry.name.startsWith("app-")) continue;
+    const pkgJsonPath = path.join(elizaPluginsRoot, entry.name, "package.json");
+    if (!fs.existsSync(pkgJsonPath)) continue;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as {
+        name?: string;
+      };
+      if (!pkg.name) continue;
+      aliases.push(...buildWorkspaceExportAliases(pkg.name, pkgJsonPath));
+      // Strip `app-` from "app-companion" -> "companion" so the
+      // stub-fallback regex can build a negative lookahead.
+      realAppNames.push(entry.name.replace(/^app-/, ""));
+    } catch {
+      // Malformed package.json — skip silently. Build failure will surface
+      // the missing alias via the standard "Rollup failed to resolve" path,
+      // not here.
+    }
+  }
+  return { aliases, realAppNames };
+}
+
+// Build a fallback alias that maps `@elizaos/app-<name>{,/subpath}` to
+// `apps/app/src/optional-eliza-app-stub.tsx` for any app name NOT in
+// `realAppNames`. main.tsx side-effect imports like
+// `import "@elizaos/app-workflow-builder/register"` reference apps that
+// may not exist in the current eliza checkout (e.g.
+// `app-workflow-builder` is in upstream milady-ai's main.tsx but the
+// package isn't present in our eliza submodule). The stub is a no-op
+// component file that makes side-effect imports succeed.
+//
+// The regex shape mirrors upstream milady's `optionalElizaAppAliasPattern`
+// at apps/app/vite.config.ts:148-153 of milady-ai/milady@develop.
+function resolveOptionalElizaAppStubAlias(
+  realAppNames: string[],
+): { find: RegExp; replacement: string } | null {
+  const stubEntry = path.join(here, "src/optional-eliza-app-stub.tsx");
+  if (!fs.existsSync(stubEntry)) return null;
+  // `core` is the only never-stubbed name (it's @elizaos/app-core, which
+  // is handled by its own explicit alias above). All other present apps
+  // come from realAppNames.
+  const escapedNames = ["core", ...realAppNames]
+    .map((n) => escapeRegExp(n))
+    .join("|");
+  return {
+    find: new RegExp(`^@elizaos\\/app-(?!(${escapedNames})(\\/|$)).+$`),
+    replacement: stubEntry,
+  };
+}
+
 /**
  * Pinned @elizaos/core from the repo root (must match the agent/runtime lock).
  */
@@ -1369,6 +1483,27 @@ export default defineConfig({
           miladyRoot,
           "eliza/plugins/app-lifeops/package.json",
         );
+        // alice's apps/app/src/main.tsx imports many `@elizaos/<pkg>` and
+        // `@elizaos/<pkg>/<subpath>` workspace packages — app-companion,
+        // app-2004scape, app-babylon, app-hyperliquid, etc. plus
+        // @elizaos/shared, @elizaos/ui, @elizaos/app-core. Each needs an
+        // alias so rollup-plugin-commonjs doesn't have to walk the
+        // exports field (which it gets wrong for workspace-symlinked
+        // packages). The two walkers below cover the bulk; explicit
+        // alias entries below cover @elizaos/shared, @elizaos/ui, and
+        // @elizaos/app-core which aren't picked up by the walkers.
+        const elizaSharedPkgPath = path.resolve(
+          miladyRoot,
+          "eliza/packages/shared/package.json",
+        );
+        const elizaUiPkgPath = path.resolve(
+          miladyRoot,
+          "eliza/packages/ui/package.json",
+        );
+        const elizaAppCorePkgPath = path.resolve(
+          miladyRoot,
+          "eliza/packages/app-core/package.json",
+        );
 
         const generatedAliases = [
           ...buildWorkspaceExportAliases("@miladyai/app-core", appCorePkgPath),
@@ -1379,7 +1514,37 @@ export default defineConfig({
             "@elizaos/app-lifeops",
             appLifeOpsPkgPath,
           ),
+          // Register the eliza packages that main.tsx imports by both
+          // their @elizaos name (resolution comes from eliza's own
+          // packages/* exports) and run through the export-aliases
+          // builder so subpaths resolve too.
+          ...(fs.existsSync(elizaSharedPkgPath)
+            ? buildWorkspaceExportAliases("@elizaos/shared", elizaSharedPkgPath)
+            : []),
+          ...(fs.existsSync(elizaUiPkgPath)
+            ? buildWorkspaceExportAliases("@elizaos/ui", elizaUiPkgPath)
+            : []),
+          ...(fs.existsSync(elizaAppCorePkgPath)
+            ? buildWorkspaceExportAliases(
+                "@elizaos/app-core",
+                elizaAppCorePkgPath,
+              )
+            : []),
+          // @elizaos/capacitor-<name> — dynamic walk of
+          // eliza/packages/native-plugins/ for src/index.ts entries.
+          ...resolveNativePluginAliasEntries(),
         ];
+
+        // @elizaos/app-<name>{,/subpath} — dynamic walk of
+        // eliza/plugins/app-* for every app-shaped workspace, plus a
+        // stub-fallback alias for app names that don't exist locally
+        // (e.g. main.tsx imports `@elizaos/app-workflow-builder/register`
+        // but the package isn't in this eliza checkout).
+        const { aliases: elizaAppAliases, realAppNames } =
+          resolveElizaAppAliasEntries();
+        generatedAliases.push(...elizaAppAliases);
+        const optionalAppStub = resolveOptionalElizaAppStubAlias(realAppNames);
+        if (optionalAppStub) generatedAliases.push(optionalAppStub);
 
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");
         const _autonomousSource = path.resolve(
