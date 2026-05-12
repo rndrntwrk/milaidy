@@ -1546,6 +1546,27 @@ export default defineConfig({
         const optionalAppStub = resolveOptionalElizaAppStubAlias(realAppNames);
         if (optionalAppStub) generatedAliases.push(optionalAppStub);
 
+        // Scope-rename alias for @clawville/app-clawville: the package.json
+        // at eliza/plugins/app-clawville/ declares name "@elizaos/app-clawville",
+        // but main.tsx imports it under "@clawville/app-clawville/ui" because
+        // 555stream's deploy-555-bot-staging.sh materialize_pkg step
+        // creates node_modules/@clawville/app-clawville/ at runtime. Vite
+        // runs BEFORE that materialize step, so we register the
+        // @clawville scope directly against the eliza source via
+        // buildWorkspaceExportAliases.
+        const clawvillePkgPath = path.resolve(
+          miladyRoot,
+          "eliza/plugins/app-clawville/package.json",
+        );
+        if (fs.existsSync(clawvillePkgPath)) {
+          generatedAliases.push(
+            ...buildWorkspaceExportAliases(
+              "@clawville/app-clawville",
+              clawvillePkgPath,
+            ),
+          );
+        }
+
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");
         const _autonomousSource = path.resolve(
           miladyRoot,
