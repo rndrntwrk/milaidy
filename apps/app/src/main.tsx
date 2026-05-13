@@ -141,10 +141,14 @@ import {
   resolveIosRuntimeConfig,
 } from "@elizaos/app-core";
 
-// CharacterEditor is statically re-exported by `@elizaos/app-core/browser`,
-// so the previous `lazy()` wrapper here was eagerly merged back into the
-// main chunk by Rollup. Static import keeps the load path honest.
-import { CharacterEditor } from "@elizaos/app-core/components/character/CharacterEditor";
+// CharacterEditor lives in alice's local @miladyai/app-core (the 2009-line
+// version is alice-specific; upstream eliza moved this component to
+// @elizaos/ui as part of the Wave A refactor, but alice keeps its own
+// customized fork). The @miladyai/app-core package's `./components/*`
+// wildcard export resolves this to packages/app-core/src/components/.
+// A static import keeps the load path honest — `lazy()` here was eagerly
+// merged back into the main chunk by Rollup anyway.
+import { CharacterEditor } from "@miladyai/app-core/components/character/CharacterEditor";
 
 declare global {
   interface Window {
