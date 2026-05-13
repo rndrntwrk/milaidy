@@ -1370,6 +1370,17 @@ function nativeModuleStubPlugin(): Plugin {
         AgentEventService: "function(){}",
         AutonomyService: "function(){}",
         createBasicCapabilitiesPlugin: "function(){return{name:'stub'}}",
+        // eliza/packages/core/src/contracts/service-routing.ts exports these
+        // model-id constants. They are re-exported by index.node.ts but NOT
+        // by index.browser.ts (which doesn't re-export service-routing). The
+        // SPA build resolves @elizaos/core through dist/browser/index.browser.js
+        // and Rollup fails the static bind when eliza/plugins/plugin-elizacloud/
+        // src/utils/config.ts imports DEFAULT_ELIZA_CLOUD_TEXT_MODEL from
+        // @elizaos/core. The constants are server-only at runtime (model
+        // selection happens behind isNode()/isProxyMode() guards), so stub
+        // strings satisfy the bind without affecting browser behavior.
+        DEFAULT_ELIZA_CLOUD_TEXT_MODEL: '"openai/gpt-oss-120b:nitro"',
+        DEFAULT_ELIZA_CLOUD_FREE_TEXT_MODEL: '"openai/gpt-oss-120b:free"',
       };
       // Check which are actually missing from the existing export block
       const needed = Object.keys(missingExports).filter((n) => {
