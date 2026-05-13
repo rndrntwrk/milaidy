@@ -800,6 +800,54 @@ export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
   return "applied";
 }
 
+const coreBrowserSpokenTextReexportSentinel =
+  "// [milaidy:core-browser-spoken-text-reexport]";
+const coreBrowserSpokenTextReexport = `${coreBrowserSpokenTextReexportSentinel}
+// eliza/packages/core/src/spoken-text.ts exports sanitizeSpeechText
+// (and ~3 sibling helpers — collapseWhitespace, stripUrls, etc., though
+// only sanitizeSpeechText is exported by name from index.node.ts).
+// The file is 65 lines, has ZERO imports (pure regex/string functions),
+// and is trivially browser-safe. plugin-elizacloud/src/lib/server-cloud-tts.ts
+// statically imports sanitizeSpeechText from @elizaos/core and Rollup
+// fails the bind. index.node.ts re-exports it via a named-export block
+// (line ~252: \`export { sanitizeSpeechText } from "./spoken-text"\`).
+// Wholesale wildcard re-export pulls in any additional public helpers
+// if they get added upstream.
+export * from "./spoken-text";
+`;
+
+export function isAliceCoreBrowserSpokenTextReexportPatched(source) {
+  return source.includes(coreBrowserSpokenTextReexportSentinel);
+}
+
+export function applyAliceCoreBrowserSpokenTextReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser spoken-text reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserSpokenTextReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser spoken-text reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserSpokenTextReexport}`
+    : `${source}\n\n${coreBrowserSpokenTextReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export spoken-text (sanitizeSpeechText)",
+  );
+  return "applied";
+}
+
 const coreBrowserCloudTopologyReexportSentinel =
   "// [milaidy:core-browser-cloud-topology-reexport]";
 const coreBrowserCloudTopologyReexport = `${coreBrowserCloudTopologyReexportSentinel}
@@ -2940,6 +2988,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserOnboardingReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSettingsDebugReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserCloudTopologyReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserSpokenTextReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
