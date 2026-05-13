@@ -800,6 +800,68 @@ export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
   return "applied";
 }
 
+const coreBrowserStateDirStubsSentinel =
+  "// [milaidy:core-browser-state-dir-stubs]";
+const coreBrowserStateDirStubs = `${coreBrowserStateDirStubsSentinel}
+// eliza/packages/core/src/utils/state-dir.ts exports resolveStateDir,
+// resolveUserPath, getElizaNamespace, resolveOAuthDir, migrateStateDir.
+// The module itself imports node:fs/promises, node:os, node:path so it
+// CANNOT be re-exported wholesale into the browser entry (would pull
+// node built-ins into the SPA bundle). index.browser.ts already provides
+// an inline stub for resolveStateDir (returns "/.eliza"). The remaining
+// four names are imported by plugin-elizacloud SPA-bundled files —
+// notably plugin-elizacloud/src/lib/state-paths.ts statically imports
+// resolveUserPath and getElizaNamespace from @elizaos/core — and Rollup
+// fails the bind without them. Provide signature-compatible no-op
+// stubs that return safe defaults. None of these are reached at runtime
+// in the browser (plugin-elizacloud's state-paths is gated behind
+// isNode() at call sites).
+export function resolveUserPath(input: string): string {
+\treturn typeof input === "string" ? input.trim() : "";
+}
+export function getElizaNamespace(): string {
+\treturn "eliza";
+}
+export function resolveOAuthDir(): string {
+\treturn "/.eliza/credentials";
+}
+export async function migrateStateDir(): Promise<{ migrated: boolean }> {
+\treturn { migrated: false };
+}
+`;
+
+export function isAliceCoreBrowserStateDirStubsPatched(source) {
+  return source.includes(coreBrowserStateDirStubsSentinel);
+}
+
+export function applyAliceCoreBrowserStateDirStubsPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser state-dir stubs patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserStateDirStubsPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser state-dir stubs already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserStateDirStubs}`
+    : `${source}\n\n${coreBrowserStateDirStubs}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts with state-dir no-op stubs (resolveUserPath, getElizaNamespace, resolveOAuthDir, migrateStateDir)",
+  );
+  return "applied";
+}
+
 export function applyAliceTelegramSourcePackageJsonExportPatch({
   elizaRoot,
   log = console.log,
@@ -2724,6 +2786,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
     applyAliceCoreBasicCapabilitiesBrowserSafePatch({ elizaRoot, log }),
     applyAliceCoreBrowserRuntimeEnvReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserStateDirStubsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
