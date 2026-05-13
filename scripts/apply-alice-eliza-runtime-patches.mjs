@@ -800,6 +800,60 @@ export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
   return "applied";
 }
 
+const appCoreUiCompatReexportRelativePath = "packages/app-core/src/index.ts";
+const appCoreUiCompatReexportSentinel =
+  "// [milaidy:app-core-ui-compat-reexport]";
+const appCoreUiCompatReexport = `${appCoreUiCompatReexportSentinel}
+// eliza/packages/app-core/src/ui-compat.ts is a thin compatibility module
+// that re-exports UI helpers from @elizaos/ui under the @elizaos/app-core
+// surface — useApp, SurfaceCard, SurfaceBadge, GameOperatorShell,
+// selectLatestRunForApp, toneForHealthState, etc. plus the matching type
+// surface (BabylonChatMessage, AppOperatorSurfaceProps, etc.).
+//
+// Upstream's app-core/src/index.ts does NOT re-export ui-compat — it only
+// exports server-side runtime + api modules. But downstream plugins (like
+// eliza/plugins/app-babylon/src/ui/BabylonOperatorSurface.tsx) statically
+// import \`useApp\` and other ui-compat names from "@elizaos/app-core"
+// expecting them to be available, and Rollup fails the bind in the SPA build.
+//
+// Adding the re-export here surfaces every name in ui-compat without
+// modifying upstream — ui-compat itself just re-exports from @elizaos/ui
+// which is fully browser-safe (it's the UI package).
+export * from "./ui-compat";
+`;
+
+export function isAliceAppCoreUiCompatReexportPatched(source) {
+  return source.includes(appCoreUiCompatReexportSentinel);
+}
+
+export function applyAliceAppCoreUiCompatReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, appCoreUiCompatReexportRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza app-core source absent; skipping app-core ui-compat reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceAppCoreUiCompatReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core ui-compat reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${appCoreUiCompatReexport}`
+    : `${source}\n\n${appCoreUiCompatReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched eliza app-core/src/index.ts to re-export ui-compat (useApp, SurfaceCard, GameOperatorShell, selectLatestRunForApp + ~30 sibling UI helper names)",
+  );
+  return "applied";
+}
+
 const coreBrowserSpokenTextReexportSentinel =
   "// [milaidy:core-browser-spoken-text-reexport]";
 const coreBrowserSpokenTextReexport = `${coreBrowserSpokenTextReexportSentinel}
@@ -2989,6 +3043,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserSettingsDebugReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserCloudTopologyReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSpokenTextReexportPatch({ elizaRoot, log }),
+    applyAliceAppCoreUiCompatReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
