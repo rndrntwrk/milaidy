@@ -1756,10 +1756,34 @@ export default defineConfig({
           // server.ts) that imports native modules (node-llama-cpp, node:module).
           // Nothing in the browser needs the barrel — only subpath imports like
           // @miladyai/agent/contracts/onboarding are used.  Map the bare import
-          // to an empty module so Vite never traverses the server-side tree.
+          // to upstream eliza's comprehensive browser stub (which exports
+          // ACCOUNT_CREDENTIAL_PROVIDER_IDS, getAccessToken, listProviderAccounts,
+          // and ~140 other server-only names as no-ops).  Upstream provides this
+          // stub specifically for browser builds — using the local
+          // `src/stubs/empty-node-module.ts` instead causes Rollup to fail with
+          // `"ACCOUNT_CREDENTIAL_PROVIDER_IDS" is not exported by ...stubs/empty-node-module.ts`
+          // when files like eliza/packages/app-core/src/services/account-pool.ts
+          // (pulled in via the @elizaos/app-core barrel from main.tsx) try to
+          // statically import from @elizaos/agent.  The browser never executes
+          // any of these — eliza/packages/app-core's services/account-pool.ts is
+          // gated behind `isMobilePlatform()` / `isNode()` checks at runtime.
+          //
+          // Guard with `fs.existsSync` and fall back to the local stub if the
+          // eliza submodule isn't checked out (package-mode, fresh CI without
+          // submodules, etc.).  Mirrors the pattern used by the
+          // elizaSharedPkgPath / elizaUiPkgPath / elizaAppCorePkgPath blocks
+          // above and the eliza alias entries from #156/#157/#162.
           {
             find: /^@elizaos\/agent$/,
-            replacement: path.resolve(here, "src/stubs/empty-node-module.ts"),
+            replacement: (() => {
+              const elizaAgentStubPath = path.resolve(
+                miladyRoot,
+                "eliza/packages/app-core/src/platform/elizaos-agent-browser-stub.ts",
+              );
+              return fs.existsSync(elizaAgentStubPath)
+                ? elizaAgentStubPath
+                : path.resolve(here, "src/stubs/empty-node-module.ts");
+            })(),
           },
           // @elizaos/core — force ALL copies (including nested ones in plugins
           // like plugin-secrets-manager that ship their own older core) to the
