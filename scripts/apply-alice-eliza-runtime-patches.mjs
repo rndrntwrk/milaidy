@@ -800,6 +800,55 @@ export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
   return "applied";
 }
 
+const coreBrowserCloudTopologyReexportSentinel =
+  "// [milaidy:core-browser-cloud-topology-reexport]";
+const coreBrowserCloudTopologyReexport = `${coreBrowserCloudTopologyReexportSentinel}
+// eliza/packages/core/src/contracts/cloud-topology.ts exports the
+// ElizaCloud config-introspection helpers used by plugin-elizacloud:
+//   isElizaCloudLinkedInConfig, resolveElizaCloudTopology,
+//   isElizaCloudServiceSelectedInConfig, shouldLoadElizaCloudPluginInConfig.
+// Upstream's index.node.ts has \`export { isElizaCloudServiceSelectedInConfig
+// } from "./contracts/cloud-topology"\` (line ~45) and the file itself is
+// fully browser-safe: imports only "./onboarding.js" (sibling, now
+// browser-safe via PR #173) and pure type/function definitions. No
+// node:* / fs / path / os / crypto imports anywhere. Plugin-elizacloud's
+// cloud-status-routes.ts statically imports
+// isElizaCloudServiceSelectedInConfig and Rollup fails the bind.
+export * from "./contracts/cloud-topology";
+`;
+
+export function isAliceCoreBrowserCloudTopologyReexportPatched(source) {
+  return source.includes(coreBrowserCloudTopologyReexportSentinel);
+}
+
+export function applyAliceCoreBrowserCloudTopologyReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser cloud-topology reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserCloudTopologyReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser cloud-topology reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserCloudTopologyReexport}`
+    : `${source}\n\n${coreBrowserCloudTopologyReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export contracts/cloud-topology (isElizaCloudServiceSelectedInConfig + 3 sibling browser-safe helpers)",
+  );
+  return "applied";
+}
+
 const coreBrowserSettingsDebugReexportSentinel =
   "// [milaidy:core-browser-settings-debug-reexport]";
 const coreBrowserSettingsDebugReexport = `${coreBrowserSettingsDebugReexportSentinel}
@@ -2890,6 +2939,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserStateDirStubsPatch({ elizaRoot, log }),
     applyAliceCoreBrowserOnboardingReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSettingsDebugReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserCloudTopologyReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
