@@ -254,7 +254,7 @@ index 71f9f391a2..75580e284d 100644
 +        // never used.
 +        try {
 +          const { disposeN8nSidecar } = await import(
-+            "../services/n8n-sidecar.js"
++            /* @vite-ignore */ "../services/n8n-sidecar.js"
 +          );
 +          await disposeN8nSidecar();
 +        } catch {
