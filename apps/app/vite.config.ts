@@ -1210,7 +1210,18 @@ function nativeModuleStubPlugin(): Plugin {
     load(id) {
       if (!id.startsWith(VIRTUAL_PREFIX)) return null;
 
-      const modName = id.slice(VIRTUAL_PREFIX.length).split("/")[0];
+      // Scope-aware module-name extraction. For "@scope/name" (with or
+      // without further subpaths) we keep "@scope/name". For unscoped
+      // packages we keep the first segment. Without this the modName for
+      // a scoped package like "@node-rs/argon2" became just "@node-rs",
+      // silently bypassing the specialized stub branch below (PR #178
+      // bug — added the @node-rs/argon2 branch but it never fired
+      // because of this split). Affects every scoped native package
+      // routed through this stub plugin.
+      const stripped = id.slice(VIRTUAL_PREFIX.length);
+      const modName = stripped.startsWith("@")
+        ? stripped.split("/").slice(0, 2).join("/")
+        : stripped.split("/")[0];
       // node-llama-cpp is the most import-heavy native module — its consumers
       // use many named exports (LlamaLogLevel, getLlama, etc.).  Return a
       // module whose default export is a Proxy that returns no-op stubs for
