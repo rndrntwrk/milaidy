@@ -39,6 +39,7 @@ export * from "./nft-verify.js";
 export * from "./og-tracker.js";
 export * from "./parse-action-block.js";
 export * from "./permissions-routes.js";
+export * from "./plugin-discovery-helpers.js";
 export * from "./plugin-validation.js";
 export * from "./provider-switch-config.js";
 export * from "./registry-routes.js";
