@@ -1122,6 +1122,17 @@ function nativeModuleStubPlugin(): Plugin {
     "electron",
     "undici",
     "@elizaos/plugin-local-embedding",
+    // Edge-TTS is a Node-only voice plugin. Its package.json declares
+    // `./dist/browser/index.browser.js` under the `browser` export
+    // condition, but that file is never built (only `dist/node/` ships,
+    // and even that isn't prebuilt for staging — plugin-edge-tts isn't
+    // in the Dockerfile build_pkg list). alice's
+    // `packages/app-core/src/runtime/eliza.ts` imports it eagerly for
+    // the server runtime. In the SPA build the runtime/eliza module is
+    // unreachable, but vite still resolves the bare specifier while
+    // walking the module graph. Stubbing here matches the existing
+    // pattern for @elizaos/plugin-local-embedding.
+    "@elizaos/plugin-edge-tts",
     // mammoth (statically imported from @elizaos/core/src/features/knowledge/
     // utils.ts) calls fs.readFile.bind(fs) inside its DocumentXmlReader factory
     // at module init. In a browser where fs is stubbed empty that lookup throws
