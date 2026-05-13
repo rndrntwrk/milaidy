@@ -1337,6 +1337,29 @@ function nativeModuleStubPlugin(): Plugin {
         return generateNodeBuiltinStub(id.slice(VIRTUAL_PREFIX.length));
       }
 
+      // @node-rs/argon2 — Rust-native password KDF. PR #167 added it to
+      // nativePackages so the SPA build doesn't try to resolve the wasm32
+      // peer. alice's eliza/packages/app-core/src/api/auth/passwords.ts
+      // does `import { hash, verify } from "@node-rs/argon2"` — those are
+      // named imports that the generic `export default {}` stub doesn't
+      // satisfy, so Rollup fails the bind. The SPA never executes server
+      // auth (passwords.ts is reachable from the app-core barrel but gated
+      // behind isNode()/isProxyMode() at runtime), so the stubs are pure
+      // bind-satisfiers — return rejected Promises so any accidental call
+      // surfaces loudly instead of pretending an auth succeeded.
+      if (modName === "@node-rs/argon2") {
+        return [
+          "async function hash() { throw new Error('@node-rs/argon2 hash invoked in browser bundle'); }",
+          "async function verify() { throw new Error('@node-rs/argon2 verify invoked in browser bundle'); }",
+          "function hashSync() { throw new Error('@node-rs/argon2 hashSync invoked in browser bundle'); }",
+          "function verifySync() { throw new Error('@node-rs/argon2 verifySync invoked in browser bundle'); }",
+          "var Algorithm = Object.freeze({ Argon2d: 0, Argon2i: 1, Argon2id: 2 });",
+          "var Version = Object.freeze({ V0x10: 16, V0x13: 19 });",
+          "export { hash, verify, hashSync, verifySync, Algorithm, Version };",
+          "export default { hash, verify, hashSync, verifySync, Algorithm, Version };",
+        ].join("\n");
+      }
+
       // Generic fallback for other native modules
       return "export default {};\n";
     },
