@@ -1133,6 +1133,15 @@ function nativeModuleStubPlugin(): Plugin {
     // walking the module graph. Stubbing here matches the existing
     // pattern for @elizaos/plugin-local-embedding.
     "@elizaos/plugin-edge-tts",
+    // @node-rs/argon2 is a Node-native password-hashing module, declared as a
+    // direct dep of @elizaos/app-core (used for credential hashing on the
+    // server). Its package.json exposes a `browser` export condition pointing
+    // at `browser.js`, which dynamically imports the optional WASM peer
+    // `@node-rs/argon2-wasm32-wasi`. That peer is not installed in alice's
+    // workspace (it's an optional dep), so the browser resolution fails.
+    // The SPA never executes credential hashing (all auth flows live on the
+    // server), so stubbing here is safe.
+    "@node-rs/argon2",
     // mammoth (statically imported from @elizaos/core/src/features/knowledge/
     // utils.ts) calls fs.readFile.bind(fs) inside its DocumentXmlReader factory
     // at module init. In a browser where fs is stubbed empty that lookup throws
