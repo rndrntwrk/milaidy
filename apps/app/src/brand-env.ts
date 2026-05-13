@@ -33,3 +33,21 @@ export const MILADY_ENV_ALIASES = [
   ["MILADY_GATEWAY_PORT", "ELIZA_GATEWAY_PORT"],
   ["MILADY_BRIDGE_PORT", "ELIZA_BRIDGE_PORT"],
 ] as const;
+
+/**
+ * Upstream-compatible aliases for the generic boot config surface.
+ *
+ * After PR #150 brought the upstream baseline of main.tsx into alice,
+ * main.tsx imports `APP_ENV_PREFIX` and `APP_ENV_ALIASES` from this
+ * module — but the file still only exported the legacy `MILADY_ENV_ALIASES`
+ * name, so Rollup failed the static bind in the SPA build (deploy #38).
+ *
+ * Re-export the same shape under the upstream-canonical names. The prefix
+ * is the bare brand token; main.tsx uses it as a template literal for
+ * injection variable names (`__${APP_ENV_PREFIX}_API_BASE__`).
+ *
+ * Kept additive (rather than replacing `MILADY_ENV_ALIASES`) so the
+ * existing `brand-env.test.ts` still asserts against the legacy name.
+ */
+export const APP_ENV_PREFIX = "MILADY";
+export const APP_ENV_ALIASES = MILADY_ENV_ALIASES;
