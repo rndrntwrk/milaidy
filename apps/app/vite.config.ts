@@ -160,11 +160,114 @@ function resolveNativePluginAliasEntries(): Array<{
     }));
 }
 
+// Probe for a TS/TSX source file matching <dir>/<basename>.{ts,tsx,js,jsx}.
+function probeSourceFile(dir: string, basename: string): string | null {
+  for (const ext of ["ts", "tsx", "js", "jsx"]) {
+    const p = path.join(dir, `${basename}.${ext}`);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+// Build vite aliases for an unbuilt eliza app-* workspace package by walking
+// its `src/` tree directly. Most `eliza/plugins/app-*` packages are NOT in
+// the Dockerfile prebuild list, so their `dist/` directory never exists at
+// vite-build time — exports-field aliases would point at non-existent
+// `dist/<subpath>.js` files and rollup would fail with `ENOENT`. Pointing
+// at src means vite/rollup-plugin-commonjs can read the TS source directly.
+//
+// For each app-* package: emit aliases for the bare import (`@elizaos/app-X`
+// → `src/index.{ts,tsx}`) plus every subdirectory with an `index.{ts,tsx}`
+// (→ that index) and every top-level non-index file (→ that file). Recurses
+// to a max depth of 3 so deep imports like
+// `@elizaos/app-lifeops/components/LifeOpsActivitySignalsEffect` resolve
+// correctly.
+function buildElizaAppSourceAliases(
+  pkgName: string,
+  packageDir: string,
+): Array<{ find: RegExp; replacement: string }> {
+  const srcDir = path.join(packageDir, "src");
+  if (!fs.existsSync(srcDir)) return [];
+  const aliases: Array<{ find: RegExp; replacement: string }> = [];
+
+  const rootIndex = probeSourceFile(srcDir, "index");
+  if (rootIndex) {
+    aliases.push({
+      find: new RegExp(`^${escapeRegExp(pkgName)}$`),
+      replacement: rootIndex,
+    });
+  }
+
+  function walk(currentDir: string, relativeKey: string, depth: number): void {
+    if (depth > 3) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
+      if (entry.name === "node_modules" || entry.name === "dist") continue;
+      const entryPath = path.join(currentDir, entry.name);
+      const newKey = relativeKey
+        ? `${relativeKey}/${entry.name}`
+        : entry.name;
+      if (entry.isDirectory()) {
+        const indexFile = probeSourceFile(entryPath, "index");
+        if (indexFile) {
+          aliases.push({
+            find: new RegExp(
+              `^${escapeRegExp(pkgName)}/${escapeRegExp(newKey)}$`,
+            ),
+            replacement: indexFile,
+          });
+        }
+        walk(entryPath, newKey, depth + 1);
+      } else if (entry.isFile()) {
+        const m = entry.name.match(/^(.+)\.(tsx?|jsx?)$/);
+        if (!m || m[1] === "index") continue;
+        if (entry.name.endsWith(".d.ts")) continue;
+        // Skip co-located test fixtures. Without this, files like
+        // `src/lifeops/scheduled-task/scheduler.test.ts` produce aliases
+        // (`^@elizaos/app-X/.../scheduler.test$`) that can pull vitest +
+        // its dependencies into the SPA bundle if anything inadvertently
+        // imports the path.
+        if (entry.name.includes(".test.") || entry.name.includes(".spec."))
+          continue;
+        const basename = m[1];
+        const fileKey = relativeKey ? `${relativeKey}/${basename}` : basename;
+        aliases.push({
+          find: new RegExp(
+            `^${escapeRegExp(pkgName)}/${escapeRegExp(fileKey)}$`,
+          ),
+          replacement: entryPath,
+        });
+        aliases.push({
+          find: new RegExp(
+            `^${escapeRegExp(pkgName)}/${escapeRegExp(fileKey)}\\.js$`,
+          ),
+          replacement: entryPath,
+        });
+      }
+    }
+  }
+  walk(srcDir, "", 0);
+
+  return aliases;
+}
+
 // Walk eliza/plugins/ for every `app-*` subdir that has a `package.json`
-// and run it through `buildWorkspaceExportAliases`. Covers the long list
-// of subpath imports in apps/app/src/main.tsx
+// and emit src-rooted aliases via `buildElizaAppSourceAliases`. Covers the
+// long list of subpath imports in apps/app/src/main.tsx
 // (`@elizaos/app-companion/ui`, `/register`, `@elizaos/app-2004scape/ui`,
 // `@elizaos/app-babylon/ui`, etc.) without enumerating them by hand.
+//
+// Note: this uses the package's `src/` tree, NOT its `exports` field. The
+// exports field would point at `dist/` which is only built for the small
+// subset of apps in the Dockerfile prebuild list (lifeops, wallet, phone,
+// wifi, contacts). All other app-* packages have no dist at vite-build
+// time. Reading src directly is what upstream milady-ai/milady does.
 //
 // Returns both the alias entries and the set of app names actually found
 // — callers use the name set to build a stub-fallback alias for missing
@@ -186,14 +289,15 @@ function resolveElizaAppAliasEntries(): {
   })) {
     if (!entry.isDirectory()) continue;
     if (!entry.name.startsWith("app-")) continue;
-    const pkgJsonPath = path.join(elizaPluginsRoot, entry.name, "package.json");
+    const packageDir = path.join(elizaPluginsRoot, entry.name);
+    const pkgJsonPath = path.join(packageDir, "package.json");
     if (!fs.existsSync(pkgJsonPath)) continue;
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as {
         name?: string;
       };
       if (!pkg.name) continue;
-      aliases.push(...buildWorkspaceExportAliases(pkg.name, pkgJsonPath));
+      aliases.push(...buildElizaAppSourceAliases(pkg.name, packageDir));
       // Strip `app-` from "app-companion" -> "companion" so the
       // stub-fallback regex can build a negative lookahead.
       realAppNames.push(entry.name.replace(/^app-/, ""));
@@ -1524,22 +1628,6 @@ export default defineConfig({
           miladyRoot,
           "packages/shared/package.json",
         );
-        const appWalletPkgPath = path.resolve(
-          miladyRoot,
-          "eliza/plugins/app-wallet/package.json",
-        );
-        // app-lifeops carries dir-style subpath imports (`./platform`,
-        // `./widgets`) that rollup-plugin-commonjs's default resolver
-        // ignores when the package is workspace-symlinked. The patcher
-        // (scripts/apply-alice-eliza-runtime-patches.mjs) adds explicit
-        // `./platform` and `./widgets` exports pointing at the source
-        // tree; registering app-lifeops here makes Vite read those
-        // exports via the workspace alias builder, sidestepping the
-        // commonjs resolver entirely.
-        const appLifeOpsPkgPath = path.resolve(
-          miladyRoot,
-          "eliza/plugins/app-lifeops/package.json",
-        );
         // alice's apps/app/src/main.tsx imports many `@elizaos/<pkg>` and
         // `@elizaos/<pkg>/<subpath>` workspace packages — app-companion,
         // app-2004scape, app-babylon, app-hyperliquid, etc. plus
@@ -1566,11 +1654,15 @@ export default defineConfig({
           ...buildWorkspaceExportAliases("@miladyai/app-core", appCorePkgPath),
           ...buildWorkspaceExportAliases("@miladyai/agent", agentPkgPath),
           ...buildWorkspaceExportAliases("@miladyai/shared", sharedPkgPath),
-          ...buildWorkspaceExportAliases("@elizaos/app-wallet", appWalletPkgPath),
-          ...buildWorkspaceExportAliases(
-            "@elizaos/app-lifeops",
-            appLifeOpsPkgPath,
-          ),
+          // NOTE: @elizaos/app-wallet and @elizaos/app-lifeops are NOT
+          // registered here via the exports-field builder anymore. They are
+          // both `eliza/plugins/app-*` workspace packages, so they get
+          // src-rooted aliases from `resolveElizaAppAliasEntries()` below.
+          // The exports-field path would point at `dist/` which is built
+          // shallowly (no `dist/components/<X>.js` for deep imports like
+          // `@elizaos/app-lifeops/components/LifeOpsActivitySignalsEffect`)
+          // and rollup would fail with `ENOENT`.
+          //
           // Register the eliza packages that main.tsx imports by both
           // their @elizaos name (resolution comes from eliza's own
           // packages/* exports) and run through the export-aliases
@@ -1617,9 +1709,9 @@ export default defineConfig({
         );
         if (fs.existsSync(clawvillePkgPath)) {
           generatedAliases.push(
-            ...buildWorkspaceExportAliases(
+            ...buildElizaAppSourceAliases(
               "@clawville/app-clawville",
-              clawvillePkgPath,
+              path.dirname(clawvillePkgPath),
             ),
           );
         }
