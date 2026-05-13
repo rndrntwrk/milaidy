@@ -1630,6 +1630,41 @@ export default defineConfig({
           "packages/plugin-selfcontrol/src/index.ts",
         ),
       },
+      // Bare `@elizaos/plugin-sql` import resolves to the npm-installed
+      // package's `dist/browser/index.browser.js`, which omits the Drizzle
+      // schema tables (authIdentityTable, authSessionTable, agentTable, etc.)
+      // because the browser-conditional dist intentionally strips the
+      // server-only DB-adapter surface. But alice's
+      // `eliza/packages/app-core/src/services/auth-store.ts` does
+      // `import { authIdentityTable, ... } from "@elizaos/plugin-sql"` for
+      // the Drizzle TABLE DEFINITIONS (used in queries at runtime — they are
+      // pure pgTable() calls, no server-only deps). Rollup fails the static
+      // bind in the SPA build.
+      //
+      // The source `eliza/plugins/plugin-sql/src/index.ts` imports
+      // `node:fs` and is NOT browser-safe, but the schema sub-tree
+      // (`src/schema/index.ts` plus its sibling `./authIdentity.ts`,
+      // `./authSession.ts`, etc.) is pure drizzle-orm `pgTable` definitions
+      // with zero node imports. Aliasing the bare specifier to
+      // `src/schema/index.ts` exposes every table the SPA imports while
+      // skipping the node-only adapter/manager files.
+      //
+      // Guarded with fs.existsSync so a fresh CI build without the eliza
+      // submodule initialized falls back to the npm package (matches the
+      // pattern used for the @elizaos/agent alias from #169 and other
+      // workspace alias entries above).
+      {
+        find: /^@elizaos\/plugin-sql$/,
+        replacement: (() => {
+          const pluginSqlSchemaSrc = path.resolve(
+            miladyRoot,
+            "eliza/plugins/plugin-sql/src/schema/index.ts",
+          );
+          return fs.existsSync(pluginSqlSchemaSrc)
+            ? pluginSqlSchemaSrc
+            : path.resolve(here, "src/stubs/empty-node-module.ts");
+        })(),
+      },
       // Keep plugin-sql subpath imports on the repo-local source layout. Some
       // installed package copies can be stale enough to miss these exports.
       {
