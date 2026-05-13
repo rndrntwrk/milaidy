@@ -1767,12 +1767,23 @@ export default defineConfig({
           // statically import from @elizaos/agent.  The browser never executes
           // any of these — eliza/packages/app-core's services/account-pool.ts is
           // gated behind `isMobilePlatform()` / `isNode()` checks at runtime.
+          //
+          // Guard with `fs.existsSync` and fall back to the local stub if the
+          // eliza submodule isn't checked out (package-mode, fresh CI without
+          // submodules, etc.).  Mirrors the pattern used by the
+          // elizaSharedPkgPath / elizaUiPkgPath / elizaAppCorePkgPath blocks
+          // above and the eliza alias entries from #156/#157/#162.
           {
             find: /^@elizaos\/agent$/,
-            replacement: path.resolve(
-              miladyRoot,
-              "eliza/packages/app-core/src/platform/elizaos-agent-browser-stub.ts",
-            ),
+            replacement: (() => {
+              const elizaAgentStubPath = path.resolve(
+                miladyRoot,
+                "eliza/packages/app-core/src/platform/elizaos-agent-browser-stub.ts",
+              );
+              return fs.existsSync(elizaAgentStubPath)
+                ? elizaAgentStubPath
+                : path.resolve(here, "src/stubs/empty-node-module.ts");
+            })(),
           },
           // @elizaos/core — force ALL copies (including nested ones in plugins
           // like plugin-secrets-manager that ship their own older core) to the
