@@ -1320,6 +1320,62 @@ function watchWorkspacePackagesPlugin(): Plugin {
   };
 }
 
+// Diagnostic plugin: surface the real build failure in CI/deploy logs.
+//
+// The CI deploy host was rendering `error during build: undefined` for every
+// failed alice deploy because Vite's CLI error catcher does
+// `err.stack || err.message || err` — when something throws a non-Error
+// value (or an object whose stack/message strip to nothing through stdout
+// buffering) the message collapses to "undefined" and the underlying cause
+// is invisible.
+//
+// `buildEnd(error)` fires after the input phase regardless of success, with
+// the rollup error passed in when the build failed. Stringifying the error
+// here (including stack/name/code/loc/plugin/cause) before propagating
+// guarantees the deploy log shows the actual cause even when Vite's catcher
+// fails to format it.
+function diagnoseBuildErrorPlugin(): Plugin {
+  return {
+    name: "diagnose-build-error",
+    enforce: "post",
+    buildEnd(error) {
+      if (!error) return;
+      try {
+        process.stderr.write(
+          `[vite-build-error] type=${typeof error} ctor=${(error as { constructor?: { name?: string } }).constructor?.name ?? "n/a"}\n`,
+        );
+        const fields = [
+          "name",
+          "code",
+          "message",
+          "plugin",
+          "id",
+          "loc",
+          "frame",
+          "cause",
+          "stack",
+        ] as const;
+        const dump: Record<string, unknown> = {};
+        for (const key of fields) {
+          const value = (error as Record<string, unknown>)[key];
+          if (value !== undefined) dump[key] = value;
+        }
+        process.stderr.write(
+          `[vite-build-error] dump=${JSON.stringify(dump, null, 2)}\n`,
+        );
+        const stack = (error as { stack?: string }).stack;
+        if (typeof stack === "string") {
+          process.stderr.write(`[vite-build-error] stack:\n${stack}\n`);
+        }
+      } catch (writeErr) {
+        process.stderr.write(
+          `[vite-build-error] failed to serialise build error: ${String(writeErr)}\n`,
+        );
+      }
+    },
+  };
+}
+
 export default defineConfig({
   root: here,
   base: "./",
@@ -1347,6 +1403,7 @@ export default defineConfig({
     ),
   },
   plugins: [
+    diagnoseBuildErrorPlugin(),
     nativeModuleStubPlugin(),
     asyncLocalStoragePatchPlugin(),
     watchWorkspacePackagesPlugin(),
