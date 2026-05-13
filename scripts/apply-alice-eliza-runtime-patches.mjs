@@ -800,6 +800,59 @@ export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
   return "applied";
 }
 
+const coreBrowserOnboardingReexportSentinel =
+  "// [milaidy:core-browser-onboarding-reexport]";
+const coreBrowserOnboardingReexport = `${coreBrowserOnboardingReexportSentinel}
+// eliza/packages/core/src/contracts/onboarding.ts defines ~50 names —
+// migrateLegacyRuntimeConfig, isCloudInferenceSelectedInConfig,
+// isSubscriptionProviderSelectionId, normalizeOnboardingProviderId,
+// the full ONBOARDING_PROVIDER_CATALOG and SUBSCRIPTION_PROVIDER_SELECTIONS
+// constants, ProviderOption / CloudProviderOption / ModelOption / etc.
+// types. Upstream's index.node.ts re-exports them via "./contracts/onboarding".
+// index.browser.ts omits it even though onboarding.ts is fully browser-safe
+// (imports only "../env-utils.js" + sibling "./service-routing.js" types/
+// normalizers, all pure JS — no node:* / fs / path / os / process anywhere).
+// plugin-elizacloud/src/routes/cloud-routes-autonomous.ts statically imports
+// migrateLegacyRuntimeConfig from @elizaos/core, and Rollup fails the bind.
+// Re-exporting wholesale surfaces the entire onboarding contract family
+// (the canonical implementations — also lets the existing missingExports
+// vite-stub for OnboardingStateMachine / isOnboardingComplete fall through
+// to the real implementations if onboarding.ts exports them).
+export * from "./contracts/onboarding";
+`;
+
+export function isAliceCoreBrowserOnboardingReexportPatched(source) {
+  return source.includes(coreBrowserOnboardingReexportSentinel);
+}
+
+export function applyAliceCoreBrowserOnboardingReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser onboarding reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserOnboardingReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser onboarding reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserOnboardingReexport}`
+    : `${source}\n\n${coreBrowserOnboardingReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export contracts/onboarding (migrateLegacyRuntimeConfig + ~49 sibling browser-safe names)",
+  );
+  return "applied";
+}
+
 const coreBrowserStateDirStubsSentinel =
   "// [milaidy:core-browser-state-dir-stubs]";
 const coreBrowserStateDirStubs = `${coreBrowserStateDirStubsSentinel}
@@ -2787,6 +2840,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBasicCapabilitiesBrowserSafePatch({ elizaRoot, log }),
     applyAliceCoreBrowserRuntimeEnvReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserStateDirStubsPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserOnboardingReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
