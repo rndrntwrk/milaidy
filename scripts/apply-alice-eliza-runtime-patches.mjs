@@ -749,6 +749,57 @@ export function applyAliceElizacloudReexportPatch({
   return "applied";
 }
 
+const coreBrowserIndexRelativePath = "packages/core/src/index.browser.ts";
+const coreBrowserRuntimeEnvReexportSentinel =
+  "// [milaidy:core-browser-runtime-env-reexport]";
+const coreBrowserRuntimeEnvReexport = `${coreBrowserRuntimeEnvReexportSentinel}
+// eliza/packages/core/src/runtime-env.ts exports ~30 pure-JS helpers
+// (resolveApiSecurityConfig, resolveAllowedOrigins, resolveApiBindHost,
+// DEFAULT_DESKTOP_API_PORT, etc.) used by plugins that bundle into the SPA
+// (notably plugin-elizacloud/src/services/cloud-auth.ts which statically
+// imports resolveApiSecurityConfig). Upstream's index.node.ts re-exports
+// runtime-env wholesale (line ~203: \`export * from "./runtime-env"\`),
+// but index.browser.ts does not — even though runtime-env.ts has zero
+// node-specific imports (only "./env-utils.js" sibling + pure regex/string).
+// Rollup fails the static bind in the SPA build when the missing names are
+// referenced. Re-exporting runtime-env from the browser entry resolves the
+// entire family of names in one shot, mirroring upstream's node-entry
+// surface for these browser-safe utilities.
+export * from "./runtime-env";
+`;
+
+export function isAliceCoreBrowserRuntimeEnvReexportPatched(source) {
+  return source.includes(coreBrowserRuntimeEnvReexportSentinel);
+}
+
+export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser runtime-env reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserRuntimeEnvReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser runtime-env reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserRuntimeEnvReexport}`
+    : `${source}\n\n${coreBrowserRuntimeEnvReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export runtime-env (resolveApiSecurityConfig + ~29 sibling browser-safe helpers)",
+  );
+  return "applied";
+}
+
 export function applyAliceTelegramSourcePackageJsonExportPatch({
   elizaRoot,
   log = console.log,
@@ -2672,6 +2723,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
     applyAliceCoreBasicCapabilitiesBrowserSafePatch({ elizaRoot, log }),
+    applyAliceCoreBrowserRuntimeEnvReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
