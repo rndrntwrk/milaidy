@@ -1150,32 +1150,26 @@ export function applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({
 const agentDiscoveryHelpersDirectReexportSentinel =
   "// [milaidy:agent-index-discovery-helpers-direct-reexport]";
 const agentDiscoveryHelpersDirectReexport = `${agentDiscoveryHelpersDirectReexportSentinel}
-/* Direct re-export of plugin-discovery-helpers symbols from index.ts,
- * bypassing the indirect chain through ./api/server.ts.
+/* Direct re-export of plugin-discovery-helpers symbols from index.ts.
  *
- * Upstream eliza/packages/agent/src/index.ts re-exports
- * AGENT_EVENT_ALLOWED_STREAMS, CONFIG_WRITE_ALLOWED_TOP_KEYS,
- * discoverInstalledPlugins, and discoverPluginsFromManifest via
- * \`export { ... } from "./api/server.ts"\`, which itself re-exports those
- * names from "./api/plugin-discovery-helpers.ts" — a two-hop indirect
- * re-export. Under Node + tsx at runtime (the production container),
- * Node fails to surface AGENT_EVENT_ALLOWED_STREAMS through that two-hop
- * chain — \`dist/entry.js\` errors at module instantiation with:
+ * The 4 names below — AGENT_EVENT_ALLOWED_STREAMS, CONFIG_WRITE_ALLOWED_TOP_KEYS,
+ * discoverInstalledPlugins, discoverPluginsFromManifest — were originally
+ * re-exported by index.ts via \`export { ... } from "./api/server.ts"\`, which
+ * itself re-exports those names from "./api/plugin-discovery-helpers.ts".
+ * That two-hop indirect re-export chain fails under Node + tsx at runtime
+ * (the production container) — \`dist/entry.js\` errors at module instantiation:
  *   SyntaxError: The requested module '@elizaos/agent' does not provide
  *   an export named 'AGENT_EVENT_ALLOWED_STREAMS'
  *
- * Re-exporting these names DIRECTLY from helpers.ts adds a one-hop
- * indirect re-export from a DIFFERENT module specifier (helpers.ts)
- * alongside the existing two-hop one (server.ts). Both resolve to the
- * same binding in helpers.ts, so ESM accepts the duplicate as an
- * indirect export resolution and the importer's name lookup succeeds.
+ * The fix is two-part:
+ *   1. Remove these 4 names from the original \`from "./api/server.ts"\`
+ *      block (handled by the patcher with a sed-style removal).
+ *   2. Add a direct one-hop indirect re-export from helpers.ts here.
  *
- * findPrimaryEnvKey and readBundledPluginPackageMetadata — also
- * re-exported by server.ts from helpers.ts — are intentionally OMITTED
- * here because upstream's index.ts ALREADY direct-re-exports them from
- * the same module specifier at \`./api/plugin-discovery-helpers.ts\`
- * (lines 54-57). Adding them again would be a same-specifier same-name
- * duplicate export and ESM rejects that at parse time. */
+ * findPrimaryEnvKey and readBundledPluginPackageMetadata are NOT included
+ * — upstream's index.ts already direct-re-exports them from
+ * \`./api/plugin-discovery-helpers.ts\` at lines 54-57, so a second
+ * same-specifier same-name export here would be a parse-time duplicate. */
 export {
 \tAGENT_EVENT_ALLOWED_STREAMS,
 \tCONFIG_WRITE_ALLOWED_TOP_KEYS,
@@ -1184,8 +1178,33 @@ export {
 } from "./api/plugin-discovery-helpers.ts";
 `;
 
+const agentDiscoveryHelpersTwoHopNames = [
+  "AGENT_EVENT_ALLOWED_STREAMS",
+  "CONFIG_WRITE_ALLOWED_TOP_KEYS",
+  "discoverInstalledPlugins",
+  "discoverPluginsFromManifest",
+];
+
 export function isAliceAgentDiscoveryHelpersDirectReexportPatched(source) {
   return source.includes(agentDiscoveryHelpersDirectReexportSentinel);
+}
+
+function removeNamesFromAgentServerReexportBlock(source) {
+  // Strip the 4 names from the existing
+  //   \`export { ... } from "./api/server.ts";\`
+  // block at index.ts:64-94, but only the lines that match
+  // \`  <name>,\n\` exactly (the upstream's 2-space indent + trailing
+  // comma + newline). A line that drifted shape (e.g. extra whitespace,
+  // an inline comment) is left alone — the patch loudly fails by leaving
+  // the duplicate in place rather than corrupting the file.
+  let next = source;
+  for (const name of agentDiscoveryHelpersTwoHopNames) {
+    const line = `  ${name},\n`;
+    if (next.includes(line)) {
+      next = next.replace(line, "");
+    }
+  }
+  return next;
 }
 
 export function applyAliceAgentDiscoveryHelpersDirectReexportPatch({
@@ -1206,12 +1225,19 @@ export function applyAliceAgentDiscoveryHelpersDirectReexportPatch({
     );
     return "already-applied";
   }
-  const next = source.endsWith("\n")
-    ? `${source}\n${agentDiscoveryHelpersDirectReexport}`
-    : `${source}\n\n${agentDiscoveryHelpersDirectReexport}`;
+  // Step 1: remove the 4 names from the upstream two-hop server.ts block,
+  // so they have exactly ONE re-export path (the direct one appended next).
+  const stripped = removeNamesFromAgentServerReexportBlock(source);
+  const removedCount = agentDiscoveryHelpersTwoHopNames.filter(
+    (name) => source.includes(`  ${name},\n`) && !stripped.includes(`  ${name},\n`),
+  ).length;
+  // Step 2: append the direct one-hop re-export from helpers.ts.
+  const next = stripped.endsWith("\n")
+    ? `${stripped}\n${agentDiscoveryHelpersDirectReexport}`
+    : `${stripped}\n\n${agentDiscoveryHelpersDirectReexport}`;
   writeFileSync(indexPath, next);
   log(
-    "[alice-eliza-runtime-patches] patched agent/src/index.ts with direct re-export of plugin-discovery-helpers (AGENT_EVENT_ALLOWED_STREAMS + 3 siblings via two-hop chain through server.ts) to bypass Node+tsx chain failure",
+    `[alice-eliza-runtime-patches] patched agent/src/index.ts: removed ${removedCount}/4 names from the two-hop ./api/server.ts re-export block and added a direct one-hop re-export from ./api/plugin-discovery-helpers.ts (AGENT_EVENT_ALLOWED_STREAMS + 3 siblings) — fixes Node+tsx chain failure`,
   );
   return "applied";
 }
