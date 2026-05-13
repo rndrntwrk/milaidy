@@ -800,6 +800,54 @@ export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
   return "applied";
 }
 
+const coreBrowserSettingsDebugReexportSentinel =
+  "// [milaidy:core-browser-settings-debug-reexport]";
+const coreBrowserSettingsDebugReexport = `${coreBrowserSettingsDebugReexportSentinel}
+// eliza/packages/core/src/settings-debug.ts exports isElizaSettingsDebugEnabled,
+// sanitizeForSettingsDebug, and settingsDebugCloudSummary. Upstream's
+// index.node.ts re-exports the first two via a named-export block (line ~248).
+// index.browser.ts omits the module entirely — even though settings-debug.ts
+// is fully browser-safe: imports only "./env-utils.js" (pure), uses
+// typeof process !== "undefined" defensively, and reads import.meta.env for
+// Vite/browser environments. plugin-elizacloud/src/lib/cloud-connection.ts
+// statically imports isElizaSettingsDebugEnabled AND settingsDebugCloudSummary
+// from @elizaos/core, and Rollup fails the bind. Wholesale re-export surfaces
+// both names plus sanitizeForSettingsDebug (which the node entry oddly omits).
+export * from "./settings-debug";
+`;
+
+export function isAliceCoreBrowserSettingsDebugReexportPatched(source) {
+  return source.includes(coreBrowserSettingsDebugReexportSentinel);
+}
+
+export function applyAliceCoreBrowserSettingsDebugReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser settings-debug reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserSettingsDebugReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser settings-debug reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserSettingsDebugReexport}`
+    : `${source}\n\n${coreBrowserSettingsDebugReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export settings-debug (isElizaSettingsDebugEnabled, settingsDebugCloudSummary, sanitizeForSettingsDebug)",
+  );
+  return "applied";
+}
+
 const coreBrowserOnboardingReexportSentinel =
   "// [milaidy:core-browser-onboarding-reexport]";
 const coreBrowserOnboardingReexport = `${coreBrowserOnboardingReexportSentinel}
@@ -2841,6 +2889,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserRuntimeEnvReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserStateDirStubsPatch({ elizaRoot, log }),
     applyAliceCoreBrowserOnboardingReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserSettingsDebugReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
