@@ -124,7 +124,7 @@ import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";
 import "@elizaos/app-wallet/register";
 import "@elizaos/app-workflow-builder/register";
-import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
+import { shouldUseCloudOnlyBranding } from "@elizaos/ui";
 import {
   APP_BRANDING_BASE,
   APP_CONFIG,
