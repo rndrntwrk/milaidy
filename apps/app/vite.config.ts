@@ -1133,6 +1133,15 @@ function nativeModuleStubPlugin(): Plugin {
     // walking the module graph. Stubbing here matches the existing
     // pattern for @elizaos/plugin-local-embedding.
     "@elizaos/plugin-edge-tts",
+    // @node-rs/argon2 is a Node-native password-hashing module, declared as a
+    // direct dep of @elizaos/app-core (used for credential hashing on the
+    // server). Its package.json exposes a `browser` export condition pointing
+    // at `browser.js`, which dynamically imports the optional WASM peer
+    // `@node-rs/argon2-wasm32-wasi`. That peer is not installed in alice's
+    // workspace (it's an optional dep), so the browser resolution fails.
+    // The SPA never executes credential hashing (all auth flows live on the
+    // server), so stubbing here is safe.
+    "@node-rs/argon2",
     // mammoth (statically imported from @elizaos/core/src/features/knowledge/
     // utils.ts) calls fs.readFile.bind(fs) inside its DocumentXmlReader factory
     // at module init. In a browser where fs is stubbed empty that lookup throws
@@ -1848,6 +1857,14 @@ export default defineConfig({
       "undici",
       // Native LLM embedding — uses node-llama-cpp, never runs in browser
       "@elizaos/plugin-local-embedding",
+      // Node-only Edge-TTS voice plugin; browser entry is an unbuilt stub.
+      // Pairs with the nativePackages entry — esbuild's pre-bundle pass would
+      // otherwise hit the package before the stub plugin gets a chance.
+      "@elizaos/plugin-edge-tts",
+      // Native argon2 password hashing — declared by @elizaos/app-core for
+      // server-side credential hashing. Browser entry imports an optional
+      // WASM peer (@node-rs/argon2-wasm32-wasi) that isn't installed.
+      "@node-rs/argon2",
       // OS keychain binding is desktop/server-only and pulls native .node assets.
       "@napi-rs/keyring",
     ],
