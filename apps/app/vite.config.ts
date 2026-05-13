@@ -1705,6 +1705,23 @@ export default defineConfig({
     cssMinify: desktopFastDist ? false : undefined,
     reportCompressedSize: !desktopFastDist,
     rollupOptions: {
+      // Print every rollup warning verbatim to stderr before delegating to
+      // the default handler. Without this, @vitejs/plugin-react-swc's
+      // silenceUseClientWarning wrapper + the build environment's stdout
+      // post-processing can collapse an UNRESOLVED_IMPORT error to a
+      // bare "undefined" line in the CI/deploy log, hiding the failing
+      // module path. Keep this delegate-then-default shape so we don't
+      // suppress vite's own escalation of warnings to build errors.
+      onwarn(warning, defaultHandler) {
+        const code = warning.code ?? "WARN";
+        const loc =
+          warning.loc?.file ?? warning.id ?? warning.importer ?? "<unknown>";
+        const msg = warning.message ?? "<no message>";
+        process.stderr.write(
+          `[vite-build-warning] ${code} at ${loc}: ${msg}\n`,
+        );
+        defaultHandler(warning);
+      },
       // Native-only deps that must not be resolved during the browser build.
       // Node built-ins (node:fs, fs, path, etc.) are NOT externalized here —
       // they are intercepted by nativeModuleStubPlugin which replaces them
