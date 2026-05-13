@@ -1093,6 +1093,59 @@ export function applyAliceCoreBrowserSettingsDebugReexportPatch({
   return "applied";
 }
 
+const coreBrowserOnboardingTypesDisambiguateSentinel =
+  "// [milaidy:core-browser-onboarding-types-disambiguate]";
+const coreBrowserOnboardingTypesDisambiguate = `${coreBrowserOnboardingTypesDisambiguateSentinel}
+// Pin MessageExample to types/agent to resolve TS2308 ambiguity.
+//
+// Two different MessageExample interfaces exist in @elizaos/core and
+// both reach this barrel:
+//   types/agent           { name: string;  content: Content }
+//   contracts/onboarding  { user: string;  content: MessageExampleContent }
+// Different field names, different content type. types/agent is the
+// canonical agent surface consumed by the Character + Agent types and
+// by downstream eliza-cli / app-core / runtime-boot. The onboarding
+// MessageExample is a narrower shape used only inside the onboarding
+// flow definitions.
+//
+// Explicit named export wins over wildcard re-exports for TS resolution,
+// so this pin selects the agent-canonical interface regardless of
+// wildcard ordering.
+export type { MessageExample } from "./types/agent";
+`;
+
+export function isAliceCoreBrowserOnboardingTypesDisambiguatePatched(source) {
+  return source.includes(coreBrowserOnboardingTypesDisambiguateSentinel);
+}
+
+export function applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser onboarding/types disambiguate patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserOnboardingTypesDisambiguatePatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser onboarding/types disambiguate already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserOnboardingTypesDisambiguate}`
+    : `${source}\n\n${coreBrowserOnboardingTypesDisambiguate}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts with onboarding/types MessageExample disambiguation epilogue",
+  );
+  return "applied";
+}
+
 const coreBrowserOnboardingReexportSentinel =
   "// [milaidy:core-browser-onboarding-reexport]";
 const coreBrowserOnboardingReexport = `${coreBrowserOnboardingReexportSentinel}
@@ -3137,6 +3190,9 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserSettingsDebugReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserCloudTopologyReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSpokenTextReexportPatch({ elizaRoot, log }),
+    // Must run AFTER all the core-browser wildcard re-exports above so the
+    // disambiguation appears last in the file and wins for TS resolution.
+    applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({ elizaRoot, log }),
     applyAliceAppCoreUiCompatReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreUiFullReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
