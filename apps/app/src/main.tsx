@@ -139,7 +139,7 @@ import {
   type IosRuntimeConfig,
   type IosRuntimeMode,
   resolveIosRuntimeConfig,
-} from "@elizaos/app-core";
+} from "@elizaos/ui";
 
 // CharacterEditor lives in alice's local @miladyai/app-core (the 2009-line
 // version is alice-specific; upstream eliza moved this component to
