@@ -1857,6 +1857,14 @@ export default defineConfig({
       "undici",
       // Native LLM embedding — uses node-llama-cpp, never runs in browser
       "@elizaos/plugin-local-embedding",
+      // Node-only Edge-TTS voice plugin; browser entry is an unbuilt stub.
+      // Pairs with the nativePackages entry — esbuild's pre-bundle pass would
+      // otherwise hit the package before the stub plugin gets a chance.
+      "@elizaos/plugin-edge-tts",
+      // Native argon2 password hashing — declared by @elizaos/app-core for
+      // server-side credential hashing. Browser entry imports an optional
+      // WASM peer (@node-rs/argon2-wasm32-wasi) that isn't installed.
+      "@node-rs/argon2",
       // OS keychain binding is desktop/server-only and pulls native .node assets.
       "@napi-rs/keyring",
     ],
