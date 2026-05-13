@@ -14,7 +14,7 @@ import {
   subscribeDesktopBridgeEvent,
   initializeStorageBridge,
   isElectrobunRuntime,
-} from "@elizaos/app-core";
+} from "@elizaos/ui";
 import type { BrandingConfig } from "@elizaos/app-core";
 import { MILADY_DEFAULT_THEME } from "@elizaos/shared";
 import {
