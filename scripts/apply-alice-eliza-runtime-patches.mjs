@@ -32,6 +32,7 @@ const appViteNativeStubRelativePath =
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
+const agentIndexRelativePath = "packages/agent/src/index.ts";
 const pluginSqlPgliteManagerRelativePath =
   "plugins/plugin-sql/typescript/pglite/manager.ts";
 const lifeOpsSourceRelativePaths = [
@@ -1142,6 +1143,75 @@ export function applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({
   writeFileSync(indexPath, next);
   log(
     "[alice-eliza-runtime-patches] patched core index.browser.ts with onboarding/types MessageExample disambiguation epilogue",
+  );
+  return "applied";
+}
+
+const agentDiscoveryHelpersDirectReexportSentinel =
+  "// [milaidy:agent-index-discovery-helpers-direct-reexport]";
+const agentDiscoveryHelpersDirectReexport = `${agentDiscoveryHelpersDirectReexportSentinel}
+/* Direct re-export of plugin-discovery-helpers symbols from index.ts,
+ * bypassing the indirect chain through ./api/server.ts.
+ *
+ * Upstream eliza/packages/agent/src/index.ts re-exports
+ * AGENT_EVENT_ALLOWED_STREAMS, CONFIG_WRITE_ALLOWED_TOP_KEYS,
+ * discoverInstalledPlugins, and discoverPluginsFromManifest via
+ * \`export { ... } from "./api/server.ts"\`, which itself re-exports those
+ * names from "./api/plugin-discovery-helpers.ts" — a two-hop indirect
+ * re-export. Under Node + tsx at runtime (the production container),
+ * Node fails to surface AGENT_EVENT_ALLOWED_STREAMS through that two-hop
+ * chain — \`dist/entry.js\` errors at module instantiation with:
+ *   SyntaxError: The requested module '@elizaos/agent' does not provide
+ *   an export named 'AGENT_EVENT_ALLOWED_STREAMS'
+ *
+ * Re-exporting these names DIRECTLY from helpers.ts adds a one-hop
+ * indirect re-export from a DIFFERENT module specifier (helpers.ts)
+ * alongside the existing two-hop one (server.ts). Both resolve to the
+ * same binding in helpers.ts, so ESM accepts the duplicate as an
+ * indirect export resolution and the importer's name lookup succeeds.
+ *
+ * findPrimaryEnvKey and readBundledPluginPackageMetadata — also
+ * re-exported by server.ts from helpers.ts — are intentionally OMITTED
+ * here because upstream's index.ts ALREADY direct-re-exports them from
+ * the same module specifier at \`./api/plugin-discovery-helpers.ts\`
+ * (lines 54-57). Adding them again would be a same-specifier same-name
+ * duplicate export and ESM rejects that at parse time. */
+export {
+\tAGENT_EVENT_ALLOWED_STREAMS,
+\tCONFIG_WRITE_ALLOWED_TOP_KEYS,
+\tdiscoverInstalledPlugins,
+\tdiscoverPluginsFromManifest,
+} from "./api/plugin-discovery-helpers.ts";
+`;
+
+export function isAliceAgentDiscoveryHelpersDirectReexportPatched(source) {
+  return source.includes(agentDiscoveryHelpersDirectReexportSentinel);
+}
+
+export function applyAliceAgentDiscoveryHelpersDirectReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, agentIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza agent source absent; skipping agent-index discovery-helpers direct-reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceAgentDiscoveryHelpersDirectReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] agent-index discovery-helpers direct-reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${agentDiscoveryHelpersDirectReexport}`
+    : `${source}\n\n${agentDiscoveryHelpersDirectReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched agent/src/index.ts with direct re-export of plugin-discovery-helpers (AGENT_EVENT_ALLOWED_STREAMS + 3 siblings via two-hop chain through server.ts) to bypass Node+tsx chain failure",
   );
   return "applied";
 }
@@ -3193,6 +3263,7 @@ export function applyAliceElizaRuntimePatches({
     // Must run AFTER all the core-browser wildcard re-exports above so the
     // disambiguation appears last in the file and wins for TS resolution.
     applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({ elizaRoot, log }),
+    applyAliceAgentDiscoveryHelpersDirectReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreUiCompatReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreUiFullReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
