@@ -228,6 +228,13 @@ function buildElizaAppSourceAliases(
         const m = entry.name.match(/^(.+)\.(tsx?|jsx?)$/);
         if (!m || m[1] === "index") continue;
         if (entry.name.endsWith(".d.ts")) continue;
+        // Skip co-located test fixtures. Without this, files like
+        // `src/lifeops/scheduled-task/scheduler.test.ts` produce aliases
+        // (`^@elizaos/app-X/.../scheduler.test$`) that can pull vitest +
+        // its dependencies into the SPA bundle if anything inadvertently
+        // imports the path.
+        if (entry.name.includes(".test.") || entry.name.includes(".spec."))
+          continue;
         const basename = m[1];
         const fileKey = relativeKey ? `${relativeKey}/${basename}` : basename;
         aliases.push({
