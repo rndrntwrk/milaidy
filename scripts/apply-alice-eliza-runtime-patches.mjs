@@ -800,6 +800,100 @@ export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
   return "applied";
 }
 
+const appCoreIndexRelativePath = "packages/app-core/src/index.ts";
+const appCoreUiFullReexportSentinel =
+  "// [milaidy:app-core-ui-full-reexport]";
+const appCoreUiFullReexport = `${appCoreUiFullReexportSentinel}
+// Bridge the full @elizaos/ui surface through @elizaos/app-core, mirroring
+// upstream-milady's eliza/packages/app-core/src/browser.ts line 1
+// (\`export * from "@elizaos/ui"\`).
+//
+// Why: alice's main.tsx has 11 import blocks of the form
+// \`import { ... } from "@elizaos/app-core"\` covering ~50 value+type names
+// (App, ErrorBoundary, client, AppBootConfig, getBootConfig, dispatchAppEvent,
+// AGENT_READY_EVENT, applyForceFreshOnboardingReset, isAppWindowRoute,
+// resolveWindowShellRoute, DESKTOP_TRAY_MENU_ITEMS, DesktopTrayRuntime,
+// DetachedShellRoot, AppProvider, applyUiTheme, loadUiTheme, AppWindowRenderer,
+// BrandingConfig type, etc.). Almost all of these names live in
+// \`@elizaos/ui\`, not \`@elizaos/app-core\`. Upstream-milady's main.tsx
+// works because its package.json exports map \`@elizaos/app-core\` to
+// \`browser.ts\` for browser builds, which re-exports the whole ui surface.
+//
+// Alice's pinned eliza (30c595e10ea5) has the older package.json export
+// map that resolves \`@elizaos/app-core\` to \`src/index.ts\` directly,
+// bypassing browser.ts. The result: every one of those 11 import blocks
+// fails the Rollup static bind on the SPA build, surfacing one missing
+// name per deploy iteration.
+//
+// Append the same wildcard re-export to alice's pinned app-core/src/index.ts
+// to bridge the gap. PR #180's \`applyAliceAppCoreUiCompatReexportPatch\`
+// (\`export * from "./ui-compat"\`) is a narrow subset of this surface
+// (~30 names); this patch is the comprehensive companion. Duplicates with
+// ui-compat are harmless at runtime (both routes resolve to the same
+// @elizaos/ui source).
+//
+// Browser safety: \`@elizaos/ui\` is the UI package — fully browser-safe by
+// design. No node:* imports flow into the SPA via this re-export.
+export * from "@elizaos/ui";
+
+// Disambiguation: \`./registry\` and \`@elizaos/ui\` both export \`ConfigField\`
+// and \`getPlugins\` with DIFFERENT declarations. \`./registry\` has the
+// Zod-inferred type for plugin config schema fields and a registry loader
+// helper; \`@elizaos/ui\` has a React component and a bridge helper.
+// Wildcard \`export *\` from two sources with the same names → TS2308
+// "Module has already exported a member named ..." build error. Mirror the
+// disambiguation pattern from upstream-milady's eliza/packages/app-core/
+// src/browser.ts line ~51 which pins the registry side explicitly.
+export { type ConfigField, getPlugins } from "./registry";
+
+// DesktopOnboardingRuntime is consumed by alice's apps/app/src/main.tsx
+// block 8 alongside DESKTOP_TRAY_MENU_ITEMS / DesktopSurfaceNavigationRuntime
+// / DesktopTrayRuntime / DetachedShellRoot. The latter four flow through
+// the \`export * from "@elizaos/ui"\` above (they live in
+// eliza/packages/ui/src/desktop-runtime/). DesktopOnboardingRuntime does
+// NOT exist in @elizaos/ui — upstream's eliza/packages/app-core/src/
+// browser.ts line ~62 emits it as a no-op stub. Mirror that here so the
+// SPA bind for alice's main.tsx block 8 resolves without throwing.
+// Runtime impact: nothing — alice's actual desktop onboarding runtime
+// lives in its local packages/app-core/src/shell/DesktopOnboardingRuntime.tsx
+// and is referenced through the desktop runtime mount path, not through
+// this barrel export. The barrel-bound value is only reached if a SPA
+// code path constructs the imported reference directly.
+export const DesktopOnboardingRuntime = (): null => null;
+`;
+
+export function isAliceAppCoreUiFullReexportPatched(source) {
+  return source.includes(appCoreUiFullReexportSentinel);
+}
+
+export function applyAliceAppCoreUiFullReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, appCoreIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza app-core source absent; skipping app-core ui-full reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceAppCoreUiFullReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core ui-full reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${appCoreUiFullReexport}`
+    : `${source}\n\n${appCoreUiFullReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched eliza app-core/src/index.ts to re-export the full @elizaos/ui surface (mirrors upstream's browser.ts pattern; bridges ~50 names main.tsx imports from @elizaos/app-core)",
+  );
+  return "applied";
+}
+
 const appCoreUiCompatReexportRelativePath = "packages/app-core/src/index.ts";
 const appCoreUiCompatReexportSentinel =
   "// [milaidy:app-core-ui-compat-reexport]";
@@ -3044,6 +3138,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserCloudTopologyReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSpokenTextReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreUiCompatReexportPatch({ elizaRoot, log }),
+    applyAliceAppCoreUiFullReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
