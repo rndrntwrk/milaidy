@@ -24,6 +24,8 @@ import {
   isAliceAppPluginRegisterExportPatched,
   applyAliceBrowserBridgeWorkspaceStubPatch,
   isAliceBrowserBridgeWorkspaceStubPatched,
+  applyAliceElizaAgentPackageSubpathExportsPatch,
+  isAliceElizaAgentPackageSubpathExportsPatched,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceTelegramSourcePackageJsonExportPatch,
   isAliceTelegramSourcePackageJsonExportPatched,
@@ -866,6 +868,161 @@ describe("Alice Eliza runtime patch contract", () => {
           log: () => undefined,
         }),
       ).toBe("skipped");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("adds 10 explicit subpath exports to eliza/packages/agent/package.json", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-elizaos-agent-subpath-exports-"),
+    );
+    try {
+      const agentDir = path.join(tempDir, "packages", "agent");
+      mkdirSync(agentDir, { recursive: true });
+      const packageJsonPath = path.join(agentDir, "package.json");
+      writeFileSync(
+        packageJsonPath,
+        `${JSON.stringify(
+          {
+            name: "@elizaos/agent",
+            main: "src/index.ts",
+            type: "module",
+            exports: {
+              ".": "./src/index.ts",
+              "./package.json": "./package.json",
+              "./config/plugin-auto-enable": "./src/config/plugin-auto-enable.ts",
+              "./services/*": {
+                import: "./dist/services/*.js",
+                default: "./dist/services/*.js",
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      // Create every target source file the patcher's pre-condition expects.
+      const subpathTargets = [
+        "src/api/config-env.ts",
+        "src/auth/account-storage.ts",
+        "src/auth/credentials.ts",
+        "src/auth/types.ts",
+        "src/config/config.ts",
+        "src/config/paths.ts",
+        "src/runtime/operations/types.ts",
+        "src/runtime/operations/vault-bridge.ts",
+        "src/services/permissions/probers/index.ts",
+        "src/services/permissions/register-probers.ts",
+      ];
+      for (const rel of subpathTargets) {
+        const target = path.join(agentDir, rel);
+        mkdirSync(path.dirname(target), { recursive: true });
+        writeFileSync(target, "export const placeholder = true;\n");
+      }
+
+      expect(
+        applyAliceElizaAgentPackageSubpathExportsPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+      expect(isAliceElizaAgentPackageSubpathExportsPatched(patched)).toBe(true);
+
+      // All 10 new explicit subpath exports present and pointing at src/<subpath>.ts.
+      expect(patched.exports["./api/config-env"]).toBe("./src/api/config-env.ts");
+      expect(patched.exports["./auth/account-storage"]).toBe(
+        "./src/auth/account-storage.ts",
+      );
+      expect(patched.exports["./auth/credentials"]).toBe(
+        "./src/auth/credentials.ts",
+      );
+      expect(patched.exports["./auth/types"]).toBe("./src/auth/types.ts");
+      expect(patched.exports["./config/config"]).toBe("./src/config/config.ts");
+      expect(patched.exports["./config/paths"]).toBe("./src/config/paths.ts");
+      expect(patched.exports["./runtime/operations/types"]).toBe(
+        "./src/runtime/operations/types.ts",
+      );
+      expect(patched.exports["./runtime/operations/vault-bridge"]).toBe(
+        "./src/runtime/operations/vault-bridge.ts",
+      );
+      expect(patched.exports["./services/permissions/probers/index"]).toBe(
+        "./src/services/permissions/probers/index.ts",
+      );
+      expect(patched.exports["./services/permissions/register-probers"]).toBe(
+        "./src/services/permissions/register-probers.ts",
+      );
+
+      // Pre-existing entries are preserved.
+      expect(patched.exports["."]).toBe("./src/index.ts");
+      expect(patched.exports["./package.json"]).toBe("./package.json");
+      expect(patched.exports["./config/plugin-auto-enable"]).toBe(
+        "./src/config/plugin-auto-enable.ts",
+      );
+      expect(patched.exports["./services/*"]).toEqual({
+        import: "./dist/services/*.js",
+        default: "./dist/services/*.js",
+      });
+
+      // Idempotent: re-running on a patched file returns already-applied
+      // and does not double-write.
+      expect(
+        applyAliceElizaAgentPackageSubpathExportsPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips the eliza agent subpath exports patch when the file is absent", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-elizaos-agent-subpath-exports-absent-"),
+    );
+    try {
+      expect(
+        applyAliceElizaAgentPackageSubpathExportsPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("skipped");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("throws if a target source file is missing when applying the eliza agent subpath exports patch", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-elizaos-agent-subpath-exports-missing-"),
+    );
+    try {
+      const agentDir = path.join(tempDir, "packages", "agent");
+      mkdirSync(agentDir, { recursive: true });
+      writeFileSync(
+        path.join(agentDir, "package.json"),
+        `${JSON.stringify(
+          {
+            name: "@elizaos/agent",
+            main: "src/index.ts",
+            type: "module",
+            exports: { ".": "./src/index.ts" },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      // Intentionally do NOT create any of the target src files.
+      expect(() =>
+        applyAliceElizaAgentPackageSubpathExportsPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toThrow(/target source file .* does not exist/);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
