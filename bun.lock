@@ -11,7 +11,7 @@
         "@ai-sdk/provider-utils": "^4.0.19",
         "@bufbuild/protobuf": "^2.11.0",
         "@clack/prompts": "^1.1.0",
-        "@electric-sql/pglite": "^0.3.16",
+        "@electric-sql/pglite": "^0.4.5",
         "@elizaos-plugins/client-telegram-account": "workspace:*",
         "@elizaos/core": "workspace:*",
         "@elizaos/plugin-agent-orchestrator": "workspace:*",
