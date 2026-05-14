@@ -2034,6 +2034,11 @@ export function applyDatabaseConfigToEnv(config: ElizaConfig): void {
       // PGlite sees the lock and either fails or, with explicit destructive
       // recovery enabled, triggers the resetPgliteDataDir path.
       cleanStalePglitePid(dataDir);
+
+      // Remove a stale eliza-pglite.lock left by @elizaos/plugin-sql when a
+      // prior pod did not release it. Its recorded pid is routinely reused by
+      // the next container, which would otherwise look like an active holder.
+      cleanStalePgliteClientLock(dataDir);
     }
   }
 }
@@ -2130,6 +2135,130 @@ export function cleanStalePglitePid(dataDir: string): void {
     reconcilePglitePidFile(dataDir);
   } catch (err) {
     logger.warn(`[eliza] PGlite PID reconciliation failed: ${err}`);
+  }
+}
+
+/**
+ * On Linux, return the wall-clock start time (ms) of process `pid` from
+ * `/proc/<pid>/stat`. Returns null when /proc is unavailable (non-Linux) or the
+ * process is gone. Used to tell a genuine lock holder apart from a reused pid:
+ * container pid namespaces restart from low pids, so a leftover lock's recorded
+ * pid is frequently reused by an unrelated process in the next container.
+ */
+function readProcessStartTimeMs(pid: number): number | null {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf-8");
+    // Field 2 (comm) is paren-wrapped and may contain spaces — parse the
+    // remaining fields after the final ')'. starttime is the 22nd overall
+    // field, i.e. index 19 of the post-comm slice.
+    const postComm = stat
+      .slice(stat.lastIndexOf(")") + 1)
+      .trim()
+      .split(/\s+/);
+    const startTicks = Number(postComm[19]);
+    if (!Number.isFinite(startTicks)) return null;
+    const clockTicksPerSecond = 100; // USER_HZ — 100 on effectively all Linux
+    const bootTimeMs = Date.now() - os.uptime() * 1000;
+    return bootTimeMs + (startTicks / clockTicksPerSecond) * 1000;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reconcile a stale `eliza-pglite.lock` written by @elizaos/plugin-sql's
+ * PGliteClientManager. plugin-sql records its own `process.pid` in this JSON
+ * lock and, on startup, refuses to open the data dir ("already in use") while
+ * that pid is alive. Across container restarts the pid is routinely reused —
+ * pid namespaces start from low numbers — so a leftover lock from a prior pod
+ * looks active and wedges startup. We clear it here, before plugin-sql init,
+ * the same way we already reconcile a stale postmaster.pid.
+ */
+function reconcilePgliteClientLock(dataDir: string): PglitePidFileStatus {
+  const lockPath = path.join(dataDir, "eliza-pglite.lock");
+  if (!existsSync(lockPath)) return "missing";
+
+  let pid: number;
+  try {
+    const parsed = JSON.parse(readFileSync(lockPath, "utf-8")) as {
+      pid?: unknown;
+    };
+    pid = typeof parsed.pid === "number" ? parsed.pid : Number.NaN;
+  } catch {
+    unlinkSync(lockPath);
+    logger.info(
+      "[eliza] Removed unreadable PGlite client lock (eliza-pglite.lock)",
+    );
+    return "cleared-malformed";
+  }
+
+  if (!Number.isInteger(pid) || pid <= 0) {
+    unlinkSync(lockPath);
+    logger.info(
+      "[eliza] Removed malformed PGlite client lock (eliza-pglite.lock)",
+    );
+    return "cleared-malformed";
+  }
+
+  // Exact pid collision with our own process, lock older than our start: a
+  // leftover from a prior container whose low pid we reused.
+  if (isPidFileFromPreviousProcess(lockPath, pid)) {
+    unlinkSync(lockPath);
+    logger.info(
+      `[eliza] Removed stale PGlite client lock from prior container process ${pid}`,
+    );
+    return "cleared-stale";
+  }
+
+  try {
+    process.kill(pid, 0); // signal 0 = existence check, does not kill
+  } catch (killErr: unknown) {
+    const code = (killErr as NodeJS.ErrnoException).code;
+    if (code === "ESRCH") {
+      unlinkSync(lockPath);
+      logger.info(
+        `[eliza] Removed stale PGlite client lock (process ${pid} not running)`,
+      );
+      return "cleared-stale";
+    }
+    logger.warn(
+      `[eliza] Cannot confirm PGlite client lock staleness (${code}) — leaving intact`,
+    );
+    return "active-unconfirmed";
+  }
+
+  // The pid is alive — but an alive pid is not proof the original holder
+  // survived. If that pid's process started after the lock file was written,
+  // it is a different (reused) process and the lock is stale.
+  const holderStartMs = readProcessStartTimeMs(pid);
+  if (holderStartMs !== null) {
+    const lockMtimeMs = statSync(lockPath).mtimeMs;
+    if (holderStartMs > lockMtimeMs + 1000) {
+      unlinkSync(lockPath);
+      logger.info(
+        `[eliza] Removed stale PGlite client lock (pid ${pid} reused — process started after the lock was written)`,
+      );
+      return "cleared-stale";
+    }
+  }
+
+  logger.info(
+    `[eliza] PGlite client lock references running process ${pid} — leaving intact`,
+  );
+  return "active";
+}
+
+/**
+ * Check for and remove a stale eliza-pglite.lock in the PGlite data directory.
+ * Mirrors {@link cleanStalePglitePid} for plugin-sql's own client lock.
+ */
+export function cleanStalePgliteClientLock(dataDir: string): void {
+  try {
+    reconcilePgliteClientLock(dataDir);
+  } catch (err) {
+    logger.warn(
+      `[eliza] PGlite client lock reconciliation failed: ${formatError(err)}`,
+    );
   }
 }
 

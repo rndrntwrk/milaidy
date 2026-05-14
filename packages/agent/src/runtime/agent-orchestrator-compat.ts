@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import type http from "node:http";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -18,13 +19,22 @@ import type {
 import { installClaudeJsonlCompletionWatcher } from "./claude-jsonl-completion-watcher";
 import { installTaskProgressStreamer } from "./task-progress-streamer";
 
-// Dynamic import: plugin-agent-orchestrator is desktop-only and may be absent
-// in Docker, cloud, or headless environments.
+// plugin-agent-orchestrator is desktop-only and may be absent in Docker, cloud,
+// or headless images. It must be loaded with a synchronous require, NOT a
+// top-level `await import`: this module is itself require()'d by eliza.ts, and
+// a top-level await would make it an async ESM module that require() cannot
+// load (ERR_REQUIRE_ASYNC_MODULE) — silently disabling the entire compat
+// wrapper, including the graceful stub fallback in resolveBasePlugin().
+const nodeRequire = createRequire(import.meta.url);
 let baseModule: Record<string, unknown> = {};
 try {
-  baseModule = await import("@elizaos/plugin-agent-orchestrator");
+  baseModule = nodeRequire("@elizaos/plugin-agent-orchestrator") as Record<
+    string,
+    unknown
+  >;
 } catch {
-  // Package not available — orchestrator features gracefully disabled
+  // Package (or a native dep such as pty-console) unavailable — orchestrator
+  // features gracefully disabled via the stub in resolveBasePlugin().
 }
 
 type AdapterId = "claude" | "codex" | "gemini" | "aider";
