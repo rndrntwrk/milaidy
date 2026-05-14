@@ -1146,114 +1146,6 @@ export function applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({
   return "applied";
 }
 
-// eliza/packages/agent/package.json ships subpath exports for a handful of
-// public-by-convention paths (`./config/plugin-auto-enable`, `./services/*`
-// via wildcard, etc.) but omits explicit literal-key entries for ten more
-// subpaths that alice's own packages/app-core code imports from
-// `@elizaos/agent/<subpath>`:
-//
-//   ./api/config-env
-//   ./auth/account-storage
-//   ./auth/credentials
-//   ./auth/types
-//   ./config/config
-//   ./config/paths
-//   ./runtime/operations/types
-//   ./runtime/operations/vault-bridge
-//   ./services/permissions/probers/index
-//   ./services/permissions/register-probers
-//
-// Upstream's `./*` wildcard maps to `./dist/*.js`, but the eliza submodule
-// SHA alice pins (30c595e10e) does not ship a `dist/` directory, so the
-// wildcard does not resolve under Node + tsx at runtime. The runtime image
-// guard also does literal-key lookup (`agentPackage.exports[subpath]`),
-// which the wildcards never match.
-//
-// All ten target files exist as `.ts` under `eliza/packages/agent/src/`.
-// Add explicit subpath exports pointing at each `./src/<subpath>.ts`,
-// matching the pattern upstream already uses for `./config/plugin-auto-enable`
-// (a flat-string export — Node + tsx resolves the `.ts` source directly).
-const agentPackageRelativePath = "packages/agent/package.json";
-const agentPackageSubpathExportsSentinelKey =
-  "x-alice-elizaos-agent-subpath-exports";
-const agentPackageSubpathExports = {
-  "./api/config-env": "./src/api/config-env.ts",
-  "./auth/account-storage": "./src/auth/account-storage.ts",
-  "./auth/credentials": "./src/auth/credentials.ts",
-  "./auth/types": "./src/auth/types.ts",
-  "./config/config": "./src/config/config.ts",
-  "./config/paths": "./src/config/paths.ts",
-  "./runtime/operations/types": "./src/runtime/operations/types.ts",
-  "./runtime/operations/vault-bridge": "./src/runtime/operations/vault-bridge.ts",
-  "./services/permissions/probers/index":
-    "./src/services/permissions/probers/index.ts",
-  "./services/permissions/register-probers":
-    "./src/services/permissions/register-probers.ts",
-};
-
-export function isAliceElizaAgentPackageSubpathExportsPatched(packageJson) {
-  return (
-    packageJson &&
-    typeof packageJson === "object" &&
-    packageJson[agentPackageSubpathExportsSentinelKey] === "v1"
-  );
-}
-
-export function applyAliceElizaAgentPackageSubpathExportsPatch({
-  elizaRoot,
-  log = console.log,
-} = {}) {
-  const packageJsonPath = path.join(elizaRoot, agentPackageRelativePath);
-  if (!existsSync(packageJsonPath)) {
-    log(
-      "[alice-eliza-runtime-patches] eliza agent package.json absent; skipping subpath exports patch",
-    );
-    return "skipped";
-  }
-  const source = readFileSync(packageJsonPath, "utf8");
-  const packageJson = JSON.parse(source);
-  if (isAliceElizaAgentPackageSubpathExportsPatched(packageJson)) {
-    log(
-      "[alice-eliza-runtime-patches] eliza agent package.json subpath exports already applied",
-    );
-    return "already-applied";
-  }
-  // Every target source file must exist; bail loudly if upstream drift has
-  // removed any of them so we ship a debuggable build error instead of a
-  // silent runtime SyntaxError 15 minutes later.
-  for (const [subpath, srcRelative] of Object.entries(agentPackageSubpathExports)) {
-    const srcPath = path.join(
-      elizaRoot,
-      "packages/agent",
-      srcRelative.replace(/^\.\//, ""),
-    );
-    if (!existsSync(srcPath)) {
-      throw new Error(
-        `[alice-eliza-runtime-patches] eliza agent subpath exports patch: ` +
-          `target source file ${srcPath} (for export ${subpath}) does not exist`,
-      );
-    }
-  }
-  const nextExports = { ...(packageJson.exports || {}) };
-  let addedCount = 0;
-  for (const [subpath, srcRelative] of Object.entries(agentPackageSubpathExports)) {
-    if (!Object.prototype.hasOwnProperty.call(nextExports, subpath)) {
-      nextExports[subpath] = srcRelative;
-      addedCount += 1;
-    }
-  }
-  const nextPackageJson = {
-    ...packageJson,
-    exports: nextExports,
-    [agentPackageSubpathExportsSentinelKey]: "v1",
-  };
-  writeFileSync(packageJsonPath, `${JSON.stringify(nextPackageJson, null, 2)}\n`);
-  log(
-    `[alice-eliza-runtime-patches] patched eliza/packages/agent/package.json: added ${addedCount}/10 explicit subpath exports (api/config-env, auth/*, config/*, runtime/operations/*, services/permissions/*) pointing at ./src/<subpath>.ts — required for Node+tsx runtime resolution and for the runtime image guard's literal-key checks`,
-  );
-  return "applied";
-}
-
 const coreBrowserOnboardingReexportSentinel =
   "// [milaidy:core-browser-onboarding-reexport]";
 const coreBrowserOnboardingReexport = `${coreBrowserOnboardingReexportSentinel}
@@ -3301,7 +3193,6 @@ export function applyAliceElizaRuntimePatches({
     // Must run AFTER all the core-browser wildcard re-exports above so the
     // disambiguation appears last in the file and wins for TS resolution.
     applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({ elizaRoot, log }),
-    applyAliceElizaAgentPackageSubpathExportsPatch({ elizaRoot, log }),
     applyAliceAppCoreUiCompatReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreUiFullReexportPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
