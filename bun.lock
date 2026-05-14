@@ -2668,6 +2668,7 @@
   },
   "overrides": {
     "@ai-sdk/groq": "3.0.31",
+    "@electric-sql/pglite": "^0.4.5",
     "@elizaos/config": "1.7.3-alpha.4",
     "@elizaos/core": "workspace:*",
     "@elizaos/plugin-cli": "2.0.0-alpha.9",

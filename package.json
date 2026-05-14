@@ -393,6 +393,7 @@
     "vitest": "^4.1.0"
   },
   "overrides": {
+    "@electric-sql/pglite": "^0.4.5",
     "@elizaos/plugin-cli": "2.0.0-alpha.9",
     "@elizaos/core": "workspace:*",
     "@elizaos/plugin-discord": "workspace:*",
