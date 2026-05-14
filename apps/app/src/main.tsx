@@ -14,7 +14,7 @@ import {
   subscribeDesktopBridgeEvent,
   initializeStorageBridge,
   isElectrobunRuntime,
-} from "@elizaos/app-core";
+} from "@elizaos/ui";
 import type { BrandingConfig } from "@elizaos/app-core";
 import { MILADY_DEFAULT_THEME } from "@elizaos/shared";
 import {
@@ -124,7 +124,7 @@ import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";
 import "@elizaos/app-wallet/register";
 import "@elizaos/app-workflow-builder/register";
-import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
+import { shouldUseCloudOnlyBranding } from "@elizaos/ui";
 import {
   APP_BRANDING_BASE,
   APP_CONFIG,
@@ -139,7 +139,7 @@ import {
   type IosRuntimeConfig,
   type IosRuntimeMode,
   resolveIosRuntimeConfig,
-} from "@elizaos/app-core";
+} from "@elizaos/ui";
 
 // CharacterEditor lives in alice's local @miladyai/app-core (the 2009-line
 // version is alice-specific; upstream eliza moved this component to
