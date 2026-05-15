@@ -25,6 +25,7 @@ import {
   applyAliceAppViteStubMammothPatch,
   applyAliceCoreBuildBrowserExternalsPatch,
   applyAliceCoreBuildBrowserExternalsMammothPatch,
+  applyAliceCoreBrowserValidationReexportPatch,
   applyAliceAppPluginRegisterExportPatch,
   isAliceAppPluginRegisterExportPatched,
   applyAliceBrowserBridgeWorkspaceStubPatch,
@@ -49,6 +50,7 @@ import {
   isAlicePgliteContainerLockPatchPatched,
   isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
+  isAliceCoreBrowserValidationReexportPatched,
   isAliceUiAuthGatedStartupPatched,
   rewriteRelativeTsRuntimeSpecifiers,
 } from "./apply-alice-eliza-runtime-patches.mjs";
@@ -365,6 +367,14 @@ describe("Alice Eliza runtime patch contract", () => {
       expect(bridgeSource).toContain('"/api/streaming"');
       expect(bridgeSource).toContain('"/api/logs"');
       expect(bridgeSource).toContain('"/api/companion"');
+      expect(bridgeSource).toContain('"/api/apps"');
+      expect(bridgeSource).toContain('"/api/browser-workspace"');
+      expect(bridgeSource).toContain('"/api/cloud"');
+      expect(bridgeSource).toContain('"/api/connectors"');
+      expect(bridgeSource).toContain('"/api/inbox"');
+      expect(bridgeSource).toContain('"/api/lifeops"');
+      expect(bridgeSource).toContain('"/api/triggers"');
+      expect(bridgeSource).toContain('"/api/wallet"');
       expect(bridgeSource).toContain("getProvidedApiToken");
       expect(bridgeSource).toContain("tokenMatches");
       expect(bridgeSource).toContain("isAgentApiAuthorized");
@@ -382,6 +392,44 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceAppCoreAgentStatusAuthBridgePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches core browser entry to expose validation helpers", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-core-browser-validation-"),
+    );
+    try {
+      const coreDir = path.join(tempDir, "packages", "core", "src");
+      mkdirSync(coreDir, { recursive: true });
+      const indexPath = path.join(coreDir, "index.browser.ts");
+      writeFileSync(
+        indexPath,
+        [
+          'export * from "./types";',
+          'export { logger } from "./logger";',
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceCoreBrowserValidationReexportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(indexPath, "utf8");
+      expect(isAliceCoreBrowserValidationReexportPatched(patched)).toBe(true);
+      expect(patched).toContain('export * from "./validation";');
+
+      expect(
+        applyAliceCoreBrowserValidationReexportPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

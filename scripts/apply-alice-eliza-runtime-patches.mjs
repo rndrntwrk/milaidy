@@ -179,15 +179,27 @@ import type { CompatRuntimeState } from "./compat-route-shared";
 const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [
   "/api/agent/events",
   "/api/agents",
+  "/api/alice",
+  "/api/apps",
+  "/api/browser-workspace",
   "/api/broadcast",
+  "/api/catalog",
+  "/api/cloud",
   "/api/coding-agents",
   "/api/companion",
+  "/api/connectors",
   "/api/conversations",
+  "/api/inbox",
+  "/api/lifeops",
   "/api/logs",
+  "/api/onboarding",
+  "/api/plugins",
   "/api/security/audit",
   "/api/status",
   "/api/stream",
   "/api/streaming",
+  "/api/triggers",
+  "/api/wallet",
   "/v1",
 ] as const;
 
@@ -1379,6 +1391,51 @@ export function applyAliceCoreBrowserSpokenTextReexportPatch({
   writeFileSync(indexPath, next);
   log(
     "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export spoken-text (sanitizeSpeechText)",
+  );
+  return "applied";
+}
+
+const coreBrowserValidationReexportSentinel =
+  "// [milaidy:core-browser-validation-reexport]";
+const coreBrowserValidationReexport = `${coreBrowserValidationReexportSentinel}
+// eliza/packages/core/src/validation exports validateActionKeywords,
+// validateActionRegex, and pure secret-format validators. index.node.ts and
+// index.edge.ts re-export this module, but index.browser.ts omits it. Browser
+// Vite builds can still statically bind plugins through @elizaos/core, and
+// plugin-shell/plugin-social-alpha/plugin-mysticism import these helpers.
+// The validation module has no node:* imports, so mirroring the edge/node
+// surface is browser-safe and fixes Rollup missing-export failures.
+export * from "./validation";
+`;
+
+export function isAliceCoreBrowserValidationReexportPatched(source) {
+  return source.includes(coreBrowserValidationReexportSentinel);
+}
+
+export function applyAliceCoreBrowserValidationReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser validation reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserValidationReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser validation reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserValidationReexport}`
+    : `${source}\n\n${coreBrowserValidationReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export validation (validateActionKeywords, validateActionRegex, secret validators)",
   );
   return "applied";
 }
@@ -4927,6 +4984,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserSettingsDebugReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserCloudTopologyReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSpokenTextReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserValidationReexportPatch({ elizaRoot, log }),
     // Must run AFTER all the core-browser wildcard re-exports above so the
     // disambiguation appears last in the file and wins for TS resolution.
     applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({ elizaRoot, log }),
