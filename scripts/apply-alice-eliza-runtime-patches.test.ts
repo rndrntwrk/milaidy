@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAliceAppCoreAgentStatusAuthBridgePatch,
   applyAliceAppCoreCodingAgentsFallbackPatch,
   applyAliceAppCoreCompanionStagePatch,
   applyAliceAppCoreOpenAccessPatch,
@@ -33,6 +34,7 @@ import {
   applyAlicePgliteContainerLockPatch,
   aliceElizaRuntimePatchRelativePath,
   isAliceAppCoreCodingAgentsFallbackPatched,
+  isAliceAppCoreAgentStatusAuthBridgePatched,
   isAliceAppCoreCompanionStagePatched,
   isAliceLifeOpsCalendarActionPatched,
   isAliceBundledKnowledgeStartupDeferralPatched,
@@ -278,6 +280,79 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceAppCoreCodingAgentsFallbackPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches source-mode app-core to bridge app-core sessions into legacy /api/status auth", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-status-auth-bridge-"),
+    );
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const serverPath = path.join(apiDir, "server.ts");
+      const bridgePath = path.join(apiDir, "agent-status-auth-bridge.ts");
+      writeFileSync(
+        serverPath,
+        [
+          'import { applyRouteModeGuard } from "../runtime/mode/route-mode-guard";',
+          'import { sendJson as sendJsonResponse } from "./response";',
+          "export function patchHttpCreateServerForCompat(state) {",
+          "  const wrappedListener = async (req, res) => {",
+          "      if (state) {",
+          '        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;',
+          "        if (",
+          '          pathname.startsWith("/api/database") ||',
+          '          pathname.startsWith("/api/trajectories")',
+          "        ) {",
+          "          await ensureRuntimeSqlCompatibility(state.current);",
+          "        }",
+          "",
+          "        try {",
+          "          if (await handleCompatRoute(req, res, state)) {",
+          "            return;",
+          "          }",
+          "        } catch (err) {",
+          "          throw err;",
+          "        }",
+          "      }",
+          "  };",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceAppCoreAgentStatusAuthBridgePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patchedServer = readFileSync(serverPath, "utf8");
+      const bridgeSource = readFileSync(bridgePath, "utf8");
+      expect(
+        isAliceAppCoreAgentStatusAuthBridgePatched(
+          patchedServer,
+          bridgeSource,
+        ),
+      ).toBe(true);
+      expect(patchedServer).toContain(
+        'import { authorizeAgentStatusFallback } from "./agent-status-auth-bridge";',
+      );
+      expect(patchedServer).toContain(
+        "if (!(await authorizeAgentStatusFallback(req, res, state)))",
+      );
+      expect(bridgeSource).toContain('pathname !== "/api/status"');
+      expect(bridgeSource).toContain("req.headers.authorization");
+
+      expect(
+        applyAliceAppCoreAgentStatusAuthBridgePatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
