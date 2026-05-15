@@ -367,6 +367,7 @@ describe("Alice Eliza runtime patch contract", () => {
       expect(bridgeSource).toContain('"/api/companion"');
       expect(bridgeSource).toContain("getProvidedApiToken");
       expect(bridgeSource).toContain("tokenMatches");
+      expect(bridgeSource).toContain("isAgentApiAuthorized");
       expect(bridgeSource).toContain('pathname === "/api/status"');
       expect(bridgeSource).toContain('pathname === "/api/apps/favorites"');
       expect(bridgeSource).toContain(

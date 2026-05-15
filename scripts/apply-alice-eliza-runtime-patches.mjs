@@ -168,6 +168,7 @@ export function buildKubeHealthResponse(
 
 const agentStatusAuthBridgeSource = `import crypto from "node:crypto";
 import type http from "node:http";
+import { isAuthorized as isAgentApiAuthorized } from "@miladyai/agent/api/server";
 import {
   ensureRouteAuthorized,
   getCompatApiToken,
@@ -255,6 +256,14 @@ export async function authorizeAgentStatusFallback(
   const token = getCompatApiToken();
   const provided = getProvidedApiToken(req);
   if (token && provided && tokenMatches(token, provided)) return true;
+
+  if (isAgentApiAuthorized(req)) {
+    if (token) {
+      req.headers.authorization = \`Bearer \${token}\`;
+      req.headers["x-api-key"] = token;
+    }
+    return true;
+  }
 
   if (!(await ensureRouteAuthorized(req, res, state))) return false;
 
