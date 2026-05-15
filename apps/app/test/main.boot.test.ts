@@ -16,4 +16,20 @@ describe("renderer boot guard", () => {
     expect(source).toContain("window.__MILADY_REACT_ROOT__ ?? createRoot(rootEl)");
     expect(source).toContain("if (window.__MILADY_APP_BOOT_PROMISE__)");
   });
+
+  it("defers the eager Agent status probe while browser auth is required", () => {
+    const testDir = path.dirname(fileURLToPath(import.meta.url));
+    const source = fs.readFileSync(
+      path.resolve(testDir, "../src/main.tsx"),
+      "utf-8",
+    );
+
+    expect(source).toContain("const auth = await client.getAuthStatus()");
+    expect(source).toContain(
+      "if (auth?.required && !auth.localAccess && !auth.authenticated)",
+    );
+    expect(source.indexOf("client.getAuthStatus")).toBeLessThan(
+      source.indexOf("Agent.getStatus()"),
+    );
+  });
 });

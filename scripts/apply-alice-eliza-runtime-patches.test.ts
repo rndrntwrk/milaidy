@@ -479,6 +479,14 @@ describe("Alice Eliza runtime patch contract", () => {
         "state",
         "startup-phase-poll.ts",
       );
+      const onboardingBootstrapPath = path.join(
+        tempDir,
+        "packages",
+        "ui",
+        "src",
+        "state",
+        "onboarding-bootstrap.ts",
+      );
       const startupPhaseRuntimePath = path.join(
         tempDir,
         "packages",
@@ -506,6 +514,7 @@ describe("Alice Eliza runtime patch contract", () => {
       for (const filePath of [
         appPath,
         hooksIndexPath,
+        onboardingBootstrapPath,
         startupShellPath,
         startupPhasePollPath,
         startupPhaseRuntimePath,
@@ -514,6 +523,32 @@ describe("Alice Eliza runtime patch contract", () => {
       ]) {
         mkdirSync(path.dirname(filePath), { recursive: true });
       }
+
+      writeFileSync(
+        onboardingBootstrapPath,
+        [
+          "export interface ExistingOnboardingProbeClient {",
+          "  apiAvailable: boolean;",
+          "  getOnboardingStatus: () => Promise<{ complete: boolean }>;",
+          "  getConfig: () => Promise<Record<string, unknown> | null | undefined>;",
+          "}",
+          "",
+          "export async function detectExistingOnboardingConnection(args: {",
+          "  client: ExistingOnboardingProbeClient;",
+          "  timeoutMs: number;",
+          "}) {",
+          "  if (!args.client.apiAvailable) {",
+          "    return null;",
+          "  }",
+          "",
+          '  const timeoutToken = Symbol("onboarding-bootstrap-timeout");',
+          "  const status = await args.client.getOnboardingStatus().catch(() => null);",
+          "  if (!status) return null;",
+          "  const config = await args.client.getConfig().catch(() => null);",
+          "  return config ? { detectedExistingInstall: true } : null;",
+          "}",
+        ].join("\n"),
+      );
 
       writeFileSync(
         startupPhaseRuntimePath,
@@ -766,6 +801,10 @@ describe("Alice Eliza runtime patch contract", () => {
       const patchedSources = {
         appSource: readFileSync(appPath, "utf8"),
         hooksIndexSource: readFileSync(hooksIndexPath, "utf8"),
+        onboardingBootstrapSource: readFileSync(
+          onboardingBootstrapPath,
+          "utf8",
+        ),
         startupShellSource: readFileSync(startupShellPath, "utf8"),
         startupPhasePollSource: readFileSync(startupPhasePollPath, "utf8"),
         startupPhaseRuntimeSource: readFileSync(startupPhaseRuntimePath, "utf8"),
@@ -776,6 +815,22 @@ describe("Alice Eliza runtime patch contract", () => {
       expect(isAliceUiAuthGatedStartupPatched(patchedSources)).toBe(true);
       expect(patchedSources.startupPhaseRuntimeSource).toContain(
         'dispatch({ type: "BACKEND_AUTH_REQUIRED" });',
+      );
+      expect(patchedSources.onboardingBootstrapSource).toContain(
+        "getAuthStatus?: () => Promise",
+      );
+      expect(patchedSources.onboardingBootstrapSource).toContain(
+        "Auth-gated origins must not run protected onboarding probes before a browser session exists.",
+      );
+      expect(patchedSources.onboardingBootstrapSource).toContain(
+        "args.client.hasToken?.() === true",
+      );
+      expect(
+        patchedSources.onboardingBootstrapSource.indexOf("getAuthStatus"),
+      ).toBeLessThan(
+        patchedSources.onboardingBootstrapSource.indexOf(
+          "getOnboardingStatus",
+        ),
       );
       expect(patchedSources.startupPhaseRuntimeSource).not.toContain(
         "Advance to ready so the auth gate",
