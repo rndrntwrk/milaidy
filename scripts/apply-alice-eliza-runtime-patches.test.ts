@@ -17,6 +17,7 @@ import {
   applyAliceAppCoreCompanionStagePatch,
   applyAliceAppCoreDashboardFallbackRoutesPatch,
   applyAliceAppCoreOpenAccessPatch,
+  applyAliceUiAuthGatedStartupPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceCoreBasicCapabilitiesBrowserSafePatch,
   applyAliceAppViteStubMammothPatch,
@@ -44,6 +45,7 @@ import {
   isAlicePgliteContainerLockPatchPatched,
   isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
+  isAliceUiAuthGatedStartupPatched,
   rewriteRelativeTsRuntimeSpecifiers,
 } from "./apply-alice-eliza-runtime-patches.mjs";
 
@@ -437,6 +439,363 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceAppCoreDashboardFallbackRoutesPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps password-required startup behind the UI auth gate before hydrating", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-ui-auth-gated-startup-"),
+    );
+    try {
+      const appPath = path.join(tempDir, "packages", "ui", "src", "App.tsx");
+      const hooksIndexPath = path.join(
+        tempDir,
+        "packages",
+        "ui",
+        "src",
+        "hooks",
+        "index.ts",
+      );
+      const startupShellPath = path.join(
+        tempDir,
+        "packages",
+        "ui",
+        "src",
+        "components",
+        "shell",
+        "StartupShell.tsx",
+      );
+      const startupPhasePollPath = path.join(
+        tempDir,
+        "packages",
+        "ui",
+        "src",
+        "state",
+        "startup-phase-poll.ts",
+      );
+      const startupPhaseRuntimePath = path.join(
+        tempDir,
+        "packages",
+        "ui",
+        "src",
+        "state",
+        "startup-phase-runtime.ts",
+      );
+      const appShellStatePath = path.join(
+        tempDir,
+        "packages",
+        "ui",
+        "src",
+        "state",
+        "useAppShellState.ts",
+      );
+      const vincentStatePath = path.join(
+        tempDir,
+        "plugins",
+        "app-vincent",
+        "src",
+        "useVincentState.ts",
+      );
+
+      for (const filePath of [
+        appPath,
+        hooksIndexPath,
+        startupShellPath,
+        startupPhasePollPath,
+        startupPhaseRuntimePath,
+        appShellStatePath,
+        vincentStatePath,
+      ]) {
+        mkdirSync(path.dirname(filePath), { recursive: true });
+      }
+
+      writeFileSync(
+        startupPhaseRuntimePath,
+        [
+          'function run(deps, client, dispatch) {',
+          "  try {",
+          "  } catch (err) {",
+          "    const ae = asApiLikeError(err);",
+          '      if ((ae?.status === 401 || ae?.status === 429) && client.hasToken()) {',
+          "        // 401/429 with a token. Two flavors to distinguish:",
+          "        //   1. Genuine port race / pre-bearer endpoint window — /api/auth/status",
+          "        //      itself isn't reachable yet. Keep retrying.",
+          "        //   2. Bearer-only token (paired but no password session). Server says",
+          "        //      /api/auth/status is fine (authenticated:true) but app endpoints",
+          "        //      like /api/agent/status still 401, or 429 from the auth rate",
+          "        //      limiter on those endpoints. /api/auth/me returns",
+          '        //      reason="remote_auth_required". Advance to ready so the auth gate',
+          "        //      can render LoginView. Hydrating tolerates 401s.",
+          "        try {",
+          "          const auth = await client.getAuthStatus();",
+          "          const remotePasswordMissing =",
+          "            auth.required &&",
+          "            auth.loginRequired &&",
+          "            auth.passwordConfigured === false;",
+          "          if (auth.authenticated || remotePasswordMissing) {",
+          "            deps.setOnboardingLoading(false);",
+          '            dispatch({ type: "AGENT_RUNNING" });',
+          "            return;",
+          "          }",
+          "        } catch {",
+          "          // /api/auth/status itself unreachable — keep retrying.",
+          "        }",
+          "      }",
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      writeFileSync(
+        startupPhasePollPath,
+        [
+          'function poll(deps, client, dispatch, latestAuth) {',
+          "      // Token holder, but the server still says auth is required (e.g. the",
+          "      // remote owner password has not been set yet, so /api/auth/me will",
+          '      // return 401 with reason="remote_password_not_configured"). Don\'t',
+          "      // loop polling forever — advance the coordinator to \"ready\" so the",
+          "      // top-level auth gate can render LoginView with an actionable",
+          '      // "Remote access blocked" message. Without this, the phone is stuck',
+          "      // on the splash because every onboarding/runtime endpoint returns 401.",
+          "      if (auth.required && !auth.authenticated && client.hasToken()) {",
+          "        deps.setAuthRequired(false);",
+          "        deps.setOnboardingComplete(true);",
+          "        deps.setOnboardingLoading(false);",
+          '        dispatch({ type: "BACKEND_REACHED", onboardingComplete: true });',
+          "        return;",
+          "      }",
+          "      if (",
+          "        (ae?.status === 401 || ae?.status === 429) &&",
+          "        client.hasToken() &&",
+          "        latestAuth.authenticated",
+          "      ) {",
+          "        // Bearer-only token (paired but no password session). /api/auth/status",
+          "        // returned authenticated:true but a downstream endpoint",
+          "        // (onboarding-status, etc.) still 401s, or the server's auth rate",
+          '        // limiter starts returning 429 ("Too many authentication attempts")',
+          "        // because every poll re-checks bearer-vs-session. /api/auth/me responds",
+          '        // with reason="remote_auth_required" in this state. Don\'t loop forever',
+          "        // — advance to ready so the top-level auth gate can render LoginView",
+          '        // with an actionable "Sign in" / "Remote access blocked" prompt.',
+          "        deps.setAuthRequired(false);",
+          "        deps.setOnboardingComplete(true);",
+          "        deps.setOnboardingLoading(false);",
+          '        dispatch({ type: "BACKEND_REACHED", onboardingComplete: true });',
+          "        return;",
+          "      }",
+          "}",
+        ].join("\n"),
+      );
+
+      writeFileSync(
+        startupShellPath,
+        [
+          'import { useCallback, useEffect, useRef, useState } from "react";',
+          'import { client } from "../../api";',
+          'import { useApp } from "../../state";',
+          'import { BootstrapStep } from "../onboarding/BootstrapStep";',
+          'import { PairingView } from "./PairingView";',
+          "",
+          "export function StartupShell() {",
+          "  const { startupCoordinator } = useApp();",
+          "  const phase = startupCoordinator.phase;",
+          "  const [showBootstrap, setShowBootstrap] = useState(false);",
+          "  const coordinatorDispatchRef = useRef(startupCoordinator.dispatch);",
+          "  coordinatorDispatchRef.current = startupCoordinator.dispatch;",
+          "  const coordinatorStateRef = useRef(startupCoordinator.state);",
+          "  coordinatorStateRef.current = startupCoordinator.state;",
+          "",
+          "  // Pairing — delegate",
+          '  if (phase === "pairing-required") {',
+          "    return <PairingView />;",
+          "  }",
+          "  if (phase === \"onboarding-required\") return <BootstrapStep />;",
+          "  return null;",
+          "}",
+        ].join("\n"),
+      );
+
+      writeFileSync(
+        appPath,
+        [
+          "function App() {",
+          "  useEffect(() => {",
+          '    if (startupCoordinator.phase !== "ready") return;',
+          '    if (backendConnection?.state !== "connected") return;',
+          "",
+          "    const report = () => {",
+          '      void fetchWithCsrf("/api/apps/overlay-presence", {',
+          '        method: "POST",',
+          '        headers: { "Content-Type": "application/json" },',
+          "        body: JSON.stringify({ appName: activeOverlayApp }),",
+          "      }).catch(() => {",
+          "        /* ignore */",
+          "      });",
+          "    };",
+          "",
+          "    report();",
+          "    const intervalId = window.setInterval(report, 25_000);",
+          "    return () => {",
+          "      window.clearInterval(intervalId);",
+          '      void fetchWithCsrf("/api/apps/overlay-presence", {',
+          '        method: "POST",',
+          '        headers: { "Content-Type": "application/json" },',
+          "        body: JSON.stringify({ appName: null }),",
+          "      }).catch(() => {",
+          "        /* ignore */",
+          "      });",
+          "    };",
+          "  }, [activeOverlayApp, backendConnection?.state, startupCoordinator.phase]);",
+          '    if (authState.phase === "unauthenticated") {',
+          "      return (",
+          "        <BugReportProvider value={bugReport}>",
+          "          <LoginView onLoginSuccess={refetchAuth} reason={authState.reason} />",
+          "          <BugReportModal />",
+          "        </BugReportProvider>",
+          "      );",
+          "    }",
+          "    // While loading the auth state we allow the main shell to continue",
+          "    // rendering (avoids a flash of login screen on refresh when cookies are valid).",
+          "  return shellContent;",
+          "}",
+        ].join("\n"),
+      );
+
+      writeFileSync(
+        appShellStatePath,
+        [
+          'import { useCallback, useEffect, useState } from "react";',
+          'import { fetchServerFavoriteApps } from "./persistence";',
+          "",
+          "export function useAppShellState() {",
+          "  const [configRaw, setConfigRaw] = useState<Record<string, unknown>>({});",
+          '  const [configText, setConfigText] = useState("");',
+          "",
+          "  useEffect(() => {",
+          "    let cancelled = false;",
+          "    void fetchServerFavoriteApps().then((serverApps) => {",
+          "      if (cancelled || serverApps == null) return;",
+          "      setFavoriteAppsRaw((current) => {",
+          "        if (",
+          "          current.length === serverApps.length &&",
+          "          current.every((entry, idx) => entry === serverApps[idx])",
+          "        ) {",
+          "          return current;",
+          "        }",
+          "        return serverApps;",
+          "      });",
+          "    });",
+          "    return () => {",
+          "      cancelled = true;",
+          "    };",
+          "  }, []);",
+          "  return null;",
+          "}",
+        ].join("\n"),
+      );
+
+      writeFileSync(
+        hooksIndexPath,
+        [
+          'export * from "./useActivityEvents";',
+          'export * from "./useAutomationDeepLink";',
+          "",
+        ].join("\n"),
+      );
+
+      writeFileSync(
+        vincentStatePath,
+        [
+          'import { openExternalUrl } from "@elizaos/ui";',
+          'import { useCallback, useEffect, useRef, useState } from "react";',
+          'import { vincentClient } from "./client";',
+          "",
+          "export function useVincentState({ setActionNotice, t }) {",
+          "  const [vincentConnected, setVincentConnected] = useState(false);",
+          "  const [vincentLoginBusy, setVincentLoginBusy] = useState(false);",
+          "  const busyRef = useRef(false);",
+          "  const loginPollRef = useRef<ReturnType<typeof setInterval> | null>(null);",
+          "",
+          "  const pollVincentStatus = useCallback(async () => {",
+          "    try {",
+          "      const status = await vincentClient.vincentStatus();",
+          "      setVincentConnected(status.connected);",
+          "      setVincentConnectedAt(status.connectedAt);",
+          "      return status.connected;",
+          "    } catch {",
+          "      return false;",
+          "    }",
+          "  }, []);",
+          "",
+          "  useEffect(() => {",
+          "    void pollVincentStatus();",
+          "    return () => {",
+          "      if (loginPollRef.current) {",
+          "        clearInterval(loginPollRef.current);",
+          "        loginPollRef.current = null;",
+          "      }",
+          "    };",
+          "  }, [pollVincentStatus]);",
+          "",
+          "  const handleVincentLogin = useCallback(async () => {",
+          "    if (vincentConnected || busyRef.current || vincentLoginBusy) return;",
+          "  }, [",
+          "    pollVincentStatus,",
+          "    setActionNotice,",
+          "    t,",
+          "    vincentConnected,",
+          "    vincentLoginBusy,",
+          "  ]);",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceUiAuthGatedStartupPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patchedSources = {
+        appSource: readFileSync(appPath, "utf8"),
+        hooksIndexSource: readFileSync(hooksIndexPath, "utf8"),
+        startupShellSource: readFileSync(startupShellPath, "utf8"),
+        startupPhasePollSource: readFileSync(startupPhasePollPath, "utf8"),
+        startupPhaseRuntimeSource: readFileSync(startupPhaseRuntimePath, "utf8"),
+        appShellStateSource: readFileSync(appShellStatePath, "utf8"),
+        vincentStateSource: readFileSync(vincentStatePath, "utf8"),
+      };
+
+      expect(isAliceUiAuthGatedStartupPatched(patchedSources)).toBe(true);
+      expect(patchedSources.startupPhaseRuntimeSource).toContain(
+        'dispatch({ type: "BACKEND_AUTH_REQUIRED" });',
+      );
+      expect(patchedSources.startupPhaseRuntimeSource).not.toContain(
+        "Advance to ready so the auth gate",
+      );
+      expect(patchedSources.startupPhasePollSource).not.toContain(
+        'dispatch({ type: "BACKEND_REACHED", onboardingComplete: true });',
+      );
+      expect(patchedSources.startupShellSource).toContain("<LoginView");
+      expect(patchedSources.appSource).toContain(
+        'data-testid="auth-loading-gate"',
+      );
+      expect(patchedSources.appShellStateSource).toContain(
+        'authState.phase !== "authenticated"',
+      );
+      expect(patchedSources.vincentStateSource).toContain(
+        "if (!authReady) return false;",
+      );
+
+      expect(
+        applyAliceUiAuthGatedStartupPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

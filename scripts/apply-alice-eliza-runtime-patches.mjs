@@ -33,6 +33,17 @@ const coreBasicCapabilitiesRelativePath =
 const coreBuildRelativePath = "packages/core/build.ts";
 const appViteNativeStubRelativePath =
   "packages/app/vite/native-module-stub-plugin.ts";
+const uiAppRelativePath = "packages/ui/src/App.tsx";
+const uiHooksIndexRelativePath = "packages/ui/src/hooks/index.ts";
+const uiStartupShellRelativePath =
+  "packages/ui/src/components/shell/StartupShell.tsx";
+const uiStartupPhasePollRelativePath =
+  "packages/ui/src/state/startup-phase-poll.ts";
+const uiStartupPhaseRuntimeRelativePath =
+  "packages/ui/src/state/startup-phase-runtime.ts";
+const uiAppShellStateRelativePath =
+  "packages/ui/src/state/useAppShellState.ts";
+const appVincentStateRelativePath = "plugins/app-vincent/src/useVincentState.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
@@ -3635,6 +3646,688 @@ export function applyAliceBundledKnowledgeStartupDeferralPatch({
   return "applied";
 }
 
+function patchAliceStartupPhaseRuntimeAuthGateSource(source) {
+  if (
+    source.includes(
+      "Remote password/session auth stays behind the startup auth gate",
+    )
+  ) {
+    return source;
+  }
+
+  const anchor = `      if ((ae?.status === 401 || ae?.status === 429) && client.hasToken()) {
+        // 401/429 with a token. Two flavors to distinguish:
+        //   1. Genuine port race / pre-bearer endpoint window — /api/auth/status
+        //      itself isn't reachable yet. Keep retrying.
+        //   2. Bearer-only token (paired but no password session). Server says
+        //      /api/auth/status is fine (authenticated:true) but app endpoints
+        //      like /api/agent/status still 401, or 429 from the auth rate
+        //      limiter on those endpoints. /api/auth/me returns
+        //      reason="remote_auth_required". Advance to ready so the auth gate
+        //      can render LoginView. Hydrating tolerates 401s.
+        try {
+          const auth = await client.getAuthStatus();
+          const remotePasswordMissing =
+            auth.required &&
+            auth.loginRequired &&
+            auth.passwordConfigured === false;
+          if (auth.authenticated || remotePasswordMissing) {
+            deps.setOnboardingLoading(false);
+            dispatch({ type: "AGENT_RUNNING" });
+            return;
+          }
+        } catch {
+          // /api/auth/status itself unreachable — keep retrying.
+        }
+      }
+`;
+  const patch = `      if ((ae?.status === 401 || ae?.status === 429) && client.hasToken()) {
+        // Remote password/session auth stays behind the startup auth gate.
+        // /api/auth/status is intentionally public and may report a valid bearer
+        // token while protected app endpoints still require the browser password
+        // session. Do not advance into hydrating/ready here: that mounts the full
+        // shell and fans out protected calls before LoginView can run.
+        try {
+          const auth = await client.getAuthStatus();
+          const remotePasswordMissing =
+            auth.required &&
+            auth.loginRequired &&
+            auth.passwordConfigured === false;
+          if (auth.authenticated || remotePasswordMissing) {
+            deps.setAuthRequired(true);
+            deps.setPairingEnabled(auth.pairingEnabled);
+            deps.setPairingExpiresAt(auth.expiresAt);
+            deps.setOnboardingLoading(false);
+            dispatch({ type: "BACKEND_AUTH_REQUIRED" });
+            return;
+          }
+        } catch {
+          // /api/auth/status itself unreachable — keep retrying.
+        }
+      }
+`;
+  if (!source.includes(anchor)) {
+    throw new Error("ui startup runtime bearer-auth gate anchor drifted");
+  }
+  return source.replace(anchor, patch);
+}
+
+function patchAliceStartupPhasePollAuthGateSource(source) {
+  if (
+    source.includes(
+      "Token holders with password/session auth still pending stay behind the startup auth gate",
+    ) &&
+    source.includes("Keep startup in the auth gate; do not enter ready.")
+  ) {
+    return source;
+  }
+
+  const tokenRequiredAnchor = `      // Token holder, but the server still says auth is required (e.g. the
+      // remote owner password has not been set yet, so /api/auth/me will
+      // return 401 with reason="remote_password_not_configured"). Don't
+      // loop polling forever — advance the coordinator to "ready" so the
+      // top-level auth gate can render LoginView with an actionable
+      // "Remote access blocked" message. Without this, the phone is stuck
+      // on the splash because every onboarding/runtime endpoint returns 401.
+      if (auth.required && !auth.authenticated && client.hasToken()) {
+        deps.setAuthRequired(false);
+        deps.setOnboardingComplete(true);
+        deps.setOnboardingLoading(false);
+        dispatch({ type: "BACKEND_REACHED", onboardingComplete: true });
+        return;
+      }
+`;
+  const tokenRequiredPatch = `      // Token holders with password/session auth still pending stay behind the startup auth gate.
+      // LoginView can now render directly from the auth-required startup phase,
+      // so advancing to ready here would only mount hydrating/dashboard effects
+      // that call protected endpoints before the user signs in.
+      if (auth.required && !auth.authenticated && client.hasToken()) {
+        deps.setAuthRequired(true);
+        deps.setPairingEnabled(auth.pairingEnabled);
+        deps.setPairingExpiresAt(auth.expiresAt);
+        deps.setOnboardingLoading(false);
+        dispatch({ type: "BACKEND_AUTH_REQUIRED" });
+        return;
+      }
+`;
+  if (!source.includes(tokenRequiredAnchor)) {
+    throw new Error("ui startup poll token-required auth gate anchor drifted");
+  }
+  let next = source.replace(tokenRequiredAnchor, tokenRequiredPatch);
+
+  const downstreamAuthAnchor = `      if (
+        (ae?.status === 401 || ae?.status === 429) &&
+        client.hasToken() &&
+        latestAuth.authenticated
+      ) {
+        // Bearer-only token (paired but no password session). /api/auth/status
+        // returned authenticated:true but a downstream endpoint
+        // (onboarding-status, etc.) still 401s, or the server's auth rate
+        // limiter starts returning 429 ("Too many authentication attempts")
+        // because every poll re-checks bearer-vs-session. /api/auth/me responds
+        // with reason="remote_auth_required" in this state. Don't loop forever
+        // — advance to ready so the top-level auth gate can render LoginView
+        // with an actionable "Sign in" / "Remote access blocked" prompt.
+        deps.setAuthRequired(false);
+        deps.setOnboardingComplete(true);
+        deps.setOnboardingLoading(false);
+        dispatch({ type: "BACKEND_REACHED", onboardingComplete: true });
+        return;
+      }
+`;
+  const downstreamAuthPatch = `      if (
+        (ae?.status === 401 || ae?.status === 429) &&
+        client.hasToken() &&
+        latestAuth.authenticated
+      ) {
+        // Bearer-only token (paired but no password session), or auth-rate 429
+        // caused by protected endpoint polling before the browser password
+        // session exists. Keep startup in the auth gate; do not enter ready.
+        deps.setAuthRequired(true);
+        deps.setPairingEnabled(latestAuth.pairingEnabled);
+        deps.setPairingExpiresAt(latestAuth.expiresAt);
+        deps.setOnboardingLoading(false);
+        dispatch({ type: "BACKEND_AUTH_REQUIRED" });
+        return;
+      }
+`;
+  if (!next.includes(downstreamAuthAnchor)) {
+    throw new Error("ui startup poll downstream-auth gate anchor drifted");
+  }
+  next = next.replace(downstreamAuthAnchor, downstreamAuthPatch);
+  return next;
+}
+
+function patchAliceStartupShellAuthGateSource(source) {
+  if (
+    source.includes("handleStartupLoginSuccess") &&
+    source.includes("usePasswordLoginGate") &&
+    source.includes('from "../auth/LoginView"')
+  ) {
+    return source;
+  }
+
+  let next = source;
+  const importAnchor = `import { BootstrapStep } from "../onboarding/BootstrapStep";
+import { PairingView } from "./PairingView";
+`;
+  if (!next.includes(importAnchor)) {
+    throw new Error("ui StartupShell auth import anchor drifted");
+  }
+  next = next.replace(
+    importAnchor,
+    `import { LoginView, type LoginViewProps } from "../auth/LoginView";
+import { BootstrapStep } from "../onboarding/BootstrapStep";
+import { PairingView } from "./PairingView";
+`,
+  );
+
+  const refAnchor = `  const coordinatorStateRef = useRef(startupCoordinator.state);
+  coordinatorStateRef.current = startupCoordinator.state;
+
+`;
+  const loginGateStatePatch = `${refAnchor}  const [usePasswordLoginGate, setUsePasswordLoginGate] = useState(() =>
+    client.hasToken(),
+  );
+  const [startupLoginReason, setStartupLoginReason] =
+    useState<LoginViewProps["reason"]>();
+
+  useEffect(() => {
+    if (phase !== "pairing-required") {
+      setUsePasswordLoginGate(client.hasToken());
+      setStartupLoginReason(undefined);
+      return;
+    }
+
+    setUsePasswordLoginGate(client.hasToken());
+    let cancelled = false;
+    void client
+      .getAuthStatus()
+      .then((auth) => {
+        if (cancelled) return;
+        const shouldUsePasswordLogin =
+          client.hasToken() ||
+          auth.loginRequired === true ||
+          auth.passwordConfigured === false;
+        setUsePasswordLoginGate(shouldUsePasswordLogin);
+        setStartupLoginReason(
+          auth.required &&
+            auth.loginRequired &&
+            auth.passwordConfigured === false
+            ? "remote_password_not_configured"
+            : "remote_auth_required",
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setUsePasswordLoginGate(client.hasToken());
+        setStartupLoginReason("remote_auth_required");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
+
+  const handleStartupLoginSuccess = useCallback(() => {
+    coordinatorDispatchRef.current({ type: "PAIRING_SUCCESS" });
+  }, []);
+
+`;
+  if (!next.includes(refAnchor)) {
+    throw new Error("ui StartupShell coordinator ref anchor drifted");
+  }
+  next = next.replace(refAnchor, loginGateStatePatch);
+
+  const pairingAnchor = `  // Pairing — delegate
+  if (phase === "pairing-required") {
+    return <PairingView />;
+  }
+`;
+  const pairingPatch = `  // Auth-required startup — token holders need password login, tokenless clients still pair.
+  if (phase === "pairing-required") {
+    if (usePasswordLoginGate) {
+      return (
+        <LoginView
+          onLoginSuccess={handleStartupLoginSuccess}
+          reason={startupLoginReason}
+        />
+      );
+    }
+    return <PairingView />;
+  }
+`;
+  if (!next.includes(pairingAnchor)) {
+    throw new Error("ui StartupShell pairing render anchor drifted");
+  }
+  return next.replace(pairingAnchor, pairingPatch);
+}
+
+function patchAliceUiAppAuthGateSource(source) {
+  if (
+    source.includes('data-testid="auth-loading-gate"') &&
+    source.includes('authState.phase !== "authenticated"')
+  ) {
+    return source;
+  }
+
+  let next = source;
+  const overlayAnchor = `  useEffect(() => {
+    if (startupCoordinator.phase !== "ready") return;
+    if (backendConnection?.state !== "connected") return;
+
+`;
+  const overlayPatch = `  useEffect(() => {
+    if (startupCoordinator.phase !== "ready") return;
+    if (backendConnection?.state !== "connected") return;
+    if (!isPopout && authState.phase !== "authenticated") return;
+
+`;
+  if (!next.includes(overlayAnchor)) {
+    throw new Error("ui App overlay presence auth guard anchor drifted");
+  }
+  next = next.replace(overlayAnchor, overlayPatch);
+
+  const overlayDepsAnchor = `  }, [activeOverlayApp, backendConnection?.state, startupCoordinator.phase]);
+`;
+  const overlayDepsPatch = `  }, [
+    activeOverlayApp,
+    authState.phase,
+    backendConnection?.state,
+    isPopout,
+    startupCoordinator.phase,
+  ]);
+`;
+  if (!next.includes(overlayDepsAnchor)) {
+    throw new Error("ui App overlay presence deps anchor drifted");
+  }
+  next = next.replace(overlayDepsAnchor, overlayDepsPatch);
+
+  const authLoadingAnchor = `    if (authState.phase === "unauthenticated") {
+      return (
+        <BugReportProvider value={bugReport}>
+          <LoginView onLoginSuccess={refetchAuth} reason={authState.reason} />
+          <BugReportModal />
+        </BugReportProvider>
+      );
+    }
+    // While loading the auth state we allow the main shell to continue
+    // rendering (avoids a flash of login screen on refresh when cookies are valid).
+`;
+  const authLoadingPatch = `    if (authState.phase === "loading") {
+      return (
+        <BugReportProvider value={bugReport}>
+          <div
+            data-testid="auth-loading-gate"
+            className="flex h-[100dvh] w-full items-center justify-center bg-bg text-sm text-muted-foreground"
+            aria-live="polite"
+          >
+            Loading...
+          </div>
+          <BugReportModal />
+        </BugReportProvider>
+      );
+    }
+    if (authState.phase === "unauthenticated") {
+      return (
+        <BugReportProvider value={bugReport}>
+          <LoginView onLoginSuccess={refetchAuth} reason={authState.reason} />
+          <BugReportModal />
+        </BugReportProvider>
+      );
+    }
+`;
+  if (!next.includes(authLoadingAnchor)) {
+    throw new Error("ui App auth loading gate anchor drifted");
+  }
+  return next.replace(authLoadingAnchor, authLoadingPatch);
+}
+
+function patchAliceUseAppShellStateAuthGateSource(source) {
+  if (
+    source.includes("useAuthStatus({ observeOnly: true })") &&
+    source.includes('authState.phase !== "authenticated"')
+  ) {
+    return source;
+  }
+
+  let next = source;
+  const importAnchor = `import { useCallback, useEffect, useState } from "react";
+`;
+  if (!next.includes(importAnchor)) {
+    throw new Error("ui useAppShellState react import anchor drifted");
+  }
+  next = next.replace(
+    importAnchor,
+    `${importAnchor}import { useAuthStatus } from "../hooks/useAuthStatus";
+`,
+  );
+
+  const stateAnchor = `  const [configRaw, setConfigRaw] = useState<Record<string, unknown>>({});
+  const [configText, setConfigText] = useState("");
+
+`;
+  if (!next.includes(stateAnchor)) {
+    throw new Error("ui useAppShellState state anchor drifted");
+  }
+  next = next.replace(
+    stateAnchor,
+    `${stateAnchor}  const { state: authState } = useAuthStatus({ observeOnly: true });
+
+`,
+  );
+
+  const effectAnchor = `  useEffect(() => {
+    let cancelled = false;
+    void fetchServerFavoriteApps().then((serverApps) => {
+      if (cancelled || serverApps == null) return;
+      setFavoriteAppsRaw((current) => {
+        if (
+          current.length === serverApps.length &&
+          current.every((entry, idx) => entry === serverApps[idx])
+        ) {
+          return current;
+        }
+        return serverApps;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+`;
+  const effectPatch = `  useEffect(() => {
+    if (authState.phase !== "authenticated") return;
+
+    let cancelled = false;
+    void fetchServerFavoriteApps().then((serverApps) => {
+      if (cancelled || serverApps == null) return;
+      setFavoriteAppsRaw((current) => {
+        if (
+          current.length === serverApps.length &&
+          current.every((entry, idx) => entry === serverApps[idx])
+        ) {
+          return current;
+        }
+        return serverApps;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authState.phase]);
+`;
+  if (!next.includes(effectAnchor)) {
+    throw new Error("ui useAppShellState favorites effect anchor drifted");
+  }
+  return next.replace(effectAnchor, effectPatch);
+}
+
+function patchAliceUiHooksIndexAuthStatusExportSource(source) {
+  if (source.includes('export * from "./useAuthStatus";')) {
+    return source;
+  }
+  const anchor = `export * from "./useAutomationDeepLink";
+`;
+  if (!source.includes(anchor)) {
+    throw new Error("ui hooks index auth export anchor drifted");
+  }
+  return source.replace(anchor, `${anchor}export * from "./useAuthStatus";
+`);
+}
+
+function patchAliceVincentStateAuthGateSource(source) {
+  if (
+    source.includes("useAuthStatus") &&
+    source.includes('const authReady = authState.phase === "authenticated";')
+  ) {
+    return source;
+  }
+
+  let next = source;
+  const importAnchor = `import { openExternalUrl } from "@elizaos/ui";
+`;
+  if (!next.includes(importAnchor)) {
+    throw new Error("app-vincent auth import anchor drifted");
+  }
+  next = next.replace(
+    importAnchor,
+    `import { openExternalUrl, useAuthStatus } from "@elizaos/ui";
+`,
+  );
+
+  const refsAnchor = `  const busyRef = useRef(false);
+  const loginPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+`;
+  if (!next.includes(refsAnchor)) {
+    throw new Error("app-vincent auth state anchor drifted");
+  }
+  next = next.replace(
+    refsAnchor,
+    `${refsAnchor}  const { state: authState } = useAuthStatus({ observeOnly: true });
+  const authReady = authState.phase === "authenticated";
+
+`,
+  );
+
+  const pollAnchor = `  const pollVincentStatus = useCallback(async () => {
+    try {
+      const status = await vincentClient.vincentStatus();
+      setVincentConnected(status.connected);
+      setVincentConnectedAt(status.connectedAt);
+      return status.connected;
+    } catch {
+      return false;
+    }
+  }, []);
+`;
+  const pollPatch = `  const pollVincentStatus = useCallback(async () => {
+    if (!authReady) return false;
+
+    try {
+      const status = await vincentClient.vincentStatus();
+      setVincentConnected(status.connected);
+      setVincentConnectedAt(status.connectedAt);
+      return status.connected;
+    } catch {
+      return false;
+    }
+  }, [authReady]);
+`;
+  if (!next.includes(pollAnchor)) {
+    throw new Error("app-vincent status poll anchor drifted");
+  }
+  next = next.replace(pollAnchor, pollPatch);
+
+  const effectAnchor = `  useEffect(() => {
+    void pollVincentStatus();
+    return () => {
+      if (loginPollRef.current) {
+        clearInterval(loginPollRef.current);
+        loginPollRef.current = null;
+      }
+    };
+  }, [pollVincentStatus]);
+`;
+  const effectPatch = `  useEffect(() => {
+    if (authReady) void pollVincentStatus();
+    return () => {
+      if (loginPollRef.current) {
+        clearInterval(loginPollRef.current);
+        loginPollRef.current = null;
+      }
+    };
+  }, [authReady, pollVincentStatus]);
+`;
+  if (!next.includes(effectAnchor)) {
+    throw new Error("app-vincent auth effect anchor drifted");
+  }
+  next = next.replace(effectAnchor, effectPatch);
+
+  const loginAnchor = `  const handleVincentLogin = useCallback(async () => {
+    if (vincentConnected || busyRef.current || vincentLoginBusy) return;
+`;
+  const loginPatch = `  const handleVincentLogin = useCallback(async () => {
+    if (!authReady || vincentConnected || busyRef.current || vincentLoginBusy) return;
+`;
+  if (!next.includes(loginAnchor)) {
+    throw new Error("app-vincent login guard anchor drifted");
+  }
+  next = next.replace(loginAnchor, loginPatch);
+
+  const depsAnchor = `  }, [
+    pollVincentStatus,
+    setActionNotice,
+    t,
+    vincentConnected,
+    vincentLoginBusy,
+  ]);
+`;
+  const depsPatch = `  }, [
+    authReady,
+    pollVincentStatus,
+    setActionNotice,
+    t,
+    vincentConnected,
+    vincentLoginBusy,
+  ]);
+`;
+  if (!next.includes(depsAnchor)) {
+    throw new Error("app-vincent login deps anchor drifted");
+  }
+  return next.replace(depsAnchor, depsPatch);
+}
+
+export function isAliceUiAuthGatedStartupPatched({
+  appSource = "",
+  hooksIndexSource = "",
+  startupShellSource = "",
+  startupPhasePollSource = "",
+  startupPhaseRuntimeSource = "",
+  appShellStateSource = "",
+  vincentStateSource = "",
+} = {}) {
+  return (
+    startupPhaseRuntimeSource.includes(
+      "Remote password/session auth stays behind the startup auth gate",
+    ) &&
+    startupPhaseRuntimeSource.includes('dispatch({ type: "BACKEND_AUTH_REQUIRED" });') &&
+    startupPhasePollSource.includes(
+      "Token holders with password/session auth still pending stay behind the startup auth gate",
+    ) &&
+    startupPhasePollSource.includes('deps.setAuthRequired(true);') &&
+    startupShellSource.includes('from "../auth/LoginView"') &&
+    startupShellSource.includes("usePasswordLoginGate") &&
+    startupShellSource.includes("handleStartupLoginSuccess") &&
+    appSource.includes('data-testid="auth-loading-gate"') &&
+    appSource.includes('authState.phase !== "authenticated"') &&
+    appShellStateSource.includes("useAuthStatus({ observeOnly: true })") &&
+    appShellStateSource.includes('authState.phase !== "authenticated"') &&
+    hooksIndexSource.includes('export * from "./useAuthStatus";') &&
+    vincentStateSource.includes("useAuthStatus") &&
+    vincentStateSource.includes('const authReady = authState.phase === "authenticated";')
+  );
+}
+
+export function applyAliceUiAuthGatedStartupPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const paths = {
+    appPath: path.join(elizaRoot, uiAppRelativePath),
+    hooksIndexPath: path.join(elizaRoot, uiHooksIndexRelativePath),
+    startupShellPath: path.join(elizaRoot, uiStartupShellRelativePath),
+    startupPhasePollPath: path.join(elizaRoot, uiStartupPhasePollRelativePath),
+    startupPhaseRuntimePath: path.join(
+      elizaRoot,
+      uiStartupPhaseRuntimeRelativePath,
+    ),
+    appShellStatePath: path.join(elizaRoot, uiAppShellStateRelativePath),
+    vincentStatePath: path.join(elizaRoot, appVincentStateRelativePath),
+  };
+
+  for (const [label, targetPath] of Object.entries(paths)) {
+    if (!existsSync(targetPath)) {
+      throw new Error(`Alice UI auth-gated startup target missing: ${label}`);
+    }
+  }
+
+  const before = {
+    appSource: readFileSync(paths.appPath, "utf8"),
+    hooksIndexSource: readFileSync(paths.hooksIndexPath, "utf8"),
+    startupShellSource: readFileSync(paths.startupShellPath, "utf8"),
+    startupPhasePollSource: readFileSync(paths.startupPhasePollPath, "utf8"),
+    startupPhaseRuntimeSource: readFileSync(paths.startupPhaseRuntimePath, "utf8"),
+    appShellStateSource: readFileSync(paths.appShellStatePath, "utf8"),
+    vincentStateSource: readFileSync(paths.vincentStatePath, "utf8"),
+  };
+
+  if (isAliceUiAuthGatedStartupPatched(before)) {
+    log("[alice-eliza-runtime-patches] UI auth-gated startup patch already applied");
+    return "already-applied";
+  }
+
+  const after = {
+    appSource: patchAliceUiAppAuthGateSource(before.appSource),
+    hooksIndexSource: patchAliceUiHooksIndexAuthStatusExportSource(
+      before.hooksIndexSource,
+    ),
+    startupShellSource: patchAliceStartupShellAuthGateSource(
+      before.startupShellSource,
+    ),
+    startupPhasePollSource: patchAliceStartupPhasePollAuthGateSource(
+      before.startupPhasePollSource,
+    ),
+    startupPhaseRuntimeSource: patchAliceStartupPhaseRuntimeAuthGateSource(
+      before.startupPhaseRuntimeSource,
+    ),
+    appShellStateSource: patchAliceUseAppShellStateAuthGateSource(
+      before.appShellStateSource,
+    ),
+    vincentStateSource: patchAliceVincentStateAuthGateSource(
+      before.vincentStateSource,
+    ),
+  };
+
+  if (!isAliceUiAuthGatedStartupPatched(after)) {
+    throw new Error("Alice UI auth-gated startup patch applied but contract is absent");
+  }
+
+  const writes = [
+    [paths.appPath, before.appSource, after.appSource],
+    [paths.hooksIndexPath, before.hooksIndexSource, after.hooksIndexSource],
+    [paths.startupShellPath, before.startupShellSource, after.startupShellSource],
+    [
+      paths.startupPhasePollPath,
+      before.startupPhasePollSource,
+      after.startupPhasePollSource,
+    ],
+    [
+      paths.startupPhaseRuntimePath,
+      before.startupPhaseRuntimeSource,
+      after.startupPhaseRuntimeSource,
+    ],
+    [
+      paths.appShellStatePath,
+      before.appShellStateSource,
+      after.appShellStateSource,
+    ],
+    [paths.vincentStatePath, before.vincentStateSource, after.vincentStateSource],
+  ];
+  let patchedFiles = 0;
+  for (const [targetPath, previous, next] of writes) {
+    if (previous === next) continue;
+    writeFileSync(targetPath, next);
+    patchedFiles++;
+  }
+
+  log(
+    `[alice-eliza-runtime-patches] patched UI auth-gated startup (${patchedFiles} files)`,
+  );
+  return patchedFiles > 0 ? "applied" : "already-applied";
+}
+
 function applyAliceRuntimeApiBindPatch({
   rootDir,
   elizaRoot,
@@ -3720,6 +4413,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
+    applyAliceUiAuthGatedStartupPatch({ elizaRoot, log }),
     applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
     applyAliceAppLifeOpsDirSubpathExportsPatch({ elizaRoot, log }),
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
