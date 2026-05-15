@@ -15,6 +15,7 @@ import {
   applyAliceAppCoreAgentStatusAuthBridgePatch,
   applyAliceAppCoreCodingAgentsFallbackPatch,
   applyAliceAppCoreCompanionStagePatch,
+  applyAliceAppCoreDashboardFallbackRoutesPatch,
   applyAliceAppCoreOpenAccessPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceCoreBasicCapabilitiesBrowserSafePatch,
@@ -36,6 +37,7 @@ import {
   isAliceAppCoreCodingAgentsFallbackPatched,
   isAliceAppCoreAgentStatusAuthBridgePatched,
   isAliceAppCoreCompanionStagePatched,
+  isAliceAppCoreDashboardFallbackRoutesPatched,
   isAliceLifeOpsCalendarActionPatched,
   isAliceBundledKnowledgeStartupDeferralPatched,
   isAliceKubeHealthReadinessPatched,
@@ -364,6 +366,77 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceAppCoreAgentStatusAuthBridgePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches source-mode app-core with dashboard fallback routes", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-dashboard-fallback-routes-"),
+    );
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const serverPath = path.join(apiDir, "server.ts");
+      const fallbackPath = path.join(apiDir, "dashboard-fallback-routes.ts");
+      writeFileSync(
+        serverPath,
+        [
+          'import { applyRouteModeGuard } from "../runtime/mode/route-mode-guard";',
+          'import { sendJson as sendJsonResponse } from "./response";',
+          "async function handleCompatRoute(",
+          "  req,",
+          "  res,",
+          "  state,",
+          ") {",
+          "  if (method === \"GET\" && url.pathname === \"/api/config\") {",
+          "    sendJsonResponse(res, 200, {});",
+          "    return true;",
+          "  }",
+          "",
+          "  return handleDatabaseRowsCompatRoute(req, res, state);",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceAppCoreDashboardFallbackRoutesPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patchedServer = readFileSync(serverPath, "utf8");
+      const fallbackSource = readFileSync(fallbackPath, "utf8");
+      expect(
+        isAliceAppCoreDashboardFallbackRoutesPatched(
+          patchedServer,
+          fallbackSource,
+        ),
+      ).toBe(true);
+      expect(patchedServer).toContain(
+        'import { handleAliceDashboardFallbackRoutes } from "./dashboard-fallback-routes";',
+      );
+      expect(patchedServer).toContain(
+        "if (await handleAliceDashboardFallbackRoutes(req, res, state)) return true;",
+      );
+      expect(fallbackSource).toContain('pathname === "/api/apps/favorites"');
+      expect(fallbackSource).toContain(
+        'pathname === "/api/apps/overlay-presence"',
+      );
+      expect(fallbackSource).toContain('pathname === "/api/vincent/status"');
+      expect(fallbackSource).toContain(
+        'pathname === "/api/computer-use/approvals"',
+      );
+      expect(fallbackSource).toContain("runtimeHasRoute");
+
+      expect(
+        applyAliceAppCoreDashboardFallbackRoutesPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

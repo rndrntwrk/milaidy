@@ -24,6 +24,8 @@ const appCoreCompatStateRelativePath =
 const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
 const appCoreAgentStatusAuthBridgeRelativePath =
   "packages/app-core/src/api/agent-status-auth-bridge.ts";
+const appCoreDashboardFallbackRoutesRelativePath =
+  "packages/app-core/src/api/dashboard-fallback-routes.ts";
 const appCoreTrustedLocalRequestRelativePath =
   "packages/app-core/src/api/trusted-local-request.ts";
 const coreBasicCapabilitiesRelativePath =
@@ -210,6 +212,229 @@ export async function authorizeAgentStatusFallback(
 }
 `;
 
+const dashboardFallbackRoutesSource = `import type http from "node:http";
+import { loadElizaConfig, saveElizaConfig } from "@elizaos/agent";
+import { ensureRouteAuthorized } from "./auth.ts";
+import {
+  readCompatJsonBody,
+  type CompatRuntimeState,
+} from "./compat-route-shared";
+import {
+  sendJsonError as sendJsonErrorResponse,
+  sendJson as sendJsonResponse,
+} from "./response";
+
+const EMPTY_APPROVAL_SNAPSHOT = {
+  mode: "full_control",
+  pendingCount: 0,
+  pendingApprovals: [],
+} as const;
+
+function sanitizeFavoriteApps(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const apps: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    apps.push(trimmed);
+  }
+  return apps;
+}
+
+function readFavoriteApps(): string[] {
+  const config = loadElizaConfig();
+  const ui = (config.ui ?? {}) as Record<string, unknown>;
+  return sanitizeFavoriteApps(ui.favoriteApps);
+}
+
+function writeFavoriteApps(apps: string[]): string[] {
+  const config = loadElizaConfig();
+  const ui = (config.ui ?? {}) as Record<string, unknown>;
+  const sanitized = sanitizeFavoriteApps(apps);
+  ui.favoriteApps = sanitized;
+  config.ui = ui as typeof config.ui;
+  saveElizaConfig(config);
+  return sanitized;
+}
+
+type RuntimeRouteLike = {
+  type?: string;
+  path?: string;
+};
+
+function routePathMatches(routePath: string, pathname: string): boolean {
+  if (routePath === pathname) return true;
+  const routeParts = routePath.split("/").filter(Boolean);
+  const pathParts = pathname.split("/").filter(Boolean);
+  if (routeParts.length !== pathParts.length) return false;
+  return routeParts.every((part, index) => {
+    if (part.startsWith(":")) return true;
+    return part === pathParts[index];
+  });
+}
+
+function runtimeHasRoute(
+  state: CompatRuntimeState,
+  method: string,
+  pathname: string,
+): boolean {
+  const routes = (state.current as { routes?: unknown } | null)?.routes;
+  if (!Array.isArray(routes)) return false;
+  return routes.some((candidate) => {
+    const route = candidate as RuntimeRouteLike;
+    if (typeof route.path !== "string") return false;
+    const routeMethod = String(route.type ?? "GET").toUpperCase();
+    return routeMethod === method && routePathMatches(route.path, pathname);
+  });
+}
+
+async function handleFavoriteAppsRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  method: string,
+  state: CompatRuntimeState,
+): Promise<boolean> {
+  if (!(await ensureRouteAuthorized(req, res, state))) return true;
+
+  if (method === "GET") {
+    sendJsonResponse(res, 200, { favoriteApps: readFavoriteApps() });
+    return true;
+  }
+
+  if (method === "PUT") {
+    const body = await readCompatJsonBody(req, res);
+    if (!body) return true;
+    const appName = typeof body.appName === "string" ? body.appName.trim() : "";
+    const isFavorite = body.isFavorite === true;
+    if (!appName || typeof body.isFavorite !== "boolean") {
+      sendJsonErrorResponse(res, 400, "appName and isFavorite are required");
+      return true;
+    }
+    const current = readFavoriteApps().filter((entry) => entry !== appName);
+    const next = isFavorite ? [...current, appName] : current;
+    sendJsonResponse(res, 200, { favoriteApps: writeFavoriteApps(next) });
+    return true;
+  }
+
+  return false;
+}
+
+async function handleReplaceFavoritesRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  state: CompatRuntimeState,
+): Promise<boolean> {
+  if (!(await ensureRouteAuthorized(req, res, state))) return true;
+  const body = await readCompatJsonBody(req, res);
+  if (!body) return true;
+  const favoriteAppNames = sanitizeFavoriteApps(body.favoriteAppNames);
+  sendJsonResponse(res, 200, {
+    favoriteApps: writeFavoriteApps(favoriteAppNames),
+  });
+  return true;
+}
+
+async function handleOverlayPresenceRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  state: CompatRuntimeState,
+): Promise<boolean> {
+  if (!(await ensureRouteAuthorized(req, res, state))) return true;
+  const body = await readCompatJsonBody(req, res);
+  if (!body) return true;
+  const rawAppName = body.appName;
+  if (rawAppName !== null && rawAppName !== undefined && typeof rawAppName !== "string") {
+    sendJsonErrorResponse(res, 400, "appName must be a string or null");
+    return true;
+  }
+  const appName =
+    typeof rawAppName === "string" && rawAppName.trim()
+      ? rawAppName.trim()
+      : null;
+  sendJsonResponse(res, 200, { ok: true, appName });
+  return true;
+}
+
+async function handleComputerUseFallbackRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  method: string,
+  pathname: string,
+  state: CompatRuntimeState,
+): Promise<boolean> {
+  if (runtimeHasRoute(state, method, pathname)) return false;
+  if (!(await ensureRouteAuthorized(req, res, state))) return true;
+
+  if (method === "GET" && pathname === "/api/computer-use/approvals") {
+    sendJsonResponse(res, 200, EMPTY_APPROVAL_SNAPSHOT);
+    return true;
+  }
+
+  if (method === "GET" && pathname === "/api/computer-use/approvals/stream") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.write(
+      \`data: \${JSON.stringify({ type: "snapshot", snapshot: EMPTY_APPROVAL_SNAPSHOT })}\\n\\n\`,
+    );
+    res.end();
+    return true;
+  }
+
+  if (method === "POST" && pathname === "/api/computer-use/approval-mode") {
+    sendJsonResponse(res, 200, { mode: EMPTY_APPROVAL_SNAPSHOT.mode });
+    return true;
+  }
+
+  if (method === "POST" && /^\\/api\\/computer-use\\/approvals\\/[^/]+$/.test(pathname)) {
+    sendJsonErrorResponse(res, 404, "Computer-use approval is not pending.");
+    return true;
+  }
+
+  return false;
+}
+
+export async function handleAliceDashboardFallbackRoutes(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  state: CompatRuntimeState,
+): Promise<boolean> {
+  const method = (req.method ?? "GET").toUpperCase();
+  const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+
+  if (pathname === "/api/apps/favorites") {
+    return handleFavoriteAppsRoute(req, res, method, state);
+  }
+
+  if (method === "POST" && pathname === "/api/apps/favorites/replace") {
+    return handleReplaceFavoritesRoute(req, res, state);
+  }
+
+  if (method === "POST" && pathname === "/api/apps/overlay-presence") {
+    return handleOverlayPresenceRoute(req, res, state);
+  }
+
+  if (method === "GET" && pathname === "/api/vincent/status") {
+    if (runtimeHasRoute(state, method, pathname)) return false;
+    if (!(await ensureRouteAuthorized(req, res, state))) return true;
+    sendJsonResponse(res, 200, { connected: false, connectedAt: null });
+    return true;
+  }
+
+  if (pathname.startsWith("/api/computer-use/")) {
+    return handleComputerUseFallbackRoute(req, res, method, pathname, state);
+  }
+
+  return false;
+}
+`;
+
 function runGitApply(args, { cwd, allowFailure = false } = {}) {
   const result = spawnSync("git", args, {
     cwd,
@@ -300,6 +525,21 @@ export function isAliceAppCoreAgentStatusAuthBridgePatched(
       "if (!(await authorizeAgentStatusFallback(req, res, state)))",
     ) &&
     bridgeSource === agentStatusAuthBridgeSource
+  );
+}
+
+export function isAliceAppCoreDashboardFallbackRoutesPatched(
+  serverSource,
+  fallbackSource,
+) {
+  return (
+    serverSource.includes(
+      'import { handleAliceDashboardFallbackRoutes } from "./dashboard-fallback-routes";',
+    ) &&
+    serverSource.includes(
+      "if (await handleAliceDashboardFallbackRoutes(req, res, state)) return true;",
+    ) &&
+    fallbackSource === dashboardFallbackRoutesSource
   );
 }
 
@@ -2572,6 +2812,97 @@ export function applyAliceAppCoreAgentStatusAuthBridgePatch({
   return "applied";
 }
 
+function patchAliceAppCoreDashboardFallbackRoutesServerSource(source) {
+  if (
+    source.includes(
+      'import { handleAliceDashboardFallbackRoutes } from "./dashboard-fallback-routes";',
+    ) &&
+    source.includes(
+      "if (await handleAliceDashboardFallbackRoutes(req, res, state)) return true;",
+    )
+  ) {
+    return source;
+  }
+
+  let next = source;
+
+  const importAnchor =
+    'import { applyRouteModeGuard } from "../runtime/mode/route-mode-guard";\n';
+  if (!next.includes(importAnchor)) {
+    throw new Error("app-core dashboard fallback routes import anchor drifted");
+  }
+  next = next.replace(
+    importAnchor,
+    `${importAnchor}import { handleAliceDashboardFallbackRoutes } from "./dashboard-fallback-routes";\n`,
+  );
+
+  const routeAnchor = `  return handleDatabaseRowsCompatRoute(req, res, state);
+}`;
+  const routePatch = `  if (await handleAliceDashboardFallbackRoutes(req, res, state)) return true;
+
+  return handleDatabaseRowsCompatRoute(req, res, state);
+}`;
+  if (!next.includes(routeAnchor)) {
+    throw new Error("app-core dashboard fallback routes insertion anchor drifted");
+  }
+  next = next.replace(routeAnchor, routePatch);
+  return next;
+}
+
+export function applyAliceAppCoreDashboardFallbackRoutesPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const serverPath = path.join(elizaRoot, appCoreApiServerRelativePath);
+  const fallbackPath = path.join(
+    elizaRoot,
+    appCoreDashboardFallbackRoutesRelativePath,
+  );
+  if (!existsSync(serverPath)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core server source absent; skipping dashboard fallback routes",
+    );
+    return "skipped";
+  }
+
+  const beforeServer = readFileSync(serverPath, "utf8");
+  const beforeFallback = existsSync(fallbackPath)
+    ? readFileSync(fallbackPath, "utf8")
+    : null;
+  const afterServer =
+    patchAliceAppCoreDashboardFallbackRoutesServerSource(beforeServer);
+
+  if (
+    afterServer === beforeServer &&
+    beforeFallback === dashboardFallbackRoutesSource &&
+    isAliceAppCoreDashboardFallbackRoutesPatched(
+      afterServer,
+      beforeFallback,
+    )
+  ) {
+    log(
+      "[alice-eliza-runtime-patches] app-core dashboard fallback routes already applied",
+    );
+    return "already-applied";
+  }
+
+  mkdirSync(path.dirname(fallbackPath), { recursive: true });
+  writeFileSync(serverPath, afterServer);
+  writeFileSync(fallbackPath, dashboardFallbackRoutesSource);
+
+  if (
+    !isAliceAppCoreDashboardFallbackRoutesPatched(
+      afterServer,
+      dashboardFallbackRoutesSource,
+    )
+  ) {
+    throw new Error("app-core dashboard fallback routes patch contract is absent");
+  }
+
+  log("[alice-eliza-runtime-patches] patched app-core dashboard fallback routes");
+  return "applied";
+}
+
 function patchAliceAppCoreCompanionStageSource(source) {
   if (isAliceAppCoreCompanionStagePatched(source)) {
     return source;
@@ -3385,6 +3716,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
     applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),
+    applyAliceAppCoreDashboardFallbackRoutesPatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
