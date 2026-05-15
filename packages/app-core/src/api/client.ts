@@ -2775,6 +2775,10 @@ export class MiladyClient {
 
   async getAuthStatus(): Promise<{
     required: boolean;
+    authenticated?: boolean;
+    localAccess?: boolean;
+    loginRequired?: boolean;
+    passwordConfigured?: boolean;
     pairingEnabled: boolean;
     expiresAt: number | null;
   }> {
@@ -3055,6 +3059,17 @@ export class MiladyClient {
     logSettingsClient("GET /api/config → start", {
       baseUrl: this.getBaseUrl(),
     });
+    const auth = await this.getAuthStatus().catch(() => null);
+    if (
+      auth?.required === true &&
+      auth.authenticated === false &&
+      auth.localAccess !== true
+    ) {
+      logSettingsClient("GET /api/config → skipped auth-gated browser", {
+        baseUrl: this.getBaseUrl(),
+      });
+      return {};
+    }
     const r = (await this.fetch("/api/config")) as Record<string, unknown>;
     const cloud = r.cloud as Record<string, unknown> | undefined;
     logSettingsClient("GET /api/config ← ok", {
