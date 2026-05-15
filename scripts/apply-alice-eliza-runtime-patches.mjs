@@ -41,6 +41,8 @@ const uiStartupPhasePollRelativePath =
   "packages/ui/src/state/startup-phase-poll.ts";
 const uiStartupPhaseRuntimeRelativePath =
   "packages/ui/src/state/startup-phase-runtime.ts";
+const uiOnboardingBootstrapRelativePath =
+  "packages/ui/src/state/onboarding-bootstrap.ts";
 const uiAppShellStateRelativePath =
   "packages/ui/src/state/useAppShellState.ts";
 const appVincentStateRelativePath = "plugins/app-vincent/src/useVincentState.ts";
@@ -3712,6 +3714,71 @@ function patchAliceStartupPhaseRuntimeAuthGateSource(source) {
   return source.replace(anchor, patch);
 }
 
+function patchAliceOnboardingBootstrapAuthProbeSource(source) {
+  if (
+    source.includes(
+      "Auth-gated origins must not run protected onboarding probes before a browser session exists",
+    )
+  ) {
+    return source;
+  }
+
+  let next = source;
+  const interfaceAnchor = `export interface ExistingOnboardingProbeClient {
+  apiAvailable: boolean;
+  getOnboardingStatus: () => Promise<{ complete: boolean }>;
+  getConfig: () => Promise<Record<string, unknown> | null | undefined>;
+}
+`;
+  const interfacePatch = `export interface ExistingOnboardingProbeClient {
+  apiAvailable: boolean;
+  getAuthStatus?: () => Promise<{
+    required?: boolean;
+    authenticated?: boolean;
+    localAccess?: boolean;
+    passwordConfigured?: boolean;
+  }>;
+  hasToken?: () => boolean;
+  getOnboardingStatus: () => Promise<{ complete: boolean }>;
+  getConfig: () => Promise<Record<string, unknown> | null | undefined>;
+}
+`;
+  if (!next.includes(interfaceAnchor)) {
+    throw new Error("ui onboarding bootstrap auth interface anchor drifted");
+  }
+  next = next.replace(interfaceAnchor, interfacePatch);
+
+  const probeAnchor = `  if (!args.client.apiAvailable) {
+    return null;
+  }
+
+  const timeoutToken = Symbol("onboarding-bootstrap-timeout");
+`;
+  const probePatch = `  if (!args.client.apiAvailable) {
+    return null;
+  }
+
+  const auth = await args.client.getAuthStatus?.().catch(() => null);
+  const protectedSessionPending =
+    auth &&
+    auth.localAccess !== true &&
+    ((auth.required === true && auth.authenticated !== true) ||
+      (auth.passwordConfigured === true && args.client.hasToken?.() === true));
+  if (protectedSessionPending) {
+    // Auth-gated origins must not run protected onboarding probes before a browser session exists.
+    // /api/onboarding/status and /api/config are intentionally protected, so
+    // probing them here only creates noisy 401s and can trip auth rate limits.
+    return null;
+  }
+
+  const timeoutToken = Symbol("onboarding-bootstrap-timeout");
+`;
+  if (!next.includes(probeAnchor)) {
+    throw new Error("ui onboarding bootstrap protected-probe anchor drifted");
+  }
+  return next.replace(probeAnchor, probePatch);
+}
+
 function patchAliceStartupPhasePollAuthGateSource(source) {
   if (
     source.includes(
@@ -4202,6 +4269,7 @@ function patchAliceVincentStateAuthGateSource(source) {
 export function isAliceUiAuthGatedStartupPatched({
   appSource = "",
   hooksIndexSource = "",
+  onboardingBootstrapSource = "",
   startupShellSource = "",
   startupPhasePollSource = "",
   startupPhaseRuntimeSource = "",
@@ -4213,6 +4281,9 @@ export function isAliceUiAuthGatedStartupPatched({
       "Remote password/session auth stays behind the startup auth gate",
     ) &&
     startupPhaseRuntimeSource.includes('dispatch({ type: "BACKEND_AUTH_REQUIRED" });') &&
+    onboardingBootstrapSource.includes(
+      "Auth-gated origins must not run protected onboarding probes before a browser session exists",
+    ) &&
     startupPhasePollSource.includes(
       "Token holders with password/session auth still pending stay behind the startup auth gate",
     ) &&
@@ -4237,6 +4308,10 @@ export function applyAliceUiAuthGatedStartupPatch({
   const paths = {
     appPath: path.join(elizaRoot, uiAppRelativePath),
     hooksIndexPath: path.join(elizaRoot, uiHooksIndexRelativePath),
+    onboardingBootstrapPath: path.join(
+      elizaRoot,
+      uiOnboardingBootstrapRelativePath,
+    ),
     startupShellPath: path.join(elizaRoot, uiStartupShellRelativePath),
     startupPhasePollPath: path.join(elizaRoot, uiStartupPhasePollRelativePath),
     startupPhaseRuntimePath: path.join(
@@ -4256,6 +4331,10 @@ export function applyAliceUiAuthGatedStartupPatch({
   const before = {
     appSource: readFileSync(paths.appPath, "utf8"),
     hooksIndexSource: readFileSync(paths.hooksIndexPath, "utf8"),
+    onboardingBootstrapSource: readFileSync(
+      paths.onboardingBootstrapPath,
+      "utf8",
+    ),
     startupShellSource: readFileSync(paths.startupShellPath, "utf8"),
     startupPhasePollSource: readFileSync(paths.startupPhasePollPath, "utf8"),
     startupPhaseRuntimeSource: readFileSync(paths.startupPhaseRuntimePath, "utf8"),
@@ -4272,6 +4351,9 @@ export function applyAliceUiAuthGatedStartupPatch({
     appSource: patchAliceUiAppAuthGateSource(before.appSource),
     hooksIndexSource: patchAliceUiHooksIndexAuthStatusExportSource(
       before.hooksIndexSource,
+    ),
+    onboardingBootstrapSource: patchAliceOnboardingBootstrapAuthProbeSource(
+      before.onboardingBootstrapSource,
     ),
     startupShellSource: patchAliceStartupShellAuthGateSource(
       before.startupShellSource,
@@ -4297,6 +4379,11 @@ export function applyAliceUiAuthGatedStartupPatch({
   const writes = [
     [paths.appPath, before.appSource, after.appSource],
     [paths.hooksIndexPath, before.hooksIndexSource, after.hooksIndexSource],
+    [
+      paths.onboardingBootstrapPath,
+      before.onboardingBootstrapSource,
+      after.onboardingBootstrapSource,
+    ],
     [paths.startupShellPath, before.startupShellSource, after.startupShellSource],
     [
       paths.startupPhasePollPath,

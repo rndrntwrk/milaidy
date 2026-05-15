@@ -70,7 +70,7 @@ import {
   type DeviceBridgeClient,
 } from "@elizaos/capacitor-llama";
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { CompanionShell } from "@elizaos/app-companion/ui";
 import {
   createVectorBrowserRenderer,
@@ -158,6 +158,8 @@ declare global {
     __ELIZA_API_BASE__?: string;
     __ELIZAOS_APP_BOOT_CONFIG__?: AppBootConfig;
     __ELIZA_APP_BOOT_CONFIG__?: AppBootConfig;
+    __MILADY_REACT_ROOT__?: Root;
+    __MILADY_APP_BOOT_PROMISE__?: Promise<void>;
   }
 }
 
@@ -175,6 +177,8 @@ type AppCompatWindow = Window &
     __ELIZA_API_BASE__?: string;
     __ELIZAOS_APP_BOOT_CONFIG__?: AppBootConfig;
     __ELIZA_APP_BOOT_CONFIG__?: AppBootConfig;
+    __MILADY_REACT_ROOT__?: Root;
+    __MILADY_APP_BOOT_PROMISE__?: Promise<void>;
   };
 
 function getAppWindow(): AppCompatWindow {
@@ -429,6 +433,11 @@ function logNativePluginUnavailable(pluginName: string, error: unknown): void {
 
 async function initializeAgent(): Promise<void> {
   try {
+    const auth = await client.getAuthStatus().catch(() => null);
+    if (auth?.required && !auth.localAccess && !auth.authenticated) {
+      return;
+    }
+
     const status = await Agent.getStatus();
     dispatchAppEvent(AGENT_READY_EVENT, status);
   } catch (err) {
@@ -735,7 +744,9 @@ function mountReactApp(): void {
   const detachedShell = isDetachedWindowShell(windowShellRoute);
   const appWindowSlug = detachedShell ? null : resolveAppWindowSlug();
 
-  createRoot(rootEl).render(
+  const reactRoot = window.__MILADY_REACT_ROOT__ ?? createRoot(rootEl);
+  window.__MILADY_REACT_ROOT__ = reactRoot;
+  reactRoot.render(
     <ErrorBoundary>
       <StrictMode>
         <AppProvider branding={APP_BRANDING}>
@@ -1034,10 +1045,18 @@ async function main(): Promise<void> {
   await initializePlatform();
 }
 
+function bootMain(): void {
+  if (window.__MILADY_APP_BOOT_PROMISE__) return;
+  window.__MILADY_APP_BOOT_PROMISE__ = main().catch((err) => {
+    window.__MILADY_APP_BOOT_PROMISE__ = undefined;
+    throw err;
+  });
+}
+
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", main);
+  document.addEventListener("DOMContentLoaded", bootMain, { once: true });
 } else {
-  main();
+  bootMain();
 }
 
 export { isAndroid, isDesktopPlatform as isDesktop, isIOS, isNative, platform };
