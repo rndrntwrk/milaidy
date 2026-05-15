@@ -289,7 +289,7 @@ describe("Alice Eliza runtime patch contract", () => {
     }
   });
 
-  it("patches source-mode app-core to bridge app-core sessions into legacy /api/status auth", () => {
+  it("patches source-mode app-core to bridge app-core sessions into legacy fallback auth", () => {
     const tempDir = mkdtempSync(
       path.join(os.tmpdir(), "alice-status-auth-bridge-"),
     );
@@ -348,7 +348,18 @@ describe("Alice Eliza runtime patch contract", () => {
       expect(patchedServer).toContain(
         "if (!(await authorizeAgentStatusFallback(req, res, state)))",
       );
-      expect(bridgeSource).toContain('pathname !== "/api/status"');
+      expect(bridgeSource).toContain(
+        "function shouldBridgeAgentFallbackAuth",
+      );
+      expect(bridgeSource).toContain('pathname === "/api/status"');
+      expect(bridgeSource).toContain('pathname === "/api/apps/favorites"');
+      expect(bridgeSource).toContain(
+        'pathname === "/api/apps/overlay-presence"',
+      );
+      expect(bridgeSource).toContain('pathname.startsWith("/api/vincent/")');
+      expect(bridgeSource).toContain(
+        'pathname === "/api/computer-use/approvals"',
+      );
       expect(bridgeSource).toContain("req.headers.authorization");
 
       expect(

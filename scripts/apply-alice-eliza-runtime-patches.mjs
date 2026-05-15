@@ -148,6 +148,48 @@ const agentStatusAuthBridgeSource = `import type http from "node:http";
 import { ensureRouteAuthorized, getCompatApiToken } from "./auth.ts";
 import type { CompatRuntimeState } from "./compat-route-shared";
 
+function shouldBridgeAgentFallbackAuth(method: string, pathname: string): boolean {
+  if (method === "GET" && pathname === "/api/status") return true;
+
+  if (pathname === "/api/apps/favorites") {
+    return method === "GET" || method === "PUT";
+  }
+  if (
+    method === "POST" &&
+    (pathname === "/api/apps/favorites/replace" ||
+      pathname === "/api/apps/overlay-presence")
+  ) {
+    return true;
+  }
+  if (
+    method === "GET" &&
+    (pathname === "/api/apps/search" ||
+      pathname === "/api/apps/installed" ||
+      pathname === "/api/apps/runs" ||
+      pathname.startsWith("/api/apps/hero/"))
+  ) {
+    return true;
+  }
+  if (pathname.startsWith("/api/apps/runs/")) return true;
+
+  if (pathname.startsWith("/api/vincent/")) return true;
+
+  if (
+    pathname === "/api/computer-use/approvals" ||
+    pathname === "/api/computer-use/approvals/stream"
+  ) {
+    return method === "GET";
+  }
+  if (pathname === "/api/computer-use/approval-mode") {
+    return method === "POST";
+  }
+  if (method === "POST" && /^\\/api\\/computer-use\\/approvals\\/[^/]+$/.test(pathname)) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function authorizeAgentStatusFallback(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -155,7 +197,7 @@ export async function authorizeAgentStatusFallback(
 ): Promise<boolean> {
   const method = (req.method ?? "GET").toUpperCase();
   const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
-  if (method !== "GET" || pathname !== "/api/status") return true;
+  if (!shouldBridgeAgentFallbackAuth(method, pathname)) return true;
 
   if (!(await ensureRouteAuthorized(req, res, state))) return false;
 
