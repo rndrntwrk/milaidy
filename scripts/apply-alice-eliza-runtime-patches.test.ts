@@ -17,6 +17,7 @@ import {
   applyAliceAppCoreCompanionStagePatch,
   applyAliceAppCoreDashboardFallbackRoutesPatch,
   applyAliceAppCoreOpenAccessPatch,
+  applyAliceProviderFailureNonfatalPatch,
   applyAliceUiAuthGatedStartupPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceCoreBasicCapabilitiesBrowserSafePatch,
@@ -39,6 +40,7 @@ import {
   isAliceAppCoreAgentStatusAuthBridgePatched,
   isAliceAppCoreCompanionStagePatched,
   isAliceAppCoreDashboardFallbackRoutesPatched,
+  isAliceProviderFailureNonfatalPatched,
   isAliceLifeOpsCalendarActionPatched,
   isAliceBundledKnowledgeStartupDeferralPatched,
   isAliceKubeHealthReadinessPatched,
@@ -355,6 +357,14 @@ describe("Alice Eliza runtime patch contract", () => {
       expect(bridgeSource).toContain(
         "function shouldBridgeAgentFallbackAuth",
       );
+      expect(bridgeSource).toContain("UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES");
+      expect(bridgeSource).toContain('"/api/conversations"');
+      expect(bridgeSource).toContain('"/api/stream"');
+      expect(bridgeSource).toContain('"/api/streaming"');
+      expect(bridgeSource).toContain('"/api/logs"');
+      expect(bridgeSource).toContain('"/api/companion"');
+      expect(bridgeSource).toContain("getProvidedApiToken");
+      expect(bridgeSource).toContain("tokenMatches");
       expect(bridgeSource).toContain('pathname === "/api/status"');
       expect(bridgeSource).toContain('pathname === "/api/apps/favorites"');
       expect(bridgeSource).toContain(
@@ -365,9 +375,134 @@ describe("Alice Eliza runtime patch contract", () => {
         'pathname === "/api/computer-use/approvals"',
       );
       expect(bridgeSource).toContain("req.headers.authorization");
+      expect(bridgeSource).toContain('req.headers["x-api-key"]');
 
       expect(
         applyAliceAppCoreAgentStatusAuthBridgePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches app-core provider stream failures to stay nonfatal", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-provider-nonfatal-"),
+    );
+    try {
+      const runtimeDir = path.join(
+        tempDir,
+        "packages",
+        "app-core",
+        "src",
+        "runtime",
+      );
+      const cliDir = path.join(
+        tempDir,
+        "packages",
+        "app-core",
+        "src",
+        "cli",
+      );
+      mkdirSync(runtimeDir, { recursive: true });
+      mkdirSync(cliDir, { recursive: true });
+      const errorHandlersPath = path.join(runtimeDir, "error-handlers.ts");
+      const devServerPath = path.join(runtimeDir, "dev-server.ts");
+      const runMainPath = path.join(cliDir, "run-main.ts");
+
+      writeFileSync(
+        errorHandlersPath,
+        [
+          "export function formatUncaughtError(error: unknown): string {",
+          "  if (error instanceof Error) {",
+          "    return error.stack ?? error.message;",
+          "  }",
+          "  return String(error);",
+          "}",
+          "",
+          "function hasInsufficientCreditsSignal(input: string): boolean {",
+          "  return /\\b(insufficient(?:[_\\s]+(?:credits?|quota))|insufficient_quota|out of credits|payment required|statuscode:\\s*402)\\b/i.test(",
+          "    input,",
+          "  );",
+          "}",
+          "",
+          "/**",
+          " * Returns `true` when the rejection looks like an AI provider credit-exhaustion",
+          " * error — these are noisy but not fatal, so callers should warn instead of crash.",
+          " */",
+          "export function shouldIgnoreUnhandledRejection(reason: unknown): boolean {",
+          "  const formatted = formatUncaughtError(reason);",
+          "  if (",
+          "    !/AI_NoOutputGeneratedError|No output generated|AI_APICallError|AI_RetryError/i.test(",
+          "      formatted,",
+          "    )",
+          "  ) {",
+          "    return false;",
+          "  }",
+          "",
+          "  if (hasInsufficientCreditsSignal(formatted)) {",
+          "    return true;",
+          "  }",
+          "",
+          "  const seen = new Set<unknown>();",
+          "  let current: unknown = reason;",
+          "  while (current && typeof current === \"object\" && !seen.has(current)) {",
+          "    seen.add(current);",
+          "    current = (current as { cause?: unknown }).cause;",
+          "  }",
+          "",
+          "  return false;",
+          "}",
+        ].join("\n"),
+      );
+      const entrypointSource = (importPath) =>
+        [
+          "import {",
+          "  formatUncaughtError,",
+          "  shouldIgnoreUnhandledRejection,",
+          `} from "${importPath}";`,
+          "",
+          'process.on("unhandledRejection", (reason) => {',
+          "  if (shouldIgnoreUnhandledRejection(reason)) {",
+          "    console.warn(",
+          "      `${getLogPrefix()} Provider credits appear exhausted; request failed without output. Top up credits and retry.`,",
+          "    );",
+          "    return;",
+          "  }",
+          "  console.error(formatUncaughtError(reason));",
+          "});",
+        ].join("\n");
+      writeFileSync(devServerPath, entrypointSource("./error-handlers.js"));
+      writeFileSync(runMainPath, entrypointSource("../runtime/error-handlers"));
+
+      expect(
+        applyAliceProviderFailureNonfatalPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const errorHandlers = readFileSync(errorHandlersPath, "utf8");
+      const devServer = readFileSync(devServerPath, "utf8");
+      const runMain = readFileSync(runMainPath, "utf8");
+      expect(
+        isAliceProviderFailureNonfatalPatched(
+          errorHandlers,
+          devServer,
+          runMain,
+        ),
+      ).toBe(true);
+      expect(errorHandlers).toContain("hasProviderNoOutputSignal");
+      expect(errorHandlers).toContain("AI_InvalidPromptError");
+      expect(errorHandlers).toContain("return true;");
+      expect(devServer).toContain("describeNonFatalUnhandledRejection");
+      expect(runMain).toContain("describeNonFatalUnhandledRejection");
+
+      expect(
+        applyAliceProviderFailureNonfatalPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

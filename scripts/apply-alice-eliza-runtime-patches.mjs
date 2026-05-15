@@ -26,6 +26,11 @@ const appCoreAgentStatusAuthBridgeRelativePath =
   "packages/app-core/src/api/agent-status-auth-bridge.ts";
 const appCoreDashboardFallbackRoutesRelativePath =
   "packages/app-core/src/api/dashboard-fallback-routes.ts";
+const appCoreRuntimeErrorHandlersRelativePath =
+  "packages/app-core/src/runtime/error-handlers.ts";
+const appCoreRuntimeDevServerRelativePath =
+  "packages/app-core/src/runtime/dev-server.ts";
+const appCoreCliRunMainRelativePath = "packages/app-core/src/cli/run-main.ts";
 const appCoreTrustedLocalRequestRelativePath =
   "packages/app-core/src/api/trusted-local-request.ts";
 const coreBasicCapabilitiesRelativePath =
@@ -160,11 +165,42 @@ export function buildKubeHealthResponse(
 }
 `;
 
-const agentStatusAuthBridgeSource = `import type http from "node:http";
-import { ensureRouteAuthorized, getCompatApiToken } from "./auth.ts";
+const agentStatusAuthBridgeSource = `import crypto from "node:crypto";
+import type http from "node:http";
+import {
+  ensureRouteAuthorized,
+  getCompatApiToken,
+  getProvidedApiToken,
+} from "./auth.ts";
 import type { CompatRuntimeState } from "./compat-route-shared";
 
+const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [
+  "/api/agent/events",
+  "/api/agents",
+  "/api/broadcast",
+  "/api/coding-agents",
+  "/api/companion",
+  "/api/conversations",
+  "/api/logs",
+  "/api/security/audit",
+  "/api/status",
+  "/api/stream",
+  "/api/streaming",
+  "/v1",
+] as const;
+
+function tokenMatches(expected: string, provided: string): boolean {
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(provided, "utf8");
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 function shouldBridgeAgentFallbackAuth(method: string, pathname: string): boolean {
+  if (UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(\`\${prefix}/\`))) {
+    return true;
+  }
+
   if (method === "GET" && pathname === "/api/status") return true;
 
   if (pathname === "/api/apps/favorites") {
@@ -215,11 +251,15 @@ export async function authorizeAgentStatusFallback(
   const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
   if (!shouldBridgeAgentFallbackAuth(method, pathname)) return true;
 
+  const token = getCompatApiToken();
+  const provided = getProvidedApiToken(req);
+  if (token && provided && tokenMatches(token, provided)) return true;
+
   if (!(await ensureRouteAuthorized(req, res, state))) return false;
 
-  const token = getCompatApiToken();
   if (token) {
     req.headers.authorization = \`Bearer \${token}\`;
+    req.headers["x-api-key"] = token;
   }
 
   return true;
@@ -2826,6 +2866,217 @@ export function applyAliceAppCoreAgentStatusAuthBridgePatch({
   return "applied";
 }
 
+export function isAliceProviderFailureNonfatalPatched(
+  errorHandlersSource,
+  devServerSource,
+  runMainSource,
+) {
+  return (
+    errorHandlersSource.includes("function hasProviderNoOutputSignal") &&
+    errorHandlersSource.includes(
+      "Provider request failed without output; request should fail closed without restarting.",
+    ) &&
+    errorHandlersSource.includes("return true;") &&
+    devServerSource.includes("describeNonFatalUnhandledRejection") &&
+    runMainSource.includes("describeNonFatalUnhandledRejection")
+  );
+}
+
+function patchAliceProviderFailureErrorHandlersSource(source) {
+  if (
+    source.includes("function hasProviderNoOutputSignal") &&
+    source.includes("describeNonFatalUnhandledRejection")
+  ) {
+    return source;
+  }
+
+  let next = source;
+  const helperAnchor =
+    /function hasInsufficientCreditsSignal\(input: string\): boolean \{[\s\S]*?\n\}\n/;
+  if (!helperAnchor.test(next)) {
+    throw new Error("app-core error-handlers helper anchor drifted");
+  }
+  next = next.replace(
+    helperAnchor,
+    (match) => `${match}
+function hasProviderNoOutputSignal(input: string): boolean {
+  return /AI_NoOutputGeneratedError|No output generated|AI_APICallError|AI_RetryError|AI_InvalidPromptError|Invalid prompt/i.test(
+    input,
+  );
+}
+
+export function describeNonFatalUnhandledRejection(
+  reason: unknown,
+): string | null {
+  const formatted = formatUncaughtError(reason);
+  if (!hasProviderNoOutputSignal(formatted)) {
+    return null;
+  }
+
+  if (hasInsufficientCreditsSignal(formatted)) {
+    return "Provider credits appear exhausted; request failed without output. Top up credits and retry.";
+  }
+
+  return "Provider request failed without output; request should fail closed without restarting.";
+}
+`,
+  );
+
+  next = next.replace(
+    `/**
+ * Returns \`true\` when the rejection looks like an AI provider credit-exhaustion
+ * error — these are noisy but not fatal, so callers should warn instead of crash.
+ */`,
+    `/**
+ * Returns \`true\` when the rejection looks like an AI provider stream/generation
+ * failure. These are request-scoped failures, so callers should warn instead
+ * of restarting the host process.
+ */`,
+  );
+
+  const oldSignalCheck = `  if (
+    !/AI_NoOutputGeneratedError|No output generated|AI_APICallError|AI_RetryError/i.test(
+      formatted,
+    )
+  ) {
+    return false;
+  }`;
+  if (!next.includes(oldSignalCheck)) {
+    throw new Error("app-core error-handlers provider signal anchor drifted");
+  }
+  next = next.replace(
+    oldSignalCheck,
+    `  if (!hasProviderNoOutputSignal(formatted)) {
+    return false;
+  }`,
+  );
+
+  const oldTail = `    current = (current as { cause?: unknown }).cause;
+  }
+
+  return false;
+}`;
+  if (!next.includes(oldTail)) {
+    throw new Error("app-core error-handlers tail anchor drifted");
+  }
+  next = next.replace(
+    oldTail,
+    `    current = (current as { cause?: unknown }).cause;
+  }
+
+  return true;
+}`,
+  );
+
+  return next;
+}
+
+function patchAliceProviderFailureEntrypointSource(source, importPath) {
+  if (source.includes("describeNonFatalUnhandledRejection")) {
+    return source;
+  }
+
+  let next = source;
+  const importAnchor = `import {
+  formatUncaughtError,
+  shouldIgnoreUnhandledRejection,
+} from "${importPath}";`;
+  if (!next.includes(importAnchor)) {
+    throw new Error(`app-core unhandled rejection import anchor drifted for ${importPath}`);
+  }
+  next = next.replace(
+    importAnchor,
+    `import {
+  describeNonFatalUnhandledRejection,
+  formatUncaughtError,
+  shouldIgnoreUnhandledRejection,
+} from "${importPath}";`,
+  );
+
+  const warningAnchor =
+    "Provider credits appear exhausted; request failed without output. Top up credits and retry.";
+  if (!next.includes(warningAnchor)) {
+    throw new Error(`app-core unhandled rejection warning anchor drifted for ${importPath}`);
+  }
+  next = next.replace(
+    `\`${"${getLogPrefix()}"} ${warningAnchor}\``,
+    `\`${"${getLogPrefix()}"} ${"${describeNonFatalUnhandledRejection(reason)}"}\``,
+  );
+  return next;
+}
+
+export function applyAliceProviderFailureNonfatalPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const errorHandlersPath = path.join(
+    elizaRoot,
+    appCoreRuntimeErrorHandlersRelativePath,
+  );
+  const devServerPath = path.join(elizaRoot, appCoreRuntimeDevServerRelativePath);
+  const runMainPath = path.join(elizaRoot, appCoreCliRunMainRelativePath);
+  if (
+    !existsSync(errorHandlersPath) ||
+    !existsSync(devServerPath) ||
+    !existsSync(runMainPath)
+  ) {
+    log(
+      "[alice-eliza-runtime-patches] app-core unhandled rejection sources absent; skipping",
+    );
+    return "skipped";
+  }
+
+  const beforeErrorHandlers = readFileSync(errorHandlersPath, "utf8");
+  const beforeDevServer = readFileSync(devServerPath, "utf8");
+  const beforeRunMain = readFileSync(runMainPath, "utf8");
+
+  const afterErrorHandlers =
+    patchAliceProviderFailureErrorHandlersSource(beforeErrorHandlers);
+  const afterDevServer = patchAliceProviderFailureEntrypointSource(
+    beforeDevServer,
+    "./error-handlers.js",
+  );
+  const afterRunMain = patchAliceProviderFailureEntrypointSource(
+    beforeRunMain,
+    "../runtime/error-handlers",
+  );
+
+  if (
+    afterErrorHandlers === beforeErrorHandlers &&
+    afterDevServer === beforeDevServer &&
+    afterRunMain === beforeRunMain &&
+    isAliceProviderFailureNonfatalPatched(
+      beforeErrorHandlers,
+      beforeDevServer,
+      beforeRunMain,
+    )
+  ) {
+    log(
+      "[alice-eliza-runtime-patches] app-core provider failure nonfatal handler already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(errorHandlersPath, afterErrorHandlers);
+  writeFileSync(devServerPath, afterDevServer);
+  writeFileSync(runMainPath, afterRunMain);
+
+  if (
+    !isAliceProviderFailureNonfatalPatched(
+      afterErrorHandlers,
+      afterDevServer,
+      afterRunMain,
+    )
+  ) {
+    throw new Error("app-core provider failure nonfatal patch contract is absent");
+  }
+
+  log(
+    "[alice-eliza-runtime-patches] patched app-core provider stream failures to stay nonfatal",
+  );
+  return "applied";
+}
+
 function patchAliceAppCoreDashboardFallbackRoutesServerSource(source) {
   if (
     source.includes(
@@ -4556,6 +4807,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
     applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),
+    applyAliceProviderFailureNonfatalPatch({ elizaRoot, log }),
     applyAliceAppCoreDashboardFallbackRoutesPatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
