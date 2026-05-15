@@ -363,6 +363,9 @@ interface OrchestratorPluginFallbackModule {
   getCoordinator?: (runtime: AgentRuntime) => unknown;
 }
 
+const LEGACY_CODING_AGENT_PLUGIN_MODULE =
+  "@elizaos/" + "plugin-coding-agent";
+
 function getAgentEventSvc(
   runtime: AgentRuntime | null,
 ): AgentEventServiceLike | null {
@@ -6447,7 +6450,7 @@ async function handleRequest(
     if (!handled) {
       try {
         const codingAgentPlugin = (await import(
-          "@elizaos/plugin-coding-agent"
+          /* @vite-ignore */ LEGACY_CODING_AGENT_PLUGIN_MODULE
         )) as {
           createCodingAgentRouteHandler?: (
             runtime: typeof state.runtime,

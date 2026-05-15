@@ -75,7 +75,7 @@ describe("release-check package guards", () => {
         agentConversationRoutes:
           'if (pathname === "/api/conversations/:id/messages") return true;',
         agentServer:
-          'if (pathname === "/api/coding-agents") error(res, "Coding agent task service unavailable", 503);',
+          'if (pathname === "/api/coding-agents") error(res, "Coding agent task service unavailable", 503);\nawait import("@elizaos/plugin-coding-agent");',
       }),
     ).toEqual([
       {
@@ -88,6 +88,10 @@ describe("release-check package guards", () => {
       },
       {
         id: "agent-coding-agents-graceful-empty-missing",
+        path: "dist/agent/src/api/server.js",
+      },
+      {
+        id: "agent-legacy-coding-agent-static-import",
         path: "dist/agent/src/api/server.js",
       },
     ]);

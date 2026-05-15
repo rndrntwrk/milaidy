@@ -204,7 +204,8 @@ export type AliceRuntimeDistIssue = {
   id:
     | "app-core-unbound-readCompatJsonBody"
     | "agent-conversation-operator-action-missing"
-    | "agent-coding-agents-graceful-empty-missing";
+    | "agent-coding-agents-graceful-empty-missing"
+    | "agent-legacy-coding-agent-static-import";
   path: string;
 };
 
@@ -238,6 +239,17 @@ export function findAliceRuntimeDistIssues(
   if (!hasCodingAgentsRootRoute || !hasGracefulEmptyResponse) {
     issues.push({
       id: "agent-coding-agents-graceful-empty-missing",
+      path: aliceRuntimeDistPaths.agentServer,
+    });
+  }
+
+  if (
+    /import\(\s*["']@elizaos\/plugin-coding-agent["']\s*\)/.test(
+      sources.agentServer,
+    )
+  ) {
+    issues.push({
+      id: "agent-legacy-coding-agent-static-import",
       path: aliceRuntimeDistPaths.agentServer,
     });
   }
