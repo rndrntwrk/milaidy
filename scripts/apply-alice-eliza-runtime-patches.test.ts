@@ -17,6 +17,7 @@ import {
   applyAliceAppCoreCompanionStagePatch,
   applyAliceAppCoreDashboardFallbackRoutesPatch,
   applyAliceAppCoreOpenAccessPatch,
+  applyAliceAuthRateLimitAfterValidSessionPatch,
   applyAliceProviderFailureNonfatalPatch,
   applyAliceUiAuthGatedStartupPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
@@ -40,6 +41,7 @@ import {
   isAliceAppCoreAgentStatusAuthBridgePatched,
   isAliceAppCoreCompanionStagePatched,
   isAliceAppCoreDashboardFallbackRoutesPatched,
+  isAliceAuthRateLimitAfterValidSessionPatched,
   isAliceProviderFailureNonfatalPatched,
   isAliceLifeOpsCalendarActionPatched,
   isAliceBundledKnowledgeStartupDeferralPatched,
@@ -507,6 +509,70 @@ describe("Alice Eliza runtime patch contract", () => {
           log: () => undefined,
         }),
       ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches app-core auth to validate sessions before failed-auth throttling", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-auth-rate-"));
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const authPath = path.join(apiDir, "auth.ts");
+      writeFileSync(
+        authPath,
+        [
+          "export function ensureCompatApiAuthorized(req, res): boolean {",
+          "  const ip = req.socket?.remoteAddress ?? null;",
+          "  if (isAuthRateLimited(ip)) {",
+          '    sendJsonError(res, 429, "Too many authentication attempts");',
+          "    return false;",
+          "  }",
+          "",
+          "  const providedToken = getProvidedApiToken(req);",
+          "  if (providedToken && tokenMatches(expectedToken, providedToken)) return true;",
+          "",
+          "  recordFailedAuth(ip);",
+          '  sendJsonError(res, 401, "Unauthorized");',
+          "  return false;",
+          "}",
+          "",
+          "export async function ensureCompatApiAuthorizedAsync(req, res, options): Promise<boolean> {",
+          "  const ip = req.socket?.remoteAddress ?? null;",
+          "  if (isAuthRateLimited(ip)) {",
+          '    sendJsonError(res, 429, "Too many authentication attempts");',
+          "    return false;",
+          "  }",
+          "",
+          "  if (isTrustedLocalRequest(req)) return true;",
+          "",
+          '  const method = (req.method ?? "GET").toUpperCase();',
+          "  const csrfRequired = !options.skipCsrf && CSRF_REQUIRED_METHODS.has(method);",
+          "  if (sessionFromBearer) return true;",
+          "",
+          "  recordFailedAuth(ip);",
+          '  sendJsonError(res, 401, "Unauthorized");',
+          "  return false;",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceAuthRateLimitAfterValidSessionPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(authPath, "utf8");
+      expect(isAliceAuthRateLimitAfterValidSessionPatched(patched)).toBe(true);
+      expect(patched.indexOf("const providedToken")).toBeLessThan(
+        patched.indexOf("Alice: validate good static bearer tokens"),
+      );
+      expect(patched.indexOf("if (isTrustedLocalRequest(req)) return true")).toBeLessThan(
+        patched.indexOf("Alice: valid local, cookie, and bearer sessions"),
+      );
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

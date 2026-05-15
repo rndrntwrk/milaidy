@@ -19,6 +19,7 @@ export const aliceElizaRuntimePatchRelativePath =
 
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
 const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
+const appCoreApiAuthRelativePath = "packages/app-core/src/api/auth.ts";
 const appCoreCompatStateRelativePath =
   "packages/app-core/src/api/compat-route-shared.ts";
 const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
@@ -2882,6 +2883,125 @@ export function isAliceProviderFailureNonfatalPatched(
   );
 }
 
+export function isAliceAuthRateLimitAfterValidSessionPatched(source) {
+  return (
+    source.includes(
+      "Alice: validate good static bearer tokens before applying failed-auth throttling.",
+    ) &&
+    source.includes(
+      "Alice: valid local, cookie, and bearer sessions bypass the failed-auth throttle.",
+    )
+  );
+}
+
+function patchAliceAuthRateLimitSource(source) {
+  if (isAliceAuthRateLimitAfterValidSessionPatched(source)) {
+    return source;
+  }
+
+  let next = source;
+  const syncOld = `  const ip = req.socket?.remoteAddress ?? null;
+  if (isAuthRateLimited(ip)) {
+    sendJsonError(res, 429, "Too many authentication attempts");
+    return false;
+  }
+
+  const providedToken = getProvidedApiToken(req);
+  if (providedToken && tokenMatches(expectedToken, providedToken)) return true;
+
+  recordFailedAuth(ip);
+  sendJsonError(res, 401, "Unauthorized");
+  return false;`;
+  const syncNew = `  const providedToken = getProvidedApiToken(req);
+  if (providedToken && tokenMatches(expectedToken, providedToken)) return true;
+
+  // Alice: validate good static bearer tokens before applying failed-auth throttling.
+  const ip = req.socket?.remoteAddress ?? null;
+  if (isAuthRateLimited(ip)) {
+    sendJsonError(res, 429, "Too many authentication attempts");
+    return false;
+  }
+
+  recordFailedAuth(ip);
+  sendJsonError(res, 401, "Unauthorized");
+  return false;`;
+  if (!next.includes(syncOld)) {
+    throw new Error("app-core auth sync rate-limit anchor drifted");
+  }
+  next = next.replace(syncOld, syncNew);
+
+  const asyncStartOld = `  const ip = req.socket?.remoteAddress ?? null;
+  if (isAuthRateLimited(ip)) {
+    sendJsonError(res, 429, "Too many authentication attempts");
+    return false;
+  }
+
+  if (isTrustedLocalRequest(req)) return true;
+
+  const method = (req.method ?? "GET").toUpperCase();`;
+  const asyncStartNew = `  if (isTrustedLocalRequest(req)) return true;
+
+  const method = (req.method ?? "GET").toUpperCase();`;
+  if (!next.includes(asyncStartOld)) {
+    throw new Error("app-core auth async rate-limit entry anchor drifted");
+  }
+  next = next.replace(asyncStartOld, asyncStartNew);
+
+  const asyncFailureOld = `  recordFailedAuth(ip);
+  sendJsonError(res, 401, "Unauthorized");
+  return false;`;
+  const asyncFailureNew = `  // Alice: valid local, cookie, and bearer sessions bypass the failed-auth throttle.
+  const ip = req.socket?.remoteAddress ?? null;
+  if (isAuthRateLimited(ip)) {
+    sendJsonError(res, 429, "Too many authentication attempts");
+    return false;
+  }
+
+  recordFailedAuth(ip);
+  sendJsonError(res, 401, "Unauthorized");
+  return false;`;
+  const asyncFailureIndex = next.lastIndexOf(asyncFailureOld);
+  if (asyncFailureIndex === -1) {
+    throw new Error("app-core auth async rate-limit failure anchor drifted");
+  }
+  next =
+    next.slice(0, asyncFailureIndex) +
+    asyncFailureNew +
+    next.slice(asyncFailureIndex + asyncFailureOld.length);
+
+  return next;
+}
+
+export function applyAliceAuthRateLimitAfterValidSessionPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const authPath = path.join(elizaRoot, appCoreApiAuthRelativePath);
+  if (!existsSync(authPath)) {
+    log("[alice-eliza-runtime-patches] app-core auth source absent; skipping");
+    return "skipped";
+  }
+
+  const before = readFileSync(authPath, "utf8");
+  const after = patchAliceAuthRateLimitSource(before);
+  if (after === before && isAliceAuthRateLimitAfterValidSessionPatched(before)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core auth rate-limit session ordering already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(authPath, after);
+  if (!isAliceAuthRateLimitAfterValidSessionPatched(after)) {
+    throw new Error("app-core auth rate-limit session ordering patch contract is absent");
+  }
+
+  log(
+    "[alice-eliza-runtime-patches] patched app-core auth to validate sessions before failed-auth throttling",
+  );
+  return "applied";
+}
+
 function patchAliceProviderFailureErrorHandlersSource(source) {
   if (
     source.includes("function hasProviderNoOutputSignal") &&
@@ -4807,6 +4927,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
     applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),
+    applyAliceAuthRateLimitAfterValidSessionPatch({ elizaRoot, log }),
     applyAliceProviderFailureNonfatalPatch({ elizaRoot, log }),
     applyAliceAppCoreDashboardFallbackRoutesPatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
