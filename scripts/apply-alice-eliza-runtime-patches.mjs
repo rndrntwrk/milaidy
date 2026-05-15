@@ -22,6 +22,8 @@ const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
 const appCoreCompatStateRelativePath =
   "packages/app-core/src/api/compat-route-shared.ts";
 const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
+const appCoreAgentStatusAuthBridgeRelativePath =
+  "packages/app-core/src/api/agent-status-auth-bridge.ts";
 const appCoreTrustedLocalRequestRelativePath =
   "packages/app-core/src/api/trusted-local-request.ts";
 const coreBasicCapabilitiesRelativePath =
@@ -142,6 +144,30 @@ export function buildKubeHealthResponse(
 }
 `;
 
+const agentStatusAuthBridgeSource = `import type http from "node:http";
+import { ensureRouteAuthorized, getCompatApiToken } from "./auth.ts";
+import type { CompatRuntimeState } from "./compat-route-shared";
+
+export async function authorizeAgentStatusFallback(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  state: CompatRuntimeState,
+): Promise<boolean> {
+  const method = (req.method ?? "GET").toUpperCase();
+  const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+  if (method !== "GET" || pathname !== "/api/status") return true;
+
+  if (!(await ensureRouteAuthorized(req, res, state))) return false;
+
+  const token = getCompatApiToken();
+  if (token) {
+    req.headers.authorization = \`Bearer \${token}\`;
+  }
+
+  return true;
+}
+`;
+
 function runGitApply(args, { cwd, allowFailure = false } = {}) {
   const result = spawnSync("git", args, {
     cwd,
@@ -217,6 +243,21 @@ export function isAliceAppCoreCodingAgentsFallbackPatched(source) {
   return (
     source.includes('url.pathname === "/api/coding-agents"') &&
     source.includes("sendJsonResponse(res, 200, []);")
+  );
+}
+
+export function isAliceAppCoreAgentStatusAuthBridgePatched(
+  serverSource,
+  bridgeSource,
+) {
+  return (
+    serverSource.includes(
+      'import { authorizeAgentStatusFallback } from "./agent-status-auth-bridge";',
+    ) &&
+    serverSource.includes(
+      "if (!(await authorizeAgentStatusFallback(req, res, state)))",
+    ) &&
+    bridgeSource === agentStatusAuthBridgeSource
   );
 }
 
@@ -2386,6 +2427,109 @@ export function applyAliceAppCoreCodingAgentsFallbackPatch({
   return "applied";
 }
 
+function patchAliceAppCoreAgentStatusAuthBridgeServerSource(source) {
+  if (
+    source.includes(
+      'import { authorizeAgentStatusFallback } from "./agent-status-auth-bridge";',
+    ) &&
+    source.includes(
+      "if (!(await authorizeAgentStatusFallback(req, res, state)))",
+    )
+  ) {
+    return source;
+  }
+
+  let next = source;
+
+  const importAnchor =
+    'import { applyRouteModeGuard } from "../runtime/mode/route-mode-guard";\n';
+  if (!next.includes(importAnchor)) {
+    throw new Error("app-core status auth bridge import anchor drifted");
+  }
+  next = next.replace(
+    importAnchor,
+    `${importAnchor}import { authorizeAgentStatusFallback } from "./agent-status-auth-bridge";\n`,
+  );
+
+  const requestAuthAnchor = `        if (
+          pathname.startsWith("/api/database") ||
+          pathname.startsWith("/api/trajectories")
+        ) {
+          await ensureRuntimeSqlCompatibility(state.current);
+        }
+
+        try {
+`;
+  const requestAuthPatch = `        if (
+          pathname.startsWith("/api/database") ||
+          pathname.startsWith("/api/trajectories")
+        ) {
+          await ensureRuntimeSqlCompatibility(state.current);
+        }
+        if (!(await authorizeAgentStatusFallback(req, res, state))) {
+          return;
+        }
+
+        try {
+`;
+  if (!next.includes(requestAuthAnchor)) {
+    throw new Error("app-core status auth bridge request anchor drifted");
+  }
+  next = next.replace(requestAuthAnchor, requestAuthPatch);
+  return next;
+}
+
+export function applyAliceAppCoreAgentStatusAuthBridgePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const serverPath = path.join(elizaRoot, appCoreApiServerRelativePath);
+  const bridgePath = path.join(
+    elizaRoot,
+    appCoreAgentStatusAuthBridgeRelativePath,
+  );
+  if (!existsSync(serverPath)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core server source absent; skipping status auth bridge",
+    );
+    return "skipped";
+  }
+
+  const beforeServer = readFileSync(serverPath, "utf8");
+  const beforeBridge = existsSync(bridgePath)
+    ? readFileSync(bridgePath, "utf8")
+    : null;
+  const afterServer =
+    patchAliceAppCoreAgentStatusAuthBridgeServerSource(beforeServer);
+
+  if (
+    afterServer === beforeServer &&
+    beforeBridge === agentStatusAuthBridgeSource &&
+    isAliceAppCoreAgentStatusAuthBridgePatched(afterServer, beforeBridge)
+  ) {
+    log(
+      "[alice-eliza-runtime-patches] app-core status auth bridge already applied",
+    );
+    return "already-applied";
+  }
+
+  mkdirSync(path.dirname(bridgePath), { recursive: true });
+  writeFileSync(serverPath, afterServer);
+  writeFileSync(bridgePath, agentStatusAuthBridgeSource);
+
+  if (
+    !isAliceAppCoreAgentStatusAuthBridgePatched(
+      afterServer,
+      agentStatusAuthBridgeSource,
+    )
+  ) {
+    throw new Error("app-core status auth bridge patch contract is absent");
+  }
+
+  log("[alice-eliza-runtime-patches] patched app-core status auth bridge");
+  return "applied";
+}
+
 function patchAliceAppCoreCompanionStageSource(source) {
   if (isAliceAppCoreCompanionStagePatched(source)) {
     return source;
@@ -3198,6 +3342,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
+    applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),
     applyAliceAppCoreCodingAgentsFallbackPatch({ elizaRoot, log }),
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
