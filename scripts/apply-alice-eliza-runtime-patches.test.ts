@@ -503,6 +503,14 @@ describe("Alice Eliza runtime patch contract", () => {
         "state",
         "useAppShellState.ts",
       );
+      const clientAgentPath = path.join(
+        tempDir,
+        "packages",
+        "ui",
+        "src",
+        "api",
+        "client-agent.ts",
+      );
       const vincentStatePath = path.join(
         tempDir,
         "plugins",
@@ -519,6 +527,7 @@ describe("Alice Eliza runtime patch contract", () => {
         startupPhasePollPath,
         startupPhaseRuntimePath,
         appShellStatePath,
+        clientAgentPath,
         vincentStatePath,
       ]) {
         mkdirSync(path.dirname(filePath), { recursive: true });
@@ -736,6 +745,39 @@ describe("Alice Eliza runtime patch contract", () => {
       );
 
       writeFileSync(
+        clientAgentPath,
+        [
+          'import { ElizaClient } from "./client-base";',
+          "",
+          "function logSettingsClient(phase, detail) {",
+          "  return undefined;",
+          "}",
+          "",
+          "function settingsDebugCloudSummary(cloud) {",
+          "  return cloud;",
+          "}",
+          "",
+          "ElizaClient.prototype.getConfig = async function (this: ElizaClient) {",
+          '  logSettingsClient("GET /api/config → start", {',
+          "    baseUrl: this.getBaseUrl(),",
+          "  });",
+          '  const r = (await this.fetch("/api/config")) as Record<string, unknown>;',
+          "  const cloud = r.cloud as Record<string, unknown> | undefined;",
+          '  logSettingsClient("GET /api/config ← ok", {',
+          "    baseUrl: this.getBaseUrl(),",
+          "    topKeys: Object.keys(r).sort(),",
+          "    cloud: settingsDebugCloudSummary(cloud),",
+          "  });",
+          "  return r;",
+          "};",
+          "",
+          "ElizaClient.prototype.getConfigSchema = async function (this: ElizaClient) {",
+          '  return this.fetch("/api/config/schema");',
+          "};",
+        ].join("\n"),
+      );
+
+      writeFileSync(
         hooksIndexPath,
         [
           'export * from "./useActivityEvents";',
@@ -809,6 +851,7 @@ describe("Alice Eliza runtime patch contract", () => {
         startupPhasePollSource: readFileSync(startupPhasePollPath, "utf8"),
         startupPhaseRuntimeSource: readFileSync(startupPhaseRuntimePath, "utf8"),
         appShellStateSource: readFileSync(appShellStatePath, "utf8"),
+        clientAgentSource: readFileSync(clientAgentPath, "utf8"),
         vincentStateSource: readFileSync(vincentStatePath, "utf8"),
       };
 
@@ -844,6 +887,14 @@ describe("Alice Eliza runtime patch contract", () => {
       );
       expect(patchedSources.appShellStateSource).toContain(
         'authState.phase !== "authenticated"',
+      );
+      expect(patchedSources.clientAgentSource).toContain(
+        "GET /api/config → skipped auth-gated browser",
+      );
+      expect(
+        patchedSources.clientAgentSource.indexOf("this.getAuthStatus().catch"),
+      ).toBeLessThan(
+        patchedSources.clientAgentSource.indexOf('this.fetch("/api/config")'),
       );
       expect(patchedSources.vincentStateSource).toContain(
         "if (!authReady) return false;",

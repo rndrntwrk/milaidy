@@ -45,6 +45,7 @@ const uiOnboardingBootstrapRelativePath =
   "packages/ui/src/state/onboarding-bootstrap.ts";
 const uiAppShellStateRelativePath =
   "packages/ui/src/state/useAppShellState.ts";
+const uiClientAgentRelativePath = "packages/ui/src/api/client-agent.ts";
 const appVincentStateRelativePath = "plugins/app-vincent/src/useVincentState.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
@@ -4130,6 +4131,56 @@ function patchAliceUseAppShellStateAuthGateSource(source) {
   return next.replace(effectAnchor, effectPatch);
 }
 
+function patchAliceUiClientAgentConfigAuthGateSource(source) {
+  if (source.includes("GET /api/config → skipped auth-gated browser")) {
+    return source;
+  }
+
+  const anchor = `ElizaClient.prototype.getConfig = async function (this: ElizaClient) {
+  logSettingsClient("GET /api/config → start", {
+    baseUrl: this.getBaseUrl(),
+  });
+  const r = (await this.fetch("/api/config")) as Record<string, unknown>;
+  const cloud = r.cloud as Record<string, unknown> | undefined;
+  logSettingsClient("GET /api/config ← ok", {
+    baseUrl: this.getBaseUrl(),
+    topKeys: Object.keys(r).sort(),
+    cloud: settingsDebugCloudSummary(cloud),
+  });
+  return r;
+};
+`;
+  const patch = `ElizaClient.prototype.getConfig = async function (this: ElizaClient) {
+  logSettingsClient("GET /api/config → start", {
+    baseUrl: this.getBaseUrl(),
+  });
+  const auth = await this.getAuthStatus().catch(() => null);
+  if (
+    auth?.required === true &&
+    auth.authenticated === false &&
+    auth.localAccess !== true
+  ) {
+    logSettingsClient("GET /api/config → skipped auth-gated browser", {
+      baseUrl: this.getBaseUrl(),
+    });
+    return {};
+  }
+  const r = (await this.fetch("/api/config")) as Record<string, unknown>;
+  const cloud = r.cloud as Record<string, unknown> | undefined;
+  logSettingsClient("GET /api/config ← ok", {
+    baseUrl: this.getBaseUrl(),
+    topKeys: Object.keys(r).sort(),
+    cloud: settingsDebugCloudSummary(cloud),
+  });
+  return r;
+};
+`;
+  if (!source.includes(anchor)) {
+    throw new Error("ui client-agent config auth gate anchor drifted");
+  }
+  return source.replace(anchor, patch);
+}
+
 function patchAliceUiHooksIndexAuthStatusExportSource(source) {
   if (source.includes('export * from "./useAuthStatus";')) {
     return source;
@@ -4274,6 +4325,7 @@ export function isAliceUiAuthGatedStartupPatched({
   startupPhasePollSource = "",
   startupPhaseRuntimeSource = "",
   appShellStateSource = "",
+  clientAgentSource = "",
   vincentStateSource = "",
 } = {}) {
   return (
@@ -4295,6 +4347,8 @@ export function isAliceUiAuthGatedStartupPatched({
     appSource.includes('authState.phase !== "authenticated"') &&
     appShellStateSource.includes("useAuthStatus({ observeOnly: true })") &&
     appShellStateSource.includes('authState.phase !== "authenticated"') &&
+    clientAgentSource.includes("GET /api/config → skipped auth-gated browser") &&
+    clientAgentSource.includes("this.getAuthStatus().catch") &&
     hooksIndexSource.includes('export * from "./useAuthStatus";') &&
     vincentStateSource.includes("useAuthStatus") &&
     vincentStateSource.includes('const authReady = authState.phase === "authenticated";')
@@ -4319,6 +4373,7 @@ export function applyAliceUiAuthGatedStartupPatch({
       uiStartupPhaseRuntimeRelativePath,
     ),
     appShellStatePath: path.join(elizaRoot, uiAppShellStateRelativePath),
+    clientAgentPath: path.join(elizaRoot, uiClientAgentRelativePath),
     vincentStatePath: path.join(elizaRoot, appVincentStateRelativePath),
   };
 
@@ -4339,6 +4394,7 @@ export function applyAliceUiAuthGatedStartupPatch({
     startupPhasePollSource: readFileSync(paths.startupPhasePollPath, "utf8"),
     startupPhaseRuntimeSource: readFileSync(paths.startupPhaseRuntimePath, "utf8"),
     appShellStateSource: readFileSync(paths.appShellStatePath, "utf8"),
+    clientAgentSource: readFileSync(paths.clientAgentPath, "utf8"),
     vincentStateSource: readFileSync(paths.vincentStatePath, "utf8"),
   };
 
@@ -4366,6 +4422,9 @@ export function applyAliceUiAuthGatedStartupPatch({
     ),
     appShellStateSource: patchAliceUseAppShellStateAuthGateSource(
       before.appShellStateSource,
+    ),
+    clientAgentSource: patchAliceUiClientAgentConfigAuthGateSource(
+      before.clientAgentSource,
     ),
     vincentStateSource: patchAliceVincentStateAuthGateSource(
       before.vincentStateSource,
@@ -4400,6 +4459,7 @@ export function applyAliceUiAuthGatedStartupPatch({
       before.appShellStateSource,
       after.appShellStateSource,
     ],
+    [paths.clientAgentPath, before.clientAgentSource, after.clientAgentSource],
     [paths.vincentStatePath, before.vincentStateSource, after.vincentStateSource],
   ];
   let patchedFiles = 0;
