@@ -364,6 +364,8 @@ describe("Alice Eliza runtime patch contract", () => {
         "function shouldBridgeAgentFallbackAuth",
       );
       expect(bridgeSource).toContain("UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES");
+      expect(bridgeSource).toContain('"/api/agent/autonomy"');
+      expect(bridgeSource).toContain('"/api/agent/events"');
       expect(bridgeSource).toContain('"/api/conversations"');
       expect(bridgeSource).toContain('"/api/stream"');
       expect(bridgeSource).toContain('"/api/streaming"');

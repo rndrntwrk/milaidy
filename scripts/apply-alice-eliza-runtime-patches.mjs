@@ -179,6 +179,7 @@ import {
 import type { CompatRuntimeState } from "./compat-route-shared";
 
 const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [
+  "/api/agent/autonomy",
   "/api/agent/events",
   "/api/agents",
   "/api/alice",
