@@ -26,6 +26,7 @@ import {
   applyAliceCoreBuildBrowserExternalsPatch,
   applyAliceCoreBuildBrowserExternalsMammothPatch,
   applyAliceCoreBrowserValidationReexportPatch,
+  applyAlicePluginSqlSchemaPgliteErrorsReexportPatch,
   applyAliceAppPluginRegisterExportPatch,
   isAliceAppPluginRegisterExportPatched,
   applyAliceBrowserBridgeWorkspaceStubPatch,
@@ -48,6 +49,7 @@ import {
   isAliceBundledKnowledgeStartupDeferralPatched,
   isAliceKubeHealthReadinessPatched,
   isAlicePgliteContainerLockPatchPatched,
+  isAlicePluginSqlSchemaPgliteErrorsReexportPatched,
   isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
   isAliceCoreBrowserValidationReexportPatched,
@@ -1402,6 +1404,10 @@ describe("Alice Eliza runtime patch contract", () => {
         '    "fs-extra",',
         '    "pty-state-capture",',
         "  ]);",
+        '      // fs-extra: CJS module with default + named exports',
+        '      if (modName === "fs-extra") {',
+        "        return [];",
+        "      }",
       ].join("\n");
       writeFileSync(filePath, original);
 
@@ -1414,13 +1420,62 @@ describe("Alice Eliza runtime patch contract", () => {
 
       const patched = readFileSync(filePath, "utf8");
       expect(patched).toContain('"mammoth", // [milaidy:vite-stub-mammoth]');
+      expect(patched).toContain("// [milaidy:vite-stub-mammoth-loader]");
+      expect(patched).toContain(
+        "export async function extractRawText() { return emptyResult; }",
+      );
       // Existing entries must remain in order.
       expect(patched).toContain('"node-llama-cpp",');
       expect(patched).toContain('"fs-extra",');
       expect(patched).toContain('"pty-state-capture",');
+      // Existing fs-extra loader branch must remain after the mammoth branch.
+      expect(patched.indexOf('if (modName === "mammoth")')).toBeLessThan(
+        patched.indexOf('if (modName === "fs-extra")'),
+      );
 
       expect(
         applyAliceAppViteStubMammothPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches plugin-sql schema index to re-export PGlite error helpers", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-plugin-sql-pglite-errors-"),
+    );
+    try {
+      const dir = path.join(tempDir, "plugins", "plugin-sql", "src", "schema");
+      mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "index.ts");
+      const original = [
+        'export { agentTable } from "./agent";',
+        'export { memoryTable } from "./memory";',
+      ].join("\n");
+      writeFileSync(filePath, original);
+
+      expect(
+        applyAlicePluginSqlSchemaPgliteErrorsReexportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(filePath, "utf8");
+      expect(isAlicePluginSqlSchemaPgliteErrorsReexportPatched(patched)).toBe(
+        true,
+      );
+      expect(patched).toContain('export * from "../pglite/errors";');
+      // Existing schema exports must remain.
+      expect(patched).toContain('export { agentTable } from "./agent";');
+      expect(patched).toContain('export { memoryTable } from "./memory";');
+
+      expect(
+        applyAlicePluginSqlSchemaPgliteErrorsReexportPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

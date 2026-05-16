@@ -56,6 +56,8 @@ const appVincentStateRelativePath = "plugins/app-vincent/src/useVincentState.ts"
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
+const pluginSqlSchemaIndexRelativePath =
+  "plugins/plugin-sql/src/schema/index.ts";
 const pluginSqlPgliteManagerRelativePath =
   "plugins/plugin-sql/typescript/pglite/manager.ts";
 const lifeOpsSourceRelativePaths = [
@@ -3847,32 +3849,56 @@ export function applyAliceCoreBuildBrowserExternalsMammothPatch({
 }
 
 function patchAliceAppViteStubMammothSource(source) {
-  const safeMarker = '"mammoth", // [milaidy:vite-stub-mammoth]';
-  if (source.includes(safeMarker)) {
-    return source;
-  }
+  const packageMarker = '"mammoth", // [milaidy:vite-stub-mammoth]';
+  const loaderMarker = "// [milaidy:vite-stub-mammoth-loader]";
+  let next = source;
 
-  const anchor = `    "node-llama-cpp",
+  if (!next.includes(packageMarker)) {
+    const anchor = `    "node-llama-cpp",
     "fs-extra",`;
 
-  if (!source.includes(anchor)) {
-    throw new Error(
-      "app/vite/native-module-stub-plugin.ts nativePackages anchor drifted",
-    );
-  }
+    if (!next.includes(anchor)) {
+      throw new Error(
+        "app/vite/native-module-stub-plugin.ts nativePackages anchor drifted",
+      );
+    }
 
-  /* Add mammoth to the SPA's Vite stub plugin so the bare `import "mammoth"`
-   * left in @elizaos/core's browser dist (after the paired core/build.ts
-   * mammoth-externals patch) gets replaced with a Proxy noop stub instead
-   * of being resolved and bundled by Vite. The default load() branch
-   * returns a generic noop Proxy for any nativePackages entry that
-   * doesn't have a specific stub generator, which is the right shape for
-   * mammoth (consumers only call its API, never inspect its export shape). */
-  const replacement = `    "node-llama-cpp",
+    const replacement = `    "node-llama-cpp",
     "fs-extra",
     "mammoth", // [milaidy:vite-stub-mammoth]`;
 
-  return source.replace(anchor, replacement);
+    next = next.replace(anchor, replacement);
+  }
+
+  if (!next.includes(loaderMarker)) {
+    const anchor = `      // fs-extra: CJS module with default + named exports
+      if (modName === "fs-extra") {`;
+
+    if (!next.includes(anchor)) {
+      throw new Error(
+        "app/vite/native-module-stub-plugin.ts mammoth loader anchor drifted",
+      );
+    }
+
+    /* @elizaos/core imports `mammoth.extractRawText` from the browser dist.
+     * A generic default-only native stub lets Vite resolve the module, but
+     * Rollup still fails static analysis because the named export is absent.
+     * Return a browser-safe named async function with Mammoth's result shape. */
+    const replacement = `      ${loaderMarker}
+      if (modName === "mammoth") {
+        return [
+          "const emptyResult = Object.freeze({ value: '', messages: [] });",
+          "export async function extractRawText() { return emptyResult; }",
+          "export default { extractRawText };",
+        ].join("\\n");
+      }
+
+${anchor}`;
+
+    next = next.replace(anchor, replacement);
+  }
+
+  return next;
 }
 
 export function applyAliceAppViteStubMammothPatch({
@@ -3899,6 +3925,49 @@ export function applyAliceAppViteStubMammothPatch({
   writeFileSync(filePath, after);
   log(
     "[alice-eliza-runtime-patches] patched app vite native-module-stub-plugin to stub mammoth",
+  );
+  return "applied";
+}
+
+const pluginSqlSchemaPgliteErrorsReexportSentinel =
+  "// [milaidy:plugin-sql-schema-pglite-errors-reexport]";
+const pluginSqlSchemaPgliteErrorsReexport = `${pluginSqlSchemaPgliteErrorsReexportSentinel}
+// packages/agent/src/runtime/eliza.ts imports plugin-sql through the schema
+// barrel during the browser Vite build. The PGlite error helpers live in
+// ../pglite/errors, so re-export them here for static named-import binding.
+export * from "../pglite/errors";
+`;
+
+export function isAlicePluginSqlSchemaPgliteErrorsReexportPatched(source) {
+  return source.includes(pluginSqlSchemaPgliteErrorsReexportSentinel);
+}
+
+export function applyAlicePluginSqlSchemaPgliteErrorsReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const filePath = path.join(elizaRoot, pluginSqlSchemaIndexRelativePath);
+  if (!existsSync(filePath)) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-sql schema index absent; skipping PGlite errors reexport patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(filePath, "utf8");
+  if (isAlicePluginSqlSchemaPgliteErrorsReexportPatched(before)) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-sql schema PGlite errors reexport already applied",
+    );
+    return "already-applied";
+  }
+
+  const after = before.endsWith("\n")
+    ? `${before}\n${pluginSqlSchemaPgliteErrorsReexport}`
+    : `${before}\n\n${pluginSqlSchemaPgliteErrorsReexport}`;
+  writeFileSync(filePath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched plugin-sql schema index to re-export PGlite errors",
   );
   return "applied";
 }
@@ -4993,6 +5062,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
+    applyAlicePluginSqlSchemaPgliteErrorsReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),
     applyAliceAuthRateLimitAfterValidSessionPatch({ elizaRoot, log }),
     applyAliceProviderFailureNonfatalPatch({ elizaRoot, log }),
