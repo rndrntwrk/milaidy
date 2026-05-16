@@ -185,7 +185,11 @@ async function executeOperatorStep(
       source: "internal",
     },
   });
-  const state = { values: { trustedAdmin: true } } as State;
+  const state: State = {
+    values: { trustedAdmin: true },
+    data: {},
+    text: "",
+  };
 
   if (typeof action.validate === "function") {
     const valid = await Promise.resolve(action.validate(runtime, message, state));
