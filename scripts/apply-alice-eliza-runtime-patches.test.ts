@@ -17,6 +17,7 @@ import {
   applyAliceAppCoreCompanionStagePatch,
   applyAliceAppCoreDashboardFallbackRoutesPatch,
   applyAliceAppCoreOpenAccessPatch,
+  applyAliceAppCoreUpstreamAuthBridgePatch,
   applyAliceAuthRateLimitAfterValidSessionPatch,
   applyAliceProviderFailureNonfatalPatch,
   applyAliceUiAuthGatedStartupPatch,
@@ -43,6 +44,7 @@ import {
   isAliceAppCoreAgentStatusAuthBridgePatched,
   isAliceAppCoreCompanionStagePatched,
   isAliceAppCoreDashboardFallbackRoutesPatched,
+  isAliceAppCoreUpstreamAuthBridgePatched,
   isAliceAuthRateLimitAfterValidSessionPatched,
   isAliceProviderFailureNonfatalPatched,
   isAliceLifeOpsCalendarActionPatched,
@@ -391,11 +393,60 @@ describe("Alice Eliza runtime patch contract", () => {
       expect(bridgeSource).toContain(
         'pathname === "/api/computer-use/approvals"',
       );
-      expect(bridgeSource).toContain("req.headers.authorization");
-      expect(bridgeSource).toContain('req.headers["x-api-key"]');
+      expect(bridgeSource).not.toContain("req.headers.authorization");
+      expect(bridgeSource).not.toContain('req.headers["x-api-key"]');
 
       expect(
         applyAliceAppCoreAgentStatusAuthBridgePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches upstream auth bridge to mutate headers only after app-core fallbacks", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-upstream-auth-bridge-"),
+    );
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const bridgePath = path.join(apiDir, "server-upstream-auth-bridge.ts");
+      writeFileSync(
+        bridgePath,
+        [
+          "const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [",
+          '  "/api/agent/events",',
+          '  "/api/agents",',
+          '  "/api/status",',
+          '  "/v1",',
+          "] as const;",
+          "export async function bridgeSessionAuthToUpstream(req, res, state, pathname) {",
+          "  req.headers.authorization = `Bearer ${upstreamToken}`;",
+          '  req.headers["x-api-key"] = upstreamToken;',
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceAppCoreUpstreamAuthBridgePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(bridgePath, "utf8");
+      expect(isAliceAppCoreUpstreamAuthBridgePatched(patched)).toBe(true);
+      expect(patched).toContain('  "/api/computer-use",');
+      expect(patched).toContain('  "/api/vincent",');
+      expect(patched).toContain('  "/api/apps",');
+      expect(patched).toContain('  "/api/agent/autonomy",');
+
+      expect(
+        applyAliceAppCoreUpstreamAuthBridgePatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

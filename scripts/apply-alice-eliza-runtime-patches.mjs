@@ -25,6 +25,8 @@ const appCoreCompatStateRelativePath =
 const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
 const appCoreAgentStatusAuthBridgeRelativePath =
   "packages/app-core/src/api/agent-status-auth-bridge.ts";
+const appCoreUpstreamAuthBridgeRelativePath =
+  "packages/app-core/src/api/server-upstream-auth-bridge.ts";
 const appCoreDashboardFallbackRoutesRelativePath =
   "packages/app-core/src/api/dashboard-fallback-routes.ts";
 const appCoreRuntimeErrorHandlersRelativePath =
@@ -272,24 +274,43 @@ export async function authorizeAgentStatusFallback(
   const provided = getProvidedApiToken(req);
   if (token && provided && tokenMatches(token, provided)) return true;
 
-  if (isAgentApiAuthorized(req)) {
-    if (token) {
-      req.headers.authorization = \`Bearer \${token}\`;
-      req.headers["x-api-key"] = token;
-    }
-    return true;
-  }
+  if (isAgentApiAuthorized(req)) return true;
 
   if (!(await ensureRouteAuthorized(req, res, state))) return false;
-
-  if (token) {
-    req.headers.authorization = \`Bearer \${token}\`;
-    req.headers["x-api-key"] = token;
-  }
 
   return true;
 }
 `;
+
+const aliceUpstreamAuthBridgePrefixes = [
+  "/api/agent/autonomy",
+  "/api/agent/events",
+  "/api/agents",
+  "/api/alice",
+  "/api/apps",
+  "/api/browser-workspace",
+  "/api/broadcast",
+  "/api/catalog",
+  "/api/cloud",
+  "/api/coding-agents",
+  "/api/companion",
+  "/api/computer-use",
+  "/api/connectors",
+  "/api/conversations",
+  "/api/inbox",
+  "/api/lifeops",
+  "/api/logs",
+  "/api/onboarding",
+  "/api/plugins",
+  "/api/security/audit",
+  "/api/status",
+  "/api/stream",
+  "/api/streaming",
+  "/api/triggers",
+  "/api/vincent",
+  "/api/wallet",
+  "/v1",
+];
 
 const dashboardFallbackRoutesSource = `import type http from "node:http";
 import { loadElizaConfig, saveElizaConfig } from "@elizaos/agent";
@@ -604,6 +625,17 @@ export function isAliceAppCoreAgentStatusAuthBridgePatched(
       "if (!(await authorizeAgentStatusFallback(req, res, state)))",
     ) &&
     bridgeSource === agentStatusAuthBridgeSource
+  );
+}
+
+export function isAliceAppCoreUpstreamAuthBridgePatched(source) {
+  return (
+    source.includes("const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [") &&
+    aliceUpstreamAuthBridgePrefixes.every((prefix) =>
+      source.includes(`  "${prefix}",`),
+    ) &&
+    source.includes("req.headers.authorization = `Bearer ${upstreamToken}`") &&
+    source.includes('req.headers["x-api-key"] = upstreamToken')
   );
 }
 
@@ -2936,6 +2968,60 @@ export function applyAliceAppCoreAgentStatusAuthBridgePatch({
   return "applied";
 }
 
+function patchAliceAppCoreUpstreamAuthBridgeSource(source) {
+  const start = "const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [";
+  const end = "] as const;";
+  const startIndex = source.indexOf(start);
+  if (startIndex < 0) {
+    throw new Error("app-core upstream auth bridge prefix anchor drifted");
+  }
+  const endIndex = source.indexOf(end, startIndex);
+  if (endIndex < 0) {
+    throw new Error("app-core upstream auth bridge prefix end anchor drifted");
+  }
+
+  const prefixBlock = `${start}
+${aliceUpstreamAuthBridgePrefixes.map((prefix) => `  "${prefix}",`).join("\n")}
+${end}`;
+  const next =
+    source.slice(0, startIndex) +
+    prefixBlock +
+    source.slice(endIndex + end.length);
+
+  if (!isAliceAppCoreUpstreamAuthBridgePatched(next)) {
+    throw new Error(
+      "app-core upstream auth bridge patch applied but contract is absent",
+    );
+  }
+  return next;
+}
+
+export function applyAliceAppCoreUpstreamAuthBridgePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const bridgePath = path.join(elizaRoot, appCoreUpstreamAuthBridgeRelativePath);
+  if (!existsSync(bridgePath)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core upstream auth bridge source absent; skipping",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(bridgePath, "utf8");
+  const after = patchAliceAppCoreUpstreamAuthBridgeSource(before);
+  if (after === before && isAliceAppCoreUpstreamAuthBridgePatched(after)) {
+    log(
+      "[alice-eliza-runtime-patches] app-core upstream auth bridge already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(bridgePath, after);
+  log("[alice-eliza-runtime-patches] patched app-core upstream auth bridge");
+  return "applied";
+}
+
 export function isAliceProviderFailureNonfatalPatched(
   errorHandlersSource,
   devServerSource,
@@ -5099,6 +5185,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
     applyAlicePluginSqlSchemaPgliteErrorsReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),
+    applyAliceAppCoreUpstreamAuthBridgePatch({ elizaRoot, log }),
     applyAliceAuthRateLimitAfterValidSessionPatch({ elizaRoot, log }),
     applyAliceProviderFailureNonfatalPatch({ elizaRoot, log }),
     applyAliceAppCoreDashboardFallbackRoutesPatch({ elizaRoot, log }),
