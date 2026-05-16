@@ -414,19 +414,25 @@ describe("Alice Eliza runtime patch contract", () => {
     try {
       const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
       mkdirSync(apiDir, { recursive: true });
+      const serverPath = path.join(apiDir, "server.ts");
       const bridgePath = path.join(apiDir, "server-upstream-auth-bridge.ts");
       writeFileSync(
-        bridgePath,
+        serverPath,
         [
-          "const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [",
-          '  "/api/agent/events",',
-          '  "/api/agents",',
-          '  "/api/status",',
-          '  "/v1",',
-          "] as const;",
-          "export async function bridgeSessionAuthToUpstream(req, res, state, pathname) {",
-          "  req.headers.authorization = `Bearer ${upstreamToken}`;",
-          '  req.headers["x-api-key"] = upstreamToken;',
+          'import { handleTrainingBenchmarksRoute } from "./training-benchmarks";',
+          "export function patchHttpCreateServerForCompat(state) {",
+          "  const wrappedListener = async (req, res) => {",
+          "      if (state) {",
+          '        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;',
+          "        try {",
+          "          if (await handleCompatRoute(req, res, state)) {",
+          "            return;",
+          "          }",
+          "        } catch (err) {",
+          "          throw err;",
+          "        }",
+          "      }",
+          "  };",
           "}",
         ].join("\n"),
       );
@@ -438,12 +444,27 @@ describe("Alice Eliza runtime patch contract", () => {
         }),
       ).toBe("applied");
 
-      const patched = readFileSync(bridgePath, "utf8");
-      expect(isAliceAppCoreUpstreamAuthBridgePatched(patched)).toBe(true);
-      expect(patched).toContain('  "/api/computer-use",');
-      expect(patched).toContain('  "/api/vincent",');
-      expect(patched).toContain('  "/api/apps",');
-      expect(patched).toContain('  "/api/agent/autonomy",');
+      const patchedServer = readFileSync(serverPath, "utf8");
+      const patchedBridge = readFileSync(bridgePath, "utf8");
+      expect(
+        isAliceAppCoreUpstreamAuthBridgePatched(
+          patchedBridge,
+          patchedServer,
+        ),
+      ).toBe(true);
+      expect(patchedServer).toContain(
+        'import { bridgeSessionAuthToUpstream } from "./server-upstream-auth-bridge";',
+      );
+      expect(patchedServer.indexOf("handleCompatRoute(req, res, state)")).toBeLessThan(
+        patchedServer.indexOf("bridgeSessionAuthToUpstream(req, res, state, pathname)"),
+      );
+      expect(patchedBridge).toContain('  "/api/computer-use",');
+      expect(patchedBridge).toContain('  "/api/vincent",');
+      expect(patchedBridge).toContain('  "/api/apps",');
+      expect(patchedBridge).toContain('  "/api/agent/autonomy",');
+      expect(patchedBridge).toContain(
+        "req.headers.authorization = `Bearer ${upstreamToken}`",
+      );
 
       expect(
         applyAliceAppCoreUpstreamAuthBridgePatch({

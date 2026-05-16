@@ -312,6 +312,57 @@ const aliceUpstreamAuthBridgePrefixes = [
   "/v1",
 ];
 
+const appCoreUpstreamAuthBridgeSource = `import crypto from "node:crypto";
+import type http from "node:http";
+import { resolveApiToken } from "@elizaos/shared";
+import { ensureRouteAuthorized, getProvidedApiToken } from "./auth";
+import type { CompatRuntimeState } from "./compat-route-shared";
+
+const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [
+${aliceUpstreamAuthBridgePrefixes.map((prefix) => `  "${prefix}",`).join("\n")}
+] as const;
+
+function tokenMatches(expected: string, provided: string): boolean {
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(provided, "utf8");
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+export function shouldBridgeSessionAuthToUpstream(
+  method: string | undefined,
+  pathname: string,
+): boolean {
+  if ((method ?? "GET").toUpperCase() === "OPTIONS") return false;
+  return UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(\`\${prefix}/\`),
+  );
+}
+
+export async function bridgeSessionAuthToUpstream(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  state: CompatRuntimeState,
+  pathname: string,
+): Promise<boolean> {
+  if (!shouldBridgeSessionAuthToUpstream(req.method, pathname)) return true;
+
+  const upstreamToken = resolveApiToken(process.env);
+  if (!upstreamToken) return true;
+
+  const provided = getProvidedApiToken(req);
+  if (provided && tokenMatches(upstreamToken, provided)) return true;
+
+  if (!(await ensureRouteAuthorized(req, res, state))) {
+    return false;
+  }
+
+  req.headers.authorization = \`Bearer \${upstreamToken}\`;
+  req.headers["x-api-key"] = upstreamToken;
+  return true;
+}
+`;
+
 const dashboardFallbackRoutesSource = `import type http from "node:http";
 import { loadElizaConfig, saveElizaConfig } from "@elizaos/agent";
 import { ensureRouteAuthorized } from "./auth.ts";
@@ -628,14 +679,24 @@ export function isAliceAppCoreAgentStatusAuthBridgePatched(
   );
 }
 
-export function isAliceAppCoreUpstreamAuthBridgePatched(source) {
+export function isAliceAppCoreUpstreamAuthBridgePatched(
+  source,
+  serverSource = "",
+) {
   return (
     source.includes("const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [") &&
     aliceUpstreamAuthBridgePrefixes.every((prefix) =>
       source.includes(`  "${prefix}",`),
     ) &&
     source.includes("req.headers.authorization = `Bearer ${upstreamToken}`") &&
-    source.includes('req.headers["x-api-key"] = upstreamToken')
+    source.includes('req.headers["x-api-key"] = upstreamToken') &&
+    (!serverSource ||
+      (serverSource.includes(
+        'import { bridgeSessionAuthToUpstream } from "./server-upstream-auth-bridge";',
+      ) &&
+        serverSource.includes(
+          "if (\n            !(await bridgeSessionAuthToUpstream(req, res, state, pathname))\n          )",
+        )))
   );
 }
 
@@ -2996,28 +3057,94 @@ ${end}`;
   return next;
 }
 
+function patchAliceAppCoreUpstreamAuthBridgeServerSource(source) {
+  if (
+    source.includes(
+      'import { bridgeSessionAuthToUpstream } from "./server-upstream-auth-bridge";',
+    ) &&
+    source.includes(
+      "if (\n            !(await bridgeSessionAuthToUpstream(req, res, state, pathname))\n          )",
+    )
+  ) {
+    return source;
+  }
+
+  let next = source;
+
+  const importAnchor =
+    'import { handleTrainingBenchmarksRoute } from "./training-benchmarks";\n';
+  if (!next.includes(importAnchor)) {
+    throw new Error("app-core upstream auth bridge server import anchor drifted");
+  }
+  next = next.replace(
+    importAnchor,
+    `${importAnchor}import { bridgeSessionAuthToUpstream } from "./server-upstream-auth-bridge";\n`,
+  );
+
+  const routeAnchor = `          if (await handleCompatRoute(req, res, state)) {
+            return;
+          }
+`;
+  const routePatch = `          if (await handleCompatRoute(req, res, state)) {
+            return;
+          }
+          if (
+            !(await bridgeSessionAuthToUpstream(req, res, state, pathname))
+          ) {
+            return;
+          }
+`;
+  if (!next.includes(routeAnchor)) {
+    throw new Error("app-core upstream auth bridge server route anchor drifted");
+  }
+  next = next.replace(routeAnchor, routePatch);
+  return next;
+}
+
 export function applyAliceAppCoreUpstreamAuthBridgePatch({
   elizaRoot,
   log = console.log,
 } = {}) {
+  const serverPath = path.join(elizaRoot, appCoreApiServerRelativePath);
   const bridgePath = path.join(elizaRoot, appCoreUpstreamAuthBridgeRelativePath);
-  if (!existsSync(bridgePath)) {
+  if (!existsSync(serverPath)) {
     log(
-      "[alice-eliza-runtime-patches] app-core upstream auth bridge source absent; skipping",
+      "[alice-eliza-runtime-patches] app-core server source absent; skipping upstream auth bridge",
     );
     return "skipped";
   }
 
-  const before = readFileSync(bridgePath, "utf8");
-  const after = patchAliceAppCoreUpstreamAuthBridgeSource(before);
-  if (after === before && isAliceAppCoreUpstreamAuthBridgePatched(after)) {
+  const beforeServer = readFileSync(serverPath, "utf8");
+  const beforeBridge = existsSync(bridgePath)
+    ? readFileSync(bridgePath, "utf8")
+    : null;
+  const afterServer =
+    patchAliceAppCoreUpstreamAuthBridgeServerSource(beforeServer);
+  const afterBridge = beforeBridge
+    ? patchAliceAppCoreUpstreamAuthBridgeSource(beforeBridge)
+    : appCoreUpstreamAuthBridgeSource;
+
+  if (
+    afterServer === beforeServer &&
+    beforeBridge === afterBridge &&
+    isAliceAppCoreUpstreamAuthBridgePatched(afterBridge, afterServer)
+  ) {
     log(
       "[alice-eliza-runtime-patches] app-core upstream auth bridge already applied",
     );
     return "already-applied";
   }
 
-  writeFileSync(bridgePath, after);
+  mkdirSync(path.dirname(bridgePath), { recursive: true });
+  writeFileSync(serverPath, afterServer);
+  writeFileSync(bridgePath, afterBridge);
+
+  if (!isAliceAppCoreUpstreamAuthBridgePatched(afterBridge, afterServer)) {
+    throw new Error(
+      "app-core upstream auth bridge patch applied but contract is absent",
+    );
+  }
+
   log("[alice-eliza-runtime-patches] patched app-core upstream auth bridge");
   return "applied";
 }
