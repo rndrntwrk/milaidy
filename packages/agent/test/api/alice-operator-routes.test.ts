@@ -74,6 +74,7 @@ describe("alice-operator-routes", () => {
     const handler = vi.fn(async (_runtime, message, _state, options, callback) => {
       expect(message.content?.source).toBe("internal");
       expect(options).toEqual({
+        inputType: "avatar",
         parameters: { inputType: "avatar" },
       });
       await callback?.({
@@ -135,6 +136,64 @@ describe("alice-operator-routes", () => {
           message: "Legacy go-live ready for session session-1.",
           status: 200,
           data: { sessionId: "session-1" },
+        },
+      ],
+    });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows stream status through the operator bridge", async () => {
+    const handler = vi.fn(async () => ({
+      success: true,
+      text: JSON.stringify({
+        ok: true,
+        message: "Stream status ready.",
+        data: { running: false },
+        status: 200,
+      }),
+    }));
+
+    const { ctx, getStatus, getJson } = buildCtx(
+      "POST",
+      "/api/alice/operator/execute",
+      {
+        runtime: {
+          agentId: "agent-1",
+          actions: [
+            {
+              name: "STREAM555_STREAM_STATUS",
+              validate: vi.fn(async () => true),
+              handler,
+            },
+          ],
+        } as unknown as AgentRuntime,
+        readJsonBody: vi.fn(async () => ({
+          steps: [
+            {
+              id: "stream-status",
+              action: "STREAM555_STREAM_STATUS",
+              params: { scope: "current" },
+            },
+          ],
+        })),
+      },
+    );
+
+    const handled = await handleAliceOperatorRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({
+      ok: true,
+      allSucceeded: true,
+      results: [
+        {
+          id: "stream-status",
+          action: "STREAM555_STREAM_STATUS",
+          success: true,
+          message: "Stream status ready.",
+          status: 200,
+          data: { running: false },
         },
       ],
     });

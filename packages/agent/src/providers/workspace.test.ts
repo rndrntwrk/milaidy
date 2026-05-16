@@ -87,6 +87,21 @@ describe("resolveDefaultAgentWorkspaceDir", () => {
       ),
     ).toBe(path.join(stateDir, "workspace"));
   });
+
+  it("falls back when the runtime cwd is not a string", () => {
+    const homeDir = makeTempDir("workspace-home-");
+
+    expect(
+      resolveDefaultAgentWorkspaceDir(
+        {} as NodeJS.ProcessEnv,
+        () => homeDir,
+        () =>
+          ({
+            trim: () => ({ pathname: "/not/a/string" }),
+          }) as unknown as string,
+      ),
+    ).toBe(path.join(homeDir, ".milady", "workspace"));
+  });
 });
 
 describe("isDefaultBoilerplate", () => {

@@ -92,7 +92,8 @@ export function resolveDefaultAgentWorkspaceDir(
   }
 
   if (!hasExplicitStateDirOverride(env)) {
-    const runtimeCwd = cwd()?.trim();
+    const runtimeCwd =
+      typeof cwd === "function" ? normalizeRuntimePath(cwd()) : undefined;
     if (runtimeCwd && shouldUseRuntimeCwdWorkspace(runtimeCwd)) {
       return resolveUserPath(runtimeCwd);
     }
@@ -243,7 +244,20 @@ function hasExplicitStateDirOverride(env: NodeJS.ProcessEnv): boolean {
   return EXPLICIT_STATE_DIR_KEYS.some((key) => Boolean(env[key]?.trim()));
 }
 
-function isLikelyPackagedRuntimeDir(dir: string): boolean {
+function normalizeRuntimePath(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isLikelyPackagedRuntimeDir(dir: unknown): boolean {
+  if (typeof dir !== "string") {
+    return false;
+  }
+
   const normalized = dir.replace(/\\/g, "/").toLowerCase();
   return (
     normalized.includes("/milady-dist") ||
@@ -255,7 +269,11 @@ function isLikelyPackagedRuntimeDir(dir: string): boolean {
 
 function shouldUseRuntimeCwdWorkspace(candidateDir: string): boolean {
   const resolvedDir = resolveUserPath(candidateDir);
-  if (!resolvedDir || isLikelyPackagedRuntimeDir(resolvedDir)) {
+  if (
+    typeof resolvedDir !== "string" ||
+    !resolvedDir ||
+    isLikelyPackagedRuntimeDir(resolvedDir)
+  ) {
     return false;
   }
 
