@@ -1404,6 +1404,8 @@ describe("Alice Eliza runtime patch contract", () => {
         '    "fs-extra",',
         '    "pty-state-capture",',
         "  ]);",
+        "      const strippedId = id.slice(VIRTUAL_PREFIX.length);",
+        '      const modName = strippedId.split("/")[0];',
         '      // fs-extra: CJS module with default + named exports',
         '      if (modName === "fs-extra") {',
         "        return [];",
@@ -1439,6 +1441,54 @@ describe("Alice Eliza runtime patch contract", () => {
           log: () => undefined,
         }),
       ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("upgrades the app vite mammoth stub to handle virtual module suffixes", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-vite-stub-mammoth-upgrade-"),
+    );
+    try {
+      const dir = path.join(tempDir, "packages", "app", "vite");
+      mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "native-module-stub-plugin.ts");
+      const original = [
+        "      const strippedId = id.slice(VIRTUAL_PREFIX.length);",
+        '      const modName = strippedId.split("/")[0];',
+        "      // [milaidy:vite-stub-mammoth-loader]",
+        '      if (modName === "mammoth") {',
+        "        return [",
+        '          "const emptyResult = Object.freeze({ value: \'\', messages: [] });",',
+        '          "export async function extractRawText() { return emptyResult; }",',
+        '          "export default { extractRawText };",',
+        '        ].join("\\n");',
+        "      }",
+        "      // fs-extra: CJS module with default + named exports",
+        '      if (modName === "fs-extra") {',
+        "        return [];",
+        "      }",
+        "    \"mammoth\", // [milaidy:vite-stub-mammoth]",
+      ].join("\n");
+      writeFileSync(filePath, original);
+
+      expect(
+        applyAliceAppViteStubMammothPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(filePath, "utf8");
+      expect(patched).toContain(
+        'const modName = strippedId.split(/[/?\\0]/)[0];',
+      );
+      expect(patched).toContain(
+        "const mammoth = Object.freeze({ extractRawText });",
+      );
+      expect(patched).toContain("export { mammoth };");
+      expect(patched).toContain("export default mammoth;");
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

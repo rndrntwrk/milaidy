@@ -3851,6 +3851,7 @@ export function applyAliceCoreBuildBrowserExternalsMammothPatch({
 function patchAliceAppViteStubMammothSource(source) {
   const packageMarker = '"mammoth", // [milaidy:vite-stub-mammoth]';
   const loaderMarker = "// [milaidy:vite-stub-mammoth-loader]";
+  const modNameMarker = 'const modName = strippedId.split(/[/?\\0]/)[0];';
   let next = source;
 
   if (!next.includes(packageMarker)) {
@@ -3870,6 +3871,29 @@ function patchAliceAppViteStubMammothSource(source) {
     next = next.replace(anchor, replacement);
   }
 
+  if (!next.includes(modNameMarker)) {
+    const anchor = 'const modName = strippedId.split("/")[0];';
+
+    if (!next.includes(anchor)) {
+      throw new Error(
+        "app/vite/native-module-stub-plugin.ts native module id normalization anchor drifted",
+      );
+    }
+
+    next = next.replace(anchor, modNameMarker);
+  }
+
+  const mammothLoader = `      ${loaderMarker}
+      if (modName === "mammoth") {
+        return [
+          "const emptyResult = Object.freeze({ value: '', messages: [] });",
+          "export async function extractRawText() { return emptyResult; }",
+          "const mammoth = Object.freeze({ extractRawText });",
+          "export { mammoth };",
+          "export default mammoth;",
+        ].join("\\n");
+      }`;
+
   if (!next.includes(loaderMarker)) {
     const anchor = `      // fs-extra: CJS module with default + named exports
       if (modName === "fs-extra") {`;
@@ -3884,18 +3908,28 @@ function patchAliceAppViteStubMammothSource(source) {
      * A generic default-only native stub lets Vite resolve the module, but
      * Rollup still fails static analysis because the named export is absent.
      * Return a browser-safe named async function with Mammoth's result shape. */
-    const replacement = `      ${loaderMarker}
+    const replacement = `${mammothLoader}
+
+${anchor}`;
+
+    next = next.replace(anchor, replacement);
+  } else if (!next.includes("export default mammoth;")) {
+    const oldLoader = `      ${loaderMarker}
       if (modName === "mammoth") {
         return [
           "const emptyResult = Object.freeze({ value: '', messages: [] });",
           "export async function extractRawText() { return emptyResult; }",
           "export default { extractRawText };",
         ].join("\\n");
-      }
+      }`;
 
-${anchor}`;
+    if (!next.includes(oldLoader)) {
+      throw new Error(
+        "app/vite/native-module-stub-plugin.ts existing mammoth loader anchor drifted",
+      );
+    }
 
-    next = next.replace(anchor, replacement);
+    next = next.replace(oldLoader, mammothLoader);
   }
 
   return next;
