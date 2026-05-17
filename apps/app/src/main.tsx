@@ -51,6 +51,10 @@ import {
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
 } from "@elizaos/app-core";
+import {
+  createPersistedActiveServer,
+  savePersistedActiveServer,
+} from "@elizaos/app-core/state/persistence";
 import { AppWindowRenderer } from "@elizaos/app-core";
 import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
 import type { ShareTargetPayload } from "@elizaos/app-core/platform";
@@ -395,6 +399,16 @@ try {
     appBootConfig.apiBase ??= window.location.origin;
     try {
       client.setToken(bootstrapToken);
+    } catch {}
+    try {
+      savePersistedActiveServer(
+        createPersistedActiveServer({
+          kind: "remote",
+          apiBase: window.location.origin,
+          accessToken: bootstrapToken,
+          label: window.location.host || "Self-hosted Alice",
+        }),
+      );
     } catch {}
   }
 } catch {}
