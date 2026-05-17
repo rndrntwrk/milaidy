@@ -55,6 +55,7 @@ const uiStartupPhaseRuntimeRelativePath =
 const uiOnboardingBootstrapRelativePath =
   "packages/ui/src/state/onboarding-bootstrap.ts";
 const uiAppShellStateRelativePath = "packages/ui/src/state/useAppShellState.ts";
+const uiClientBaseRelativePath = "packages/ui/src/api/client-base.ts";
 const uiClientAgentRelativePath = "packages/ui/src/api/client-agent.ts";
 const appVincentStateRelativePath =
   "plugins/app-vincent/src/useVincentState.ts";
@@ -5314,6 +5315,83 @@ export function applyAliceUiAuthGatedStartupPatch({
   return patchedFiles > 0 ? "applied" : "already-applied";
 }
 
+export function isAliceUiSameOriginWebsocketPatched(source = "") {
+  return (
+    source.includes("Keep same-origin WS available for real web hosts.") &&
+    source.includes("const normalizedHost = host.trim().toLowerCase();") &&
+    source.includes("const isNativePlaceholderHost =") &&
+    source.includes('normalizedHost === "-"') &&
+    source.includes('normalizedHost === "[::1]"') &&
+    source.includes("if (isNativePlaceholderHost && !hasPort) return;")
+  );
+}
+
+function patchAliceUiClientBaseSameOriginWebsocketSource(source) {
+  if (isAliceUiSameOriginWebsocketPatched(source)) {
+    return source;
+  }
+
+  const anchor = `    // On Capacitor native (iosScheme/androidScheme = "https"), the origin host
+    // is a dummy bundle host (e.g. "localhost" with no server behind it).
+    // Skip WS if we have no explicit baseUrl and the host doesn't look like a
+    // real backend (no port, not an IP, not a known API domain).
+    if (!this.baseUrl && typeof host === "string") {
+      const hasPort = host.includes(":");
+      const isLoopback =
+        host.startsWith("127.") || host.startsWith("localhost:");
+      if (!hasPort && !isLoopback) return;
+    }
+`;
+  const patch = `    // On Capacitor native (iosScheme/androidScheme = "https"), the origin host
+    // can be a dummy bundle host (e.g. "localhost" with no server behind it).
+    // Keep same-origin WS available for real web hosts.
+    if (!this.baseUrl && typeof host === "string") {
+      const normalizedHost = host.trim().toLowerCase();
+      const hasPort = /(?::\\d+|\\]:\\d+)$/.test(normalizedHost);
+      const isNativePlaceholderHost =
+        normalizedHost === "-" ||
+        normalizedHost === "localhost" ||
+        normalizedHost === "127.0.0.1" ||
+        normalizedHost === "[::1]";
+      if (isNativePlaceholderHost && !hasPort) return;
+    }
+`;
+
+  if (!source.includes(anchor)) {
+    throw new Error("UI client-base same-origin websocket anchor drifted");
+  }
+  return source.replace(anchor, patch);
+}
+
+export function applyAliceUiSameOriginWebsocketPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const clientBasePath = path.join(elizaRoot, uiClientBaseRelativePath);
+  if (!existsSync(clientBasePath)) {
+    throw new Error("Alice UI client-base websocket target missing");
+  }
+
+  const before = readFileSync(clientBasePath, "utf8");
+  if (isAliceUiSameOriginWebsocketPatched(before)) {
+    log(
+      "[alice-eliza-runtime-patches] UI same-origin websocket patch already applied",
+    );
+    return "already-applied";
+  }
+
+  const after = patchAliceUiClientBaseSameOriginWebsocketSource(before);
+  if (!isAliceUiSameOriginWebsocketPatched(after)) {
+    throw new Error(
+      "Alice UI same-origin websocket patch applied but contract is absent",
+    );
+  }
+
+  writeFileSync(clientBasePath, after);
+  log("[alice-eliza-runtime-patches] patched UI same-origin websocket guard");
+  return "applied";
+}
+
 export function isAliceCompanionOperatorPatchPatched(elizaRoot) {
   const requiredFiles = [
     "packages/ui/src/api/client-types-alice.ts",
@@ -5536,6 +5614,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
     applyAliceUiAuthGatedStartupPatch({ elizaRoot, log }),
+    applyAliceUiSameOriginWebsocketPatch({ elizaRoot, log }),
     applyAliceCompanionOperatorPatch({ rootDir, elizaRoot, log }),
     applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
     applyAliceAppLifeOpsDirSubpathExportsPatch({ elizaRoot, log }),

@@ -21,6 +21,7 @@ import {
   applyAliceAuthRateLimitAfterValidSessionPatch,
   applyAliceProviderFailureNonfatalPatch,
   applyAliceUiAuthGatedStartupPatch,
+  applyAliceUiSameOriginWebsocketPatch,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceCoreBasicCapabilitiesBrowserSafePatch,
   applyAliceAppViteStubMammothPatch,
@@ -56,6 +57,7 @@ import {
   isAliceRuntimeApiBindPatched,
   isAliceCoreBrowserValidationReexportPatched,
   isAliceUiAuthGatedStartupPatched,
+  isAliceUiSameOriginWebsocketPatched,
   rewriteRelativeTsRuntimeSpecifiers,
 } from "./apply-alice-eliza-runtime-patches.mjs";
 
@@ -1228,6 +1230,72 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceUiAuthGatedStartupPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches UI websocket setup to keep same-origin web hosts alive", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-ui-ws-"));
+    try {
+      const apiDir = path.join(tempDir, "packages", "ui", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const clientBasePath = path.join(apiDir, "client-base.ts");
+      writeFileSync(
+        clientBasePath,
+        [
+          "export class ElizaClient {",
+          "  private baseUrl?: string;",
+          "  setupWebSocket(host: string | null) {",
+          "    if (!host) return;",
+          "",
+          '    // On Capacitor native (iosScheme/androidScheme = "https"), the origin host',
+          '    // is a dummy bundle host (e.g. "localhost" with no server behind it).',
+          "    // Skip WS if we have no explicit baseUrl and the host doesn't look like a",
+          "    // real backend (no port, not an IP, not a known API domain).",
+          '    if (!this.baseUrl && typeof host === "string") {',
+          '      const hasPort = host.includes(":");',
+          "      const isLoopback =",
+          '        host.startsWith("127.") || host.startsWith("localhost:");',
+          "      if (!hasPort && !isLoopback) return;",
+          "    }",
+          "",
+          "    return host;",
+          "  }",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        isAliceUiSameOriginWebsocketPatched(
+          readFileSync(clientBasePath, "utf8"),
+        ),
+      ).toBe(false);
+
+      expect(
+        applyAliceUiSameOriginWebsocketPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(clientBasePath, "utf8");
+      expect(isAliceUiSameOriginWebsocketPatched(patched)).toBe(true);
+      expect(patched).toContain(
+        "Keep same-origin WS available for real web hosts.",
+      );
+      expect(patched).toContain(
+        "const hasPort = /(?::\\d+|\\]:\\d+)$/.test(normalizedHost);",
+      );
+      expect(patched).toContain('normalizedHost === "[::1]"');
+      expect(patched).not.toContain("host doesn't look like");
+
+      expect(
+        applyAliceUiSameOriginWebsocketPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
