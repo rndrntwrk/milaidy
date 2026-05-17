@@ -26,6 +26,14 @@ type WorkbenchTodoResponse = {
   type: string;
 };
 
+type WorkbenchTaskResponse = {
+  id: string;
+  name: string;
+  description: string;
+  isCompleted: boolean;
+  tags: string[];
+};
+
 // ---------------------------------------------------------------------------
 // Helpers (only used by workbench/todos routes)
 // ---------------------------------------------------------------------------
@@ -143,6 +151,104 @@ function toTaskBackedWorkbenchTodo(
         ? todoMeta.type
         : "task",
   };
+}
+
+function toTaskBackedWorkbenchTask(
+  task: Record<string, unknown> | null | undefined,
+): WorkbenchTaskResponse | null {
+  if (!task) {
+    return null;
+  }
+
+  const id =
+    typeof task.id === "string" && task.id.trim().length > 0 ? task.id : null;
+  if (!id) {
+    return null;
+  }
+
+  if (toTaskBackedWorkbenchTodo(task)) {
+    return null;
+  }
+
+  return {
+    id,
+    name:
+      typeof task.name === "string" && task.name.trim().length > 0
+        ? task.name
+        : "Task",
+    description: typeof task.description === "string" ? task.description : "",
+    isCompleted: readCompatTaskCompleted(task),
+    tags: normalizeCompatStringArray(task.tags),
+  };
+}
+
+async function handleTaskBackedWorkbenchOverviewRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  runtime: AgentRuntime | null,
+  pathname: string,
+  method: string,
+): Promise<boolean> {
+  if (method !== "GET" || pathname !== "/api/workbench/overview") {
+    return false;
+  }
+
+  if (!ensureCompatApiAuthorized(req, res)) {
+    return true;
+  }
+
+  const tasks: WorkbenchTaskResponse[] = [];
+  const todos: WorkbenchTodoResponse[] = [];
+  let tasksAvailable = false;
+  let todosAvailable = false;
+
+  if (runtime) {
+    try {
+      const runtimeTasks = (await runtime.getTasks({})) as unknown as Array<
+        Record<string, unknown>
+      >;
+      tasksAvailable = true;
+      todosAvailable = true;
+
+      for (const task of runtimeTasks) {
+        const todo = toTaskBackedWorkbenchTodo(task);
+        if (todo) {
+          todos.push(todo);
+          continue;
+        }
+
+        const mappedTask = toTaskBackedWorkbenchTask(task);
+        if (mappedTask) {
+          tasks.push(mappedTask);
+        }
+      }
+    } catch {
+      tasksAvailable = false;
+      todosAvailable = false;
+    }
+  }
+
+  tasks.sort((left, right) => left.name.localeCompare(right.name));
+  todos.sort((left, right) => left.name.localeCompare(right.name));
+
+  sendJsonResponse(res, 200, {
+    tasks,
+    triggers: [],
+    todos,
+    summary: {
+      totalTasks: tasks.length,
+      completedTasks: tasks.filter((task) => task.isCompleted).length,
+      totalTriggers: 0,
+      activeTriggers: 0,
+      totalTodos: todos.length,
+      completedTodos: todos.filter((todo) => todo.isCompleted).length,
+    },
+    tasksAvailable,
+    triggersAvailable: false,
+    todosAvailable,
+    lifeopsAvailable: false,
+  });
+  return true;
 }
 
 export function runtimeHasTodoDatabase(runtime: AgentRuntime | null): boolean {
@@ -454,6 +560,18 @@ export async function handleWorkbenchCompatRoutes(
 ): Promise<boolean> {
   const method = (req.method ?? "GET").toUpperCase();
   const url = new URL(req.url ?? "/", "http://localhost");
+
+  if (
+    await handleTaskBackedWorkbenchOverviewRoute(
+      req,
+      res,
+      state.current,
+      url.pathname,
+      method,
+    )
+  ) {
+    return true;
+  }
 
   if (
     url.pathname.startsWith("/api/workbench/todos") &&

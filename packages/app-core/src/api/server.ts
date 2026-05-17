@@ -123,6 +123,7 @@ import {
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
 import { buildCharacterFromConfig } from "../runtime/eliza";
+import { pickRandomNames } from "../runtime/onboarding-names";
 import {
   ensureRuntimeSqlCompatibility,
   executeRawSql,
@@ -131,6 +132,7 @@ import {
   sqlLiteral,
 } from "../utils/sql-compat";
 import { handleAuthPairingCompatRoutes } from "./auth-pairing-compat-routes";
+import { handleCharacterRoutes } from "./character-routes";
 import { handleCloudRoute } from "./cloud-routes";
 import { handleCloudStatusRoutes } from "./cloud-status-routes";
 import { handleDatabaseRowsCompatRoute } from "./database-rows-compat-routes";
@@ -868,6 +870,38 @@ async function handleMiladyCompatRoute(
 
   // Workbench / todos routes — extracted to workbench-compat-routes.ts
   if (await handleWorkbenchCompatRoutes(req, res, state)) return true;
+
+  if (url.pathname.startsWith("/api/character")) {
+    if (!ensureCompatApiAuthorized(req, res)) {
+      return true;
+    }
+    const config = loadElizaConfig();
+    const character = buildCharacterFromConfig(config);
+    return handleCharacterRoutes({
+      req,
+      res,
+      method,
+      pathname: url.pathname,
+      state: {
+        runtime: state.current,
+        agentName:
+          state.current?.character?.name ??
+          character.name ??
+          getConfiguredCompatAgentName() ??
+          "Alice",
+        config,
+      },
+      pickRandomNames,
+      readJsonBody: readCompatJsonBodyShared,
+      json: (_res, body, status = 200) => {
+        sendJsonResponse(res, status, body);
+      },
+      error: (_res, message, status = 400) => {
+        sendJsonErrorResponse(res, status, message);
+      },
+      saveConfig: saveElizaConfig,
+    });
+  }
 
   // Handle all /api/cloud/* routes (except compat and billing which have
   // their own handlers above) through Milady's handleCloudRoute. This is

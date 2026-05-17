@@ -16,13 +16,16 @@ const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 
 export const aliceElizaRuntimePatchRelativePath =
   "scripts/alice-eliza-runtime-patches/app-core-server-only-api-bind.patch";
+export const aliceCompanionOperatorPatchRelativePath =
+  "scripts/alice-eliza-runtime-patches/alice-companion-operator.patch";
 
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
 const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
 const appCoreApiAuthRelativePath = "packages/app-core/src/api/auth.ts";
 const appCoreCompatStateRelativePath =
   "packages/app-core/src/api/compat-route-shared.ts";
-const appCoreKubeHealthRelativePath = "packages/app-core/src/api/kube-health.ts";
+const appCoreKubeHealthRelativePath =
+  "packages/app-core/src/api/kube-health.ts";
 const appCoreAgentStatusAuthBridgeRelativePath =
   "packages/app-core/src/api/agent-status-auth-bridge.ts";
 const appCoreUpstreamAuthBridgeRelativePath =
@@ -51,10 +54,10 @@ const uiStartupPhaseRuntimeRelativePath =
   "packages/ui/src/state/startup-phase-runtime.ts";
 const uiOnboardingBootstrapRelativePath =
   "packages/ui/src/state/onboarding-bootstrap.ts";
-const uiAppShellStateRelativePath =
-  "packages/ui/src/state/useAppShellState.ts";
+const uiAppShellStateRelativePath = "packages/ui/src/state/useAppShellState.ts";
 const uiClientAgentRelativePath = "packages/ui/src/api/client-agent.ts";
-const appVincentStateRelativePath = "plugins/app-vincent/src/useVincentState.ts";
+const appVincentStateRelativePath =
+  "plugins/app-vincent/src/useVincentState.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
@@ -603,8 +606,9 @@ function runGitApply(args, { cwd, allowFailure = false } = {}) {
 
 export function isAliceRuntimeApiBindPatched(source) {
   const serverOnlyBranch =
-    source.match(/if \(options\?\.serverOnly\) \{[\s\S]*?const keepAlive/m)?.[0] ??
-    "";
+    source.match(
+      /if \(options\?\.serverOnly\) \{[\s\S]*?const keepAlive/m,
+    )?.[0] ?? "";
   const apiBindIndex = serverOnlyBranch.indexOf(
     'const apiServerHandle = await withStartupPhase(\n        "api-bind"',
   );
@@ -635,15 +639,19 @@ export function isAliceRuntimeApiBindPatched(source) {
 
 export function isAliceKubeHealthReadinessPatched(serverSource, compatSource) {
   const updateRuntimeBlock =
-    serverSource.match(/server\.updateRuntime = \(runtime:[\s\S]*?\n    \};/)?.[0] ??
-    "";
+    serverSource.match(
+      /server\.updateRuntime = \(runtime:[\s\S]*?\n {4}\};/,
+    )?.[0] ?? "";
   const updateStartupBlock =
-    serverSource.match(/server\.updateStartup = \(update\) => \{[\s\S]*?\n    \};/)?.[0] ??
-    "";
+    serverSource.match(
+      /server\.updateStartup = \(update\) => \{[\s\S]*?\n {4}\};/,
+    )?.[0] ?? "";
 
   return (
     compatSource.includes("kubeReady: boolean") &&
-    serverSource.includes('import { buildKubeHealthResponse } from "./kube-health"') &&
+    serverSource.includes(
+      'import { buildKubeHealthResponse } from "./kube-health"',
+    ) &&
     serverSource.includes('pathname === "/health"') &&
     serverSource.includes('pathname === "/health/live"') &&
     serverSource.includes('pathname === "/health/ready"') &&
@@ -733,19 +741,22 @@ export function isAliceBundledKnowledgeStartupDeferralPatched(source) {
       "bundled knowledge seeding disabled by default during server startup",
     ) &&
     source.includes("Bundled knowledge seeding scheduled after") &&
-    source.includes("bundled knowledge seeding deferred until API server startup") &&
-    source.includes('scheduleBundledKnowledgeSeed(runtime, "api-server-listen");') &&
-    source.includes('scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");') &&
+    source.includes(
+      "bundled knowledge seeding deferred until API server startup",
+    ) &&
+    source.includes(
+      'scheduleBundledKnowledgeSeed(runtime, "api-server-listen");',
+    ) &&
+    source.includes(
+      'scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");',
+    ) &&
     !source.includes("await seedBundledKnowledge(runtime);")
   );
 }
 
 export function rewriteRelativeTsRuntimeSpecifiers(source) {
   return source
-    .replace(
-      /(\bfrom\s*["'])(\.{1,2}\/[^"']+)\.(?:ts|tsx)(["'])/g,
-      "$1$2.js$3",
-    )
+    .replace(/(\bfrom\s*["'])(\.{1,2}\/[^"']+)\.(?:ts|tsx)(["'])/g, "$1$2.js$3")
     .replace(
       /(\bimport\s*["'])(\.{1,2}\/[^"']+)\.(?:ts|tsx)(["'])/g,
       "$1$2.js$3",
@@ -775,9 +786,13 @@ export function isAlicePgliteContainerLockPatchPatched(source) {
     source.includes("type PgliteLockFile = {") &&
     source.includes("private getCurrentProcessStartedAtMs(): number") &&
     source.includes("private isLockFileFromPreviousProcess(") &&
-    source.includes("const previousProcessLock = this.isLockFileFromPreviousProcess(") &&
+    source.includes(
+      "const previousProcessLock = this.isLockFileFromPreviousProcess(",
+    ) &&
     source.includes("pid && this.isPidRunning(pid) && !previousProcessLock") &&
-    source.includes("Removed stale PGlite postmaster.pid from prior container process")
+    source.includes(
+      "Removed stale PGlite postmaster.pid from prior container process",
+    )
   );
 }
 
@@ -936,7 +951,9 @@ ${pidFileAnchor}`,
   );
 
   if (!isAlicePgliteContainerLockPatchPatched(next)) {
-    throw new Error("plugin-sql PGlite manager patch applied but contract is absent");
+    throw new Error(
+      "plugin-sql PGlite manager patch applied but contract is absent",
+    );
   }
   return next;
 }
@@ -963,7 +980,9 @@ export function applyAlicePgliteContainerLockPatch({
   }
 
   writeFileSync(managerPath, after);
-  log("[alice-eliza-runtime-patches] patched plugin-sql PGlite container lock recovery");
+  log(
+    "[alice-eliza-runtime-patches] patched plugin-sql PGlite container lock recovery",
+  );
   return "applied";
 }
 
@@ -1002,7 +1021,9 @@ function patchAliceLifeOpsCalendarActionSource(source) {
   );
 
   if (!isAliceLifeOpsCalendarActionPatched(next)) {
-    throw new Error("app-lifeops calendar action patch applied but contract is absent");
+    throw new Error(
+      "app-lifeops calendar action patch applied but contract is absent",
+    );
   }
   return next;
 }
@@ -1296,8 +1317,7 @@ export function applyAliceCoreBrowserRuntimeEnvReexportPatch({
 }
 
 const appCoreIndexRelativePath = "packages/app-core/src/index.ts";
-const appCoreUiFullReexportSentinel =
-  "// [milaidy:app-core-ui-full-reexport]";
+const appCoreUiFullReexportSentinel = "// [milaidy:app-core-ui-full-reexport]";
 const appCoreUiFullReexport = `${appCoreUiFullReexportSentinel}
 // Bridge the full @elizaos/ui surface through @elizaos/app-core, mirroring
 // upstream-milady's eliza/packages/app-core/src/browser.ts line 1
@@ -1826,7 +1846,11 @@ export function applyAliceTelegramSourcePackageJsonExportPatch({
     return "already-applied";
   }
 
-  if (!packageJson.exports || typeof packageJson.exports !== "object" || Array.isArray(packageJson.exports)) {
+  if (
+    !packageJson.exports ||
+    typeof packageJson.exports !== "object" ||
+    Array.isArray(packageJson.exports)
+  ) {
     packageJson.exports = { ".": packageJson.main ?? "./dist/index.js" };
   }
   packageJson.exports[telegramSourceAccountAuthExport] =
@@ -2376,7 +2400,10 @@ export function applyAliceBrowserBridgeWorkspaceStubPatch({
   const stubDir = path.join(elizaRoot, browserBridgeStubRelativePath);
   const packageJsonPath = path.join(stubDir, "package.json");
 
-  if (existsSync(packageJsonPath) && !isAliceBrowserBridgeWorkspaceStubPatched(elizaRoot)) {
+  if (
+    existsSync(packageJsonPath) &&
+    !isAliceBrowserBridgeWorkspaceStubPatched(elizaRoot)
+  ) {
     log(
       "[alice-eliza-runtime-patches] browser-bridge plugin source already present from upstream; skipping stub",
     );
@@ -2405,10 +2432,7 @@ export function applyAliceBrowserBridgeWorkspaceStubPatch({
     path.join(distDir, "contracts.js"),
     browserBridgeStubContractsSource,
   );
-  writeFileSync(
-    path.join(distDir, "schema.js"),
-    browserBridgeStubSchemaSource,
-  );
+  writeFileSync(path.join(distDir, "schema.js"), browserBridgeStubSchemaSource);
   writeFileSync(
     path.join(distDir, "index.d.ts"),
     `${browserBridgeStubMarker}\nexport {};\n`,
@@ -2449,7 +2473,9 @@ export function applyAliceLifeOpsCalendarActionPatch({
   }
 
   if (inspectedFiles === 0) {
-    log("[alice-eliza-runtime-patches] app-lifeops calendar action source absent; skipping");
+    log(
+      "[alice-eliza-runtime-patches] app-lifeops calendar action source absent; skipping",
+    );
     return "skipped";
   }
 
@@ -2661,12 +2687,10 @@ export function applyAliceLifeOpsNativeActivityTrackerPatch({
     );
     if (existsSync(servicePath)) {
       if (
-        patchLifeOpsFile(
-          servicePath,
-          (source) =>
-            patchNativeActivityTrackerServiceStartup(
-              patchNativeActivityTrackerServiceImport(source),
-            ),
+        patchLifeOpsFile(servicePath, (source) =>
+          patchNativeActivityTrackerServiceStartup(
+            patchNativeActivityTrackerServiceImport(source),
+          ),
         )
       ) {
         patchedFiles += 1;
@@ -2709,7 +2733,9 @@ function patchAliceKubeHealthCompatStateSource(source) {
 
 function patchAliceKubeHealthServerSource(source) {
   if (
-    source.includes('import { buildKubeHealthResponse } from "./kube-health"') &&
+    source.includes(
+      'import { buildKubeHealthResponse } from "./kube-health"',
+    ) &&
     source.includes("Boolean(state?.kubeReady)") &&
     source.includes("compatState.kubeReady = true;") &&
     source.includes("compatState.kubeReady = false;")
@@ -2719,7 +2745,8 @@ function patchAliceKubeHealthServerSource(source) {
 
   let next = source;
 
-  const importAnchor = 'import { sendJson as sendJsonResponse } from "./response";\n';
+  const importAnchor =
+    'import { sendJson as sendJsonResponse } from "./response";\n';
   if (!next.includes(importAnchor)) {
     throw new Error("app-core server response import anchor drifted");
   }
@@ -2862,7 +2889,9 @@ export function applyAliceKubeHealthReadinessPatch({
   writeFileSync(kubeHealthPath, kubeHealthSource);
 
   if (!isAliceKubeHealthReadinessPatched(afterServer, afterCompat)) {
-    throw new Error("app-core kube health patch applied but contract is absent");
+    throw new Error(
+      "app-core kube health patch applied but contract is absent",
+    );
   }
 
   log(
@@ -3074,7 +3103,9 @@ function patchAliceAppCoreUpstreamAuthBridgeServerSource(source) {
   const importAnchor =
     'import { handleTrainingBenchmarksRoute } from "./training-benchmarks";\n';
   if (!next.includes(importAnchor)) {
-    throw new Error("app-core upstream auth bridge server import anchor drifted");
+    throw new Error(
+      "app-core upstream auth bridge server import anchor drifted",
+    );
   }
   next = next.replace(
     importAnchor,
@@ -3095,7 +3126,9 @@ function patchAliceAppCoreUpstreamAuthBridgeServerSource(source) {
           }
 `;
   if (!next.includes(routeAnchor)) {
-    throw new Error("app-core upstream auth bridge server route anchor drifted");
+    throw new Error(
+      "app-core upstream auth bridge server route anchor drifted",
+    );
   }
   next = next.replace(routeAnchor, routePatch);
   return next;
@@ -3106,7 +3139,10 @@ export function applyAliceAppCoreUpstreamAuthBridgePatch({
   log = console.log,
 } = {}) {
   const serverPath = path.join(elizaRoot, appCoreApiServerRelativePath);
-  const bridgePath = path.join(elizaRoot, appCoreUpstreamAuthBridgeRelativePath);
+  const bridgePath = path.join(
+    elizaRoot,
+    appCoreUpstreamAuthBridgeRelativePath,
+  );
   if (!existsSync(serverPath)) {
     log(
       "[alice-eliza-runtime-patches] app-core server source absent; skipping upstream auth bridge",
@@ -3266,7 +3302,10 @@ export function applyAliceAuthRateLimitAfterValidSessionPatch({
 
   const before = readFileSync(authPath, "utf8");
   const after = patchAliceAuthRateLimitSource(before);
-  if (after === before && isAliceAuthRateLimitAfterValidSessionPatched(before)) {
+  if (
+    after === before &&
+    isAliceAuthRateLimitAfterValidSessionPatched(before)
+  ) {
     log(
       "[alice-eliza-runtime-patches] app-core auth rate-limit session ordering already applied",
     );
@@ -3275,7 +3314,9 @@ export function applyAliceAuthRateLimitAfterValidSessionPatch({
 
   writeFileSync(authPath, after);
   if (!isAliceAuthRateLimitAfterValidSessionPatched(after)) {
-    throw new Error("app-core auth rate-limit session ordering patch contract is absent");
+    throw new Error(
+      "app-core auth rate-limit session ordering patch contract is absent",
+    );
   }
 
   log(
@@ -3384,7 +3425,9 @@ function patchAliceProviderFailureEntrypointSource(source, importPath) {
   shouldIgnoreUnhandledRejection,
 } from "${importPath}";`;
   if (!next.includes(importAnchor)) {
-    throw new Error(`app-core unhandled rejection import anchor drifted for ${importPath}`);
+    throw new Error(
+      `app-core unhandled rejection import anchor drifted for ${importPath}`,
+    );
   }
   next = next.replace(
     importAnchor,
@@ -3398,7 +3441,9 @@ function patchAliceProviderFailureEntrypointSource(source, importPath) {
   const warningAnchor =
     "Provider credits appear exhausted; request failed without output. Top up credits and retry.";
   if (!next.includes(warningAnchor)) {
-    throw new Error(`app-core unhandled rejection warning anchor drifted for ${importPath}`);
+    throw new Error(
+      `app-core unhandled rejection warning anchor drifted for ${importPath}`,
+    );
   }
   next = next.replace(
     `\`${"${getLogPrefix()}"} ${warningAnchor}\``,
@@ -3415,7 +3460,10 @@ export function applyAliceProviderFailureNonfatalPatch({
     elizaRoot,
     appCoreRuntimeErrorHandlersRelativePath,
   );
-  const devServerPath = path.join(elizaRoot, appCoreRuntimeDevServerRelativePath);
+  const devServerPath = path.join(
+    elizaRoot,
+    appCoreRuntimeDevServerRelativePath,
+  );
   const runMainPath = path.join(elizaRoot, appCoreCliRunMainRelativePath);
   if (
     !existsSync(errorHandlersPath) ||
@@ -3470,7 +3518,9 @@ export function applyAliceProviderFailureNonfatalPatch({
       afterRunMain,
     )
   ) {
-    throw new Error("app-core provider failure nonfatal patch contract is absent");
+    throw new Error(
+      "app-core provider failure nonfatal patch contract is absent",
+    );
   }
 
   log(
@@ -3510,7 +3560,9 @@ function patchAliceAppCoreDashboardFallbackRoutesServerSource(source) {
   return handleDatabaseRowsCompatRoute(req, res, state);
 }`;
   if (!next.includes(routeAnchor)) {
-    throw new Error("app-core dashboard fallback routes insertion anchor drifted");
+    throw new Error(
+      "app-core dashboard fallback routes insertion anchor drifted",
+    );
   }
   next = next.replace(routeAnchor, routePatch);
   return next;
@@ -3542,10 +3594,7 @@ export function applyAliceAppCoreDashboardFallbackRoutesPatch({
   if (
     afterServer === beforeServer &&
     beforeFallback === dashboardFallbackRoutesSource &&
-    isAliceAppCoreDashboardFallbackRoutesPatched(
-      afterServer,
-      beforeFallback,
-    )
+    isAliceAppCoreDashboardFallbackRoutesPatched(afterServer, beforeFallback)
   ) {
     log(
       "[alice-eliza-runtime-patches] app-core dashboard fallback routes already applied",
@@ -3563,10 +3612,14 @@ export function applyAliceAppCoreDashboardFallbackRoutesPatch({
       dashboardFallbackRoutesSource,
     )
   ) {
-    throw new Error("app-core dashboard fallback routes patch contract is absent");
+    throw new Error(
+      "app-core dashboard fallback routes patch contract is absent",
+    );
   }
 
-  log("[alice-eliza-runtime-patches] patched app-core dashboard fallback routes");
+  log(
+    "[alice-eliza-runtime-patches] patched app-core dashboard fallback routes",
+  );
   return "applied";
 }
 
@@ -3584,7 +3637,7 @@ function patchAliceAppCoreCompanionStageSource(source) {
   readCompatJsonBody,
 } from "./compat-route-shared";
 `;
-  if (!next.includes("readCompatJsonBody,\n} from \"./compat-route-shared\"")) {
+  if (!next.includes('readCompatJsonBody,\n} from "./compat-route-shared"')) {
     if (!next.includes(compatImportAnchor)) {
       throw new Error("app-core companion stage compat import anchor drifted");
     }
@@ -3941,9 +3994,7 @@ const browserExternals = [
 \t"sharp", // Image processing - not available in browser`;
 
   if (!source.includes(anchor)) {
-    throw new Error(
-      "core/build.ts browserExternals anchor drifted",
-    );
+    throw new Error("core/build.ts browserExternals anchor drifted");
   }
 
   /* When bun build runs without fs-extra in browserExternals, it resolves and
@@ -4065,7 +4116,7 @@ export function applyAliceCoreBuildBrowserExternalsMammothPatch({
 function patchAliceAppViteStubMammothSource(source) {
   const packageMarker = '"mammoth", // [milaidy:vite-stub-mammoth]';
   const loaderMarker = "// [milaidy:vite-stub-mammoth-loader]";
-  const modNameMarker = 'const modName = strippedId.split(/[/?\\0]/)[0];';
+  const modNameMarker = "const modName = strippedId.split(/[/?\\0]/)[0];";
   let next = source;
 
   if (!next.includes(packageMarker)) {
@@ -4294,7 +4345,9 @@ ${enableGuardAnchor}`;
     )
   ) {
     if (!next.includes(enableGuardAnchor)) {
-      throw new Error("agent runtime bundled knowledge schedule anchor drifted");
+      throw new Error(
+        "agent runtime bundled knowledge schedule anchor drifted",
+      );
     }
     next = next.replace(enableGuardAnchor, enableGuardPatch);
   }
@@ -4332,7 +4385,11 @@ ${enableGuardAnchor}`;
   const apiListenPatch = `    logger.info(\`[eliza] API server listening on \${dashboardUrl}\`);
     scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
 `;
-  if (!next.includes('scheduleBundledKnowledgeSeed(runtime, "api-server-listen");')) {
+  if (
+    !next.includes(
+      'scheduleBundledKnowledgeSeed(runtime, "api-server-listen");',
+    )
+  ) {
     if (!next.includes(apiListenAnchor)) {
       throw new Error("agent runtime API listen anchor drifted");
     }
@@ -4360,7 +4417,11 @@ ${enableGuardAnchor}`;
     return runtime;
   }
 `;
-  if (!next.includes('scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");')) {
+  if (
+    !next.includes(
+      'scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");',
+    )
+  ) {
     if (!next.includes(headlessAnchor)) {
       throw new Error("agent runtime headless return anchor drifted");
     }
@@ -4944,8 +5005,11 @@ function patchAliceUiHooksIndexAuthStatusExportSource(source) {
   if (!source.includes(anchor)) {
     throw new Error("ui hooks index auth export anchor drifted");
   }
-  return source.replace(anchor, `${anchor}export * from "./useAuthStatus";
-`);
+  return source.replace(
+    anchor,
+    `${anchor}export * from "./useAuthStatus";
+`,
+  );
 }
 
 function patchAliceVincentStateAuthGateSource(source) {
@@ -5086,14 +5150,16 @@ export function isAliceUiAuthGatedStartupPatched({
     startupPhaseRuntimeSource.includes(
       "Remote password/session auth stays behind the startup auth gate",
     ) &&
-    startupPhaseRuntimeSource.includes('dispatch({ type: "BACKEND_AUTH_REQUIRED" });') &&
+    startupPhaseRuntimeSource.includes(
+      'dispatch({ type: "BACKEND_AUTH_REQUIRED" });',
+    ) &&
     onboardingBootstrapSource.includes(
       "Auth-gated origins must not run protected onboarding probes before a browser session exists",
     ) &&
     startupPhasePollSource.includes(
       "Token holders with password/session auth still pending stay behind the startup auth gate",
     ) &&
-    startupPhasePollSource.includes('deps.setAuthRequired(true);') &&
+    startupPhasePollSource.includes("deps.setAuthRequired(true);") &&
     startupShellSource.includes('from "../auth/LoginView"') &&
     startupShellSource.includes("usePasswordLoginGate") &&
     startupShellSource.includes("handleStartupLoginSuccess") &&
@@ -5101,11 +5167,15 @@ export function isAliceUiAuthGatedStartupPatched({
     appSource.includes('authState.phase !== "authenticated"') &&
     appShellStateSource.includes("useAuthStatus({ observeOnly: true })") &&
     appShellStateSource.includes('authState.phase !== "authenticated"') &&
-    clientAgentSource.includes("GET /api/config → skipped auth-gated browser") &&
+    clientAgentSource.includes(
+      "GET /api/config → skipped auth-gated browser",
+    ) &&
     clientAgentSource.includes("this.getAuthStatus().catch") &&
     hooksIndexSource.includes('export * from "./useAuthStatus";') &&
     vincentStateSource.includes("useAuthStatus") &&
-    vincentStateSource.includes('const authReady = authState.phase === "authenticated";')
+    vincentStateSource.includes(
+      'const authReady = authState.phase === "authenticated";',
+    )
   );
 }
 
@@ -5146,14 +5216,19 @@ export function applyAliceUiAuthGatedStartupPatch({
     ),
     startupShellSource: readFileSync(paths.startupShellPath, "utf8"),
     startupPhasePollSource: readFileSync(paths.startupPhasePollPath, "utf8"),
-    startupPhaseRuntimeSource: readFileSync(paths.startupPhaseRuntimePath, "utf8"),
+    startupPhaseRuntimeSource: readFileSync(
+      paths.startupPhaseRuntimePath,
+      "utf8",
+    ),
     appShellStateSource: readFileSync(paths.appShellStatePath, "utf8"),
     clientAgentSource: readFileSync(paths.clientAgentPath, "utf8"),
     vincentStateSource: readFileSync(paths.vincentStatePath, "utf8"),
   };
 
   if (isAliceUiAuthGatedStartupPatched(before)) {
-    log("[alice-eliza-runtime-patches] UI auth-gated startup patch already applied");
+    log(
+      "[alice-eliza-runtime-patches] UI auth-gated startup patch already applied",
+    );
     return "already-applied";
   }
 
@@ -5186,7 +5261,9 @@ export function applyAliceUiAuthGatedStartupPatch({
   };
 
   if (!isAliceUiAuthGatedStartupPatched(after)) {
-    throw new Error("Alice UI auth-gated startup patch applied but contract is absent");
+    throw new Error(
+      "Alice UI auth-gated startup patch applied but contract is absent",
+    );
   }
 
   const writes = [
@@ -5197,7 +5274,11 @@ export function applyAliceUiAuthGatedStartupPatch({
       before.onboardingBootstrapSource,
       after.onboardingBootstrapSource,
     ],
-    [paths.startupShellPath, before.startupShellSource, after.startupShellSource],
+    [
+      paths.startupShellPath,
+      before.startupShellSource,
+      after.startupShellSource,
+    ],
     [
       paths.startupPhasePollPath,
       before.startupPhasePollSource,
@@ -5214,7 +5295,11 @@ export function applyAliceUiAuthGatedStartupPatch({
       after.appShellStateSource,
     ],
     [paths.clientAgentPath, before.clientAgentSource, after.clientAgentSource],
-    [paths.vincentStatePath, before.vincentStateSource, after.vincentStateSource],
+    [
+      paths.vincentStatePath,
+      before.vincentStateSource,
+      after.vincentStateSource,
+    ],
   ];
   let patchedFiles = 0;
   for (const [targetPath, previous, next] of writes) {
@@ -5227,6 +5312,133 @@ export function applyAliceUiAuthGatedStartupPatch({
     `[alice-eliza-runtime-patches] patched UI auth-gated startup (${patchedFiles} files)`,
   );
   return patchedFiles > 0 ? "applied" : "already-applied";
+}
+
+export function isAliceCompanionOperatorPatchPatched(elizaRoot) {
+  const requiredFiles = [
+    "packages/ui/src/api/client-types-alice.ts",
+    "plugins/app-companion/src/components/operator/useCompanionStageOperator.ts",
+    "plugins/app-companion/src/components/operator/CompanionGoLiveModal.tsx",
+    "plugins/app-companion/src/components/operator/CompanionStageOperatorOverlay.tsx",
+    "plugins/app-companion/src/utils/app-emote-runtime.ts",
+  ].map((relativePath) => path.join(elizaRoot, relativePath));
+
+  if (requiredFiles.some((filePath) => !existsSync(filePath))) {
+    return false;
+  }
+
+  const companionViewPath = path.join(
+    elizaRoot,
+    "plugins/app-companion/src/components/companion/CompanionView.tsx",
+  );
+  const companionHeaderPath = path.join(
+    elizaRoot,
+    "plugins/app-companion/src/components/companion/CompanionHeader.tsx",
+  );
+  const companionAppViewPath = path.join(
+    elizaRoot,
+    "plugins/app-companion/src/components/companion/CompanionAppView.tsx",
+  );
+  const clientAgentPath = path.join(
+    elizaRoot,
+    "packages/ui/src/api/client-agent.ts",
+  );
+  const clientChatPath = path.join(
+    elizaRoot,
+    "packages/ui/src/api/client-chat.ts",
+  );
+  const messageContentPath = path.join(
+    elizaRoot,
+    "packages/ui/src/components/chat/MessageContent.tsx",
+  );
+
+  if (
+    [
+      companionViewPath,
+      companionHeaderPath,
+      companionAppViewPath,
+      clientAgentPath,
+      clientChatPath,
+      messageContentPath,
+    ].some((filePath) => !existsSync(filePath))
+  ) {
+    return false;
+  }
+
+  const companionViewSource = readFileSync(companionViewPath, "utf8");
+  const companionHeaderSource = readFileSync(companionHeaderPath, "utf8");
+  const companionAppViewSource = readFileSync(companionAppViewPath, "utf8");
+  const clientAgentSource = readFileSync(clientAgentPath, "utf8");
+  const clientChatSource = readFileSync(clientChatPath, "utf8");
+  const messageContentSource = readFileSync(messageContentPath, "utf8");
+
+  return (
+    companionViewSource.includes("companion-header-go-live") &&
+    companionViewSource.includes("CompanionStageOperatorOverlay") &&
+    companionHeaderSource.includes("companionControlsExtras") &&
+    companionAppViewSource.includes(
+      'import { CompanionView } from "./CompanionView"',
+    ) &&
+    companionAppViewSource.includes("<CompanionView />") &&
+    clientAgentSource.includes("executeAliceOperatorPlan") &&
+    clientAgentSource.includes("getEmotes") &&
+    clientChatSource.includes("logConversationOperatorAction") &&
+    messageContentSource.includes("action-pill")
+  );
+}
+
+export function applyAliceCompanionOperatorPatch({
+  rootDir,
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  if (isAliceCompanionOperatorPatchPatched(elizaRoot)) {
+    log(
+      "[alice-eliza-runtime-patches] Alice companion operator already applied",
+    );
+    return "already-applied";
+  }
+
+  const patchPath = path.join(rootDir, aliceCompanionOperatorPatchRelativePath);
+  if (!existsSync(patchPath)) {
+    throw new Error(`missing Alice companion operator patch: ${patchPath}`);
+  }
+
+  const reverseCheck = runGitApply(
+    ["apply", "--reverse", "--check", patchPath],
+    { cwd: elizaRoot, allowFailure: true },
+  );
+  if (reverseCheck.status === 0) {
+    log(
+      "[alice-eliza-runtime-patches] Alice companion operator already applied",
+    );
+    return "already-applied";
+  }
+
+  const forwardCheck = runGitApply(["apply", "--check", patchPath], {
+    cwd: elizaRoot,
+    allowFailure: true,
+  });
+  if (forwardCheck.status !== 0) {
+    throw new Error(
+      `Alice companion operator patch drifted: ${
+        forwardCheck.stderr.trim() || forwardCheck.stdout.trim()
+      }`,
+    );
+  }
+
+  runGitApply(["apply", patchPath], { cwd: elizaRoot });
+
+  if (!isAliceCompanionOperatorPatchPatched(elizaRoot)) {
+    throw new Error(
+      "Alice companion operator patch applied but contract is absent",
+    );
+  }
+
+  log(
+    "[alice-eliza-runtime-patches] restored Alice companion operator controls",
+  );
+  return "applied";
 }
 
 function applyAliceRuntimeApiBindPatch({
@@ -5243,7 +5455,9 @@ function applyAliceRuntimeApiBindPatch({
   }
 
   if (isAliceRuntimeApiBindPatched(readFileSync(runtimePath, "utf8"))) {
-    log("[alice-eliza-runtime-patches] app-core API bind patch already applied");
+    log(
+      "[alice-eliza-runtime-patches] app-core API bind patch already applied",
+    );
     return "already-applied";
   }
 
@@ -5257,7 +5471,9 @@ function applyAliceRuntimeApiBindPatch({
     { cwd: elizaRoot, allowFailure: true },
   );
   if (reverseCheck.status === 0) {
-    log("[alice-eliza-runtime-patches] app-core API bind patch already applied");
+    log(
+      "[alice-eliza-runtime-patches] app-core API bind patch already applied",
+    );
     return "already-applied";
   }
 
@@ -5320,6 +5536,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreCompanionStagePatch({ elizaRoot, log }),
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
     applyAliceUiAuthGatedStartupPatch({ elizaRoot, log }),
+    applyAliceCompanionOperatorPatch({ rootDir, elizaRoot, log }),
     applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
     applyAliceAppLifeOpsDirSubpathExportsPatch({ elizaRoot, log }),
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
