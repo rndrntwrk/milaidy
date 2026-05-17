@@ -1152,6 +1152,10 @@ function nativeModuleStubPlugin(): Plugin {
     // has the same entry; both are needed because each Vite config runs its
     // own copy of nativeModuleStubPlugin.
     "mammoth",
+    // LifeOps screen context is server-side, but the SPA graph can still walk
+    // its default `sharp` import through app-core/agent exports. Stub the
+    // native loader so a browser bundle never evaluates sharp's runtime probe.
+    "sharp",
   ]);
   const nativeScopeRe = /^@node-llama-cpp\//;
 
@@ -1203,6 +1207,7 @@ function nativeModuleStubPlugin(): Plugin {
         : id.split("/")[0];
       // Scoped: @node-llama-cpp/*
       if (nativeScopeRe.test(id)) return VIRTUAL_PREFIX + id;
+      if (isSharpStubId(id)) return VIRTUAL_PREFIX + id;
       // Exact or sub-path match against native packages
       if (nativePackages.has(bare)) return VIRTUAL_PREFIX + id;
       return null;

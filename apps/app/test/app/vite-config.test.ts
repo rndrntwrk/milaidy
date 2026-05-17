@@ -29,6 +29,29 @@ function getPluginNames(plugins: unknown[]): string[] {
   return names;
 }
 
+function findPlugin(
+  plugins: unknown[],
+  name: string,
+): { resolveId?: (id: string) => unknown } | null {
+  for (const plugin of plugins) {
+    if (Array.isArray(plugin)) {
+      const found = findPlugin(plugin, name);
+      if (found) return found;
+      continue;
+    }
+
+    if (
+      plugin &&
+      typeof plugin === "object" &&
+      "name" in plugin &&
+      plugin.name === name
+    ) {
+      return plugin as { resolveId?: (id: string) => unknown };
+    }
+  }
+  return null;
+}
+
 describe("app vite config", () => {
   it("loads through Vite's bundled config loader", async () => {
     const loaded = await loadConfigFromFile(
@@ -99,6 +122,20 @@ describe("app vite config", () => {
           ),
         }),
       ]),
+    );
+  });
+
+  it("stubs sharp native modules in the browser bundle", async () => {
+    const loaded = await loadConfigFromFile(
+      { command: "build", mode: "test" },
+      CONFIG_PATH,
+      APP_DIR,
+    );
+
+    const plugin = findPlugin(loaded?.config.plugins ?? [], "native-module-stub");
+    expect(plugin?.resolveId?.("sharp")).toBe("\0native-stub:sharp");
+    expect(plugin?.resolveId?.("@img/sharp-wasm32")).toBe(
+      "\0native-stub:@img/sharp-wasm32",
     );
   });
 });
