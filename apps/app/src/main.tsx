@@ -1,4 +1,9 @@
-import { App, ErrorBoundary } from "@elizaos/app-core";
+import {
+  App,
+  createPersistedActiveServer,
+  ErrorBoundary,
+  savePersistedActiveServer,
+} from "@elizaos/app-core";
 // Styles bundled via the @elizaos/ui barrel. The Wave A refactor (eliza
 // commit 5a6f5f337) moved CSS out of @elizaos/app-core/styles/ but
 // didn't update this consumer; the new shape is a single subpath.
@@ -51,10 +56,6 @@ import {
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
 } from "@elizaos/app-core";
-import {
-  createPersistedActiveServer,
-  savePersistedActiveServer,
-} from "@elizaos/app-core/state/persistence";
 import { AppWindowRenderer } from "@elizaos/app-core";
 import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
 import type { ShareTargetPayload } from "@elizaos/app-core/platform";
