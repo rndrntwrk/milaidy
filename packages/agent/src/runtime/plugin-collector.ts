@@ -28,6 +28,11 @@ import { CORE_PLUGINS } from "./core-plugins.js";
 // ---------------------------------------------------------------------------
 
 const PI_AI_PLUGIN_PACKAGE = "@elizaos/plugin-pi-ai";
+const STREAM555_PLUGIN_PACKAGE = "@rndrntwrk/plugin-555stream";
+
+type ConfigEnvRecord = Record<string, unknown> & {
+  vars?: Record<string, unknown>;
+};
 
 function isPiAiEnabledFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = env.ELIZA_USE_PI_AI ?? env.MILADY_USE_PI_AI;
@@ -40,6 +45,34 @@ function isTruthyCloudEnvValue(raw: string | undefined): boolean {
   if (!raw) return false;
   const value = raw.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes";
+}
+
+function readStringConfigEnvValue(
+  configEnv: ConfigEnvRecord | undefined,
+  key: string,
+): string | undefined {
+  const fromVars =
+    configEnv?.vars &&
+    typeof configEnv.vars === "object" &&
+    !Array.isArray(configEnv.vars)
+      ? configEnv.vars[key]
+      : undefined;
+  const value = fromVars ?? configEnv?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function hasStream555RuntimeEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  configEnv?: ConfigEnvRecord,
+): boolean {
+  const readValue = (key: string): string | undefined =>
+    env[key]?.trim() || readStringConfigEnvValue(configEnv, key);
+  const baseUrl = readValue("STREAM555_BASE_URL");
+  const auth =
+    readValue("STREAM555_AGENT_API_KEY") ||
+    readValue("STREAM555_AGENT_TOKEN") ||
+    readValue("STREAM_API_BEARER_TOKEN");
+  return Boolean(baseUrl && auth);
 }
 
 /** Maps Eliza channel names to plugin package names. */
@@ -206,9 +239,7 @@ export function collectPluginNames(
   const cloudHandlesInference =
     cloudTopology.services.inference ||
     (isCloudContainer && Boolean(process.env.ELIZAOS_CLOUD_API_KEY?.trim()));
-  const configEnv = config.env as
-    | (Record<string, unknown> & { vars?: Record<string, unknown> })
-    | undefined;
+  const configEnv = config.env as ConfigEnvRecord | undefined;
   const configPiAiFlag =
     (configEnv?.vars &&
     typeof configEnv.vars === "object" &&
@@ -237,6 +268,10 @@ export function collectPluginNames(
         : pluginPackageName;
     return pluginEntries?.[pluginId]?.enabled === false;
   };
+
+  const isStream555ExplicitlyDisabled = (): boolean =>
+    isPluginExplicitlyDisabled(STREAM555_PLUGIN_PACKAGE) ||
+    pluginEntries?.["stream555-canonical"]?.enabled === false;
 
   const providerPluginIdSet = new Set(
     Object.values(PROVIDER_PLUGIN_MAP).map((pluginPackageName) => {
@@ -280,6 +315,14 @@ export function collectPluginNames(
       pluginsToLoad.add(pluginName);
       track(pluginName, `plugins.allow[${JSON.stringify(item)}]`);
     }
+  }
+
+  if (
+    hasStream555RuntimeEnv(process.env, configEnv) &&
+    !isStream555ExplicitlyDisabled()
+  ) {
+    pluginsToLoad.add(STREAM555_PLUGIN_PACKAGE);
+    track(STREAM555_PLUGIN_PACKAGE, "env: STREAM555_BASE_URL + stream auth");
   }
 
   // Connector plugins — load when connector has config entries
