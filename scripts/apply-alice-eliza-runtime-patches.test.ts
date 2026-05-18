@@ -120,7 +120,9 @@ describe("Alice Eliza runtime patch contract", () => {
       );
       writeFileSync(
         path.join(targetRoot, "sample.ts"),
-        ["export const value = 1;", "export const keep = true;"].join("\n"),
+        ["export const value = 1;", "export const keep = true;", ""].join(
+          "\n",
+        ),
       );
 
       const patchPath = path.join(tempDir, "sample.patch");
@@ -155,7 +157,7 @@ describe("Alice Eliza runtime patch contract", () => {
           driftMessage: "sample patch drifted",
           log: () => undefined,
         }),
-      ).toBe("direct");
+      ).toBe("git-directory");
 
       expect(readFileSync(path.join(targetRoot, "sample.ts"), "utf8")).toBe(
         ["export const value = 2;", "export const keep = true;", ""].join("\n"),

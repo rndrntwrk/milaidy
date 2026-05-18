@@ -590,10 +590,11 @@ export async function handleAliceDashboardFallbackRoutes(
 }
 `;
 
-function runGitApply(args, { cwd, allowFailure = false } = {}) {
+function runGitApply(args, { cwd, allowFailure = false, env } = {}) {
   const result = spawnSync("git", args, {
     cwd,
     encoding: "utf8",
+    env: env ? { ...process.env, ...env } : undefined,
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -794,6 +795,28 @@ export function applyPatchWithGitFallback({
   }
 
   if (isBrokenGitMetadataResult(forwardCheck)) {
+    const parentRoot = path.dirname(targetRoot);
+    const targetDirectory = path.relative(parentRoot, targetRoot) || ".";
+    const parentCheck = runGitApply(
+      ["apply", `--directory=${targetDirectory}`, "--check", patchPath],
+      {
+        cwd: parentRoot,
+        env: { GIT_DIR: "", GIT_WORK_TREE: "" },
+        allowFailure: true,
+      },
+    );
+    if (parentCheck.status === 0) {
+      runGitApply(["apply", `--directory=${targetDirectory}`, patchPath], {
+        cwd: parentRoot,
+        env: { GIT_DIR: "", GIT_WORK_TREE: "" },
+      });
+      return "git-directory";
+    }
+
+    if (!isBrokenGitMetadataResult(parentCheck)) {
+      throw new Error(`${driftMessage}: ${gitApplyOutput(parentCheck)}`);
+    }
+
     log?.(
       "[alice-eliza-runtime-patches] git metadata unavailable; applying patch directly",
     );
