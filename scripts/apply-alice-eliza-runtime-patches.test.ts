@@ -41,6 +41,7 @@ import {
   applyAliceLifeOpsCalendarActionPatch,
   applyAliceLifeOpsNativeActivityTrackerPatch,
   applyAlicePgliteContainerLockPatch,
+  aliceCompanionOperatorPatchRelativePath,
   aliceElizaRuntimePatchRelativePath,
   isAliceAppCoreCodingAgentsFallbackPatched,
   isAliceAppCoreAgentStatusAuthBridgePatched,
@@ -90,6 +91,16 @@ describe("Alice Eliza runtime patch contract", () => {
     expect(patch).toContain(
       "+        await apiServerHandle.close().catch(() => undefined);",
     );
+  });
+
+  it("leaves client config auth gating to the dedicated startup patch", () => {
+    const patch = readFileSync(
+      path.join(repoRoot, aliceCompanionOperatorPatchRelativePath),
+      "utf8",
+    );
+
+    expect(patch).toContain("+ElizaClient.prototype.executeAliceOperatorPlan");
+    expect(patch).not.toContain("GET /api/config → skipped auth-gated browser");
   });
 
   it("detects the applied contract in runtime source", () => {

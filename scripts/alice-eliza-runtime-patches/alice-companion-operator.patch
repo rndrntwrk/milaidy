@@ -304,24 +304,6 @@ index ebde3abc6a..64e49ff9fb 100644
  ElizaClient.prototype.runTerminalCommand = async function (
    this: ElizaClient,
    command,
-@@ -1377,6 +1637,17 @@ ElizaClient.prototype.getConfig = async function (this: ElizaClient) {
-   logSettingsClient("GET /api/config → start", {
-     baseUrl: this.getBaseUrl(),
-   });
-+  const auth = await this.getAuthStatus().catch(() => null);
-+  if (
-+    auth?.required === true &&
-+    auth.authenticated === false &&
-+    auth.localAccess !== true
-+  ) {
-+    logSettingsClient("GET /api/config → skipped auth-gated browser", {
-+      baseUrl: this.getBaseUrl(),
-+    });
-+    return {};
-+  }
-   const r = (await this.fetch("/api/config")) as Record<string, unknown>;
-   const cloud = r.cloud as Record<string, unknown> | undefined;
-   logSettingsClient("GET /api/config ← ok", {
 diff --git a/packages/ui/src/api/client-chat.ts b/packages/ui/src/api/client-chat.ts
 index 446d09ac92..ce80ee200c 100644
 --- a/packages/ui/src/api/client-chat.ts
