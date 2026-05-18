@@ -22,6 +22,7 @@ import {
   applyAliceProviderFailureNonfatalPatch,
   applyAliceUiAuthGatedStartupPatch,
   applyAliceUiSameOriginWebsocketPatch,
+  applyPatchWithGitFallback,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceCoreBasicCapabilitiesBrowserSafePatch,
   applyAliceAppViteStubMammothPatch,
@@ -106,6 +107,67 @@ describe("Alice Eliza runtime patch contract", () => {
     ].join("\n");
 
     expect(isAliceRuntimeApiBindPatched(source)).toBe(true);
+  });
+
+  it("applies git-format patches when copied Eliza git metadata is unavailable", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-gitless-patch-"));
+    try {
+      const targetRoot = path.join(tempDir, "eliza");
+      mkdirSync(targetRoot, { recursive: true });
+      writeFileSync(
+        path.join(targetRoot, ".git"),
+        "gitdir: ../.git/modules/eliza\n",
+      );
+      writeFileSync(
+        path.join(targetRoot, "sample.ts"),
+        ["export const value = 1;", "export const keep = true;"].join("\n"),
+      );
+
+      const patchPath = path.join(tempDir, "sample.patch");
+      writeFileSync(
+        patchPath,
+        [
+          "diff --git a/sample.ts b/sample.ts",
+          "index 1111111111..2222222222 100644",
+          "--- a/sample.ts",
+          "+++ b/sample.ts",
+          "@@ -1,2 +1,2 @@",
+          "-export const value = 1;",
+          "+export const value = 2;",
+          " export const keep = true;",
+          "",
+          "diff --git a/new-file.ts b/new-file.ts",
+          "new file mode 100644",
+          "index 0000000000..3333333333",
+          "--- /dev/null",
+          "+++ b/new-file.ts",
+          "@@ -0,0 +1,2 @@",
+          "+export const added = true;",
+          "+export const ready = true;",
+          "",
+        ].join("\n"),
+      );
+
+      expect(
+        applyPatchWithGitFallback({
+          patchPath,
+          targetRoot,
+          driftMessage: "sample patch drifted",
+          log: () => undefined,
+        }),
+      ).toBe("direct");
+
+      expect(readFileSync(path.join(targetRoot, "sample.ts"), "utf8")).toBe(
+        ["export const value = 2;", "export const keep = true;", ""].join("\n"),
+      );
+      expect(readFileSync(path.join(targetRoot, "new-file.ts"), "utf8")).toBe(
+        ["export const added = true;", "export const ready = true;", ""].join(
+          "\n",
+        ),
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("rewrites LifeOps runtime TypeScript specifiers without corrupting multiline imports", () => {

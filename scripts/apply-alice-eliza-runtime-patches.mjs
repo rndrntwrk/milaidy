@@ -605,6 +605,205 @@ function runGitApply(args, { cwd, allowFailure = false } = {}) {
   return result;
 }
 
+function gitApplyOutput(result) {
+  return [result.stderr, result.stdout].filter(Boolean).join("\n").trim();
+}
+
+function isBrokenGitMetadataResult(result) {
+  const output = gitApplyOutput(result);
+  return (
+    /not a git repository/i.test(output) ||
+    /not a git repo/i.test(output) ||
+    /invalid gitfile format/i.test(output) ||
+    /repository .* does not exist/i.test(output)
+  );
+}
+
+function parsePatchFilePath(headerValue) {
+  const value = headerValue.trim().split(/\t/)[0];
+  if (value === "/dev/null") return null;
+  return value.replace(/^[ab]\//, "");
+}
+
+function resolvePatchTargetPath(targetRoot, relativePath) {
+  const absolutePath = path.resolve(targetRoot, relativePath);
+  const rootWithSeparator = path.resolve(targetRoot) + path.sep;
+  if (
+    absolutePath !== path.resolve(targetRoot) &&
+    !absolutePath.startsWith(rootWithSeparator)
+  ) {
+    throw new Error(`patch target escapes root: ${relativePath}`);
+  }
+  return absolutePath;
+}
+
+function splitPatchSource(source) {
+  if (source.length === 0) return [];
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return lines;
+}
+
+function findHunkIndex(lines, oldLines, expectedIndex) {
+  if (oldLines.length === 0) {
+    return Math.max(0, Math.min(expectedIndex, lines.length));
+  }
+
+  const matchesAt = (index) =>
+    oldLines.every((line, offset) => lines[index + offset] === line);
+
+  if (
+    expectedIndex >= 0 &&
+    expectedIndex + oldLines.length <= lines.length &&
+    matchesAt(expectedIndex)
+  ) {
+    return expectedIndex;
+  }
+
+  for (let index = 0; index <= lines.length - oldLines.length; index += 1) {
+    if (matchesAt(index)) return index;
+  }
+
+  return -1;
+}
+
+function parseUnifiedPatch(patchSource) {
+  const patchLines = patchSource.replace(/\r\n/g, "\n").split("\n");
+  const filePatches = [];
+  let currentFile = null;
+  let currentHunk = null;
+
+  const finishHunk = () => {
+    if (currentFile && currentHunk) {
+      currentFile.hunks.push(currentHunk);
+      currentHunk = null;
+    }
+  };
+
+  const finishFile = () => {
+    finishHunk();
+    if (currentFile) {
+      filePatches.push(currentFile);
+      currentFile = null;
+    }
+  };
+
+  for (const line of patchLines) {
+    if (line.startsWith("diff --git ")) {
+      finishFile();
+      currentFile = { oldPath: null, newPath: null, hunks: [] };
+      continue;
+    }
+
+    if (!currentFile) continue;
+
+    if (line.startsWith("--- ")) {
+      currentFile.oldPath = parsePatchFilePath(line.slice(4));
+      continue;
+    }
+
+    if (line.startsWith("+++ ")) {
+      currentFile.newPath = parsePatchFilePath(line.slice(4));
+      continue;
+    }
+
+    const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunkMatch) {
+      finishHunk();
+      currentHunk = {
+        oldStart: Number(hunkMatch[1]),
+        newStart: Number(hunkMatch[2]),
+        lines: [],
+      };
+      continue;
+    }
+
+    if (currentHunk) {
+      if (line === "\\ No newline at end of file") continue;
+      if (/^[ +\-]/.test(line)) {
+        currentHunk.lines.push(line);
+      }
+    }
+  }
+
+  finishFile();
+  return filePatches.filter((filePatch) => filePatch.hunks.length > 0);
+}
+
+export function applyUnifiedPatchFile({ patchPath, targetRoot }) {
+  const patchSource = readFileSync(patchPath, "utf8");
+  const filePatches = parseUnifiedPatch(patchSource);
+
+  for (const filePatch of filePatches) {
+    const relativePath = filePatch.newPath ?? filePatch.oldPath;
+    if (!relativePath) continue;
+
+    const targetPath = resolvePatchTargetPath(targetRoot, relativePath);
+    const originalSource = existsSync(targetPath)
+      ? readFileSync(targetPath, "utf8")
+      : "";
+    let lines = splitPatchSource(originalSource);
+
+    for (const hunk of filePatch.hunks) {
+      const oldLines = [];
+      const newLines = [];
+
+      for (const patchLine of hunk.lines) {
+        const marker = patchLine[0];
+        const text = patchLine.slice(1);
+        if (marker === " ") {
+          oldLines.push(text);
+          newLines.push(text);
+        } else if (marker === "-") {
+          oldLines.push(text);
+        } else if (marker === "+") {
+          newLines.push(text);
+        }
+      }
+
+      const expectedIndex = Math.max(0, hunk.oldStart - 1);
+      const hunkIndex = findHunkIndex(lines, oldLines, expectedIndex);
+      if (hunkIndex < 0) {
+        throw new Error(
+          `patch hunk did not match ${relativePath} near line ${hunk.oldStart}`,
+        );
+      }
+
+      lines.splice(hunkIndex, oldLines.length, ...newLines);
+    }
+
+    mkdirSync(path.dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, `${lines.join("\n")}\n`);
+  }
+}
+
+export function applyPatchWithGitFallback({
+  patchPath,
+  targetRoot,
+  driftMessage,
+  log,
+}) {
+  const forwardCheck = runGitApply(["apply", "--check", patchPath], {
+    cwd: targetRoot,
+    allowFailure: true,
+  });
+
+  if (forwardCheck.status === 0) {
+    runGitApply(["apply", patchPath], { cwd: targetRoot });
+    return "git";
+  }
+
+  if (isBrokenGitMetadataResult(forwardCheck)) {
+    log?.(
+      "[alice-eliza-runtime-patches] git metadata unavailable; applying patch directly",
+    );
+    applyUnifiedPatchFile({ patchPath, targetRoot });
+    return "direct";
+  }
+
+  throw new Error(`${driftMessage}: ${gitApplyOutput(forwardCheck)}`);
+}
+
 export function isAliceRuntimeApiBindPatched(source) {
   const serverOnlyBranch =
     source.match(
@@ -5493,19 +5692,12 @@ export function applyAliceCompanionOperatorPatch({
     return "already-applied";
   }
 
-  const forwardCheck = runGitApply(["apply", "--check", patchPath], {
-    cwd: elizaRoot,
-    allowFailure: true,
+  applyPatchWithGitFallback({
+    patchPath,
+    targetRoot: elizaRoot,
+    driftMessage: "Alice companion operator patch drifted",
+    log,
   });
-  if (forwardCheck.status !== 0) {
-    throw new Error(
-      `Alice companion operator patch drifted: ${
-        forwardCheck.stderr.trim() || forwardCheck.stdout.trim()
-      }`,
-    );
-  }
-
-  runGitApply(["apply", patchPath], { cwd: elizaRoot });
 
   if (!isAliceCompanionOperatorPatchPatched(elizaRoot)) {
     throw new Error(
@@ -5555,19 +5747,12 @@ function applyAliceRuntimeApiBindPatch({
     return "already-applied";
   }
 
-  const forwardCheck = runGitApply(["apply", "--check", patchPath], {
-    cwd: elizaRoot,
-    allowFailure: true,
+  applyPatchWithGitFallback({
+    patchPath,
+    targetRoot: elizaRoot,
+    driftMessage: `Alice Eliza runtime patch drifted from ${runtimeRelativePath}`,
+    log,
   });
-  if (forwardCheck.status !== 0) {
-    throw new Error(
-      `Alice Eliza runtime patch drifted from ${runtimeRelativePath}: ${
-        forwardCheck.stderr.trim() || forwardCheck.stdout.trim()
-      }`,
-    );
-  }
-
-  runGitApply(["apply", patchPath], { cwd: elizaRoot });
 
   const patched = readFileSync(runtimePath, "utf8");
   if (!isAliceRuntimeApiBindPatched(patched)) {
