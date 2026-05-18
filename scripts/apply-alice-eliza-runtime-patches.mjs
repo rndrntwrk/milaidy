@@ -1496,6 +1496,115 @@ export function applyAliceElizacloudReexportPatch({
   return "applied";
 }
 
+const elizacloudBrowserIndexRelativePath =
+  "plugins/plugin-elizacloud/src/index.browser.ts";
+const elizacloudBrowserTtsStubsSentinel =
+  "// [milaidy:elizacloud-browser-tts-stubs]";
+const elizacloudBrowserTtsStubs = `${elizacloudBrowserTtsStubsSentinel}
+// app-core imports Cloud TTS helpers while Vite bundles the browser/runtime
+// surface. The real implementations remain exported by index.node.ts; these
+// browser stubs only keep static named imports resolvable.
+type CloudTtsEnvLike = Record<string, string | undefined>;
+
+export function __resetCloudBaseUrlCache(): void {}
+
+export function ensureCloudTtsApiKeyAlias(_env?: CloudTtsEnvLike): boolean {
+  return false;
+}
+
+export function resolveElevenLabsApiKeyForCloudMode(
+  _env?: CloudTtsEnvLike,
+): string | null {
+  return null;
+}
+
+export function resolveCloudTtsBaseUrl(env?: CloudTtsEnvLike): string {
+  const configured = env?.ELIZAOS_CLOUD_BASE_URL?.trim();
+  return configured && configured.length > 0
+    ? configured.replace(/\\/+$/, "")
+    : "https://www.elizacloud.ai/api/v1";
+}
+
+export async function handleCloudTtsPreviewRoute(
+  _req: unknown,
+  res?: {
+    statusCode?: number;
+    setHeader?: (name: string, value: string) => void;
+    end?: (body?: string) => void;
+  },
+): Promise<boolean> {
+  if (res) {
+    res.statusCode = 501;
+    res.setHeader?.("Content-Type", "application/json");
+    res.end?.(
+      JSON.stringify({
+        error: "Cloud TTS preview is only available in the node runtime.",
+      }),
+    );
+  }
+  return true;
+}
+
+export function mirrorCompatHeaders(_req: {
+  headers?: Record<string, unknown>;
+}): void {}
+`;
+
+export function isAliceElizacloudBrowserTtsStubsPatched(source) {
+  return (
+    source.includes(elizacloudBrowserTtsStubsSentinel) &&
+    source.includes("handleCloudTtsPreviewRoute(") &&
+    source.includes("export function ensureCloudTtsApiKeyAlias(") &&
+    source.includes("export function mirrorCompatHeaders(")
+  );
+}
+
+export function applyAliceElizacloudBrowserTtsStubsPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, elizacloudBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-elizacloud browser source absent; skipping Cloud TTS stub patch",
+    );
+    return "skipped";
+  }
+
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceElizacloudBrowserTtsStubsPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-elizacloud browser Cloud TTS stubs already applied",
+    );
+    return "already-applied";
+  }
+
+  const clearSecretsAnchor = "export function clearCloudSecrets(): void {}\n";
+  const typesAnchor = '\nexport * from "./types";';
+  let next;
+  if (source.includes(clearSecretsAnchor)) {
+    next = source.replace(
+      clearSecretsAnchor,
+      `${clearSecretsAnchor}\n${elizacloudBrowserTtsStubs}\n`,
+    );
+  } else if (source.includes(typesAnchor)) {
+    next = source.replace(
+      typesAnchor,
+      `\n${elizacloudBrowserTtsStubs}\n${typesAnchor}`,
+    );
+  } else {
+    next = source.endsWith("\n")
+      ? `${source}\n${elizacloudBrowserTtsStubs}\n`
+      : `${source}\n\n${elizacloudBrowserTtsStubs}\n`;
+  }
+
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched plugin-elizacloud/src/index.browser.ts with browser-safe Cloud TTS stubs",
+  );
+  return "applied";
+}
+
 const coreBrowserIndexRelativePath = "packages/core/src/index.browser.ts";
 const coreBrowserRuntimeEnvReexportSentinel =
   "// [milaidy:core-browser-runtime-env-reexport]";
@@ -5842,6 +5951,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAliceElizacloudReexportPatch({ elizaRoot, log }),
+    applyAliceElizacloudBrowserTtsStubsPatch({ elizaRoot, log }),
     // applyAliceBundledKnowledgeStartupDeferralPatch retired against upstream
     // be182cc913b3+ — `seedBundledKnowledge` no longer exists in upstream's
     // packages/agent/src/runtime/eliza.ts (removed during the 866-commit

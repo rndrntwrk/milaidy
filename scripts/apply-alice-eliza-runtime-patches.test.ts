@@ -36,6 +36,7 @@ import {
   isAliceBrowserBridgeWorkspaceStubPatched,
   applyAliceTelegramAccountAuthResolverPatch,
   applyAliceTelegramSourcePackageJsonExportPatch,
+  applyAliceElizacloudBrowserTtsStubsPatch,
   isAliceTelegramSourcePackageJsonExportPatched,
   applyAliceKubeHealthReadinessPatch,
   applyAliceLifeOpsCalendarActionPatch,
@@ -55,6 +56,7 @@ import {
   isAliceKubeHealthReadinessPatched,
   isAlicePgliteContainerLockPatchPatched,
   isAlicePluginSqlSchemaPgliteErrorsReexportPatched,
+  isAliceElizacloudBrowserTtsStubsPatched,
   isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
   isAliceCoreBrowserValidationReexportPatched,
@@ -583,6 +585,69 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceCoreBrowserValidationReexportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches plugin-elizacloud browser entry with Cloud TTS stubs", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-elizacloud-browser-tts-"),
+    );
+    try {
+      const pluginDir = path.join(
+        tempDir,
+        "plugins",
+        "plugin-elizacloud",
+        "src",
+      );
+      mkdirSync(pluginDir, { recursive: true });
+      const indexPath = path.join(pluginDir, "index.browser.ts");
+      writeFileSync(
+        indexPath,
+        [
+          'import type { Plugin } from "@elizaos/core";',
+          "",
+          "export const elizaOSCloudPlugin: Plugin = { name: \"elizaOSCloud\" };",
+          "",
+          "export function getCloudSecret(): string | undefined {",
+          "  return undefined;",
+          "}",
+          "",
+          "export function clearCloudSecrets(): void {}",
+          "",
+          'export * from "./types";',
+          "export default elizaOSCloudPlugin;",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceElizacloudBrowserTtsStubsPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(indexPath, "utf8");
+      expect(isAliceElizacloudBrowserTtsStubsPatched(patched)).toBe(true);
+      expect(patched).toContain("export function ensureCloudTtsApiKeyAlias");
+      expect(patched).toContain(
+        "export async function handleCloudTtsPreviewRoute",
+      );
+      expect(patched).toContain("export function mirrorCompatHeaders");
+      expect(patched.indexOf("clearCloudSecrets")).toBeLessThan(
+        patched.indexOf("handleCloudTtsPreviewRoute"),
+      );
+      expect(patched.indexOf("handleCloudTtsPreviewRoute")).toBeLessThan(
+        patched.indexOf('export * from "./types";'),
+      );
+
+      expect(
+        applyAliceElizacloudBrowserTtsStubsPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
