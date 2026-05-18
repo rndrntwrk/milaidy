@@ -924,13 +924,21 @@ export function isAliceAppCoreDashboardFallbackRoutesPatched(
 }
 
 export function isAliceAppCoreCompanionStagePatched(source) {
-  return (
+  const hasAliceStageRoutes =
     source.includes("const ALICE_COMPANION_STAGE_DEFAULT") &&
     source.includes('url.pathname === "/api/companion/stage"') &&
     source.includes("/^\\/api\\/broadcast\\/([a-zA-Z0-9-]+)\\/stage$/") &&
     source.includes("aliceReadCompanionStageState()") &&
-    source.includes("aliceWriteCompanionStageState(merged)")
-  );
+    source.includes("aliceWriteCompanionStageState(merged)");
+  const hasCompatStageRoutes =
+    source.includes("const COMPAT_COMPANION_STAGE_DEFAULT") &&
+    source.includes("COMPAT_BROADCAST_STAGE_CHANNELS") &&
+    source.includes('url.pathname === "/api/companion/stage"') &&
+    source.includes("/^\\/api\\/broadcast\\/([a-zA-Z0-9-]+)\\/stage$/") &&
+    source.includes("compatReadCompanionStageState()") &&
+    source.includes("compatWriteCompanionStageState(next)") &&
+    source.includes("handleCompatCompanionStageRoutes(req, res, state)");
+  return hasAliceStageRoutes || hasCompatStageRoutes;
 }
 
 export function isAliceBundledKnowledgeStartupDeferralPatched(source) {
@@ -3824,10 +3832,6 @@ export function applyAliceAppCoreDashboardFallbackRoutesPatch({
 }
 
 function patchAliceAppCoreCompanionStageSource(source) {
-  if (isAliceAppCoreCompanionStagePatched(source)) {
-    return source;
-  }
-
   let next = source;
 
   const compatImportAnchor = `  getConfiguredCompatAgentName,
@@ -3837,11 +3841,18 @@ function patchAliceAppCoreCompanionStageSource(source) {
   readCompatJsonBody,
 } from "./compat-route-shared";
 `;
-  if (!next.includes('readCompatJsonBody,\n} from "./compat-route-shared"')) {
+  const compatImportMatch = next.match(
+    /import \{[\s\S]*?\} from "\.\/compat-route-shared";/,
+  )?.[0];
+  if (!compatImportMatch?.includes("readCompatJsonBody")) {
     if (!next.includes(compatImportAnchor)) {
       throw new Error("app-core companion stage compat import anchor drifted");
     }
     next = next.replace(compatImportAnchor, compatImportPatch);
+  }
+
+  if (isAliceAppCoreCompanionStagePatched(next)) {
+    return next;
   }
 
   const helperAnchor = `async function handleCompatRoute(

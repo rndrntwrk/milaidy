@@ -1430,6 +1430,69 @@ describe("Alice Eliza runtime patch contract", () => {
     }
   });
 
+  it("recognizes upstream companion stage routes and only restores the local JSON-body import", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-companion-stage-upstream-"),
+    );
+    try {
+      const apiDir = path.join(tempDir, "packages", "app-core", "src", "api");
+      mkdirSync(apiDir, { recursive: true });
+      const serverPath = path.join(apiDir, "server.ts");
+      writeFileSync(
+        serverPath,
+        [
+          "import {",
+          "  type CompatRuntimeState,",
+          "  clearCompatRuntimeRestart,",
+          "  getConfiguredCompatAgentName,",
+          '} from "./compat-route-shared";',
+          "export {",
+          "  readCompatJsonBody,",
+          '} from "./compat-route-shared";',
+          "const COMPAT_COMPANION_STAGE_DEFAULT = {};",
+          'const COMPAT_BROADCAST_STAGE_CHANNELS = new Set(["alice-cam"]);',
+          "function compatReadCompanionStageState() { return {}; }",
+          "function compatWriteCompanionStageState(next) { return next; }",
+          "async function handleCompatCompanionStageRoutes(req, res, state) {",
+          '  const url = new URL(req.url ?? "/", "http://localhost");',
+          '  if (url.pathname === "/api/companion/stage") return true;',
+          "  const publicStageMatch = url.pathname.match(",
+          "    /^\\/api\\/broadcast\\/([a-zA-Z0-9-]+)\\/stage$/,",
+          "  );",
+          "  const next = compatReadCompanionStageState();",
+          "  compatWriteCompanionStageState(next);",
+          "  return Boolean(publicStageMatch);",
+          "}",
+          "async function handleCompatRoute(req, res, state) {",
+          "  if (await handleCompatCompanionStageRoutes(req, res, state)) return true;",
+          "  return false;",
+          "}",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceAppCoreCompanionStagePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(serverPath, "utf8");
+      expect(isAliceAppCoreCompanionStagePatched(patched)).toBe(true);
+      expect(patched).toContain("  readCompatJsonBody,");
+      expect(patched).not.toContain("const ALICE_COMPANION_STAGE_DEFAULT");
+
+      expect(
+        applyAliceAppCoreCompanionStagePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("patches core basic-capabilities to bypass the plugin-manager barrel for browser safety", () => {
     const tempDir = mkdtempSync(
       path.join(os.tmpdir(), "alice-basic-capabilities-browser-safe-"),
