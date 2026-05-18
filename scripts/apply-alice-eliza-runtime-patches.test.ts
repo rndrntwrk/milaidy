@@ -635,6 +635,7 @@ describe("Alice Eliza runtime patch contract", () => {
       const patched = readFileSync(indexPath, "utf8");
       expect(isAliceElizacloudBrowserTtsStubsPatched(patched)).toBe(true);
       expect(patched).toContain("export function ensureCloudTtsApiKeyAlias");
+      expect(patched).toContain("export function normalizeCloudSiteUrl");
       expect(patched).toContain(
         "export async function handleCloudTtsPreviewRoute",
       );

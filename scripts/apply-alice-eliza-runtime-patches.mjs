@@ -1525,6 +1525,36 @@ export function resolveCloudTtsBaseUrl(env?: CloudTtsEnvLike): string {
     : "https://www.elizacloud.ai/api/v1";
 }
 
+export function normalizeCloudSiteUrl(rawUrl?: string): string {
+  const candidate = rawUrl?.trim() || "https://www.elizacloud.ai";
+  try {
+    const parsed = new URL(candidate);
+    parsed.hash = "";
+    parsed.search = "";
+    parsed.pathname = parsed.pathname
+      .replace(/\\/+$/, "")
+      .replace(/\\/api\\/v1$/, "");
+    if (
+      parsed.hostname !== "localhost" &&
+      parsed.hostname !== "::1" &&
+      !parsed.hostname.startsWith("127.")
+    ) {
+      parsed.protocol = "https:";
+      parsed.port = "";
+    }
+    if (
+      parsed.hostname === "elizacloud.ai" ||
+      parsed.hostname === "www.elizacloud.ai"
+    ) {
+      parsed.hostname = "www.elizacloud.ai";
+      parsed.pathname = "";
+    }
+    return parsed.toString().replace(/\\/+$/, "");
+  } catch {
+    return candidate.replace(/\\/+$/, "");
+  }
+}
+
 export async function handleCloudTtsPreviewRoute(
   _req: unknown,
   res?: {
@@ -1555,6 +1585,7 @@ export function isAliceElizacloudBrowserTtsStubsPatched(source) {
     source.includes(elizacloudBrowserTtsStubsSentinel) &&
     source.includes("handleCloudTtsPreviewRoute(") &&
     source.includes("export function ensureCloudTtsApiKeyAlias(") &&
+    source.includes("export function normalizeCloudSiteUrl(") &&
     source.includes("export function mirrorCompatHeaders(")
   );
 }
