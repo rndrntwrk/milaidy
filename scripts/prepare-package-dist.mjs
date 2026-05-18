@@ -38,6 +38,7 @@ const packageJsonPath = path.join(packageDir, "package.json");
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
 const workspaceVersions = collectWorkspaceVersions(repoRoot);
 const installedPackageVersionCache = new Map();
+let rootPackageJsonCache;
 
 const publishManifest = {
   ...packageJson,
@@ -98,6 +99,7 @@ function collectWorkspaceVersions(rootDir) {
     path.join(rootDir, "packages"),
     path.join(rootDir, "plugins"),
     path.join(rootDir, "eliza", "packages"),
+    path.join(rootDir, "eliza", "plugins"),
     path.join(rootDir, "apps", "app", "plugins"),
   ];
   const versions = new Map();
@@ -191,26 +193,94 @@ function getInstalledPackageVersion(packageName) {
     "package.json",
   );
 
-  let version;
-  if (existsSync(packageJsonPath)) {
-    try {
-      const installedPackageJson = JSON.parse(
-        readFileSync(packageJsonPath, "utf8"),
-      );
-      if (typeof installedPackageJson.version === "string") {
-        version = installedPackageJson.version;
-      }
-    } catch {
-      version = undefined;
-    }
-  }
+  let version = readPackageVersionAt(packageJsonPath);
+  version ??= getBunStorePackageVersion(packageName);
+  version ??= getRootDependencySpecifier(packageName);
 
   installedPackageVersionCache.set(packageName, version);
   return version;
 }
 
+function readPackageVersionAt(packageJsonPath) {
+  if (!existsSync(packageJsonPath)) {
+    return undefined;
+  }
+
+  try {
+    const installedPackageJson = JSON.parse(
+      readFileSync(packageJsonPath, "utf8"),
+    );
+    return typeof installedPackageJson.version === "string"
+      ? installedPackageJson.version
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getBunStorePackageVersion(packageName) {
+  const bunStoreDir = path.join(repoRoot, "node_modules", ".bun");
+  let entries;
+  try {
+    entries = readdirSync(bunStoreDir, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+
+  const entryPrefix = `${packageName.replace("/", "+")}@`;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith(entryPrefix)) {
+      continue;
+    }
+    const packageJsonPath = path.join(
+      bunStoreDir,
+      entry.name,
+      "node_modules",
+      ...packageName.split("/"),
+      "package.json",
+    );
+    const version = readPackageVersionAt(packageJsonPath);
+    if (version) {
+      return version;
+    }
+  }
+
+  return undefined;
+}
+
+function getRootDependencySpecifier(packageName) {
+  const rootPackageJson = getRootPackageJson();
+  const specifier =
+    rootPackageJson.dependencies?.[packageName] ??
+    rootPackageJson.optionalDependencies?.[packageName] ??
+    rootPackageJson.peerDependencies?.[packageName] ??
+    rootPackageJson.devDependencies?.[packageName] ??
+    rootPackageJson.overrides?.[packageName];
+
+  if (
+    typeof specifier !== "string" ||
+    /^(workspace|file|link|portal|catalog):/.test(specifier)
+  ) {
+    return undefined;
+  }
+
+  return specifier;
+}
+
+function getRootPackageJson() {
+  if (!rootPackageJsonCache) {
+    rootPackageJsonCache = JSON.parse(
+      readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+    );
+  }
+  return rootPackageJsonCache;
+}
+
 function normalizeWorkspaceVersion(spec, resolvedVersion) {
   const suffix = spec.slice("workspace:".length);
+  if (!/^\d+\.\d+\.\d+/.test(resolvedVersion)) {
+    return resolvedVersion;
+  }
   if (suffix === "*" || suffix === "^" || suffix === "") {
     return `^${resolvedVersion}`;
   }
