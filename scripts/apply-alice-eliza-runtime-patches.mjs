@@ -3579,6 +3579,10 @@ export function isAliceAuthRateLimitAfterValidSessionPatched(source) {
     ) &&
     source.includes(
       "Alice: valid local, cookie, and bearer sessions bypass the failed-auth throttle.",
+    ) &&
+    source.includes("Bearer path — configured API token or session id.") &&
+    source.includes(
+      "if (expectedToken && tokenMatches(expectedToken, provided)) return true;",
     )
   );
 }
@@ -3614,10 +3618,11 @@ function patchAliceAuthRateLimitSource(source) {
   recordFailedAuth(ip);
   sendJsonError(res, 401, "Unauthorized");
   return false;`;
-  if (!next.includes(syncOld)) {
+  if (next.includes(syncOld)) {
+    next = next.replace(syncOld, syncNew);
+  } else if (!next.includes(syncNew)) {
     throw new Error("app-core auth sync rate-limit anchor drifted");
   }
-  next = next.replace(syncOld, syncNew);
 
   const asyncStartOld = `  const ip = req.socket?.remoteAddress ?? null;
   if (isAuthRateLimited(ip)) {
@@ -3631,10 +3636,11 @@ function patchAliceAuthRateLimitSource(source) {
   const asyncStartNew = `  if (isTrustedLocalRequest(req)) return true;
 
   const method = (req.method ?? "GET").toUpperCase();`;
-  if (!next.includes(asyncStartOld)) {
+  if (next.includes(asyncStartOld)) {
+    next = next.replace(asyncStartOld, asyncStartNew);
+  } else if (!next.includes(asyncStartNew)) {
     throw new Error("app-core auth async rate-limit entry anchor drifted");
   }
-  next = next.replace(asyncStartOld, asyncStartNew);
 
   const asyncFailureOld = `  recordFailedAuth(ip);
   sendJsonError(res, 401, "Unauthorized");
@@ -3650,13 +3656,58 @@ function patchAliceAuthRateLimitSource(source) {
   sendJsonError(res, 401, "Unauthorized");
   return false;`;
   const asyncFailureIndex = next.lastIndexOf(asyncFailureOld);
-  if (asyncFailureIndex === -1) {
+  if (asyncFailureIndex !== -1) {
+    next =
+      next.slice(0, asyncFailureIndex) +
+      asyncFailureNew +
+      next.slice(asyncFailureIndex + asyncFailureOld.length);
+  } else if (!next.includes(asyncFailureNew)) {
     throw new Error("app-core auth async rate-limit failure anchor drifted");
   }
-  next =
-    next.slice(0, asyncFailureIndex) +
-    asyncFailureNew +
-    next.slice(asyncFailureIndex + asyncFailureOld.length);
+
+  const asyncBearerDocOld = ` *   1. valid \`eliza_session\` cookie → session in DB → authorised.
+ *   2. session-id bearer header.`;
+  const asyncBearerDocNew = ` *   1. valid \`eliza_session\` cookie → session in DB → authorised.
+ *   2. configured API token bearer header.
+ *   3. session-id bearer header.`;
+  if (!next.includes(asyncBearerDocNew)) {
+    if (!next.includes(asyncBearerDocOld)) {
+      throw new Error("app-core auth async bearer doc anchor drifted");
+    }
+    next = next.replace(asyncBearerDocOld, asyncBearerDocNew);
+  }
+
+  const asyncBearerOld = `  // Bearer path — session id only.
+  // Bearer-auth requests are exempt from CSRF (they're not cookie-bound).
+  const provided = getProvidedApiToken(req);
+  if (provided) {
+    const sessionFromBearer = await findActiveSession(
+      options.store,
+      provided,
+      options.now,
+    ).catch(() => null);
+    if (sessionFromBearer) return true;
+  }`;
+  const asyncBearerNew = `  // Bearer path — configured API token or session id.
+  // Bearer-auth requests are exempt from CSRF (they're not cookie-bound).
+  const provided = getProvidedApiToken(req);
+  if (provided) {
+    const expectedToken = getCompatApiToken();
+    if (expectedToken && tokenMatches(expectedToken, provided)) return true;
+
+    const sessionFromBearer = await findActiveSession(
+      options.store,
+      provided,
+      options.now,
+    ).catch(() => null);
+    if (sessionFromBearer) return true;
+  }`;
+  if (!next.includes(asyncBearerNew)) {
+    if (!next.includes(asyncBearerOld)) {
+      throw new Error("app-core auth async bearer anchor drifted");
+    }
+    next = next.replace(asyncBearerOld, asyncBearerNew);
+  }
 
   return next;
 }
