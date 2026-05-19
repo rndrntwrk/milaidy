@@ -62,6 +62,7 @@ const appVincentStateRelativePath =
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
+const agentAppsRoutesRelativePath = "packages/agent/src/api/apps-routes.ts";
 const pluginSqlSchemaIndexRelativePath =
   "plugins/plugin-sql/src/schema/index.ts";
 const pluginSqlPgliteManagerRelativePath =
@@ -193,9 +194,11 @@ const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [
   "/api/browser-workspace",
   "/api/broadcast",
   "/api/catalog",
+  "/api/character",
   "/api/cloud",
   "/api/coding-agents",
   "/api/companion",
+  "/api/config",
   "/api/connectors",
   "/api/conversations",
   "/api/inbox",
@@ -209,6 +212,7 @@ const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [
   "/api/streaming",
   "/api/triggers",
   "/api/wallet",
+  "/api/workbench",
   "/v1",
 ] as const;
 
@@ -265,6 +269,10 @@ function shouldBridgeAgentFallbackAuth(method: string, pathname: string): boolea
   return false;
 }
 
+function isPublicAppHeroRoute(method: string, pathname: string): boolean {
+  return method === "GET" && pathname.startsWith("/api/apps/hero/");
+}
+
 export async function authorizeAgentStatusFallback(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -273,9 +281,14 @@ export async function authorizeAgentStatusFallback(
   const method = (req.method ?? "GET").toUpperCase();
   const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
   if (!shouldBridgeAgentFallbackAuth(method, pathname)) return true;
+  if (isPublicAppHeroRoute(method, pathname)) return true;
 
   const token = getCompatApiToken();
-  const provided = getProvidedApiToken(req);
+  const streamToken =
+    method === "GET" && pathname === "/api/computer-use/approvals/stream"
+      ? new URL(req.url ?? "/", "http://localhost").searchParams.get("token")?.trim()
+      : null;
+  const provided = getProvidedApiToken(req) ?? streamToken;
   if (token && provided && tokenMatches(token, provided)) return true;
 
   if (isAgentApiAuthorized(req)) return true;
@@ -295,9 +308,11 @@ const aliceUpstreamAuthBridgePrefixes = [
   "/api/browser-workspace",
   "/api/broadcast",
   "/api/catalog",
+  "/api/character",
   "/api/cloud",
   "/api/coding-agents",
   "/api/companion",
+  "/api/config",
   "/api/computer-use",
   "/api/connectors",
   "/api/conversations",
@@ -313,6 +328,7 @@ const aliceUpstreamAuthBridgePrefixes = [
   "/api/triggers",
   "/api/vincent",
   "/api/wallet",
+  "/api/workbench",
   "/v1",
 ];
 
@@ -343,6 +359,10 @@ export function shouldBridgeSessionAuthToUpstream(
   );
 }
 
+function isPublicAppHeroRoute(method: string | undefined, pathname: string): boolean {
+  return (method ?? "GET").toUpperCase() === "GET" && pathname.startsWith("/api/apps/hero/");
+}
+
 export async function bridgeSessionAuthToUpstream(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -353,6 +373,12 @@ export async function bridgeSessionAuthToUpstream(
 
   const upstreamToken = resolveApiToken(process.env);
   if (!upstreamToken) return true;
+
+  if (isPublicAppHeroRoute(req.method, pathname)) {
+    req.headers.authorization = \`Bearer \${upstreamToken}\`;
+    req.headers["x-api-key"] = upstreamToken;
+    return true;
+  }
 
   const provided = getProvidedApiToken(req);
   if (provided && tokenMatches(upstreamToken, provided)) return true;
@@ -921,6 +947,8 @@ export function isAliceAppCoreUpstreamAuthBridgePatched(
     ) &&
     source.includes("req.headers.authorization = `Bearer ${upstreamToken}`") &&
     source.includes('req.headers["x-api-key"] = upstreamToken') &&
+    source.includes("function isPublicAppHeroRoute(") &&
+    source.includes("if (isPublicAppHeroRoute(req.method, pathname))") &&
     (!serverSource ||
       (serverSource.includes(
         'import { bridgeSessionAuthToUpstream } from "./server-upstream-auth-bridge";',
@@ -3449,12 +3477,53 @@ ${end}`;
     prefixBlock +
     source.slice(endIndex + end.length);
 
-  if (!isAliceAppCoreUpstreamAuthBridgePatched(next)) {
+  let patched = next;
+  if (!patched.includes("function isPublicAppHeroRoute(")) {
+    const functionAnchor = `export async function bridgeSessionAuthToUpstream(
+`;
+    if (!patched.includes(functionAnchor)) {
+      throw new Error(
+        "app-core upstream auth bridge public hero function anchor drifted",
+      );
+    }
+    patched = patched.replace(
+      functionAnchor,
+      `function isPublicAppHeroRoute(method: string | undefined, pathname: string): boolean {
+  return (method ?? "GET").toUpperCase() === "GET" && pathname.startsWith("/api/apps/hero/");
+}
+
+${functionAnchor}`,
+    );
+  }
+
+  if (!patched.includes("if (isPublicAppHeroRoute(req.method, pathname))")) {
+    const tokenAnchor = `  const upstreamToken = resolveApiToken(process.env);
+  if (!upstreamToken) return true;
+
+`;
+    if (!patched.includes(tokenAnchor)) {
+      throw new Error(
+        "app-core upstream auth bridge public hero token anchor drifted",
+      );
+    }
+    patched = patched.replace(
+      tokenAnchor,
+      `${tokenAnchor}  if (isPublicAppHeroRoute(req.method, pathname)) {
+    req.headers.authorization = \`Bearer \${upstreamToken}\`;
+    req.headers["x-api-key"] = upstreamToken;
+    return true;
+  }
+
+`,
+    );
+  }
+
+  if (!isAliceAppCoreUpstreamAuthBridgePatched(patched)) {
     throw new Error(
       "app-core upstream auth bridge patch applied but contract is absent",
     );
   }
-  return next;
+  return patched;
 }
 
 function patchAliceAppCoreUpstreamAuthBridgeServerSource(source) {
@@ -3553,6 +3622,93 @@ export function applyAliceAppCoreUpstreamAuthBridgePatch({
   }
 
   log("[alice-eliza-runtime-patches] patched app-core upstream auth bridge");
+  return "applied";
+}
+
+function isAliceAgentAppsHeroFallbackPatched(source) {
+  return (
+    source.includes("function createGeneratedAppHeroFallback(") &&
+    source.includes("return createGeneratedAppHeroFallback(slug);")
+  );
+}
+
+function patchAliceAgentAppsHeroFallbackSource(source) {
+  if (isAliceAgentAppsHeroFallbackPatched(source)) return source;
+
+  const typeAnchor = `type ResolvedAppHero =
+  | { kind: "file"; absolutePath: string; contentType: string }
+  | { kind: "generated"; svg: string };
+`;
+  const typePatch = `${typeAnchor}
+function createGeneratedAppHeroFallback(slug: string): ResolvedAppHero {
+  return {
+    kind: "generated",
+    svg: createGeneratedAppHeroSvg({
+      name: slug,
+      displayName: packageNameToAppDisplayName(slug),
+      category: "app",
+      description: "",
+    }),
+  };
+}
+`;
+  if (!source.includes(typeAnchor)) {
+    throw new Error("agent apps hero fallback type anchor drifted");
+  }
+
+  let next = source.replace(typeAnchor, typePatch);
+  const refreshAnchor = `  const registry = await pluginManager.refreshRegistry();
+  for (const entry of registry.values()) {
+`;
+  const refreshPatch = `  let registry: Map<string, RegistryPluginInfo>;
+  try {
+    registry = await pluginManager.refreshRegistry();
+  } catch {
+    return createGeneratedAppHeroFallback(slug);
+  }
+
+  for (const entry of registry.values()) {
+`;
+  if (!next.includes(refreshAnchor)) {
+    throw new Error("agent apps hero fallback refresh anchor drifted");
+  }
+  next = next.replace(refreshAnchor, refreshPatch);
+
+  if (!isAliceAgentAppsHeroFallbackPatched(next)) {
+    throw new Error("agent apps hero fallback patch contract is absent");
+  }
+  return next;
+}
+
+export function applyAliceAgentAppsHeroFallbackPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const appsRoutesPath = path.join(elizaRoot, agentAppsRoutesRelativePath);
+  if (!existsSync(appsRoutesPath)) {
+    log(
+      "[alice-eliza-runtime-patches] agent apps routes source absent; skipping hero fallback",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(appsRoutesPath, "utf8");
+  const after = patchAliceAgentAppsHeroFallbackSource(before);
+  if (after === before && isAliceAgentAppsHeroFallbackPatched(after)) {
+    log(
+      "[alice-eliza-runtime-patches] agent apps hero fallback already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(appsRoutesPath, after);
+  if (!isAliceAgentAppsHeroFallbackPatched(after)) {
+    throw new Error(
+      "agent apps hero fallback patch applied but contract is absent",
+    );
+  }
+
+  log("[alice-eliza-runtime-patches] patched agent apps hero fallback");
   return "applied";
 }
 
@@ -6017,6 +6173,7 @@ export function applyAliceElizaRuntimePatches({
     applyAlicePluginSqlSchemaPgliteErrorsReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),
     applyAliceAppCoreUpstreamAuthBridgePatch({ elizaRoot, log }),
+    applyAliceAgentAppsHeroFallbackPatch({ elizaRoot, log }),
     applyAliceAuthRateLimitAfterValidSessionPatch({ elizaRoot, log }),
     applyAliceProviderFailureNonfatalPatch({ elizaRoot, log }),
     applyAliceAppCoreDashboardFallbackRoutesPatch({ elizaRoot, log }),
