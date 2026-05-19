@@ -7,6 +7,10 @@
 
 import crypto from "node:crypto";
 import type http from "node:http";
+import {
+  getConfiguredApiToken as getAgentConfiguredApiToken,
+  isAuthorized as isAgentApiAuthorized,
+} from "@miladyai/agent/api/server-auth";
 import { resolveApiToken } from "@miladyai/shared/runtime-env";
 import { isLoopbackRemoteAddress } from "./compat-route-shared";
 import { sendJsonError } from "./response";
@@ -29,7 +33,7 @@ export function extractHeaderValue(
  * Returns `null` when no token is configured (open access).
  */
 export function getCompatApiToken(): string | null {
-  return resolveApiToken(process.env);
+  return getAgentConfiguredApiToken() ?? resolveApiToken(process.env);
 }
 
 export function isCompatApiAuthDisabled(): boolean {
@@ -139,6 +143,7 @@ export function ensureCompatApiAuthorized(
   res: http.ServerResponse,
 ): boolean {
   if (isCompatApiAuthDisabled()) return true;
+  if (isAgentApiAuthorized(req as http.IncomingMessage)) return true;
 
   const expectedToken = getCompatApiToken();
   if (!expectedToken) return true;
