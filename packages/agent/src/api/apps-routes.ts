@@ -4,6 +4,7 @@ import {
   type AppRunSummary,
   type AppSessionActionResult,
   hasAppInterface,
+  packageNameToAppDisplayName,
   packageNameToAppRouteSlug,
 } from "../contracts/apps.js";
 import { importAppRouteModule } from "../services/app-package-modules.js";
@@ -86,6 +87,53 @@ export interface AppsRouteContext
 
 function isNonAppRegistryPlugin(plugin: RegistryPluginInfo): boolean {
   return !hasAppInterface(plugin);
+}
+
+function escapeAppHeroText(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function createGeneratedAppHeroSvgFallback(slug: string): string {
+  const displayName = packageNameToAppDisplayName(slug) || slug;
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+  const title = escapeAppHeroText(displayName);
+  const mark = escapeAppHeroText(initials || "A");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="${title} app artwork"><defs><linearGradient id="aliceHeroBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#151515"/><stop offset="1" stop-color="#332806"/></linearGradient></defs><rect width="1200" height="675" fill="url(#aliceHeroBg)"/><circle cx="960" cy="150" r="190" fill="#8a6f14" opacity="0.2"/><circle cx="230" cy="560" r="230" fill="#d6a91d" opacity="0.14"/><rect x="92" y="86" width="1016" height="503" rx="28" fill="rgba(0,0,0,0.28)" stroke="rgba(255,255,255,0.14)"/><text x="144" y="192" fill="#d7b84a" font-family="Inter, Arial, sans-serif" font-size="28" letter-spacing="4">ALICE APP</text><text x="144" y="328" fill="#fff8db" font-family="Inter, Arial, sans-serif" font-size="82" font-weight="700">${title}</text><text x="144" y="422" fill="#cabd8d" font-family="Inter, Arial, sans-serif" font-size="30">Generated staging artwork</text><circle cx="960" cy="426" r="96" fill="#d6a91d"/><text x="960" y="460" text-anchor="middle" fill="#171309" font-family="Inter, Arial, sans-serif" font-size="70" font-weight="800">${mark}</text></svg>`;
+}
+
+function sendGeneratedAppHeroFallback(res: unknown, slug: string): void {
+  const svg = createGeneratedAppHeroSvgFallback(slug);
+  const data = Buffer.from(svg, "utf8");
+  const response = res as {
+    writeHead?: (
+      status: number,
+      headers: Record<string, string | number>,
+    ) => void;
+    setHeader?: (name: string, value: string | number) => void;
+    end?: (chunk?: unknown) => void;
+  };
+  if (typeof response.writeHead === "function") {
+    response.writeHead(200, {
+      "Content-Type": "image/svg+xml",
+      "Content-Length": data.byteLength,
+      "Cache-Control": "public, max-age=300",
+    });
+  } else if (typeof response.setHeader === "function") {
+    response.setHeader("Content-Type", "image/svg+xml");
+    response.setHeader("Content-Length", data.byteLength);
+    response.setHeader("Cache-Control", "public, max-age=300");
+  }
+  response.end?.(data);
 }
 
 function actionResultStatus(result: unknown): number {
@@ -420,6 +468,18 @@ export async function handleAppsRoutes(
     error,
     runtime,
   } = ctx;
+
+  if (method === "GET" && pathname.startsWith("/api/apps/hero/")) {
+    const slug = decodeURIComponent(
+      pathname.slice("/api/apps/hero/".length),
+    ).trim();
+    if (!slug) {
+      error(res, "app slug is required");
+      return true;
+    }
+    sendGeneratedAppHeroFallback(res, slug);
+    return true;
+  }
 
   if (method === "GET" && pathname === "/api/apps") {
     const pluginManager = getPluginManager();
