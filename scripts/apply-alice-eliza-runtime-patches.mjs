@@ -1724,6 +1724,65 @@ export function applyAliceElizacloudBrowserTtsStubsPatch({
 }
 
 const coreBrowserIndexRelativePath = "packages/core/src/index.browser.ts";
+const coreNodeIndexRelativePath = "packages/core/src/index.node.ts";
+const coreNodeSecretAliasReexportSentinel =
+  "// [milaidy:core-node-secret-alias-reexport]";
+const coreNodeSecretAliasReexportNames = [
+  "resolveSecretKeyAlias",
+  "SECRET_KEY_ALIASES",
+];
+
+export function isAliceCoreNodeSecretAliasReexportPatched(source) {
+  return coreNodeSecretAliasReexportNames.every((name) =>
+    source.includes(name),
+  );
+}
+
+export function applyAliceCoreNodeSecretAliasReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreNodeIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-node secret alias reexport patch",
+    );
+    return "skipped";
+  }
+
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreNodeSecretAliasReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-node secret alias reexport already applied",
+    );
+    return "already-applied";
+  }
+
+  const anchor = "\tLOCAL_MODEL_PROVIDERS,\n} from \"./constants\";";
+  if (!source.includes(anchor)) {
+    throw new Error(
+      "core-node secret alias reexport patch drifted: constants export block anchor not found",
+    );
+  }
+
+  const next = source.replace(
+    anchor,
+    `\tLOCAL_MODEL_PROVIDERS,\n\tresolveSecretKeyAlias,\n\tSECRET_KEY_ALIASES,\n} from "./constants";\n${coreNodeSecretAliasReexportSentinel}`,
+  );
+
+  if (!isAliceCoreNodeSecretAliasReexportPatched(next)) {
+    throw new Error(
+      "core-node secret alias reexport patch applied but contract is absent",
+    );
+  }
+
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.node.ts to re-export secret alias helpers required by plugin-secrets-manager",
+  );
+  return "applied";
+}
+
 const coreBrowserRuntimeEnvReexportSentinel =
   "// [milaidy:core-browser-runtime-env-reexport]";
 const coreBrowserRuntimeEnvReexport = `${coreBrowserRuntimeEnvReexportSentinel}
@@ -6409,6 +6468,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
     applyAliceCoreBasicCapabilitiesBrowserSafePatch({ elizaRoot, log }),
+    applyAliceCoreNodeSecretAliasReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserRuntimeEnvReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserStateDirStubsPatch({ elizaRoot, log }),
     applyAliceCoreBrowserOnboardingReexportPatch({ elizaRoot, log }),

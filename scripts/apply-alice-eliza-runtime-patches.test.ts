@@ -25,6 +25,7 @@ import {
   applyPatchWithGitFallback,
   applyAliceBundledKnowledgeStartupDeferralPatch,
   applyAliceCoreBasicCapabilitiesBrowserSafePatch,
+  applyAliceCoreNodeSecretAliasReexportPatch,
   applyAliceAppViteStubMammothPatch,
   applyAliceCoreBuildBrowserExternalsPatch,
   applyAliceCoreBuildBrowserExternalsMammothPatch,
@@ -59,6 +60,7 @@ import {
   isAliceElizacloudBrowserTtsStubsPatched,
   isAliceTelegramAccountAuthResolverPatched,
   isAliceRuntimeApiBindPatched,
+  isAliceCoreNodeSecretAliasReexportPatched,
   isAliceCoreBrowserValidationReexportPatched,
   isAliceUiAuthGatedStartupPatched,
   isAliceUiSameOriginWebsocketPatched,
@@ -120,6 +122,56 @@ describe("Alice Eliza runtime patch contract", () => {
     ].join("\n");
 
     expect(isAliceRuntimeApiBindPatched(source)).toBe(true);
+  });
+
+  it("re-exports core secret alias helpers required by plugin-secrets-manager", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-core-node-secret-"),
+    );
+    try {
+      const coreDir = path.join(tempDir, "packages", "core", "src");
+      mkdirSync(coreDir, { recursive: true });
+      const indexPath = path.join(coreDir, "index.node.ts");
+      writeFileSync(
+        indexPath,
+        [
+          "export {",
+          "\tCANONICAL_SECRET_KEYS,",
+          "\ttype CanonicalSecretKey,",
+          "\tCHANNEL_OPTIONAL_SECRETS,",
+          "\tgetAliasesForKey,",
+          "\tgetAllSecretsForChannel,",
+          "\tgetProviderForApiKey,",
+          "\tgetRequiredSecretsForChannel,",
+          "\tisCanonicalSecretKey,",
+          "\tisSecretKeyAlias,",
+          "\tLOCAL_MODEL_PROVIDERS,",
+          '} from "./constants";',
+          "",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceCoreNodeSecretAliasReexportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(indexPath, "utf8");
+      expect(isAliceCoreNodeSecretAliasReexportPatched(patched)).toBe(true);
+      expect(patched).toContain("resolveSecretKeyAlias");
+      expect(patched).toContain("SECRET_KEY_ALIASES");
+
+      expect(
+        applyAliceCoreNodeSecretAliasReexportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("applies git-format patches when copied Eliza git metadata is unavailable", () => {
