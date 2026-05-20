@@ -6,6 +6,7 @@ export * from "./env-utils.js";
 export * from "./restart.js";
 export * from "./connectors.js";
 export { migrateLegacyRuntimeConfig } from "./contracts/onboarding.js";
+export * from "./contracts/cloud-coding-containers.js";
 export {
   isMiladySettingsDebugEnabled,
   sanitizeForSettingsDebug,

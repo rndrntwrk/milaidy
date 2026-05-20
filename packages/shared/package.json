@@ -26,6 +26,7 @@
     "./contracts/avatar-speech": "./src/contracts/avatar-speech.ts",
     "./contracts/apps": "./src/contracts/apps.ts",
     "./contracts/awareness": "./src/contracts/awareness.ts",
+    "./contracts/cloud-coding-containers": "./src/contracts/cloud-coding-containers.ts",
     "./contracts/config": "./src/contracts/config.ts",
     "./contracts/drop": "./src/contracts/drop.ts",
     "./contracts/onboarding": "./src/contracts/onboarding.ts",

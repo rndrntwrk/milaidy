@@ -48,6 +48,18 @@ work from `milady-ai/develop` and the nested Eliza source.
 
 ## Current Recovery Invariants
 
+- Root `@elizaos/core` must re-export the runtime constants imported by
+  first-party plugins from its Node entrypoint. In particular,
+  `packages/core/src/index.node.ts` must expose `resolveSecretKeyAlias` and
+  `SECRET_KEY_ALIASES` from `./constants`; otherwise
+  `@elizaos/plugin-secrets-manager` crashes during startup with an ES module
+  named-export error before Alice can serve `/health`.
+- The deploy image materializes `@elizaos/shared` from Milady root
+  `packages/shared` so Milady app-core can keep its local shared helpers.
+  When upstream Eliza plugins add root `@elizaos/shared` imports, copy the
+  required browser-safe contracts into Milady root shared as tracked source.
+  The cloud coding container schemas are required by
+  `@elizaos/plugin-elizacloud` during startup.
 - Root `@elizaos/agent` exports must include:
   - `./actions/grounded-action-reply`
   - `./api/conversation-metadata`
@@ -79,6 +91,16 @@ work from `milady-ai/develop` and the nested Eliza source.
   boot errors.
 - `555stream` may assert runtime surfaces exist, but runtime behavior fixes must
   remain in `milaidy` or tracked Milady-owned Eliza patch hooks.
+- Companion is the stream operator surface. Do not replace it with a separate
+  stream path while restoring Alice. The Go Live button, stage operator overlay,
+  stream/action-log bubbles, app emotes, and computer-use approvals all belong
+  to the companion/app-core bridge and must be verified together.
+- App-core bridge auth must keep the Alice staging-owned routes reachable after
+  pairing: `/api/emote`, `/api/emotes`, `/api/companion/stage`,
+  `/api/apps/overlay-presence`, `/api/apps/hero/*`,
+  `/api/computer-use/approvals`, `/api/computer-use/approval-mode`, and the
+  approvals event stream. Regressions usually present as a wall of 401/429
+  browser console errors.
 
 ## Deployment Evidence
 
@@ -97,6 +119,9 @@ Record for each deploy:
 - smoke result for `/health`, `/agents`, `/api/status`, operator action,
   companion/stage routes, coding-agent fallback, Telegram preflight, companion
   assets, and stream start/stop
+- browser evidence for companion loading from `/apps`, the Go Live control being
+  present in companion, VRM assets loading as gzip VRM files rather than Git LFS
+  pointers, and action/stream log surfaces remaining visible after interaction
 
 ## Promotion Rule
 

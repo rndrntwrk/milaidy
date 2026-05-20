@@ -1,6 +1,7 @@
 export * from "./apps.js";
 export * from "./avatar-speech.js";
 export * from "./awareness.js";
+export * from "./cloud-coding-containers.js";
 export * from "./cloud-topology.js";
 export * from "./config.js";
 export * from "./content-pack.js";
