@@ -273,6 +273,28 @@ function isPublicAppHeroRoute(method: string, pathname: string): boolean {
   return method === "GET" && pathname.startsWith("/api/apps/hero/");
 }
 
+function getComputerUseApprovalsStreamToken(
+  req: http.IncomingMessage,
+  method: string,
+  pathname: string,
+): string | null {
+  if (method !== "GET" || pathname !== "/api/computer-use/approvals/stream") {
+    return null;
+  }
+  return new URL(req.url ?? "/", "http://localhost").searchParams.get("token")?.trim() || null;
+}
+
+function restoreAuthorizationHeader(
+  req: http.IncomingMessage,
+  previousAuthorization: http.IncomingHttpHeaders["authorization"],
+): void {
+  if (previousAuthorization === undefined) {
+    delete req.headers.authorization;
+    return;
+  }
+  req.headers.authorization = previousAuthorization;
+}
+
 export async function authorizeAgentStatusFallback(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -284,16 +306,27 @@ export async function authorizeAgentStatusFallback(
   if (isPublicAppHeroRoute(method, pathname)) return true;
 
   const token = getCompatApiToken();
-  const streamToken =
-    method === "GET" && pathname === "/api/computer-use/approvals/stream"
-      ? new URL(req.url ?? "/", "http://localhost").searchParams.get("token")?.trim()
-      : null;
-  const provided = getProvidedApiToken(req) ?? streamToken;
+  const providedHeader = getProvidedApiToken(req);
+  const streamToken = getComputerUseApprovalsStreamToken(req, method, pathname);
+  const shouldPromoteStreamToken = Boolean(streamToken && !providedHeader);
+  const previousAuthorization = req.headers.authorization;
+  if (shouldPromoteStreamToken && streamToken) {
+    // EventSource cannot send headers. Promote the query token through the
+    // normal bearer path so paired staging auth and the legacy stream guard agree.
+    req.headers.authorization = \`Bearer \${streamToken}\`;
+  }
+
+  const provided = providedHeader ?? streamToken;
   if (token && provided && tokenMatches(token, provided)) return true;
 
   if (isAgentApiAuthorized(req)) return true;
 
-  if (!(await ensureRouteAuthorized(req, res, state))) return false;
+  if (!(await ensureRouteAuthorized(req, res, state))) {
+    if (shouldPromoteStreamToken) {
+      restoreAuthorizationHeader(req, previousAuthorization);
+    }
+    return false;
+  }
 
   return true;
 }
