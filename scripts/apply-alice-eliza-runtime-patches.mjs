@@ -57,6 +57,8 @@ const uiOnboardingBootstrapRelativePath =
 const uiAppShellStateRelativePath = "packages/ui/src/state/useAppShellState.ts";
 const uiClientBaseRelativePath = "packages/ui/src/api/client-base.ts";
 const uiClientAgentRelativePath = "packages/ui/src/api/client-agent.ts";
+const uiInternalToolAppsRelativePath =
+  "packages/ui/src/components/apps/internal-tool-apps.ts";
 const appVincentStateRelativePath =
   "plugins/app-vincent/src/useVincentState.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
@@ -201,6 +203,8 @@ const UPSTREAM_SESSION_AUTH_BRIDGE_PREFIXES = [
   "/api/config",
   "/api/connectors",
   "/api/conversations",
+  "/api/emote",
+  "/api/emotes",
   "/api/inbox",
   "/api/lifeops",
   "/api/logs",
@@ -349,6 +353,8 @@ const aliceUpstreamAuthBridgePrefixes = [
   "/api/computer-use",
   "/api/connectors",
   "/api/conversations",
+  "/api/emote",
+  "/api/emotes",
   "/api/inbox",
   "/api/lifeops",
   "/api/logs",
@@ -990,6 +996,26 @@ export function isAliceAppCoreUpstreamAuthBridgePatched(
           "if (\n            !(await bridgeSessionAuthToUpstream(req, res, state, pathname))\n          )",
         )))
   );
+}
+
+const aliceInternalToolHeroRoutes = new Map([
+  ["plugin-viewer", "/api/apps/hero/plugin-viewer"],
+  ["skills-viewer", "/api/apps/hero/skills-viewer"],
+  ["trajectory-viewer", "/api/apps/hero/trajectory-viewer"],
+  ["relationship-viewer", "/api/apps/hero/relationship-viewer"],
+  ["memory-viewer", "/api/apps/hero/memory-viewer"],
+  ["runtime-debugger", "/api/apps/hero/runtime-debugger"],
+  ["database-viewer", "/api/apps/hero/database-viewer"],
+  ["log-viewer", "/api/apps/hero/log-viewer"],
+]);
+
+export function isAliceUiInternalToolHeroRoutesPatched(source) {
+  return [...aliceInternalToolHeroRoutes].every(([slug, route]) => {
+    return (
+      source.includes(`heroImage: "${route}"`) &&
+      !source.includes(`heroImage: "/app-heroes/${slug}.png"`)
+    );
+  });
 }
 
 export function isAliceAppCoreDashboardFallbackRoutesPatched(
@@ -3655,6 +3681,51 @@ export function applyAliceAppCoreUpstreamAuthBridgePatch({
   }
 
   log("[alice-eliza-runtime-patches] patched app-core upstream auth bridge");
+  return "applied";
+}
+
+function patchAliceUiInternalToolHeroRoutesSource(source) {
+  let next = source;
+  for (const [slug, route] of aliceInternalToolHeroRoutes) {
+    next = next.replaceAll(
+      `heroImage: "/app-heroes/${slug}.png"`,
+      `heroImage: "${route}"`,
+    );
+  }
+  if (!isAliceUiInternalToolHeroRoutesPatched(next)) {
+    throw new Error(
+      "ui internal tool hero routes patch applied but contract is absent",
+    );
+  }
+  return next;
+}
+
+export function applyAliceUiInternalToolHeroRoutesPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const internalToolAppsPath = path.join(
+    elizaRoot,
+    uiInternalToolAppsRelativePath,
+  );
+  if (!existsSync(internalToolAppsPath)) {
+    log(
+      "[alice-eliza-runtime-patches] ui internal tool apps source absent; skipping hero route patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(internalToolAppsPath, "utf8");
+  const after = patchAliceUiInternalToolHeroRoutesSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] ui internal tool hero routes already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(internalToolAppsPath, after);
+  log("[alice-eliza-runtime-patches] patched ui internal tool hero routes");
   return "applied";
 }
 
@@ -6356,6 +6427,7 @@ export function applyAliceElizaRuntimePatches({
     applyAlicePluginSqlSchemaPgliteErrorsReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),
     applyAliceAppCoreUpstreamAuthBridgePatch({ elizaRoot, log }),
+    applyAliceUiInternalToolHeroRoutesPatch({ elizaRoot, log }),
     applyAliceAgentAppsHeroFallbackPatch({ elizaRoot, log }),
     applyAliceRootAgentAppsHeroFallbackPatch({ rootDir, log }),
     applyAliceAuthRateLimitAfterValidSessionPatch({ elizaRoot, log }),
