@@ -12,7 +12,7 @@ function localUpstreamsDisabled() {
   const sourceMode = (
     process.env.MILADY_ELIZA_SOURCE ??
     process.env.ELIZA_SOURCE ??
-    "packages"
+    "local"
   ).toLowerCase();
   return (
     ["package", "packages", "published", "npm", "registry", "global"].includes(
