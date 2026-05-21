@@ -8,6 +8,7 @@ import {
 // commit 5a6f5f337) moved CSS out of @elizaos/app-core/styles/ but
 // didn't update this consumer; the new shape is a single subpath.
 import "@elizaos/ui/styles";
+import "@miladyai/app-core/styles/alice-companion.css";
 
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -76,15 +77,15 @@ import {
 } from "@elizaos/capacitor-llama";
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { CompanionShell } from "@elizaos/app-companion/ui";
 import {
+  CompanionShell,
   createVectorBrowserRenderer,
   GlobalEmoteOverlay,
   InferenceCloudAlertButton,
   resolveCompanionInferenceNotice,
   THREE,
   useCompanionSceneStatus,
-} from "@elizaos/app-companion";
+} from "@elizaos/app-companion/ui";
 import "@elizaos/app-companion/register";
 // Side-effect: register LifeOps sidebar widgets + client methods on ElizaClient.
 import "@elizaos/app-lifeops/widgets";
@@ -138,7 +139,7 @@ import {
   APP_URL_SCHEME,
 } from "./app-config";
 import { APP_ENV_ALIASES, APP_ENV_PREFIX } from "./brand-env";
-import { APP_CHARACTER_CATALOG } from "./character-catalog";
+import { APP_CHARACTER_CATALOG, buildAppVrmAssets } from "./character-catalog";
 import {
   apiBaseToDeviceBridgeUrl,
   type IosRuntimeConfig,
@@ -307,9 +308,7 @@ import { getStylePresets } from "@elizaos/shared/onboarding-presets";
 // Derive VRM roster from STYLE_PRESETS so character names stay in one place.
 const APP_STYLE_PRESETS = getStylePresets();
 
-const APP_VRM_ASSETS = APP_STYLE_PRESETS.slice()
-  .sort((a, b) => a.avatarIndex - b.avatarIndex)
-  .map((p) => ({ title: p.name, slug: `${APP_NAMESPACE}-${p.avatarIndex}` }));
+const APP_VRM_ASSETS = buildAppVrmAssets(APP_STYLE_PRESETS);
 
 const appBootConfig: AppBootConfig = {
   ...getBootConfig(),
@@ -731,6 +730,8 @@ function setupPlatformStyles(): void {
 
 function isPhoneCompanionMode(): boolean {
   if (typeof window === "undefined") return false;
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (pathname === "/companion") return true;
   const params = new URLSearchParams(
     window.location.search || window.location.hash.split("?")[1] || "",
   );

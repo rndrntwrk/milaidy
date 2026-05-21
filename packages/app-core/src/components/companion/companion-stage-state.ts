@@ -48,8 +48,8 @@
  *
  * All values are normalized:
  * - `zoom`: 0 (widest) .. 1 (closest). `VrmEngine.setCompanionZoomNormalized`
- *   maps this to the underlying camera distance. Default 0.95 matches
- *   the legacy `DEFAULT_COMPANION_ZOOM` constant in CompanionSceneHost.
+ *   maps this to the underlying camera distance. Default 0.25 keeps Alice in
+ *   the wider upper-body frame used by the operator companion.
  * - `yaw` / `pitch`: radians, applied to the camera orbit target.
  *   Default 0 — the VRM model centered straight-on.
  * - `pan`: horizontal camera offset used by the character editor; 0
@@ -77,13 +77,12 @@ export interface PartialCompanionStageState {
 
 /**
  * Defaults applied both server-side (when `stage.json` is missing) and
- * client-side (before hydration completes). The zoom default matches
- * the legacy `DEFAULT_COMPANION_ZOOM = 0.95` constant so existing
- * captures don't visually jump on the first deploy.
+ * client-side (before hydration completes). The zoom default matches the
+ * restored Alice operator frame rather than the older close-up crop.
  */
 export const DEFAULT_COMPANION_STAGE_STATE: CompanionStageState = {
   camera: {
-    zoom: 0.95,
+    zoom: 0.25,
     yaw: 0,
     pitch: 0,
     pan: 0,

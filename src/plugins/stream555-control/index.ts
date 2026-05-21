@@ -153,6 +153,18 @@ function readParamValue(
   return value?.trim() ? value.trim() : undefined;
 }
 
+function buildStreamStartOptions(
+  scene: string,
+  avatarIdentity?: string,
+  extra?: JsonObject,
+): JsonObject {
+  return {
+    scene,
+    ...(avatarIdentity ? { avatarIdentity } : {}),
+    ...(extra ?? {}),
+  };
+}
+
 type LiveLayoutMode = "camera-full" | "camera-hold";
 
 function resolveSceneForLayoutMode(
@@ -997,6 +1009,10 @@ const goLiveAction: Action = {
         readParam(options as HandlerOptions | undefined, "layoutMode"),
         readParam(options as HandlerOptions | undefined, "scene") || "default",
       );
+      const avatarIdentity = readParamValue(
+        options as HandlerOptions | undefined,
+        "avatarIdentity",
+      );
       const applyDestinations = parseBooleanFlag(
         readParam(options as HandlerOptions | undefined, "applyDestinations"),
         parseBooleanFlag(trimEnv(STREAM555_DEST_SYNC_ON_GO_LIVE_ENV), true),
@@ -1034,7 +1050,7 @@ const goLiveAction: Action = {
           type: inputType,
           ...(inputUrl ? { url: inputUrl } : {}),
         },
-        options: { scene },
+        options: buildStreamStartOptions(scene, avatarIdentity),
       };
       const startResponse = await fetchJson(
         "POST",
@@ -1187,6 +1203,7 @@ const goLiveAction: Action = {
     { name: "inputType", description: "camera|screen|website|avatar|radio|...", required: false, schema: { type: "string" as const } },
     { name: "inputUrl", description: "Optional source url for website/rtmp/file", required: false, schema: { type: "string" as const } },
     { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
+    { name: "avatarIdentity", description: "Avatar identity to render in capture (for Alice companion sync)", required: false, schema: { type: "string" as const } },
     { name: "layoutMode", description: "Optional Alice layout mode (camera-full|camera-hold)", required: false, schema: { type: "string" as const } },
     { name: "applyDestinations", description: "Apply configured RTMP destinations before go-live (default true)", required: false, schema: { type: "string" as const } },
     { name: "destinationPlatforms", description: "Comma-separated subset of destinations to apply before go-live", required: false, schema: { type: "string" as const } },
@@ -1303,6 +1320,10 @@ const goLiveAppAction: Action = {
         readParam(options as HandlerOptions | undefined, "layoutMode"),
         readParam(options as HandlerOptions | undefined, "scene") || "default",
       );
+      const avatarIdentity = readParamValue(
+        options as HandlerOptions | undefined,
+        "avatarIdentity",
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -1395,12 +1416,11 @@ const goLiveAppAction: Action = {
             type: "website",
             url: resolvedUrl,
           },
-          options: {
-            scene,
+          options: buildStreamStartOptions(scene, avatarIdentity, {
             appName,
             resolvedFrom,
             app: appOptions,
-          },
+          }),
         },
         requestContract: {
           input: { required: true, type: "object" },
@@ -1443,6 +1463,7 @@ const goLiveAppAction: Action = {
     },
     { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
     { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
+    { name: "avatarIdentity", description: "Avatar identity to render in capture (for Alice companion sync)", required: false, schema: { type: "string" as const } },
   ],
 };
 
@@ -1698,6 +1719,10 @@ const screenShareAction: Action = {
       const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
       const sceneId =
         readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
+      const avatarIdentity = readParamValue(
+        options as HandlerOptions | undefined,
+        "avatarIdentity",
+      );
       const requestId = createControlRequestId("screen-share");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
@@ -1713,7 +1738,7 @@ const screenShareAction: Action = {
             type: "screen",
             ...(inputUrl ? { url: inputUrl } : {}),
           },
-          options: { scene: sceneId },
+          options: buildStreamStartOptions(sceneId, avatarIdentity),
         },
         requestContract: {
           input: { required: true, type: "object" },
@@ -1732,6 +1757,7 @@ const screenShareAction: Action = {
     { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
     { name: "inputUrl", description: "Optional URL for browser-based screen source", required: false, schema: { type: "string" as const } },
     { name: "sceneId", description: "Scene to activate (default active-pip)", required: false, schema: { type: "string" as const } },
+    { name: "avatarIdentity", description: "Avatar identity to render in capture (for Alice companion sync)", required: false, schema: { type: "string" as const } },
   ],
 };
 

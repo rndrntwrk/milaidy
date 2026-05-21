@@ -369,6 +369,45 @@ describe("stream555-control plugin actions", () => {
     );
   });
 
+  it("forwards Alice avatar identity through go-live stream start", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-alice-1" }))
+      .mockResolvedValueOnce(jsonResponse(200, { accepted: true }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          sessionId: "session-alice-1",
+          cfSessionId: "cf-alice-1",
+          publisher: "avatar",
+          phase: "live",
+          cloudflare: { isConnected: true, state: "connected" },
+        }),
+      );
+
+    const action = await resolveAction("STREAM555_GO_LIVE");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-alice-1",
+          inputType: "avatar",
+          avatarIdentity: "alice",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const [, streamStartCall] = fetchMock.mock.calls;
+    expect(parseFetchBody(streamStartCall)).toEqual({
+      input: { type: "avatar" },
+      options: { scene: "default", avatarIdentity: "alice" },
+    });
+    expect(result?.success).toBe(true);
+  });
+
   it("surfaces the exact bootstrap auth failure inline when refresh cannot recover", async () => {
     delete process.env.STREAM555_AGENT_TOKEN;
     process.env.STREAM555_AGENT_API_KEY = "stream-api-key";
@@ -427,6 +466,34 @@ describe("stream555-control plugin actions", () => {
     });
     expect(result?.success).toBe(true);
     expect(parseEnvelope(result as { text: string }).code).toBe("OK");
+  });
+
+  it("keeps screen share on the PiP scene while forwarding Alice avatar identity", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-2" }))
+      .mockResolvedValueOnce(jsonResponse(200, { accepted: true }));
+
+    const action = await resolveAction("STREAM555_SCREEN_SHARE");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-2",
+          avatarIdentity: "alice",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, streamStartCall] = fetchMock.mock.calls;
+    expect(parseFetchBody(streamStartCall)).toEqual({
+      input: { type: "screen" },
+      options: { scene: "active-pip", avatarIdentity: "alice" },
+    });
+    expect(result?.success).toBe(true);
   });
 
   it("submits segment override with required segmentType", async () => {

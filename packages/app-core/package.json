@@ -108,6 +108,7 @@
     "./styles/base.css": "./src/styles/base.css",
     "./styles/xterm.css": "./src/styles/xterm.css",
     "./styles/onboarding-game.css": "./src/styles/onboarding-game.css",
+    "./styles/alice-companion.css": "./src/styles/alice-companion.css",
     "./styles/styles.css": "./src/styles/styles.css",
     "./shell": "./src/shell/index.ts",
     "./styles/brand-gold.css": "./src/styles/brand-gold.css",

@@ -24,6 +24,7 @@ vi.mock("@miladyai/app-core/state", () => ({
     `/vrms/backgrounds/milady-${index}.png`,
   getVrmTitle: (index: number) => `MILADY-${index}`,
   VRM_COUNT: 24,
+  getCameraDistanceScale: () => 1,
   CUSTOM_ONBOARDING_STEPS: [],
   useCompanionSceneConfig: () => {
     const state = (mockUseApp() as Record<string, unknown>) ?? {};
@@ -40,10 +41,42 @@ vi.mock("@miladyai/app-core/state", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 
+vi.mock("@miladyai/app-core/hooks", () => ({
+  useRenderGuard: () => {},
+  useDocumentVisibility: () => true,
+  useMediaQuery: (query: string) =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(query).matches
+      : false,
+  useAvatarSpeechCapabilities: () => ({
+    avatarKey: "bundled:9",
+    capabilities: { speechMotionPath: null },
+    manifest: null,
+    loading: false,
+    saveDetectedCapabilities: vi.fn(async () => {}),
+  }),
+}));
+
 vi.mock("@miladyai/ui", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("@miladyai/ui");
   return createInlineUiMock(actual);
 });
+
+vi.mock("@miladyai/app-core/components", () => ({
+  LANGUAGE_DROPDOWN_TRIGGER_CLASSNAME: "",
+  LanguageDropdown: ({ uiLanguage }: { uiLanguage: string }) =>
+    React.createElement(
+      "button",
+      { type: "button", "data-testid": "mock-language-dropdown" },
+      uiLanguage,
+    ),
+  ThemeToggle: ({ uiTheme }: { uiTheme: string }) =>
+    React.createElement(
+      "button",
+      { type: "button", "data-testid": "mock-theme-toggle" },
+      uiTheme,
+    ),
+}));
 
 vi.mock("../../src/components/avatar/VrmViewer", () => ({
   VrmViewer: (props: Record<string, unknown>) => {
@@ -90,6 +123,8 @@ const mockClientFns = vi.hoisted(() => ({
   switchArcade555Game: vi.fn(),
   stopArcade555Game: vi.fn(),
   getEmotes: vi.fn(),
+  getCompanionStageState: vi.fn(async () => ({ state: null })),
+  setCompanionStageState: vi.fn(async () => ({ ok: true })),
   executeAliceOperatorPlan: vi.fn(),
   listHyperscapeEmbeddedAgents: vi.fn(),
   getHyperscapeAgentGoal: vi.fn(),
@@ -111,9 +146,10 @@ vi.mock("@miladyai/app-core/utils", () => ({
 }));
 
 import { CompanionSceneHost } from "../../src/components/companion/CompanionSceneHost";
+import { CompanionAppView } from "../../src/components/companion/CompanionAppView";
 import { CompanionView } from "../../src/components/pages/CompanionView";
 
-const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
+const DEFAULT_COMPANION_ZOOM = 0.25;
 
 function createContext(overrides: Record<string, unknown> = {}) {
   return {
@@ -319,6 +355,8 @@ describe("CompanionView", () => {
     mockClientFns.switchArcade555Game.mockReset();
     mockClientFns.stopArcade555Game.mockReset();
     mockClientFns.getEmotes.mockReset();
+    mockClientFns.getCompanionStageState.mockReset();
+    mockClientFns.setCompanionStageState.mockReset();
     mockClientFns.executeAliceOperatorPlan.mockReset();
     mockClientFns.listHyperscapeEmbeddedAgents.mockReset();
     mockClientFns.getHyperscapeAgentGoal.mockReset();
@@ -378,6 +416,8 @@ describe("CompanionView", () => {
         },
       ],
     });
+    mockClientFns.getCompanionStageState.mockResolvedValue({ state: null });
+    mockClientFns.setCompanionStageState.mockResolvedValue({ ok: true });
     mockClientFns.executeAliceOperatorPlan.mockResolvedValue({
       ok: true,
       allSucceeded: true,
@@ -660,7 +700,7 @@ describe("CompanionView", () => {
     expect(viewerPropsRef.current?.speechMotionPath).toBeNull();
   });
 
-  it("keeps the Alice stage launcher off narrow screens while preserving the header go live control", async () => {
+  it("keeps the Alice stage launcher available on narrow screens with the header go live control", async () => {
     window.matchMedia = createMatchMedia(
       (query) => query === "(max-width: 767px)",
     );
@@ -686,8 +726,46 @@ describe("CompanionView", () => {
     expect(
       tree?.root.findAllByProps({
         "data-testid": "companion-stage-actions-launcher",
+      }).length ?? 0,
+    ).toBeGreaterThan(0);
+  });
+
+  it("routes the overlay companion app through the canonical Alice companion shell", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+        plugins: [{ id: "five55-games", enabled: true, isActive: true }],
       }),
-    ).toHaveLength(0);
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(CompanionAppView, {
+          exitToApps: vi.fn(),
+          uiTheme: "dark",
+          t: (key: string) => key,
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-header-go-live",
+      }).length ?? 0,
+    ).toBeGreaterThan(0);
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-stage-actions-launcher",
+      }).length ?? 0,
+    ).toBeGreaterThan(0);
+    expect(
+      tree?.root.findAllByProps({
+        "data-testid": "companion-chat-modal-stub",
+      }),
+    ).toHaveLength(1);
   });
 
   it("expands the Alice stage launcher into a scrollable action panel", async () => {
@@ -1087,7 +1165,9 @@ describe("CompanionView", () => {
       });
     });
 
-    expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0.95);
+    expect(setCompanionZoomNormalized).toHaveBeenCalledWith(
+      DEFAULT_COMPANION_ZOOM,
+    );
     setDragOrbitTarget.mockClear();
     resetDragOrbit.mockClear();
 
@@ -1237,10 +1317,15 @@ describe("CompanionView", () => {
 
     const lastZoom =
       setCompanionZoomNormalized.mock.calls.at(-1)?.[0] ?? Number.NaN;
-    expect(lastZoom).toBeCloseTo(0.95 - 120 / 720, 5);
-    expect(localStorage.setItem).toHaveBeenLastCalledWith(
-      COMPANION_ZOOM_STORAGE_KEY,
-      String(lastZoom),
+    expect(lastZoom).toBeCloseTo(DEFAULT_COMPANION_ZOOM - 120 / 720, 5);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 140));
+    });
+    expect(mockClientFns.setCompanionStageState).toHaveBeenLastCalledWith(
+      {
+        camera: { zoom: lastZoom },
+      },
     );
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
@@ -1407,12 +1492,15 @@ describe("CompanionView", () => {
   });
 
   it("restores persisted companion zoom on mount", async () => {
-    localStorage.setItem(COMPANION_ZOOM_STORAGE_KEY, "0.62");
+    mockClientFns.getCompanionStageState.mockResolvedValueOnce({
+      state: { camera: { zoom: 0.62 } },
+    });
     mockUseApp.mockReturnValue(createContext());
 
     let tree: TestRenderer.ReactTestRenderer | null = null;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
     });
 
     const setCompanionZoomNormalized = vi.fn();

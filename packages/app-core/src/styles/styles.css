@@ -183,8 +183,56 @@
  * the dialog content.
  */
 body[data-milady-dialog-open="true"] .companion-chat-dock,
-body[data-milady-dialog-open="true"] .companion-stage-overlay {
+body[data-milady-dialog-open="true"] .companion-stage-overlay,
+body:has(.go-live-modal) .companion-chat-dock,
+body:has(.go-live-modal) .companion-stage-overlay,
+body:has([data-testid="companion-stage-actions-bubble"]) .companion-chat-dock,
+body:has([data-testid="companion-stage-actions-bubble"]) .companion-stage-overlay {
   display: none !important;
+}
+
+.companion-stage-overlay {
+  display: block;
+  z-index: 35;
+}
+
+@media (max-width: 767px) {
+  .companion-stage-overlay {
+    left: 0.75rem;
+    top: auto;
+    bottom: calc(var(--safe-area-bottom, 0px) + min(42vh, 24rem) + 1.25rem);
+    transform: none;
+  }
+}
+
+[data-testid="companion-stage-actions-bubble"] {
+  left: 5rem !important;
+  top: calc(var(--safe-area-top, 0px) + 5rem) !important;
+  right: auto !important;
+  bottom: calc(var(--safe-area-bottom, 0px) + 1rem) !important;
+  width: min(25rem, calc(100vw - 6.25rem)) !important;
+  max-width: min(25rem, calc(100vw - 6.25rem)) !important;
+  height: auto !important;
+  max-height: none !important;
+  transform: none !important;
+  translate: 0 0 !important;
+  border-radius: 24px !important;
+}
+
+@media (max-width: 767px) {
+  [data-testid="companion-stage-actions-bubble"] {
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    top: auto !important;
+    bottom: calc(var(--safe-area-bottom, 0px) + 1rem) !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: min(58dvh, 32rem) !important;
+    transform: none !important;
+    translate: 0 0 !important;
+    border-radius: 24px !important;
+  }
 }
 
 .go-live-modal {
@@ -206,10 +254,30 @@ body[data-milady-dialog-open="true"] .companion-stage-overlay {
      bottom with no way to reach them. */
   display: flex !important;
   flex-direction: column;
+  width: min(calc(100vw - 1.5rem), 72rem) !important;
+  max-width: 72rem !important;
+  height: min(
+    94dvh,
+    calc(
+      100dvh - 1rem - var(--safe-area-top, 0px) -
+        var(--safe-area-bottom, 0px)
+    )
+  ) !important;
+  max-height: min(
+    94dvh,
+    calc(
+      100dvh - 1rem - var(--safe-area-top, 0px) -
+        var(--safe-area-bottom, 0px)
+    )
+  ) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
 }
 
 .go-live-modal__shell {
   display: flex;
+  width: 100%;
+  min-height: 0;
   height: 100%;
   max-height: none;
   flex-direction: column;
@@ -226,6 +294,7 @@ body[data-milady-dialog-open="true"] .companion-stage-overlay {
   position: sticky;
   top: 0;
   z-index: 10;
+  flex: 0 0 auto;
   border-bottom: 1px solid var(--go-live-border);
   background: linear-gradient(180deg, rgba(9, 13, 20, 0.96), rgba(9, 13, 20, 0.9));
   padding: 1.5rem 1.5rem 1.25rem;
@@ -339,6 +408,7 @@ body[data-milady-dialog-open="true"] .companion-stage-overlay {
   flex: 1 1 auto;
   min-height: 0;
   padding: 1.5rem;
+  padding-bottom: 1.75rem;
   /* Explicit overflow rules so the scroll container is not subject to
      Tailwind class-purge ordering or specificity surprises. overscroll-
      behavior: contain prevents the page scroll from taking over once the
@@ -347,6 +417,7 @@ body[data-milady-dialog-open="true"] .companion-stage-overlay {
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .go-live-modal__mode-grid {
@@ -471,6 +542,9 @@ body[data-milady-dialog-open="true"] .companion-stage-overlay {
 
 .go-live-modal__footer {
   display: flex;
+  position: relative;
+  z-index: 11;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
@@ -595,6 +669,102 @@ body[data-milady-dialog-open="true"] .companion-stage-overlay {
 
   .go-live-modal__footer-primary > * {
     width: 100%;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 721px) {
+  .go-live-modal__header {
+    padding: 1rem 1.5rem 0.95rem;
+  }
+
+  .go-live-modal__title {
+    margin-top: 0.55rem;
+    font-size: clamp(1.65rem, 3vw, 2.35rem);
+  }
+
+  .go-live-modal__description {
+    margin-top: 0.55rem;
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+
+  .go-live-modal__stepper {
+    margin-top: 0.95rem;
+    gap: 0.55rem;
+  }
+
+  .go-live-modal__step {
+    gap: 0.55rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .go-live-modal__step-index {
+    height: 1.45rem;
+    width: 1.45rem;
+    font-size: 0.68rem;
+  }
+
+  .go-live-modal__step-label {
+    font-size: 0.72rem;
+  }
+
+  .go-live-modal__body {
+    padding: 1rem 1.5rem 1.25rem;
+  }
+
+  .go-live-modal__mode-grid {
+    gap: 0.75rem;
+  }
+
+  .go-live-modal__mode-card {
+    min-height: 8.8rem;
+    gap: 0.65rem;
+    border-radius: 22px;
+    padding: 0.85rem 0.9rem;
+  }
+
+  .go-live-modal__mode-card-head {
+    gap: 0.65rem;
+  }
+
+  .go-live-modal__mode-card-icon {
+    height: 2.35rem;
+    width: 2.35rem;
+    border-radius: 15px;
+  }
+
+  .go-live-modal__mode-card-title {
+    font-size: 0.98rem;
+  }
+
+  .go-live-modal__mode-card-support {
+    font-size: 0.74rem;
+    line-height: 1.32;
+  }
+
+  .go-live-modal__mode-card-description {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.84rem;
+    line-height: 1.38;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .go-live-modal__mode-card-meta {
+    font-size: 0.66rem;
+  }
+
+  .go-live-modal__footer {
+    gap: 0.65rem;
+    padding: 0.75rem 1.5rem 0.85rem;
+  }
+
+  .go-live-modal__footer-status,
+  .go-live-modal__footer-actions,
+  .go-live-modal__footer-secondary,
+  .go-live-modal__footer-primary {
+    gap: 0.5rem;
   }
 }
 
@@ -851,6 +1021,24 @@ kbd {
   box-shadow:
     0 14px 34px rgba(0, 0, 0, 0.28),
     0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+@media (max-width: 767px) {
+  .alice-stage-rail-node {
+    height: 3.5rem;
+    width: 3.5rem;
+  }
+
+  .alice-stage-rail-node::before,
+  .alice-stage-rail-node::after,
+  .alice-stage-rail-launcher::after {
+    display: none;
+  }
+
+  .alice-stage-rail-launcher {
+    width: 3rem;
+    height: 3rem;
+  }
 }
 
 .pro-streamer-summary-sheet {

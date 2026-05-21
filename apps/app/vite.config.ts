@@ -2,22 +2,6 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  parseAllowedHostEnv,
-  toViteAllowedHosts,
-} from "@elizaos/app-core/config/allowed-hosts";
-import { colorizeDevSettingsStartupBanner } from "@elizaos/shared/dev-settings-banner-style";
-import { prependDevSubsystemFigletHeading } from "@elizaos/shared/dev-settings-figlet-heading";
-import {
-  type DevSettingsRow,
-  formatDevSettingsTable,
-} from "@elizaos/shared/dev-settings-table";
-import {
-  resolveDesktopApiPort,
-  resolveDesktopApiPortPreference,
-  resolveDesktopUiPort,
-  resolveDesktopUiPortPreference,
-} from "@elizaos/shared/runtime-env";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import type { Plugin } from "vite";
@@ -210,9 +194,7 @@ function buildElizaAppSourceAliases(
       if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
       if (entry.name === "node_modules" || entry.name === "dist") continue;
       const entryPath = path.join(currentDir, entry.name);
-      const newKey = relativeKey
-        ? `${relativeKey}/${entry.name}`
-        : entry.name;
+      const newKey = relativeKey ? `${relativeKey}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         const indexFile = probeSourceFile(entryPath, "index");
         if (indexFile) {
@@ -417,11 +399,15 @@ function findElizaCoreBundleInBunStore(
 /**
  * Resolved file path for bundling `@elizaos/core` in the renderer.
  * Linked eliza checkouts sometimes omit `dist/` until `bun run build`;
- * fall back to `dist/node` (Vite stubs `node:` imports via nativeModuleStubPlugin),
- * then to the bun install cache copy.
+ * prefer the local browser source entry so shared packages and core exports
+ * stay in lockstep. Built artifacts remain fallbacks for published/cached
+ * installs.
  */
 function resolveElizaCoreBundlePath(): string {
   const pkgDir = path.dirname(_require.resolve("@elizaos/core/package.json"));
+  const sourceBrowserEntry = path.join(pkgDir, "src/index.browser.ts");
+  if (fs.existsSync(sourceBrowserEntry)) return sourceBrowserEntry;
+
   const browserEntry = path.join(pkgDir, "dist/browser/index.browser.js");
   const nodeEntry = path.join(pkgDir, "dist/node/index.node.js");
   if (fs.existsSync(browserEntry)) return browserEntry;
@@ -1084,7 +1070,7 @@ function isSharpStubId(strippedId: string): boolean {
   );
 }
 
-function generateNativeModuleStub(
+function _generateNativeModuleStub(
   strippedId: string,
   capacitorNativeScopeRe: RegExp,
 ): string {
@@ -1121,7 +1107,21 @@ function nativeModuleStubPlugin(): Plugin {
     "pty-state-capture",
     "electron",
     "undici",
+    // Browser automation is server-only. If a mixed entrypoint leaks one of
+    // these packages into the renderer graph, stub it instead of letting Vite
+    // prebundle proxy-agent and other Node-only HTTP deps for the browser.
+    "puppeteer-core",
+    "@puppeteer/browsers",
+    "proxy-agent",
+    "http-proxy-agent",
+    "https-proxy-agent",
+    "socks-proxy-agent",
+    "pac-proxy-agent",
+    "agent-base",
+    "@elizaos/plugin-aosp-local-inference",
+    "@elizaos/plugin-commands",
     "@elizaos/plugin-local-embedding",
+    "@elizaos/plugin-scratchpad",
     // Edge-TTS is a Node-only voice plugin. Its package.json declares
     // `./dist/browser/index.browser.js` under the `browser` export
     // condition, but that file is never built (only `dist/node/` ships,
@@ -1870,6 +1870,25 @@ export default defineConfig({
                 : path.resolve(here, "src/stubs/empty-node-module.ts");
             })(),
           },
+          {
+            find: /^@elizaos\/plugin-elizacloud$/,
+            replacement: (() => {
+              const sourceBrowserEntry = path.resolve(
+                miladyRoot,
+                "eliza/plugins/plugin-elizacloud/src/index.browser.ts",
+              );
+              if (fs.existsSync(sourceBrowserEntry)) return sourceBrowserEntry;
+              const distBrowserEntry = path.resolve(
+                miladyRoot,
+                "eliza/plugins/plugin-elizacloud/dist/browser/index.browser.js",
+              );
+              if (fs.existsSync(distBrowserEntry)) return distBrowserEntry;
+              return path.resolve(
+                miladyRoot,
+                "eliza/packages/app-core/src/platform/elizaos-plugin-elizacloud-browser-stub.ts",
+              );
+            })(),
+          },
           // @elizaos/core — force ALL copies (including nested ones in plugins
           // like plugin-secrets-manager that ship their own older core) to the
           // main workspace copy's browser entry.  The browser entry has all
@@ -1962,8 +1981,22 @@ export default defineConfig({
       // the browser entry; skip pre-bundling so it's served on-demand via the
       // transform plugin that patches missing exports.
       "@elizaos/plugin-secrets-manager",
+      // Keep local app-core/browser imports on the workspace browser facade.
+      // Parent node_modules may contain stale plugin-elizacloud npm builds
+      // that lack browser-safe named exports such as getCloudSecret.
+      "@elizaos/plugin-elizacloud",
       // Node-only HTTP client — crashes in browser, stub via nativeModuleStubPlugin
       "undici",
+      // Browser automation is server-only and pulls in proxy-agent/agent-base,
+      // which crashes when bundled for the browser.
+      "puppeteer-core",
+      "@puppeteer/browsers",
+      "proxy-agent",
+      "http-proxy-agent",
+      "https-proxy-agent",
+      "socks-proxy-agent",
+      "pac-proxy-agent",
+      "agent-base",
       // Native LLM embedding — uses node-llama-cpp, never runs in browser
       "@elizaos/plugin-local-embedding",
       // Node-only Edge-TTS voice plugin; browser entry is an unbuilt stub.

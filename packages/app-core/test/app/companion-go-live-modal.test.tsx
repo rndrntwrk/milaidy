@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -193,5 +195,38 @@ describe("CompanionGoLiveModal", () => {
     );
 
     expect(alert).toBeDefined();
+  });
+
+  it("keeps the go-live modal body bounded and scrollable on short viewports", () => {
+    const cssFiles = [
+      readFileSync(
+        resolve(process.cwd(), "packages/app-core/src/styles/alice-companion.css"),
+        "utf8",
+      ),
+      readFileSync(
+        resolve(process.cwd(), "packages/app-core/src/styles/styles.css"),
+        "utf8",
+      ),
+    ];
+
+    for (const css of cssFiles) {
+      expect(css).toContain("94dvh");
+      expect(css).toContain("100dvh - 1rem");
+      expect(css).toMatch(
+        /\.go-live-modal__shell\s*\{[\s\S]*?min-height: 0;[\s\S]*?height: 100%;/,
+      );
+      expect(css).toMatch(
+        /\.go-live-modal__header\s*\{[\s\S]*?flex: 0 0 auto;/,
+      );
+      expect(css).toMatch(
+        /\.go-live-modal__body\s*\{[\s\S]*?flex: 1 1 auto;[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;[\s\S]*?scrollbar-gutter: stable;/,
+      );
+      expect(css).toMatch(
+        /\.go-live-modal__footer\s*\{[\s\S]*?flex: 0 0 auto;/,
+      );
+      expect(css).toMatch(
+        /@media \(max-height: 760px\) and \(min-width: 721px\) \{[\s\S]*?\.go-live-modal__mode-card\s*\{[\s\S]*?min-height: 8\.8rem;/,
+      );
+    }
   });
 });

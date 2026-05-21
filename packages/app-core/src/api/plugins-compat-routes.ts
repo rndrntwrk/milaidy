@@ -792,28 +792,58 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
       continue;
     }
 
+    let bundledMeta:
+      | ReturnType<typeof readBundledPluginPackageMetadata>
+      | undefined;
+    try {
+      bundledMeta = readBundledPluginPackageMetadata(
+        manifestRoot,
+        `plugin-${pluginId}`,
+        pluginName.includes("/") ? pluginName : undefined,
+      );
+    } catch (err) {
+      logger.warn(
+        `[api/plugins] runtime plugin metadata unavailable for ${pluginName}; continuing with runtime data: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+    const configKeys = bundledMeta?.configKeys ?? [];
+    const parameters = buildPluginParamDefs(bundledMeta?.pluginParameters);
+    const validationErrors = parameters
+      .filter((parameter) => parameter.required && !parameter.isSet)
+      .map((parameter) => ({
+        field: parameter.key,
+        message: "Required value is not configured.",
+      }));
+
     plugins.set(pluginId, {
       id: pluginId,
       name: titleCasePluginId(pluginId),
       description:
         (plugin as RuntimePluginLike).description ??
+        bundledMeta?.description ??
         "Loaded runtime plugin discovered without manifest metadata.",
       tags: [],
       enabled:
         typeof configEntries[pluginId]?.enabled === "boolean"
           ? Boolean(configEntries[pluginId]?.enabled)
           : true,
-      configured: true,
-      envKey: null,
+      configured: validationErrors.length === 0,
+      envKey: findPrimaryEnvKey(configKeys),
       category: "feature",
       source: "bundled",
-      parameters: [],
-      validationErrors: [],
+      configKeys,
+      parameters,
+      validationErrors,
       validationWarnings: [],
       npmName: pluginName,
       version: resolveInstalledPackageVersion(pluginName) ?? undefined,
       isActive: true,
+      configUiHints: bundledMeta?.configUiHints,
       icon: null,
+      homepage: bundledMeta?.homepage,
+      repository: bundledMeta?.repository,
     });
   }
 

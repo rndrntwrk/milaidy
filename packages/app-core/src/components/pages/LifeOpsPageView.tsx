@@ -4,7 +4,7 @@ import {
   BellRing,
   Bot,
   ExternalLink,
-  Github,
+  GitBranch as Github,
   ListTodo,
   RefreshCw,
   Shield,

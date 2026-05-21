@@ -36,7 +36,6 @@ const CharacterEditor = lazy(() =>
 const COMPANION_UI_REVEAL_FALLBACK_MS = 1400;
 const COMPANION_DOCK_HEIGHT = "min(42vh, 24rem)";
 const SHELL_MODE_MOBILE_MEDIA_QUERY = "(max-width: 639px)";
-const ALICE_STAGE_BUBBLE_HIDE_MEDIA_QUERY = "(max-width: 767px)";
 const ALICE_GO_LIVE_STRIP_CLASSNAME =
   "pointer-events-auto inline-flex max-w-full items-center gap-1 rounded-lg border border-white/12 bg-black/48 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.22)] backdrop-blur-xl";
 const ALICE_GO_LIVE_BUTTON_CLASSNAME =
@@ -199,7 +198,6 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
     t,
   } = useApp();
   const operator = useCompanionStageOperator();
-  const hideAliceStageBubble = useMediaQuery(ALICE_STAGE_BUBBLE_HIDE_MEDIA_QUERY);
 
   const [companionView, setCompanionView] =
     useState<CompanionShellView>("companion");
@@ -232,7 +230,7 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
   const avatarReady =
     sceneAvatarReady || avatarReadyFallback || onboardingHandoffActive;
   const showAliceGoLiveControl = avatarReady && operator.isAliceActive;
-  const showAliceStageBubble = showAliceGoLiveControl && !hideAliceStageBubble;
+  const showAliceStageBubble = showAliceGoLiveControl;
 
   const handleExitToDesktop = useCallback(() => {
     setState("activeOverlayApp", null);

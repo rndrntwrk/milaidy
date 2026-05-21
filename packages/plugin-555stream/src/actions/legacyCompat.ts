@@ -716,6 +716,7 @@ const goLiveAction: Action = {
         optionString(options, 'layoutMode'),
         optionString(options, 'scene') || 'default',
       );
+      const avatarIdentity = optionString(options, 'avatarIdentity');
       const applyDestinations =
         optionBoolean(options, 'applyDestinations') ??
         parseBooleanValue(trimEnv(STREAM555_DEST_SYNC_ON_GO_LIVE_ENV)) ??
@@ -759,7 +760,7 @@ const goLiveAction: Action = {
             type: inputType,
             ...(inputUrl ? { url: inputUrl } : {}),
           },
-          options: { scene },
+          options: { scene, ...(avatarIdentity ? { avatarIdentity } : {}) },
         },
       );
       let initialSnapshot: StreamReadinessSnapshot | undefined;
@@ -833,6 +834,7 @@ const goLiveAction: Action = {
     { name: 'inputType', description: 'camera|screen|website|avatar|radio|...', required: false, schema: { type: 'string' } },
     { name: 'inputUrl', description: 'Optional source url for website/rtmp/file', required: false, schema: { type: 'string' } },
     { name: 'scene', description: 'Initial scene id', required: false, schema: { type: 'string' } },
+    { name: 'avatarIdentity', description: 'Avatar identity to render in capture (for Alice companion sync)', required: false, schema: { type: 'string' } },
     { name: 'layoutMode', description: 'Optional Alice layout mode (camera-full|camera-hold)', required: false, schema: { type: 'string' } },
     { name: 'applyDestinations', description: 'Apply configured RTMP destinations before go-live (default true)', required: false, schema: { type: 'boolean' } },
     { name: 'destinationPlatforms', description: 'Comma-separated subset of destinations to apply before go-live', required: false, schema: { type: 'string' } },

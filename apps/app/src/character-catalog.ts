@@ -2,7 +2,29 @@
  * Milady character catalog derived from the shared character preset source.
  */
 import type { CharacterCatalogData } from "@miladyai/app-core/config";
-import { buildMiladyCharacterCatalog } from "@miladyai/shared/onboarding-presets";
+import {
+  buildMiladyCharacterCatalog,
+  DEFAULT_VISUAL_AVATAR_INDEX,
+  getStylePresets,
+} from "@miladyai/shared/onboarding-presets";
+
+export const APP_VRM_ASSET_NAMESPACE = "milady";
+export const ALICE_CAMERA_DISTANCE_SCALE = 1.3;
+
+export function buildAppVrmAssets(
+  stylePresets = getStylePresets(),
+) {
+  return stylePresets
+    .slice()
+    .sort((left, right) => left.avatarIndex - right.avatarIndex)
+    .map((preset) => ({
+      title: preset.name,
+      slug: `${APP_VRM_ASSET_NAMESPACE}-${preset.avatarIndex}`,
+      ...(preset.avatarIndex === DEFAULT_VISUAL_AVATAR_INDEX
+        ? { cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE }
+        : {}),
+    }));
+}
 
 export const MILADY_CHARACTER_CATALOG: CharacterCatalogData =
   buildMiladyCharacterCatalog() as CharacterCatalogData;

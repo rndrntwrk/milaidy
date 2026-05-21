@@ -21,7 +21,7 @@ type CompanionStageOperator = ReturnType<
 >;
 
 const SHEET_DIALOG_CLASSNAME =
-  "!left-4 !top-1/2 !z-[180] !m-0 !h-[min(78dvh,44rem)] !max-h-[min(78dvh,44rem)] !w-[min(24rem,calc(100vw-2rem))] !translate-x-0 !-translate-y-1/2 gap-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#07090e]/94 p-0 shadow-[0_28px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl max-sm:!left-1/2 max-sm:!top-auto max-sm:!bottom-4 max-sm:!h-[min(78dvh,40rem)] max-sm:!w-[min(calc(100vw-1rem),24rem)] max-sm:!translate-x-[-50%] max-sm:!translate-y-0";
+  "!left-4 !top-20 !bottom-4 !m-0 !w-[min(24rem,calc(100vw-2rem))] !translate-x-0 !translate-y-0 gap-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#07090e]/94 p-0 shadow-[0_28px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl max-sm:!left-3 max-sm:!right-3 max-sm:!top-auto max-sm:!bottom-4 max-sm:!w-auto max-sm:!translate-x-0 max-sm:!translate-y-0";
 const SECTION_CLASSNAME = "border-t border-white/8 pt-4 first:border-t-0 first:pt-0";
 const SECTION_TITLE_CLASSNAME =
   "text-[10px] font-semibold uppercase tracking-[0.22em] text-white/44";
@@ -317,7 +317,7 @@ export function CompanionStageOperatorOverlay({
         // bubble/tooltip children) while a Dialog is open. Without this, the
         // rail sits in its own stacking context above the Dialog overlay on
         // the companion view.
-        className="companion-stage-overlay pointer-events-none absolute left-4 top-1/2 z-20 hidden -translate-y-1/2 md:block xl:left-6"
+        className="companion-stage-overlay pointer-events-none absolute left-4 top-1/2 z-20 -translate-y-1/2 xl:left-6"
         data-no-camera-drag="true"
         data-no-camera-zoom="true"
       >

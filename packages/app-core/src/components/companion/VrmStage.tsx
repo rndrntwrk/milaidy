@@ -274,13 +274,16 @@ export const VrmStage = memo(function VrmStage({
     >
       {backgroundImageUrl && (
         <div
-          className="pointer-events-none absolute inset-0 bg-cover bg-center"
+          className="pointer-events-none absolute inset-0 scale-[1.04]"
           style={{
             backgroundImage: toCssImageUrl(backgroundImageUrl),
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            backgroundSize: "cover",
             filter:
               environmentTheme === "dark"
-                ? "brightness(0.62) saturate(1.08)"
-                : "brightness(0.92) saturate(0.98)",
+                ? "blur(18px) brightness(0.58) saturate(1.08)"
+                : "blur(18px) brightness(0.92) saturate(0.98)",
           }}
         />
       )}
@@ -299,18 +302,20 @@ export const VrmStage = memo(function VrmStage({
                 : "radial-gradient(circle at 50% 40%, rgba(180, 200, 220, 0.12) 0%, transparent 60%), linear-gradient(180deg, #f5f5f5 0%, #efefef 100%)",
           }}
         />
-        <div
-          className={`absolute inset-x-[-14%] bottom-[-24%] h-[74%] ${environmentTheme === "dark" ? "opacity-50" : "opacity-30"}`}
-          style={{
-            transform: "perspective(1200px) rotateX(80deg)",
-            transformOrigin: "center bottom",
-            backgroundImage:
-              environmentTheme === "dark"
-                ? "linear-gradient(rgba(80, 20, 160, 0.45) 1px, transparent 1px), linear-gradient(90deg, rgba(80, 20, 160, 0.4) 1px, transparent 1px)"
-                : "linear-gradient(rgba(160, 170, 180, 0.25) 1px, transparent 1px), linear-gradient(90deg, rgba(160, 170, 180, 0.22) 1px, transparent 1px)",
-            backgroundSize: "68px 68px",
-          }}
-        />
+        {!backgroundImageUrl && (
+          <div
+            className={`absolute inset-x-[-14%] bottom-[-24%] h-[74%] ${environmentTheme === "dark" ? "opacity-50" : "opacity-30"}`}
+            style={{
+              transform: "perspective(1200px) rotateX(80deg)",
+              transformOrigin: "center bottom",
+              backgroundImage:
+                environmentTheme === "dark"
+                  ? "linear-gradient(rgba(80, 20, 160, 0.45) 1px, transparent 1px), linear-gradient(90deg, rgba(80, 20, 160, 0.4) 1px, transparent 1px)"
+                  : "linear-gradient(rgba(160, 170, 180, 0.25) 1px, transparent 1px), linear-gradient(90deg, rgba(160, 170, 180, 0.22) 1px, transparent 1px)",
+              backgroundSize: "68px 68px",
+            }}
+          />
+        )}
       </div>
 
       {/* Single persistent VrmViewer — world stays loaded, only character swaps */}

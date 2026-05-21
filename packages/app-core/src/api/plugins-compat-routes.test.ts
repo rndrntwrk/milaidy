@@ -44,6 +44,10 @@ const ENV_KEYS = [
   "ELIZA_API_TOKEN",
   "ELIZA_PERSIST_CONFIG_PATH",
   "MILADY_PERSIST_CONFIG_PATH",
+  "STREAM555_AGENT_API_KEY",
+  "STREAM555_DEST_TWITCH_ENABLED",
+  "STREAM555_DEST_TWITCH_RTMP_URL",
+  "STREAM555_DEST_TWITCH_STREAM_KEY",
 ] as const;
 
 const envBackup = new Map<string, string | undefined>();
@@ -284,6 +288,50 @@ describe("buildPluginListResponse", () => {
     } finally {
       loadSpy.mockRestore();
     }
+  });
+
+  it("hydrates metadata for runtime-loaded 555stream when the manifest is stale", () => {
+    process.env.STREAM555_AGENT_API_KEY = "sk_ag_runtime_metadata_test";
+    process.env.STREAM555_DEST_TWITCH_ENABLED = "true";
+    process.env.STREAM555_DEST_TWITCH_RTMP_URL = "rtmps://twitch.example/app";
+    process.env.STREAM555_DEST_TWITCH_STREAM_KEY = "twitch-runtime-key";
+
+    const response = buildPluginListResponse({
+      plugins: [{ name: "555stream" }],
+    } as never);
+    const stream = response.plugins.find((plugin) => plugin.id === "555stream");
+
+    expect(stream).toMatchObject({
+      id: "555stream",
+      enabled: true,
+      configured: true,
+      isActive: true,
+      source: "bundled",
+    });
+    expect(stream?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "STREAM555_AGENT_API_KEY",
+          isSet: true,
+          currentValue: expect.not.stringContaining("runtime_metadata_test"),
+        }),
+        expect.objectContaining({
+          key: "STREAM555_DEST_TWITCH_ENABLED",
+          isSet: true,
+          currentValue: "true",
+        }),
+        expect.objectContaining({
+          key: "STREAM555_DEST_TWITCH_RTMP_URL",
+          isSet: true,
+          currentValue: "rtmps://twitch.example/app",
+        }),
+        expect.objectContaining({
+          key: "STREAM555_DEST_TWITCH_STREAM_KEY",
+          isSet: true,
+          currentValue: expect.not.stringContaining("runtime-key"),
+        }),
+      ]),
+    );
   });
 
   it("marks Discord toggles as pending restart on the compat API route", async () => {

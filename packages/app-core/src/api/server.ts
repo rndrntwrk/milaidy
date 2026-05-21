@@ -50,6 +50,10 @@ import {
   sendJsonError as sendJsonErrorResponse,
   sendJson as sendJsonResponse,
 } from "./response";
+import {
+  resolveTerminalRunClientId,
+  resolveTerminalRunRejection,
+} from "./server-security";
 
 export {
   type CompatRuntimeState,

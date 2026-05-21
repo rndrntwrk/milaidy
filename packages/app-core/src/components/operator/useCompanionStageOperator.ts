@@ -746,7 +746,7 @@ export function useCompanionStageOperator() {
               {
                 id: "screen-share",
                 action: "STREAM555_SCREEN_SHARE",
-                params: { sceneId: "active-pip" },
+                params: { sceneId: "active-pip", avatarIdentity: "alice" },
               },
               {
                 id: "destinations-apply",

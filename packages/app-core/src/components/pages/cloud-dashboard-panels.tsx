@@ -12,7 +12,7 @@ import {
 import {
   ChevronDown,
   ExternalLink,
-  Github,
+  GitBranch as Github,
   Loader2,
   MessageCircle,
   Settings2,

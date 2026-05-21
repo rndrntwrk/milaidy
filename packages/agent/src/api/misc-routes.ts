@@ -50,7 +50,7 @@ interface PartialCompanionStageState {
 
 const DEFAULT_COMPANION_STAGE_STATE: CompanionStageState = {
   camera: {
-    zoom: 0.95,
+    zoom: 0.25,
     yaw: 0,
     pitch: 0,
     pan: 0,
