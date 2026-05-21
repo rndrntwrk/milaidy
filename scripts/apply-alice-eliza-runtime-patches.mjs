@@ -2073,6 +2073,58 @@ export function applyAliceCoreBrowserValidationReexportPatch({
   return "applied";
 }
 
+const coreBrowserMiladyRuntimeBindingsSentinel =
+  "// [milaidy:core-browser-milady-runtime-bindings]";
+const coreBrowserMiladyRuntimeBindings = `${coreBrowserMiladyRuntimeBindingsSentinel}
+// Parent Milady's browser build statically scans some server/runtime modules
+// during dev and production Vite builds. The browser entry must expose the same
+// public names those modules import from the node entry, without pulling
+// node-only runtime capability graphs into the SPA.
+export {
+\tresolveSecretKeyAlias,
+\tSECRET_KEY_ALIASES,
+} from "./constants/secrets";
+export {
+\tDEFAULT_ELIZA_CLOUD_FREE_TEXT_MODEL,
+\tDEFAULT_ELIZA_CLOUD_TEXT_MODEL,
+} from "./contracts/service-routing";
+export function createBasicCapabilitiesPlugin() {
+\treturn { name: "stub" };
+}
+`;
+
+export function isAliceCoreBrowserMiladyRuntimeBindingsPatched(source) {
+  return source.includes(coreBrowserMiladyRuntimeBindingsSentinel);
+}
+
+export function applyAliceCoreBrowserMiladyRuntimeBindingsPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser milady runtime bindings patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserMiladyRuntimeBindingsPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser milady runtime bindings already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserMiladyRuntimeBindings}`
+    : `${source}\n\n${coreBrowserMiladyRuntimeBindings}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts with browser-safe Milady runtime bindings (secret aliases, service defaults, basic capabilities shim)",
+  );
+  return "applied";
+}
+
 const coreBrowserCloudTopologyReexportSentinel =
   "// [milaidy:core-browser-cloud-topology-reexport]";
 const coreBrowserCloudTopologyReexport = `${coreBrowserCloudTopologyReexportSentinel}
@@ -6476,6 +6528,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserCloudTopologyReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSpokenTextReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserValidationReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserMiladyRuntimeBindingsPatch({ elizaRoot, log }),
     // Must run AFTER all the core-browser wildcard re-exports above so the
     // disambiguation appears last in the file and wins for TS resolution.
     applyAliceCoreBrowserOnboardingTypesDisambiguatePatch({ elizaRoot, log }),

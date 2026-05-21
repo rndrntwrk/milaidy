@@ -30,6 +30,7 @@ import {
   applyAliceCoreBuildBrowserExternalsPatch,
   applyAliceCoreBuildBrowserExternalsMammothPatch,
   applyAliceCoreBrowserValidationReexportPatch,
+  applyAliceCoreBrowserMiladyRuntimeBindingsPatch,
   applyAlicePluginSqlSchemaPgliteErrorsReexportPatch,
   applyAliceAppPluginRegisterExportPatch,
   isAliceAppPluginRegisterExportPatched,
@@ -62,6 +63,7 @@ import {
   isAliceRuntimeApiBindPatched,
   isAliceCoreNodeSecretAliasReexportPatched,
   isAliceCoreBrowserValidationReexportPatched,
+  isAliceCoreBrowserMiladyRuntimeBindingsPatched,
   isAliceUiAuthGatedStartupPatched,
   isAliceUiSameOriginWebsocketPatched,
   rewriteRelativeTsRuntimeSpecifiers,
@@ -524,7 +526,10 @@ describe("Alice Eliza runtime patch contract", () => {
       expect(bridgeSource).toContain(
         'pathname === "/api/computer-use/approvals"',
       );
-      expect(bridgeSource).not.toContain("req.headers.authorization");
+      expect(bridgeSource).toContain("restoreAuthorizationHeader");
+      expect(bridgeSource).toContain(
+        "req.headers.authorization = `Bearer ${streamToken}`",
+      );
       expect(bridgeSource).not.toContain('req.headers["x-api-key"]');
 
       expect(
@@ -637,6 +642,48 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceCoreBrowserValidationReexportPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches core browser entry with Milady runtime binding shims", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-core-browser-runtime-bindings-"),
+    );
+    try {
+      const coreDir = path.join(tempDir, "packages", "core", "src");
+      mkdirSync(coreDir, { recursive: true });
+      const indexPath = path.join(coreDir, "index.browser.ts");
+      writeFileSync(
+        indexPath,
+        [
+          'export * from "./types";',
+          'export { logger } from "./logger";',
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceCoreBrowserMiladyRuntimeBindingsPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = readFileSync(indexPath, "utf8");
+      expect(isAliceCoreBrowserMiladyRuntimeBindingsPatched(patched)).toBe(true);
+      expect(patched).toContain("resolveSecretKeyAlias");
+      expect(patched).toContain("SECRET_KEY_ALIASES");
+      expect(patched).toContain("DEFAULT_ELIZA_CLOUD_TEXT_MODEL");
+      expect(patched).toContain("function createBasicCapabilitiesPlugin()");
+      expect(patched).toContain('return { name: "stub" };');
+
+      expect(
+        applyAliceCoreBrowserMiladyRuntimeBindingsPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),
@@ -859,6 +906,11 @@ describe("Alice Eliza runtime patch contract", () => {
           "}",
           "",
           "export async function ensureCompatApiAuthorizedAsync(req, res, options): Promise<boolean> {",
+          "/**",
+          " * Auth order:",
+          " *   1. valid `eliza_session` cookie → session in DB → authorised.",
+          " *   2. session-id bearer header.",
+          " */",
           "  const ip = req.socket?.remoteAddress ?? null;",
           "  if (isAuthRateLimited(ip)) {",
           '    sendJsonError(res, 429, "Too many authentication attempts");',
@@ -869,7 +921,17 @@ describe("Alice Eliza runtime patch contract", () => {
           "",
           '  const method = (req.method ?? "GET").toUpperCase();',
           "  const csrfRequired = !options.skipCsrf && CSRF_REQUIRED_METHODS.has(method);",
-          "  if (sessionFromBearer) return true;",
+          "  // Bearer path — session id only.",
+          "  // Bearer-auth requests are exempt from CSRF (they're not cookie-bound).",
+          "  const provided = getProvidedApiToken(req);",
+          "  if (provided) {",
+          "    const sessionFromBearer = await findActiveSession(",
+          "      options.store,",
+          "      provided,",
+          "      options.now,",
+          "    ).catch(() => null);",
+          "    if (sessionFromBearer) return true;",
+          "  }",
           "",
           "  recordFailedAuth(ip);",
           '  sendJsonError(res, 401, "Unauthorized");',
