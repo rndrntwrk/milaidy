@@ -50,6 +50,7 @@ import {
   createBasicCapabilitiesPlugin,
   createMessageMemory,
   type Entity,
+  type Evaluator,
   type LogEntry,
   logger,
   // loggerScope, // removed
@@ -4201,7 +4202,7 @@ export async function startEliza(
         description:
           "Lightweight relationship updates from conversation co-occurrence",
         evaluators: [
-          {
+          ({
             name: "CONVERSATION_PROXIMITY",
             description:
               "Update relationship strength for co-participants in a room",
@@ -4217,7 +4218,7 @@ export async function startEliza(
               await updateProximityRelationships(_runtime, message);
               return undefined;
             },
-          },
+          } as unknown as Evaluator & { alwaysRun: boolean }),
         ],
       });
       logger.info("[eliza] ✓ conversation-proximity evaluator registered");

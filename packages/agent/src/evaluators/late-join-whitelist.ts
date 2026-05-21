@@ -99,4 +99,4 @@ export const lateJoinWhitelistEvaluator = {
     );
     return undefined;
   },
-} as Evaluator & { alwaysRun: boolean };
+} as unknown as Evaluator & { alwaysRun: boolean };
