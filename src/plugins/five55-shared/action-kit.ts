@@ -135,6 +135,8 @@ export interface ExecuteApiActionOptions {
   };
 }
 
+export type ActionExecutionResult = { success: boolean; text: string };
+
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -477,7 +479,7 @@ function actionSuccess(
   message: string,
   data?: unknown,
   trace?: ActionTrace,
-): { success: true; text: string } {
+): ActionExecutionResult {
   return {
     success: true,
     text: buildEnvelopeText({
@@ -502,7 +504,7 @@ function actionFailure(
   message: string,
   details?: unknown,
   trace?: ActionTrace,
-): { success: false; text: string } {
+): ActionExecutionResult {
   return {
     success: false,
     text: buildEnvelopeText({
@@ -616,7 +618,7 @@ export function exceptionAction(
   module: string,
   action: string,
   err: unknown,
-): { success: false; text: string } {
+): ActionExecutionResult {
   const message = err instanceof Error ? err.message : String(err);
   const isCapabilityDenied = /capability denied/i.test(message);
   return actionFailure(
@@ -630,7 +632,7 @@ export function exceptionAction(
 
 export async function executeApiAction(
   options: ExecuteApiActionOptions,
-): Promise<{ success: boolean; text: string }> {
+): Promise<ActionExecutionResult> {
   const payloadText = JSON.stringify(options.payload);
   const idempotencyKey = buildIdempotencyKey(
     options.endpoint,

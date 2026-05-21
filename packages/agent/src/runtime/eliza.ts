@@ -61,10 +61,8 @@ import {
   type UUID,
 } from "@elizaos/core";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
-import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
-import * as pluginPdf from "@elizaos/plugin-pdf";
 import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
@@ -298,9 +296,7 @@ export const STATIC_ELIZA_PLUGINS: Record<
   "@elizaos/plugin-plugin-manager": pluginPluginManager,
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
   ...(pluginCommands ? { "@elizaos/plugin-commands": pluginCommands } : {}),
-  "@elizaos/plugin-pdf": pluginPdf,
   ...(pluginOpenai ? { "@elizaos/plugin-openai": pluginOpenai } : {}),
-  "@elizaos/plugin-anthropic": pluginAnthropic,
   ...(pluginOllama ? { "@elizaos/plugin-ollama": pluginOllama } : {}),
   // Bun parses static imports eagerly, so keep the cloud plugin behind a
   // deferred loader until it is actually enabled.

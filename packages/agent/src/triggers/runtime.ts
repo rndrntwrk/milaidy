@@ -407,7 +407,6 @@ export function registerTriggerTaskWorker(runtime: IAgentRuntime): void {
 
   runtime.registerTaskWorker({
     name: TRIGGER_TASK_NAME,
-    validate: async () => true,
     execute: async (rt, options, task) => {
       // Return the full result so callers (tests, dashboards) can inspect
       // trigger-specific fields like taskDeleted and runRecord.

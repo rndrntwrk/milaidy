@@ -54,7 +54,7 @@ function loadConnectorAdminWhitelist(
   }
 }
 
-export const lateJoinWhitelistEvaluator: Evaluator = {
+export const lateJoinWhitelistEvaluator = {
   name: "late_join_whitelist",
   description:
     "Auto-promotes entities matching connector admin whitelist on first message",
@@ -93,11 +93,10 @@ export const lateJoinWhitelistEvaluator: Evaluator = {
       message,
       message.entityId as string,
       "ADMIN",
-      "connector_admin",
     );
     logger.info(
       `[roles] Late-join: promoted entity ${message.entityId} to ADMIN (whitelist match)`,
     );
     return undefined;
   },
-};
+} as Evaluator & { alwaysRun: boolean };

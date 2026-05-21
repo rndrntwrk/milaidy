@@ -94,7 +94,7 @@ function actionResult(params: {
   message: string;
   data?: unknown;
   details?: unknown;
-}) {
+}): ActionExecutionResult {
   const { success, module, action, code, status, message, data, details } = params;
   return {
     success,
@@ -116,7 +116,7 @@ export function exceptionAction(
   module: string,
   action: string,
   err: unknown,
-): { success: false; text: string } {
+): ActionExecutionResult {
   const message = err instanceof Error ? err.message : String(err);
   const isCapabilityDenied = /capability denied|trusted admin/i.test(message);
   return actionResult({
@@ -154,9 +154,11 @@ interface ExecuteApiActionOptions {
   logScope?: string;
 }
 
+export type ActionExecutionResult = { success: boolean; text: string };
+
 export async function executeApiAction(
   options: ExecuteApiActionOptions,
-): Promise<{ success: boolean; text: string }> {
+): Promise<ActionExecutionResult> {
   const payload = options.payload ?? {};
   const requestErrors = validateContract(payload, options.requestContract);
   if (requestErrors.length > 0) {

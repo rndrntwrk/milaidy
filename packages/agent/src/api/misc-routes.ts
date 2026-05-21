@@ -363,7 +363,7 @@ export async function handleMiscRoutes(
         .catch((err: unknown) => {
           logger.debug?.(
             "[misc-routes] LiveKit emote broadcast failed (non-fatal):",
-            err instanceof Error ? err.message : err,
+            err instanceof Error ? err.message : String(err),
           );
         });
     }
