@@ -55,6 +55,7 @@ const uiStartupPhaseRuntimeRelativePath =
 const uiOnboardingBootstrapRelativePath =
   "packages/ui/src/state/onboarding-bootstrap.ts";
 const uiAppShellStateRelativePath = "packages/ui/src/state/useAppShellState.ts";
+const uiPersistenceRelativePath = "packages/ui/src/state/persistence.ts";
 const uiClientBaseRelativePath = "packages/ui/src/api/client-base.ts";
 const uiClientAgentRelativePath = "packages/ui/src/api/client-agent.ts";
 const uiInternalToolAppsRelativePath =
@@ -6337,6 +6338,121 @@ export function applyAliceUiSameOriginWebsocketPatch({
   return "applied";
 }
 
+export function isAliceUiAvatarDefaultMigrationPatched(source = "") {
+  return (
+    source.includes(
+      'const AVATAR_DEFAULT_MARKER_KEY = "eliza_avatar_default_index"',
+    ) &&
+    source.includes("const defaultIndex = getDefaultBundledVrmIndex();") &&
+    source.includes("localStorage.getItem(AVATAR_DEFAULT_MARKER_KEY)")
+  );
+}
+
+export function patchAliceUiAvatarDefaultMigrationSource(source = "") {
+  if (isAliceUiAvatarDefaultMigrationPatched(source)) return source;
+
+  let next = source;
+  next = next.replace(
+    'import { normalizeAvatarIndex } from "./vrm";',
+    'import { getDefaultBundledVrmIndex, normalizeAvatarIndex } from "./vrm";',
+  );
+  next = next.replace(
+    'const AVATAR_INDEX_KEY = "eliza_avatar_index";\n',
+    'const AVATAR_INDEX_KEY = "eliza_avatar_index";\nconst AVATAR_DEFAULT_MARKER_KEY = "eliza_avatar_default_index";\n',
+  );
+  next = next.replace(
+    `export function loadAvatarIndex(): number {
+  return tryLocalStorage(() => {
+    const stored = localStorage.getItem(AVATAR_INDEX_KEY);
+    if (stored) {
+      const n = parseInt(stored, 10);
+      return normalizeAvatarIndex(n);
+    }
+    return 1;
+  }, 1);
+}
+
+export function saveAvatarIndex(index: number): void {
+  tryLocalStorage(() => {
+    localStorage.setItem(AVATAR_INDEX_KEY, String(normalizeAvatarIndex(index)));
+  }, undefined);
+}
+
+export function clearAvatarIndex(): void {
+  tryLocalStorage(() => {
+    localStorage.removeItem(AVATAR_INDEX_KEY);
+  }, undefined);
+}`,
+    `export function loadAvatarIndex(): number {
+  return tryLocalStorage(() => {
+    const defaultIndex = getDefaultBundledVrmIndex();
+    const defaultMarker = localStorage.getItem(AVATAR_DEFAULT_MARKER_KEY);
+    const stored = localStorage.getItem(AVATAR_INDEX_KEY);
+    if (defaultMarker !== String(defaultIndex)) {
+      localStorage.setItem(AVATAR_DEFAULT_MARKER_KEY, String(defaultIndex));
+      if (stored) {
+        localStorage.setItem(AVATAR_INDEX_KEY, String(defaultIndex));
+      }
+      return defaultIndex;
+    }
+    if (stored) {
+      const n = parseInt(stored, 10);
+      return normalizeAvatarIndex(n);
+    }
+    return defaultIndex;
+  }, getDefaultBundledVrmIndex());
+}
+
+export function saveAvatarIndex(index: number): void {
+  tryLocalStorage(() => {
+    localStorage.setItem(
+      AVATAR_DEFAULT_MARKER_KEY,
+      String(getDefaultBundledVrmIndex()),
+    );
+    localStorage.setItem(AVATAR_INDEX_KEY, String(normalizeAvatarIndex(index)));
+  }, undefined);
+}
+
+export function clearAvatarIndex(): void {
+  tryLocalStorage(() => {
+    localStorage.removeItem(AVATAR_INDEX_KEY);
+    localStorage.removeItem(AVATAR_DEFAULT_MARKER_KEY);
+  }, undefined);
+}`,
+  );
+
+  if (!isAliceUiAvatarDefaultMigrationPatched(next)) {
+    throw new Error("Alice UI avatar default migration patch drifted");
+  }
+  return next;
+}
+
+export function applyAliceUiAvatarDefaultMigrationPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const targetPath = path.join(elizaRoot, uiPersistenceRelativePath);
+  if (!existsSync(targetPath)) {
+    log(
+      "[alice-eliza-runtime-patches] UI persistence source absent; skipping avatar default migration",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(targetPath, "utf8");
+  if (isAliceUiAvatarDefaultMigrationPatched(before)) {
+    log(
+      "[alice-eliza-runtime-patches] UI avatar default migration already applied",
+    );
+    return "already-applied";
+  }
+
+  const after = patchAliceUiAvatarDefaultMigrationSource(before);
+  writeFileSync(targetPath, after);
+  log("[alice-eliza-runtime-patches] patched UI avatar default migration");
+  return "applied";
+}
+
 export function isAliceCompanionOperatorPatchPatched(elizaRoot) {
   const requiredFiles = [
     "packages/ui/src/api/client-types-alice.ts",
@@ -6551,6 +6667,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
     applyAliceUiAuthGatedStartupPatch({ elizaRoot, log }),
     applyAliceUiSameOriginWebsocketPatch({ elizaRoot, log }),
+    applyAliceUiAvatarDefaultMigrationPatch({ elizaRoot, log }),
     applyAliceCompanionOperatorPatch({ rootDir, elizaRoot, log }),
     applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
     applyAliceAppLifeOpsDirSubpathExportsPatch({ elizaRoot, log }),

@@ -552,20 +552,34 @@ export function saveLastNativeTab(tab: Tab): void {
 
 /* ── Avatar persistence ───────────────────────────────────────────────── */
 const AVATAR_INDEX_KEY = "eliza_avatar_index";
+const AVATAR_DEFAULT_MARKER_KEY = "eliza_avatar_default_index";
 
 export function loadAvatarIndex(): number {
   return tryLocalStorage(() => {
+    const defaultIndex = getDefaultBundledVrmIndex();
+    const defaultMarker = localStorage.getItem(AVATAR_DEFAULT_MARKER_KEY);
     const stored = localStorage.getItem(AVATAR_INDEX_KEY);
+    if (defaultMarker !== String(defaultIndex)) {
+      localStorage.setItem(AVATAR_DEFAULT_MARKER_KEY, String(defaultIndex));
+      if (stored) {
+        localStorage.setItem(AVATAR_INDEX_KEY, String(defaultIndex));
+      }
+      return defaultIndex;
+    }
     if (stored) {
       const n = parseInt(stored, 10);
       return normalizeAvatarIndex(n);
     }
-    return getDefaultBundledVrmIndex();
+    return defaultIndex;
   }, getDefaultBundledVrmIndex());
 }
 
 export function saveAvatarIndex(index: number): void {
   tryLocalStorage(() => {
+    localStorage.setItem(
+      AVATAR_DEFAULT_MARKER_KEY,
+      String(getDefaultBundledVrmIndex()),
+    );
     localStorage.setItem(AVATAR_INDEX_KEY, String(normalizeAvatarIndex(index)));
   }, undefined);
 }
@@ -573,6 +587,7 @@ export function saveAvatarIndex(index: number): void {
 export function clearAvatarIndex(): void {
   tryLocalStorage(() => {
     localStorage.removeItem(AVATAR_INDEX_KEY);
+    localStorage.removeItem(AVATAR_DEFAULT_MARKER_KEY);
   }, undefined);
 }
 
