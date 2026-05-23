@@ -329,6 +329,7 @@ export function serveStaticUi(
   // alice.rndrntwrk.com/broadcast/* is intentionally public and the capture
   // transport now receives its token through injected boot config instead.
   const isBroadcastPath = isPublicBroadcastUiPath(pathname);
+  const needsRootBaseHref = shouldInjectRootBaseHref(pathname);
   const cloudToken =
     isCloudProvisionedContainer() && !isBroadcastPath
       ? resolveApiToken(process.env)
@@ -340,15 +341,13 @@ export function serveStaticUi(
   );
 
   // SPA is built with Vite `base: "./"` for Electrobun + Capacitor
-  // compatibility. When served at `/broadcast/:channel` (no trailing slash),
-  // relative asset URLs in the bundled HTML — `<script src="./assets/...">`
-  // and friends — resolve against the document directory and end up at
-  // `/broadcast/assets/...`, which 404s. The actual assets are at `/assets/*`
-  // on the same host, so re-anchor to the root with `<base href="/">` for
-  // broadcast HTML responses. This keeps the desktop / mobile builds (which
-  // need `./` to load from `electrobun://` or `file://`) untouched while
-  // making the same bundled HTML work as a web SPA at a sub-path.
-  if (isBroadcastPath) {
+  // compatibility. When served at web sub-routes such as `/broadcast/:channel`
+  // or `/companion/`, relative asset URLs in the bundled HTML —
+  // `<script src="./assets/...">` and friends — resolve against the document
+  // directory and end up at `/broadcast/assets/...` or `/companion/assets/...`,
+  // which 404s. The actual assets are at `/assets/*` on the same host, so
+  // re-anchor to the root with `<base href="/">` for those HTML responses.
+  if (needsRootBaseHref) {
     html = injectBaseHrefIntoHtml(html, "/");
   }
 
@@ -372,6 +371,14 @@ export function serveStaticUi(
 
 export function isPublicBroadcastUiPath(pathname: string): boolean {
   return /^\/broadcast(?:\/[a-zA-Z0-9-]+)?\/?$/.test(pathname);
+}
+
+export function isCompanionUiPath(pathname: string): boolean {
+  return pathname === "/companion" || pathname === "/companion/";
+}
+
+export function shouldInjectRootBaseHref(pathname: string): boolean {
+  return isPublicBroadcastUiPath(pathname) || isCompanionUiPath(pathname);
 }
 
 export function isAuthProtectedRoute(pathname: string): boolean {
