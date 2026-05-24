@@ -48,6 +48,11 @@
         "description": "Internal 555 Stream control-plane URL for allow-listed internal agents only.",
         "required": false
       },
+      "STREAM555_INTERNAL_AGENT_IDS": {
+        "type": "string",
+        "description": "Comma-separated agent IDs that should use STREAM555_INTERNAL_BASE_URL.",
+        "default": "alice,alice-internal"
+      },
       "STREAM555_AGENT_API_KEY": {
         "type": "string",
         "description": "Preferred agent API key used to mint and refresh runtime bearer tokens.",
@@ -60,15 +65,56 @@
         "required": false,
         "sensitive": true
       },
+      "STREAM_API_BEARER_TOKEN": {
+        "type": "string",
+        "description": "Legacy bearer token fallback for agent route authentication.",
+        "required": false,
+        "sensitive": true
+      },
+      "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT": {
+        "type": "string",
+        "description": "Token exchange path used by agent API key authentication.",
+        "default": "/api/agent/v1/auth/token/exchange"
+      },
+      "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS": {
+        "type": "number",
+        "description": "Token refresh buffer for exchanged JWTs.",
+        "default": 300
+      },
       "STREAM555_DEFAULT_SESSION_ID": {
         "type": "string",
         "description": "Optional session ID to auto-connect",
+        "required": false
+      },
+      "STREAM_SESSION_ID": {
+        "type": "string",
+        "description": "One-off session override for immediate control actions",
         "required": false
       },
       "STREAM555_REQUIRE_APPROVALS": {
         "type": "boolean",
         "description": "Require approval for dangerous actions (start/stop stream, etc.)",
         "default": true
+      },
+      "STREAM555_ALLOW_LOCALHOST_APP_URLS": {
+        "type": "string",
+        "description": "Allow localhost app URLs for STREAM555_GO_LIVE_APP",
+        "default": "false"
+      },
+      "STREAM555_WALLET_AUTH_PREFERRED_CHAIN": {
+        "type": "string",
+        "description": "Wallet auth chain preference",
+        "default": "solana"
+      },
+      "STREAM555_WALLET_AUTH_ALLOW_PROVISION": {
+        "type": "string",
+        "description": "Allow sw4p-linked wallet provisioning when no runtime wallet exists",
+        "default": "true"
+      },
+      "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN": {
+        "type": "string",
+        "description": "Target chain for sw4p-linked wallet provisioning fallback",
+        "default": "eth"
       },
       "STREAM555_DEST_SYNC_ON_GO_LIVE": {
         "type": "string",
@@ -178,6 +224,342 @@
         "type": "string",
         "description": "Custom stream key",
         "sensitive": true
+      }
+    },
+    "configUiHints": {
+      "STREAM555_BASE_URL": {
+        "hidden": true
+      },
+      "STREAM555_PUBLIC_BASE_URL": {
+        "hidden": true
+      },
+      "STREAM555_INTERNAL_BASE_URL": {
+        "hidden": true
+      },
+      "STREAM555_INTERNAL_AGENT_IDS": {
+        "hidden": true
+      },
+      "STREAM555_AGENT_API_KEY": {
+        "label": "Agent API key",
+        "group": "Authentication",
+        "width": "full",
+        "order": 10,
+        "help": "Preferred credential for Alice's 555stream control-plane access."
+      },
+      "STREAM555_AGENT_TOKEN": {
+        "hidden": true
+      },
+      "STREAM_API_BEARER_TOKEN": {
+        "hidden": true
+      },
+      "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT": {
+        "hidden": true
+      },
+      "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS": {
+        "hidden": true
+      },
+      "STREAM555_DEFAULT_SESSION_ID": {
+        "hidden": true
+      },
+      "STREAM_SESSION_ID": {
+        "hidden": true
+      },
+      "STREAM555_ALLOW_LOCALHOST_APP_URLS": {
+        "hidden": true
+      },
+      "STREAM555_REQUIRE_APPROVALS": {
+        "label": "Require approvals",
+        "group": "Operator Controls",
+        "width": "half",
+        "order": 40,
+        "type": "radio",
+        "options": [
+          {
+            "value": "true",
+            "label": "Enabled"
+          },
+          {
+            "value": "false",
+            "label": "Disabled"
+          }
+        ],
+        "help": "Require approval prompts for dangerous stream actions."
+      },
+      "STREAM555_WALLET_AUTH_PREFERRED_CHAIN": {
+        "label": "Preferred wallet chain",
+        "group": "Wallet Auth",
+        "width": "half",
+        "order": 120,
+        "type": "radio",
+        "options": [
+          {
+            "value": "solana",
+            "label": "Solana preferred"
+          },
+          {
+            "value": "eth",
+            "label": "Ethereum fallback"
+          }
+        ],
+        "help": "Use Solana first when available."
+      },
+      "STREAM555_WALLET_AUTH_ALLOW_PROVISION": {
+        "label": "Allow wallet provisioning",
+        "group": "Wallet Auth",
+        "width": "half",
+        "order": 130,
+        "type": "radio",
+        "options": [
+          {
+            "value": "true",
+            "label": "Enabled"
+          },
+          {
+            "value": "false",
+            "label": "Disabled"
+          }
+        ],
+        "help": "Allow sw4p-linked wallet provisioning when no runtime wallet exists."
+      },
+      "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN": {
+        "label": "Provision target chain",
+        "group": "Wallet Auth",
+        "width": "half",
+        "order": 140,
+        "advanced": true,
+        "type": "radio",
+        "options": [
+          {
+            "value": "eth",
+            "label": "Ethereum"
+          },
+          {
+            "value": "solana",
+            "label": "Solana"
+          }
+        ]
+      },
+      "STREAM555_DEST_SYNC_ON_GO_LIVE": {
+        "label": "Auto-sync channels before Go Live",
+        "group": "Channels",
+        "width": "full",
+        "advanced": true,
+        "order": 210,
+        "type": "radio",
+        "options": [
+          {
+            "value": "true",
+            "label": "Enabled"
+          },
+          {
+            "value": "false",
+            "label": "Disabled"
+          }
+        ],
+        "help": "Sync enabled channels before Alice starts the live session."
+      },
+      "STREAM555_DEST_PUMPFUN_ENABLED": {
+        "label": "Pump.fun",
+        "group": "Channels",
+        "width": "full",
+        "order": 300,
+        "type": "boolean"
+      },
+      "STREAM555_DEST_PUMPFUN_RTMP_URL": {
+        "label": "Pump.fun RTMPS URL",
+        "group": "Channels",
+        "width": "half",
+        "order": 310,
+        "showIf": {
+          "field": "STREAM555_DEST_PUMPFUN_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_PUMPFUN_STREAM_KEY": {
+        "label": "Pump.fun stream key",
+        "group": "Channels",
+        "width": "half",
+        "order": 320,
+        "showIf": {
+          "field": "STREAM555_DEST_PUMPFUN_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_X_ENABLED": {
+        "label": "X",
+        "group": "Channels",
+        "width": "full",
+        "order": 330,
+        "type": "boolean"
+      },
+      "STREAM555_DEST_X_RTMP_URL": {
+        "label": "X RTMPS URL",
+        "group": "Channels",
+        "width": "half",
+        "order": 340,
+        "showIf": {
+          "field": "STREAM555_DEST_X_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_X_STREAM_KEY": {
+        "label": "X stream key",
+        "group": "Channels",
+        "width": "half",
+        "order": 350,
+        "showIf": {
+          "field": "STREAM555_DEST_X_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_TWITCH_ENABLED": {
+        "label": "Twitch",
+        "group": "Channels",
+        "width": "full",
+        "order": 360,
+        "type": "boolean"
+      },
+      "STREAM555_DEST_TWITCH_RTMP_URL": {
+        "label": "Twitch RTMPS URL",
+        "group": "Channels",
+        "width": "half",
+        "order": 370,
+        "showIf": {
+          "field": "STREAM555_DEST_TWITCH_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_TWITCH_STREAM_KEY": {
+        "label": "Twitch stream key",
+        "group": "Channels",
+        "width": "half",
+        "order": 380,
+        "showIf": {
+          "field": "STREAM555_DEST_TWITCH_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_KICK_ENABLED": {
+        "label": "Kick",
+        "group": "Channels",
+        "width": "full",
+        "order": 390,
+        "type": "boolean"
+      },
+      "STREAM555_DEST_KICK_RTMP_URL": {
+        "label": "Kick RTMPS URL",
+        "group": "Channels",
+        "width": "half",
+        "order": 400,
+        "showIf": {
+          "field": "STREAM555_DEST_KICK_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_KICK_STREAM_KEY": {
+        "label": "Kick stream key",
+        "group": "Channels",
+        "width": "half",
+        "order": 410,
+        "showIf": {
+          "field": "STREAM555_DEST_KICK_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_YOUTUBE_ENABLED": {
+        "label": "YouTube",
+        "group": "Channels",
+        "width": "full",
+        "order": 420,
+        "type": "boolean"
+      },
+      "STREAM555_DEST_YOUTUBE_RTMP_URL": {
+        "label": "YouTube RTMPS URL",
+        "group": "Channels",
+        "width": "half",
+        "order": 430,
+        "showIf": {
+          "field": "STREAM555_DEST_YOUTUBE_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_YOUTUBE_STREAM_KEY": {
+        "label": "YouTube stream key",
+        "group": "Channels",
+        "width": "half",
+        "order": 440,
+        "showIf": {
+          "field": "STREAM555_DEST_YOUTUBE_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_FACEBOOK_ENABLED": {
+        "label": "Facebook",
+        "group": "Channels",
+        "width": "full",
+        "order": 450,
+        "type": "boolean"
+      },
+      "STREAM555_DEST_FACEBOOK_RTMP_URL": {
+        "label": "Facebook RTMPS URL",
+        "group": "Channels",
+        "width": "half",
+        "order": 460,
+        "showIf": {
+          "field": "STREAM555_DEST_FACEBOOK_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_FACEBOOK_STREAM_KEY": {
+        "label": "Facebook stream key",
+        "group": "Channels",
+        "width": "half",
+        "order": 470,
+        "showIf": {
+          "field": "STREAM555_DEST_FACEBOOK_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_CUSTOM_ENABLED": {
+        "label": "Custom RTMP",
+        "group": "Channels",
+        "width": "full",
+        "order": 480,
+        "type": "boolean"
+      },
+      "STREAM555_DEST_CUSTOM_RTMP_URL": {
+        "label": "Custom RTMP URL",
+        "group": "Channels",
+        "width": "half",
+        "order": 490,
+        "showIf": {
+          "field": "STREAM555_DEST_CUSTOM_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
+      },
+      "STREAM555_DEST_CUSTOM_STREAM_KEY": {
+        "label": "Custom stream key",
+        "group": "Channels",
+        "width": "half",
+        "order": 500,
+        "showIf": {
+          "field": "STREAM555_DEST_CUSTOM_ENABLED",
+          "op": "eq",
+          "value": "true"
+        }
       }
     }
   },

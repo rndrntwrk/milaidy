@@ -95,6 +95,10 @@ const STREAM555_SETUP_KEYS = new Set([
   "STREAM555_AGENT_API_KEY",
   "STREAM555_AGENT_TOKEN",
   "STREAM_API_BEARER_TOKEN",
+  "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+  "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+  "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+  "STREAM555_DEST_SYNC_ON_GO_LIVE",
   ...STREAM555_DESTINATION_SPECS.flatMap((spec) => [
     spec.enabledKey,
     spec.streamKeyKey,
@@ -130,9 +134,12 @@ function readBooleanParam(params: PluginParamDef[], key: string): boolean {
   return value === true;
 }
 
-function readStringParam(params: PluginParamDef[], key: string): string | null {
+function isParamConfigured(params: PluginParamDef[], key: string): boolean {
+  const param = params.find((entry) => entry.key === key);
+  if (!param) return false;
+  if (param.isSet) return true;
   const value = readParamValue(params, key);
-  return typeof value === "string" ? value : null;
+  return value === true || (typeof value === "string" && value.length > 0);
 }
 
 export function isStream555PrimaryPlugin(plugin?: Pick<PluginInfo, "id" | "npmName"> | null): boolean {
@@ -166,16 +173,22 @@ export function buildStream555SetupSummary(
   plugin: PluginInfo | null,
 ): Stream555SetupSummary {
   const params = plugin?.parameters ?? [];
-  const authConnected = Boolean(
-    readStringParam(params, "STREAM555_AGENT_API_KEY") ||
-      readStringParam(params, "STREAM555_AGENT_TOKEN") ||
-      readStringParam(params, "STREAM_API_BEARER_TOKEN"),
-  );
+  const authConnected = [
+    "STREAM555_AGENT_API_KEY",
+    "STREAM555_AGENT_TOKEN",
+    "STREAM_API_BEARER_TOKEN",
+  ].some((key) => isParamConfigured(params, key));
+
+  const authLabel = authConnected
+    ? (isParamConfigured(params, "STREAM555_AGENT_API_KEY")
+        ? "Agent API key configured"
+        : "Bearer credential configured")
+    : "Authentication required";
 
   const destinations = STREAM555_DESTINATION_SPECS.map((spec) => {
     const enabled = readBooleanParam(params, spec.enabledKey);
-    const hasUrl = Boolean(readStringParam(params, spec.urlKey));
-    const hasStreamKey = Boolean(readStringParam(params, spec.streamKeyKey));
+    const hasUrl = isParamConfigured(params, spec.urlKey);
+    const hasStreamKey = isParamConfigured(params, spec.streamKeyKey);
     const readinessState: Stream555DestinationReadinessState = !enabled
       ? "disabled"
       : !hasUrl
@@ -194,7 +207,7 @@ export function buildStream555SetupSummary(
 
   const readyDestinations = destinations.filter(
     (destination) => destination.readinessState === "ready",
-  ).length;
+  );
   const enabledDestinations = destinations.filter(
     (destination) => destination.enabled,
   ).length;
@@ -210,9 +223,9 @@ export function buildStream555SetupSummary(
 
   return {
     authConnected,
-    authLabel: authConnected ? "Connected" : "Authentication required",
-    setupRequired: !authConnected || readyDestinations === 0,
-    readyDestinations,
+    authLabel,
+    setupRequired: !authConnected || readyDestinations.length === 0,
+    readyDestinations: readyDestinations.length,
     enabledDestinations,
     configuredDestinations,
     destinations,

@@ -330,8 +330,37 @@ describe("buildPluginListResponse", () => {
           isSet: true,
           currentValue: expect.not.stringContaining("runtime-key"),
         }),
+        expect.objectContaining({
+          key: "STREAM_API_BEARER_TOKEN",
+          isSet: false,
+        }),
+        expect.objectContaining({
+          key: "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+          default: "solana",
+        }),
+        expect.objectContaining({
+          key: "STREAM555_DEST_SYNC_ON_GO_LIVE",
+          default: "true",
+        }),
       ]),
     );
+    expect(stream?.configUiHints).toMatchObject({
+      STREAM555_AGENT_API_KEY: expect.objectContaining({
+        label: "Agent API key",
+        group: "Authentication",
+      }),
+      STREAM_API_BEARER_TOKEN: expect.objectContaining({
+        hidden: true,
+      }),
+      STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: expect.objectContaining({
+        type: "radio",
+        advanced: true,
+      }),
+      STREAM555_DEST_PUMPFUN_ENABLED: expect.objectContaining({
+        label: "Pump.fun",
+        type: "boolean",
+      }),
+    });
   });
 
   it("marks Discord toggles as pending restart on the compat API route", async () => {

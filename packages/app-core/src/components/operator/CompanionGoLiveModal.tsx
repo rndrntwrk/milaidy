@@ -36,6 +36,7 @@ import {
   OPERATOR_SECTION_EYEBROW_CLASSNAME,
   OPERATOR_SECTION_TITLE_CLASSNAME,
   OperatorPill,
+  type OperatorPillTone,
 } from "./OperatorPrimitives";
 import {
   buildStream555SetupSummary,
@@ -58,6 +59,7 @@ type GoLiveStep =
   | "review-and-launch";
 
 type CompanionStageOperatorState = ReturnType<typeof useCompanionStageOperator>;
+type WalletAuthChain = "solana" | "eth";
 
 const STEP_ORDER: readonly { key: GoLiveStep; label: string }[] = [
   { key: "setup-required", label: "Setup" },
@@ -70,6 +72,31 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value != null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function readSetupParamString(
+  params: PluginParamDef[],
+  key: string,
+): string | null {
+  const param = params.find((entry) => entry.key === key);
+  const raw = param?.currentValue ?? param?.default ?? null;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeWalletAuthChain(value: string | null): WalletAuthChain | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "sol" || normalized === "solana") return "solana";
+  if (normalized === "eth" || normalized === "evm" || normalized === "ethereum") {
+    return "eth";
+  }
+  return null;
+}
+
+function labelForWalletAuthChain(chain: WalletAuthChain): string {
+  return chain === "solana" ? "Solana" : "Ethereum";
 }
 
 function labelForDestinationReadiness(
@@ -96,6 +123,23 @@ function labelForDestinationReadiness(
       return t("aliceoperator.destinationDisabled", {
         defaultValue: "Disabled",
       });
+  }
+}
+
+function toneForDestinationReadiness(
+  readinessState: ReturnType<
+    typeof buildStream555SetupSummary
+  >["destinations"][number]["readinessState"],
+): OperatorPillTone {
+  switch (readinessState) {
+    case "ready":
+      return "success";
+    case "missing-stream-key":
+    case "missing-url":
+      return "warning";
+    case "disabled":
+    default:
+      return "neutral";
   }
 }
 
@@ -358,7 +402,21 @@ export function CompanionGoLiveModal({
     return generated;
   }, [setupParams, streamPlugin]);
 
-  const preferredChain = walletAddresses?.solanaAddress ? "solana" : "evm";
+  const preferredWalletAuthChain =
+    normalizeWalletAuthChain(
+      readSetupParamString(setupParams, "STREAM555_WALLET_AUTH_PREFERRED_CHAIN"),
+    ) ?? "solana";
+  const provisionTargetChain =
+    normalizeWalletAuthChain(
+      readSetupParamString(
+        setupParams,
+        "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+      ),
+    ) ?? (walletAddresses?.solanaAddress ? "solana" : "eth");
+  const preferredChainLabel = labelForWalletAuthChain(
+    preferredWalletAuthChain,
+  );
+  const provisionTargetLabel = labelForWalletAuthChain(provisionTargetChain);
   const streamPluginMissingMessage = t("aliceoperator.streamPluginMissing", {
     defaultValue:
       "555stream is not running in this runtime. Refresh status after staging finishes loading, then reconnect setup.",
@@ -772,13 +830,13 @@ export function CompanionGoLiveModal({
                       })}
                     </div>
                     <div className="mt-2 text-lg font-semibold text-txt">
-                      {preferredChain === "solana"
-                        ? "Solana"
-                        : "Ethereum fallback"}
+                      {t("aliceoperator.setup.preferredChainValue", {
+                        defaultValue: `${preferredChainLabel} preferred`,
+                      })}
                     </div>
                     <div className="mt-1 text-sm text-muted-strong">
                       {t("aliceoperator.setup.chainHint", {
-                        defaultValue: "Used for linked-wallet provisioning.",
+                        defaultValue: `Provision fallback: ${provisionTargetLabel}`,
                       })}
                     </div>
                   </div>
@@ -862,8 +920,8 @@ export function CompanionGoLiveModal({
                         void executeSetupAction(
                           "wallet-provision",
                           "STREAM555_AUTH_WALLET_PROVISION_LINKED",
-                          { targetChain: preferredChain },
-                          `Linked wallet provisioned for ${preferredChain}.`,
+                          { targetChain: provisionTargetChain },
+                          `Linked wallet provisioned for ${provisionTargetChain}.`,
                           "Linked wallet provisioning failed.",
                         )
                       }
@@ -887,6 +945,69 @@ export function CompanionGoLiveModal({
                         defaultValue: "Refresh status",
                       })}
                     </Button>
+                  </div>
+
+                  <div
+                    className="go-live-modal__destination-board mt-5"
+                    aria-label={t("aliceoperator.setup.channelReadiness", {
+                      defaultValue: "Channel readiness",
+                    })}
+                  >
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                        {t("aliceoperator.setup.channelReadiness", {
+                          defaultValue: "Channel readiness",
+                        })}
+                      </div>
+                      <OperatorPill
+                        tone={
+                          summary.readyDestinations > 0
+                            ? "success"
+                            : "warning"
+                        }
+                      >
+                        {summary.readyDestinations}/
+                        {summary.destinations.length} ready
+                      </OperatorPill>
+                    </div>
+                    <div className="go-live-modal__destination-list">
+                      {summary.destinations.map((destination) => (
+                        <div
+                          key={destination.id}
+                          className="go-live-modal__destination-row"
+                          data-readiness-state={destination.readinessState}
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-txt">
+                              {destination.label}
+                            </div>
+                            <div className="mt-0.5 truncate text-xs text-muted-strong">
+                              {destination.enabled
+                                ? destination.hasUrl
+                                  ? t("aliceoperator.destinationUrlConfigured", {
+                                      defaultValue: "RTMP URL configured",
+                                    })
+                                  : t("aliceoperator.destinationNeedsUrl", {
+                                      defaultValue: "Needs RTMP URL",
+                                    })
+                                : t("aliceoperator.destinationNotEnabled", {
+                                    defaultValue: "Not enabled",
+                                  })}
+                            </div>
+                          </div>
+                          <OperatorPill
+                            tone={toneForDestinationReadiness(
+                              destination.readinessState,
+                            )}
+                          >
+                            {labelForDestinationReadiness(
+                              destination.readinessState,
+                              t,
+                            )}
+                          </OperatorPill>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {schema ? (

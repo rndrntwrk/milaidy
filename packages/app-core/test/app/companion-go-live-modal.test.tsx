@@ -39,6 +39,7 @@ vi.mock("../../src/components/PluginsView", () => ({
 }));
 
 import { CompanionGoLiveModal } from "../../src/components/operator/CompanionGoLiveModal";
+import { buildStream555SetupSummary } from "../../src/components/operator/stream555-setup";
 
 function t(key: string, options?: Record<string, unknown>) {
   return String(options?.defaultValue ?? key);
@@ -64,6 +65,61 @@ function createBlockedPlugin() {
     id: "555stream",
     name: "555 Stream",
     parameters: [{ key: "STREAM555_DEST_X_ENABLED", currentValue: "true" }],
+    validationWarnings: [],
+    validationErrors: [],
+  };
+}
+
+function createPartiallyReadyPlugin() {
+  return {
+    id: "555stream",
+    name: "555 Stream",
+    parameters: [
+      { key: "STREAM555_AGENT_API_KEY", currentValue: null, isSet: true },
+      { key: "STREAM555_DEST_PUMPFUN_ENABLED", currentValue: "true" },
+      {
+        key: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+        currentValue: "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
+      },
+      { key: "STREAM555_DEST_TWITCH_ENABLED", currentValue: "true" },
+      {
+        key: "STREAM555_DEST_TWITCH_RTMP_URL",
+        currentValue: "rtmps://ingest.global-contribute.live-video.net/app",
+      },
+      { key: "STREAM555_DEST_TWITCH_STREAM_KEY", currentValue: null },
+      { key: "STREAM555_DEST_KICK_ENABLED", currentValue: "true" },
+      {
+        key: "STREAM555_DEST_KICK_RTMP_URL",
+        currentValue: "rtmps://fa723fc1b171.global-contribute.live-video.net",
+      },
+      { key: "STREAM555_DEST_KICK_STREAM_KEY", currentValue: null },
+      { key: "STREAM555_DEST_YOUTUBE_ENABLED", currentValue: "true" },
+      {
+        key: "STREAM555_DEST_YOUTUBE_RTMP_URL",
+        currentValue: "rtmps://a.rtmp.youtube.com/live2",
+      },
+      { key: "STREAM555_DEST_YOUTUBE_STREAM_KEY", currentValue: null },
+    ],
+    validationWarnings: [],
+    validationErrors: [],
+  };
+}
+
+function createWalletConfigPlugin() {
+  return {
+    id: "555stream",
+    name: "555 Stream",
+    parameters: [
+      { key: "STREAM555_DEST_X_ENABLED", currentValue: "true" },
+      {
+        key: "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+        currentValue: "solana",
+      },
+      {
+        key: "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+        currentValue: "eth",
+      },
+    ],
     validationWarnings: [],
     validationErrors: [],
   };
@@ -199,6 +255,110 @@ describe("CompanionGoLiveModal", () => {
     );
 
     expect(alert).toBeDefined();
+  });
+
+  it("treats redacted configured 555stream secrets as setup-ready", () => {
+    const summary = buildStream555SetupSummary({
+      id: "555stream",
+      name: "555 Stream",
+      parameters: [
+        {
+          key: "STREAM555_AGENT_API_KEY",
+          currentValue: null,
+          isSet: true,
+          sensitive: true,
+        },
+        {
+          key: "STREAM555_DEST_TWITCH_ENABLED",
+          currentValue: "true",
+          isSet: true,
+          sensitive: false,
+        },
+        {
+          key: "STREAM555_DEST_TWITCH_RTMP_URL",
+          currentValue: "rtmps://ingest.global-contribute.live-video.net/app",
+          isSet: true,
+          sensitive: false,
+        },
+        {
+          key: "STREAM555_DEST_TWITCH_STREAM_KEY",
+          currentValue: null,
+          isSet: true,
+          sensitive: true,
+        },
+      ],
+      validationWarnings: [],
+      validationErrors: [],
+    } as never);
+
+    expect(summary.authConnected).toBe(true);
+    expect(summary.readyDestinations).toBe(1);
+    expect(summary.configuredDestinations).toBe(1);
+    expect(summary.setupRequired).toBe(false);
+  });
+
+  it("shows per-channel setup readiness before the config form", async () => {
+    mockUseApp.mockReturnValue({
+      handlePluginConfigSave: vi.fn(async () => {}),
+      loadPlugins: vi.fn(async () => {}),
+      pluginSaving: new Set<string>(),
+      plugins: [createPartiallyReadyPlugin()],
+      walletAddresses: { evmAddress: "0x123" },
+      t,
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(CompanionGoLiveModal, {
+          open: true,
+          onOpenChange: vi.fn(),
+          preferredMode: "camera",
+          onPreferredModeChange: vi.fn(),
+          operator: createOperator(),
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    const setupCopy = textOf(tree!.root);
+
+    expect(setupCopy).toContain("Pump.fun");
+    expect(setupCopy).toContain("Twitch");
+    expect(setupCopy).toContain("Kick");
+    expect(setupCopy).toContain("YouTube");
+    expect(setupCopy).toContain("Missing stream key");
+  });
+
+  it("shows wallet-auth chain config instead of inferring from loaded wallet addresses", async () => {
+    mockUseApp.mockReturnValue({
+      handlePluginConfigSave: vi.fn(async () => {}),
+      loadPlugins: vi.fn(async () => {}),
+      pluginSaving: new Set<string>(),
+      plugins: [createWalletConfigPlugin()],
+      walletAddresses: { evmAddress: "0x123" },
+      t,
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(CompanionGoLiveModal, {
+          open: true,
+          onOpenChange: vi.fn(),
+          preferredMode: "camera",
+          onPreferredModeChange: vi.fn(),
+          operator: createOperator(),
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    const setupCopy = textOf(tree!.root);
+
+    expect(setupCopy).toContain("Solana preferred");
+    expect(setupCopy).toContain("Provision fallback: Ethereum");
+    expect(setupCopy).not.toContain("Ethereum fallbackUsed");
   });
 
   it("keeps the go-live modal body bounded and scrollable on short viewports", () => {
