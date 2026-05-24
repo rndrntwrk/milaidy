@@ -40,6 +40,9 @@ describe("Alice companion host imports", () => {
     expect(dockerSource).toContain(
       "cp packages/agent/package.json node_modules/@elizaos/agent/",
     );
+    expect(dockerSource).toContain(
+      "cp packages/shared/package.json node_modules/@miladyai/shared/",
+    );
     expect(dockerSource).not.toContain(
       "cp eliza/packages/agent/package.json node_modules/@elizaos/agent/",
     );

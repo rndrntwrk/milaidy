@@ -50,6 +50,13 @@ RUN set -x; \
     cp -a packages/app-core/src node_modules/@elizaos/app-core/src 2>/dev/null || true; \
     cp -a packages/app-core/dist node_modules/@elizaos/app-core/dist 2>/dev/null || true; \
     ls node_modules/@elizaos/app-core/src/index.ts 2>/dev/null && echo "@elizaos/app-core Milady alias OK" || echo "WARN: app-core Milady alias missing"; \
+    # @miladyai/shared: app-core and agent source imports must resolve at runtime.
+    rm -rf node_modules/@miladyai/shared; \
+    mkdir -p node_modules/@miladyai/shared; \
+    cp packages/shared/package.json node_modules/@miladyai/shared/; \
+    cp -a packages/shared/src node_modules/@miladyai/shared/src 2>/dev/null || true; \
+    cp -a packages/shared/dist node_modules/@miladyai/shared/dist 2>/dev/null || true; \
+    ls node_modules/@miladyai/shared/src/index.ts 2>/dev/null && echo "@miladyai/shared src OK" || echo "WARN: @miladyai/shared src missing"; \
     # @elizaos/shared: DON'T replace — the npm version or resolved workspace symlink works.
     # Workspace package.json exports point to ./src/*.ts (tsx handles this).
     # Replacing with dist-only breaks resolution since exports don't match dist layout.
