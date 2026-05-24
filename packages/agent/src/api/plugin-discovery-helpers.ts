@@ -565,6 +565,7 @@ export const CONFIG_WRITE_ALLOWED_TOP_KEYS = new Set([
   "tools",
   "bindings",
   "broadcast",
+  "streaming",
   "audio",
   "messages",
   "commands",

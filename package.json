@@ -334,6 +334,7 @@
     "@miladyai/css-color-cjs": "npm:@asamuzakjp/css-color@4.1.2",
     "@miladyai/plugin-selfcontrol": "workspace:*",
     "@rndrntwrk/plugin-555stream": "workspace:*",
+    "@node-rs/argon2": "^2.0.2",
     "@noble/curves": "^2.0.1",
     "@opinion-labs/opinion-clob-sdk": "0.5.2",
     "@pixiv/three-vrm": "^3.5.1",

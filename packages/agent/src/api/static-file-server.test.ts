@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   injectApiBaseIntoHtml,
   injectBaseHrefIntoHtml,
+  isCompanionUiPath,
   isPublicBroadcastUiPath,
+  shouldInjectRootBaseHref,
 } from "./static-file-server";
 
 describe("isPublicBroadcastUiPath", () => {
@@ -17,6 +19,35 @@ describe("isPublicBroadcastUiPath", () => {
     expect(isPublicBroadcastUiPath("/api/broadcast/alice-cam/scene")).toBe(
       false,
     );
+  });
+});
+
+describe("isCompanionUiPath", () => {
+  it("recognizes the companion shell route", () => {
+    expect(isCompanionUiPath("/companion")).toBe(true);
+    expect(isCompanionUiPath("/companion/")).toBe(true);
+  });
+
+  it("does not treat companion assets or unrelated routes as shell HTML", () => {
+    expect(isCompanionUiPath("/companion/assets/main.js")).toBe(false);
+    expect(isCompanionUiPath("/apps/companion")).toBe(false);
+    expect(isCompanionUiPath("/api/companion/stage")).toBe(false);
+  });
+});
+
+describe("shouldInjectRootBaseHref", () => {
+  it("enables root base injection for web sub-route shells", () => {
+    expect(shouldInjectRootBaseHref("/broadcast/alice-cam")).toBe(true);
+    expect(shouldInjectRootBaseHref("/broadcast/alice-cam/")).toBe(true);
+    expect(shouldInjectRootBaseHref("/companion")).toBe(true);
+    expect(shouldInjectRootBaseHref("/companion/")).toBe(true);
+  });
+
+  it("does not enable root base injection for assets or APIs", () => {
+    expect(shouldInjectRootBaseHref("/")).toBe(false);
+    expect(shouldInjectRootBaseHref("/assets/main.js")).toBe(false);
+    expect(shouldInjectRootBaseHref("/companion/assets/main.js")).toBe(false);
+    expect(shouldInjectRootBaseHref("/api/companion/stage")).toBe(false);
   });
 });
 

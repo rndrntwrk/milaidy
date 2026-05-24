@@ -42,6 +42,8 @@ const appCoreTrustedLocalRequestRelativePath =
 const coreBasicCapabilitiesRelativePath =
   "packages/core/src/features/basic-capabilities/index.ts";
 const coreBuildRelativePath = "packages/core/build.ts";
+const sharedGenerateKeywordsRelativePath =
+  "packages/shared/scripts/generate-keywords.mjs";
 const appViteNativeStubRelativePath =
   "packages/app/vite/native-module-stub-plugin.ts";
 const uiAppRelativePath = "packages/ui/src/App.tsx";
@@ -55,6 +57,7 @@ const uiStartupPhaseRuntimeRelativePath =
 const uiOnboardingBootstrapRelativePath =
   "packages/ui/src/state/onboarding-bootstrap.ts";
 const uiAppShellStateRelativePath = "packages/ui/src/state/useAppShellState.ts";
+const uiVrmRelativePath = "packages/ui/src/state/vrm.ts";
 const uiPersistenceRelativePath = "packages/ui/src/state/persistence.ts";
 const uiClientBaseRelativePath = "packages/ui/src/api/client-base.ts";
 const uiClientAgentRelativePath = "packages/ui/src/api/client-agent.ts";
@@ -63,6 +66,8 @@ const uiInternalToolAppsRelativePath =
 const appVincentStateRelativePath =
   "plugins/app-vincent/src/useVincentState.ts";
 const agentRuntimeRelativePath = "packages/agent/src/runtime/eliza.ts";
+const agentPluginCollectorRelativePath =
+  "packages/agent/src/runtime/plugin-collector.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
 const agentAppsRoutesRelativePath = "packages/agent/src/api/apps-routes.ts";
@@ -1517,6 +1522,177 @@ export function applyAliceTelegramAccountAuthResolverPatch({
   return "applied";
 }
 
+export function isAliceStream555RuntimePluginAutoloadPatched(source = "") {
+  return (
+    source.includes('const STREAM555_PLUGIN_PACKAGE = "@rndrntwrk/plugin-555stream"') &&
+    source.includes("function hasStream555RuntimeEnv") &&
+    source.includes('"stream555-canonical": STREAM555_PLUGIN_PACKAGE') &&
+    source.includes("env: STREAM555_BASE_URL + stream auth")
+  );
+}
+
+function patchAliceStream555RuntimePluginAutoloadSource(source) {
+  if (isAliceStream555RuntimePluginAutoloadPatched(source)) {
+    return source;
+  }
+
+  let next = source;
+  const constantsAnchor = `const STORE_BUILD_LOCAL_EXECUTION_PLUGINS = new Set<string>([
+  "agent-orchestrator",
+  "@elizaos/plugin-agent-orchestrator",
+  "@elizaos/plugin-shell",
+  "@elizaos/plugin-coding-tools",
+]);
+`;
+  const constantsPatch = `${constantsAnchor}const STREAM555_PLUGIN_PACKAGE = "@rndrntwrk/plugin-555stream";
+
+type ConfigEnvRecord = Record<string, unknown> & {
+  vars?: Record<string, unknown>;
+};
+`;
+  if (!next.includes(constantsAnchor)) {
+    throw new Error("stream555 plugin collector constants anchor drifted");
+  }
+  next = next.replace(constantsAnchor, constantsPatch);
+
+  const envHelperAnchor = `function isTruthyCloudEnvValue(raw: string | undefined): boolean {
+  if (!raw) return false;
+  const value = raw.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+`;
+  const envHelperPatch = `${envHelperAnchor}function readStringConfigEnvValue(
+  configEnv: ConfigEnvRecord | undefined,
+  key: string,
+): string | undefined {
+  const fromVars =
+    configEnv?.vars &&
+    typeof configEnv.vars === "object" &&
+    !Array.isArray(configEnv.vars)
+      ? configEnv.vars[key]
+      : undefined;
+  const value = fromVars ?? configEnv?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function hasStream555RuntimeEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  configEnv?: ConfigEnvRecord,
+): boolean {
+  const readValue = (key: string): string | undefined =>
+    env[key]?.trim() || readStringConfigEnvValue(configEnv, key);
+  const baseUrl = readValue("STREAM555_BASE_URL");
+  const auth =
+    readValue("STREAM555_AGENT_API_KEY") ||
+    readValue("STREAM555_AGENT_TOKEN") ||
+    readValue("STREAM_API_BEARER_TOKEN");
+  return Boolean(baseUrl && auth);
+}
+
+`;
+  if (!next.includes(envHelperAnchor)) {
+    throw new Error("stream555 plugin collector env helper anchor drifted");
+  }
+  next = next.replace(envHelperAnchor, envHelperPatch);
+
+  const optionalMapAnchor = `  streaming: "@elizaos/plugin-streaming",
+  form: "@elizaos/plugin-form",
+`;
+  const optionalMapPatch = `  streaming: "@elizaos/plugin-streaming",
+  "stream555-canonical": STREAM555_PLUGIN_PACKAGE,
+  "555stream": STREAM555_PLUGIN_PACKAGE,
+  form: "@elizaos/plugin-form",
+`;
+  if (!next.includes(optionalMapAnchor)) {
+    throw new Error("stream555 plugin collector optional map anchor drifted");
+  }
+  next = next.replace(optionalMapAnchor, optionalMapPatch);
+
+  const configEnvAnchor = `  const _configEnv = config.env as
+    | (Record<string, unknown> & { vars?: Record<string, unknown> })
+    | undefined;
+`;
+  const configEnvPatch = `  const configEnv = config.env as ConfigEnvRecord | undefined;
+`;
+  if (!next.includes(configEnvAnchor)) {
+    throw new Error("stream555 plugin collector config env anchor drifted");
+  }
+  next = next.replace(configEnvAnchor, configEnvPatch);
+
+  const disabledAnchor = `  const isPluginExplicitlyDisabled = (pluginPackageName: string): boolean => {
+    const marker = "/plugin-";
+    const markerIndex = pluginPackageName.lastIndexOf(marker);
+    const pluginId =
+      markerIndex >= 0
+        ? pluginPackageName.slice(markerIndex + marker.length)
+        : pluginPackageName;
+    return pluginEntries?.[pluginId]?.enabled === false;
+  };
+
+`;
+  const disabledPatch = `${disabledAnchor}  const isStream555ExplicitlyDisabled = (): boolean =>
+    isPluginExplicitlyDisabled(STREAM555_PLUGIN_PACKAGE) ||
+    pluginEntries?.["stream555-canonical"]?.enabled === false;
+
+`;
+  if (!next.includes(disabledAnchor)) {
+    throw new Error("stream555 plugin collector disablement anchor drifted");
+  }
+  next = next.replace(disabledAnchor, disabledPatch);
+
+  const autoloadAnchor = `  // Connector plugins — load when connector has config entries
+`;
+  const autoloadPatch = `  if (
+    hasStream555RuntimeEnv(process.env, configEnv) &&
+    !isStream555ExplicitlyDisabled()
+  ) {
+    pluginsToLoad.add(STREAM555_PLUGIN_PACKAGE);
+    track(STREAM555_PLUGIN_PACKAGE, "env: STREAM555_BASE_URL + stream auth");
+  }
+
+${autoloadAnchor}`;
+  if (!next.includes(autoloadAnchor)) {
+    throw new Error("stream555 plugin collector autoload anchor drifted");
+  }
+  next = next.replace(autoloadAnchor, autoloadPatch);
+
+  if (!isAliceStream555RuntimePluginAutoloadPatched(next)) {
+    throw new Error(
+      "stream555 plugin collector patch applied but contract is absent",
+    );
+  }
+  return next;
+}
+
+export function applyAliceStream555RuntimePluginAutoloadPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const collectorPath = path.join(elizaRoot, agentPluginCollectorRelativePath);
+  if (!existsSync(collectorPath)) {
+    log(
+      "[alice-eliza-runtime-patches] agent plugin collector source absent; skipping 555stream autoload patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(collectorPath, "utf8");
+  if (isAliceStream555RuntimePluginAutoloadPatched(before)) {
+    log(
+      "[alice-eliza-runtime-patches] 555stream runtime plugin autoload already applied",
+    );
+    return "already-applied";
+  }
+
+  const after = patchAliceStream555RuntimePluginAutoloadSource(before);
+  writeFileSync(collectorPath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched agent plugin collector with 555stream runtime autoload",
+  );
+  return "applied";
+}
+
 const telegramSourcePackageRelativePath =
   "plugins/plugin-telegram/package.json";
 const telegramSourceAccountAuthExport = "./account-auth-service";
@@ -2074,6 +2250,208 @@ export function applyAliceCoreBrowserValidationReexportPatch({
   return "applied";
 }
 
+const coreBrowserSkillInvocationCaptureSentinel =
+  "// [milaidy:core-browser-skill-invocation-capture]";
+const coreBrowserSkillInvocationCapture = `${coreBrowserSkillInvocationCaptureSentinel}
+// plugin-agent-skills imports captureSkillInvocationIO from @elizaos/core.
+// The canonical node implementation lives in runtime/trajectory-recorder.ts,
+// but that module imports node:fs/node:os/node:path, so browser builds cannot
+// re-export it wholesale. Keep the public capture contract available with a
+// browser-safe implementation that mirrors the persisted shape.
+export interface SkillInvocationIOInput {
+\targs?: unknown;
+\tresult?: unknown;
+\tcapBytes?: number;
+}
+export type SkillInvocationTruncationMarker = {
+\tfield: "args" | "result";
+\toriginalBytes: number;
+\tcapBytes: number;
+};
+export interface SkillInvocationIOCapture {
+\targs?: string;
+\tresult?: string;
+\ttruncated?: SkillInvocationTruncationMarker[];
+}
+function encodeBrowserSkillInvocationValue(value: unknown): string | undefined {
+\tif (value === undefined) return undefined;
+\tif (typeof value === "string") return value;
+\ttry {
+\t\tconst encoded = JSON.stringify(value);
+\t\treturn encoded === undefined ? String(value) : encoded;
+\t} catch {
+\t\treturn String(value);
+\t}
+}
+function byteLengthForBrowserSkillInvocation(value: string): number {
+\tif (typeof TextEncoder !== "undefined") {
+\t\treturn new TextEncoder().encode(value).byteLength;
+\t}
+\treturn value.length;
+}
+function capBrowserSkillInvocationField(
+\tfield: "args" | "result",
+\tvalue: string,
+\tcapBytes: number,
+): { value: string; marker?: SkillInvocationTruncationMarker } {
+\tconst originalBytes = byteLengthForBrowserSkillInvocation(value);
+\tif (originalBytes <= capBytes) return { value };
+\treturn {
+\t\tvalue: value.slice(0, capBytes),
+\t\tmarker: { field, originalBytes, capBytes },
+\t};
+}
+export function captureSkillInvocationIO(
+\tinput: SkillInvocationIOInput,
+): SkillInvocationIOCapture {
+\tconst capBytes = input.capBytes ?? 64 * 1024;
+\tconst out: SkillInvocationIOCapture = {};
+\tconst truncated: SkillInvocationTruncationMarker[] = [];
+\tconst args = encodeBrowserSkillInvocationValue(input.args);
+\tif (args !== undefined) {
+\t\tconst capped = capBrowserSkillInvocationField("args", args, capBytes);
+\t\tout.args = capped.value;
+\t\tif (capped.marker) truncated.push(capped.marker);
+\t}
+\tconst result = encodeBrowserSkillInvocationValue(input.result);
+\tif (result !== undefined) {
+\t\tconst capped = capBrowserSkillInvocationField("result", result, capBytes);
+\t\tout.result = capped.value;
+\t\tif (capped.marker) truncated.push(capped.marker);
+\t}
+\tif (truncated.length > 0) out.truncated = truncated;
+\treturn out;
+}
+`;
+
+export function isAliceCoreBrowserSkillInvocationCapturePatched(source) {
+  return (
+    source.includes(coreBrowserSkillInvocationCaptureSentinel) &&
+    source.includes("export function captureSkillInvocationIO")
+  );
+}
+
+export function applyAliceCoreBrowserSkillInvocationCapturePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser skill invocation capture patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserSkillInvocationCapturePatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser skill invocation capture already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserSkillInvocationCapture}`
+    : `${source}\n\n${coreBrowserSkillInvocationCapture}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts with browser-safe captureSkillInvocationIO",
+  );
+  return "applied";
+}
+
+const coreBrowserConfirmationReexportSentinel =
+  "// [milaidy:core-browser-confirmation-reexport]";
+const coreBrowserConfirmationReexport = `${coreBrowserConfirmationReexportSentinel}
+// plugin-agent-skills imports requireConfirmation from @elizaos/core.
+// utils/confirmation.ts is browser-safe at runtime: it imports only types
+// and delegates persistence to the provided runtime cache API.
+export type {
+\tConfirmationDecision,
+\tConfirmationStatus,
+\tRequireConfirmationArgs,
+} from "./utils/confirmation";
+export {
+\tclearPendingConfirmation,
+\trequireConfirmation,
+} from "./utils/confirmation";
+`;
+
+export function isAliceCoreBrowserConfirmationReexportPatched(source) {
+  return (
+    source.includes(coreBrowserConfirmationReexportSentinel) &&
+    source.includes("requireConfirmation")
+  );
+}
+
+export function applyAliceCoreBrowserConfirmationReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser confirmation reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserConfirmationReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser confirmation reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserConfirmationReexport}`
+    : `${source}\n\n${coreBrowserConfirmationReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export confirmation helpers",
+  );
+  return "applied";
+}
+
+const coreBrowserEvaluatorPrioritiesReexportSentinel =
+  "// [milaidy:core-browser-evaluator-priorities-reexport]";
+const coreBrowserEvaluatorPrioritiesReexport = `${coreBrowserEvaluatorPrioritiesReexportSentinel}
+// plugin-form imports EvaluatorPriority from @elizaos/core. The canonical
+// priorities module is a pure constant/type module with no node dependencies,
+// so the browser entry should mirror the node entry for this surface.
+export * from "./services/evaluator-priorities";
+`;
+
+export function isAliceCoreBrowserEvaluatorPrioritiesReexportPatched(source) {
+  return source.includes(coreBrowserEvaluatorPrioritiesReexportSentinel);
+}
+
+export function applyAliceCoreBrowserEvaluatorPrioritiesReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser evaluator priorities reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserEvaluatorPrioritiesReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser evaluator priorities reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserEvaluatorPrioritiesReexport}`
+    : `${source}\n\n${coreBrowserEvaluatorPrioritiesReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export evaluator priorities",
+  );
+  return "applied";
+}
+
 const coreBrowserMiladyRuntimeBindingsSentinel =
   "// [milaidy:core-browser-milady-runtime-bindings]";
 const coreBrowserMiladyRuntimeBindings = `${coreBrowserMiladyRuntimeBindingsSentinel}
@@ -2325,6 +2703,50 @@ export function applyAliceCoreBrowserOnboardingReexportPatch({
   writeFileSync(indexPath, next);
   log(
     "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export contracts/onboarding (migrateLegacyRuntimeConfig + ~49 sibling browser-safe names)",
+  );
+  return "applied";
+}
+
+const coreBrowserOnboardingStateReexportSentinel =
+  "// [milaidy:core-browser-onboarding-state-reexport]";
+const coreBrowserOnboardingStateReexport = `${coreBrowserOnboardingStateReexportSentinel}
+// eliza/packages/core/src/services/onboarding-state.ts exports the
+// OnboardingStateMachine runtime, isOnboardingComplete, and related wizard
+// helpers. index.node.ts and index.edge.ts both expose this module, but
+// index.browser.ts omits it. The secrets-manager plugin statically imports
+// OnboardingStateMachine from @elizaos/core during the SPA build, so mirror
+// the edge/node public surface here instead of stubbing plugin code.
+export * from "./services/onboarding-state";
+`;
+
+export function isAliceCoreBrowserOnboardingStateReexportPatched(source) {
+  return source.includes(coreBrowserOnboardingStateReexportSentinel);
+}
+
+export function applyAliceCoreBrowserOnboardingStateReexportPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const indexPath = path.join(elizaRoot, coreBrowserIndexRelativePath);
+  if (!existsSync(indexPath)) {
+    log(
+      "[alice-eliza-runtime-patches] eliza core source absent; skipping core-browser onboarding-state reexport patch",
+    );
+    return "skipped";
+  }
+  const source = readFileSync(indexPath, "utf8");
+  if (isAliceCoreBrowserOnboardingStateReexportPatched(source)) {
+    log(
+      "[alice-eliza-runtime-patches] core-browser onboarding-state reexport already applied",
+    );
+    return "already-applied";
+  }
+  const next = source.endsWith("\n")
+    ? `${source}\n${coreBrowserOnboardingStateReexport}`
+    : `${source}\n\n${coreBrowserOnboardingStateReexport}`;
+  writeFileSync(indexPath, next);
+  log(
+    "[alice-eliza-runtime-patches] patched core index.browser.ts to re-export services/onboarding-state (OnboardingStateMachine + completion helpers)",
   );
   return "applied";
 }
@@ -6338,6 +6760,246 @@ export function applyAliceUiSameOriginWebsocketPatch({
   return "applied";
 }
 
+const aliceUiVrmDefaultSource = [
+  'import { type BundledVrmAsset, getBootConfig } from "../config/boot-config";',
+  'import { resolveAppAssetUrl } from "../utils/asset-url";',
+  'import type { UiTheme } from "./ui-preferences";',
+  "",
+  "const DEFAULT_VISUAL_AVATAR_INDEX = 9;",
+  'const BUNDLED_VRM_FALLBACK_SLUG = "milady-1";',
+  "const BUNDLED_AVATAR_IMAGE_VERSION_BY_SLUG: Record<string, string> = {",
+  '  "milady-9": "20260413-alice-capture",',
+  "};",
+  "",
+  "function resolveBundledAvatarImageUrl(assetPath: string, slug: string): string {",
+  "  const version = BUNDLED_AVATAR_IMAGE_VERSION_BY_SLUG[slug];",
+  "  const versionedPath = version ? `${assetPath}?v=${version}` : assetPath;",
+  "  return resolveAppAssetUrl(versionedPath);",
+  "}",
+  "",
+  "function getAssets(): BundledVrmAsset[] {",
+  "  const assets = getBootConfig().vrmAssets;",
+  "  if (Array.isArray(assets) && assets.length > 0) {",
+  "    return assets;",
+  "  }",
+  "  return [];",
+  "}",
+  "",
+  "export function getVrmCount(): number {",
+  "  return getAssets().length;",
+  "}",
+  "",
+  "export const DEFAULT_BUNDLED_VRM_INDEX = DEFAULT_VISUAL_AVATAR_INDEX;",
+  "",
+  "function findAliceBundledVrmIndex(assets: BundledVrmAsset[]): number | null {",
+  "  return getBundledAssetForIndex(assets, DEFAULT_VISUAL_AVATAR_INDEX)",
+  "    ? DEFAULT_VISUAL_AVATAR_INDEX",
+  "    : null;",
+  "}",
+  "",
+  "function rosterUsesIndexedSlugs(assets: BundledVrmAsset[]): boolean {",
+  "  return assets.some((asset) => /-\\d+$/.test(asset.slug));",
+  "}",
+  "",
+  "function getBundledAssetForIndex(",
+  "  assets: BundledVrmAsset[],",
+  "  index: number,",
+  "): BundledVrmAsset | undefined {",
+  "  if (index < 1) return undefined;",
+  "  const indexed = assets.find((asset) => asset.slug.endsWith(`-${index}`));",
+  "  if (indexed) return indexed;",
+  "  if (rosterUsesIndexedSlugs(assets)) return undefined;",
+  "  return assets[index - 1];",
+  "}",
+  "",
+  "export function getDefaultBundledVrmIndex(): number {",
+  "  const assets = getAssets();",
+  "  const count = assets.length;",
+  "  if (count <= 0) return 1;",
+  "  return findAliceBundledVrmIndex(assets) ?? 1;",
+  "}",
+  "",
+  "export const VRM_COUNT = DEFAULT_BUNDLED_VRM_INDEX;",
+  "",
+  "export function normalizeAvatarIndex(index: number): number {",
+  "  if (!Number.isFinite(index)) return getDefaultBundledVrmIndex();",
+  "  const n = Math.trunc(index);",
+  "  if (n === 0) return 0;",
+  "  const assets = getAssets();",
+  "  if (assets.length <= 0) return 1;",
+  "  if (!getBundledAssetForIndex(assets, n)) return getDefaultBundledVrmIndex();",
+  "  return n;",
+  "}",
+  "",
+  "export function isAliceBundledAvatarIndex(index: number): boolean {",
+  "  if (!Number.isFinite(index)) return false;",
+  "  return Math.trunc(index) === DEFAULT_VISUAL_AVATAR_INDEX;",
+  "}",
+  "",
+  "export function getVrmUrl(index: number): string {",
+  "  const assets = getAssets();",
+  "  if (assets.length === 0) {",
+  "    return resolveAppAssetUrl(`vrms/${BUNDLED_VRM_FALLBACK_SLUG}.vrm.gz`);",
+  "  }",
+  "  const n = normalizeAvatarIndex(index);",
+  "  const safe = n > 0 ? n : getDefaultBundledVrmIndex();",
+  "  const slug =",
+  '    getBundledAssetForIndex(assets, safe)?.slug ?? assets[0]?.slug ?? "default";',
+  "  return resolveAppAssetUrl(`vrms/${slug}.vrm.gz`);",
+  "}",
+  "",
+  "export function getVrmPreviewUrl(index: number): string {",
+  "  const assets = getAssets();",
+  "  if (assets.length === 0) {",
+  "    return resolveAppAssetUrl(`vrms/previews/${BUNDLED_VRM_FALLBACK_SLUG}.png`);",
+  "  }",
+  "  const n = normalizeAvatarIndex(index);",
+  "  const safe = n > 0 ? n : getDefaultBundledVrmIndex();",
+  "  const slug =",
+  '    getBundledAssetForIndex(assets, safe)?.slug ?? assets[0]?.slug ?? "default";',
+  "  return resolveBundledAvatarImageUrl(`vrms/previews/${slug}.png`, slug);",
+  "}",
+  "",
+  "export function getVrmBackgroundUrl(index: number): string {",
+  "  const assets = getAssets();",
+  "  if (assets.length === 0) {",
+  "    return resolveAppAssetUrl(",
+  "      `vrms/backgrounds/${BUNDLED_VRM_FALLBACK_SLUG}.png`,",
+  "    );",
+  "  }",
+  "  const n = normalizeAvatarIndex(index);",
+  "  const safe = n > 0 ? n : getDefaultBundledVrmIndex();",
+  "  const slug =",
+  '    getBundledAssetForIndex(assets, safe)?.slug ?? assets[0]?.slug ?? "default";',
+  "  return resolveBundledAvatarImageUrl(`vrms/backgrounds/${slug}.png`, slug);",
+  "}",
+  "",
+  "const COMPANION_THEME_BACKGROUND_INDEX: Record<UiTheme, number> = {",
+  "  light: 3,",
+  "  dark: 4,",
+  "};",
+  "",
+  "export function getCompanionBackgroundUrl(theme: UiTheme): string {",
+  "  return getVrmBackgroundUrl(COMPANION_THEME_BACKGROUND_INDEX[theme]);",
+  "}",
+  "",
+  "export function getVrmTitle(index: number): string {",
+  "  const assets = getAssets();",
+  '  if (assets.length === 0) return "Avatar";',
+  "  const n = normalizeAvatarIndex(index);",
+  "  const safe = n > 0 ? n : getDefaultBundledVrmIndex();",
+  "  return (",
+  '    getBundledAssetForIndex(assets, safe)?.title ?? assets[0]?.title ?? "Avatar"',
+  "  );",
+  "}",
+  "",
+].join("\n");
+
+export function isAliceUiVrmDefaultPatched(source = "") {
+  return (
+    source.includes("const DEFAULT_VISUAL_AVATAR_INDEX = 9;") &&
+    source.includes('const BUNDLED_VRM_FALLBACK_SLUG = "milady-1";') &&
+    source.includes("BUNDLED_AVATAR_IMAGE_VERSION_BY_SLUG") &&
+    source.includes("export function getDefaultBundledVrmIndex(): number") &&
+    source.includes("export const VRM_COUNT = DEFAULT_BUNDLED_VRM_INDEX;")
+  );
+}
+
+export function patchAliceUiVrmDefaultSource(source = "") {
+  let next = source.replace(
+    'import { DEFAULT_VISUAL_AVATAR_INDEX } from "@elizaos/shared/onboarding-presets";\n',
+    "",
+  );
+
+  if (
+    !next.includes("const DEFAULT_VISUAL_AVATAR_INDEX = 9;") &&
+    next.includes('import type { UiTheme } from "./ui-preferences";')
+  ) {
+    next = next.replace(
+      'import type { UiTheme } from "./ui-preferences";\n',
+      'import type { UiTheme } from "./ui-preferences";\n\nconst DEFAULT_VISUAL_AVATAR_INDEX = 9;\n',
+    );
+  }
+
+  if (isAliceUiVrmDefaultPatched(next)) return next;
+
+  if (
+    !source.includes('const BUNDLED_VRM_FALLBACK_SLUG = "bundled-1";') ||
+    !source.includes("export const VRM_COUNT = 8;")
+  ) {
+    throw new Error("Alice UI VRM default patch drifted");
+  }
+
+  return aliceUiVrmDefaultSource;
+}
+
+export function applyAliceUiVrmDefaultPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const targetPath = path.join(elizaRoot, uiVrmRelativePath);
+  if (!existsSync(targetPath)) {
+    throw new Error("Alice UI VRM source missing");
+  }
+
+  const before = readFileSync(targetPath, "utf8");
+  if (isAliceUiVrmDefaultPatched(before)) {
+    log("[alice-eliza-runtime-patches] UI VRM default already applied");
+    return "already-applied";
+  }
+
+  const after = patchAliceUiVrmDefaultSource(before);
+  if (!isAliceUiVrmDefaultPatched(after)) {
+    throw new Error("Alice UI VRM default patch applied but contract is absent");
+  }
+
+  writeFileSync(targetPath, after);
+  log("[alice-eliza-runtime-patches] patched UI VRM default");
+  return "applied";
+}
+
+export function isAliceSharedKeywordAppleDoublePatched(source = "") {
+  return source.includes('!f.startsWith("._") && f.endsWith(".keywords.json")');
+}
+
+export function applyAliceSharedKeywordAppleDoublePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const targetPath = path.join(elizaRoot, sharedGenerateKeywordsRelativePath);
+  if (!existsSync(targetPath)) {
+    log("[alice-eliza-runtime-patches] shared keyword generator absent; skipping AppleDouble patch");
+    return "skipped";
+  }
+
+  const before = readFileSync(targetPath, "utf8");
+  if (isAliceSharedKeywordAppleDoublePatched(before)) {
+    log("[alice-eliza-runtime-patches] shared keyword AppleDouble filter already applied");
+    return "already-applied";
+  }
+
+  const needle = `  const files = readdirSync(keywordsDir).filter((f) =>
+    f.endsWith(".keywords.json"),
+  );`;
+  const replacement = `  const files = readdirSync(keywordsDir).filter(
+    (f) => !f.startsWith("._") && f.endsWith(".keywords.json"),
+  );`;
+  if (!before.includes(needle)) {
+    throw new Error("Alice shared keyword AppleDouble patch drifted");
+  }
+
+  const after = before.replace(needle, replacement);
+  if (!isAliceSharedKeywordAppleDoublePatched(after)) {
+    throw new Error(
+      "Alice shared keyword AppleDouble patch applied but contract is absent",
+    );
+  }
+
+  writeFileSync(targetPath, after);
+  log("[alice-eliza-runtime-patches] patched shared keyword AppleDouble filter");
+  return "applied";
+}
+
 export function isAliceUiAvatarDefaultMigrationPatched(source = "") {
   return (
     source.includes(
@@ -6640,10 +7302,14 @@ export function applyAliceElizaRuntimePatches({
     applyAliceCoreBrowserRuntimeEnvReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserStateDirStubsPatch({ elizaRoot, log }),
     applyAliceCoreBrowserOnboardingReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserOnboardingStateReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSettingsDebugReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserCloudTopologyReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserSpokenTextReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserValidationReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserSkillInvocationCapturePatch({ elizaRoot, log }),
+    applyAliceCoreBrowserConfirmationReexportPatch({ elizaRoot, log }),
+    applyAliceCoreBrowserEvaluatorPrioritiesReexportPatch({ elizaRoot, log }),
     applyAliceCoreBrowserMiladyRuntimeBindingsPatch({ elizaRoot, log }),
     // Must run AFTER all the core-browser wildcard re-exports above so the
     // disambiguation appears last in the file and wins for TS resolution.
@@ -6667,6 +7333,8 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreOpenAccessPatch({ elizaRoot, log }),
     applyAliceUiAuthGatedStartupPatch({ elizaRoot, log }),
     applyAliceUiSameOriginWebsocketPatch({ elizaRoot, log }),
+    applyAliceUiVrmDefaultPatch({ elizaRoot, log }),
+    applyAliceSharedKeywordAppleDoublePatch({ elizaRoot, log }),
     applyAliceUiAvatarDefaultMigrationPatch({ elizaRoot, log }),
     applyAliceCompanionOperatorPatch({ rootDir, elizaRoot, log }),
     applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
@@ -6674,6 +7342,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
     applyAliceAppPluginRegisterExportPatch({ elizaRoot, log }),
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
+    applyAliceStream555RuntimePluginAutoloadPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAliceElizacloudReexportPatch({ elizaRoot, log }),
     applyAliceElizacloudBrowserTtsStubsPatch({ elizaRoot, log }),
