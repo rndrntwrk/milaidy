@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appSource = path.resolve(__dirname, "../../src/main.tsx");
+const repoPackageJson = path.resolve(__dirname, "../../../../package.json");
 
 describe("Alice companion host imports", () => {
   it("loads companion UI from the UI-only entrypoint", () => {
@@ -24,6 +25,14 @@ describe("Alice companion host imports", () => {
     );
     expect(source).not.toContain(
       'phoneCompanion ? (\n            <CompanionShell tab="companion"',
+    );
+  });
+
+  it("keeps the elizaOS app-core workspace installed for deployed runtime imports", () => {
+    const packageJson = JSON.parse(fs.readFileSync(repoPackageJson, "utf8"));
+
+    expect(packageJson.dependencies?.["@elizaos/app-core"]).toBe(
+      "workspace:*",
     );
   });
 });
