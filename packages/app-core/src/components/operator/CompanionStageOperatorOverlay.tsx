@@ -28,6 +28,23 @@ const SECTION_TITLE_CLASSNAME =
 const ACTION_BUTTON_BASE_CLASSNAME =
   "h-9 min-h-9 rounded-full border px-3.5 text-[11px] font-semibold uppercase tracking-[0.14em] shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition-colors disabled:cursor-not-allowed disabled:opacity-45";
 
+function isAuthErrorMessage(message: string) {
+  return /\b(401|403|unauthorized|forbidden|authentication required|not authenticated)\b/i.test(
+    message,
+  );
+}
+
+function operatorPanelErrorMessage(
+  message: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (!isAuthErrorMessage(message)) return message;
+  return t("aliceoperator.authReconnectRequired", {
+    defaultValue:
+      "Streaming controls need authentication. Open Go Live setup to reconnect.",
+  });
+}
+
 function resolveActionToneClassName(
   tone: "stream" | "launch" | "avatar" | "utility" | "danger",
 ) {
@@ -308,6 +325,12 @@ export function CompanionStageOperatorOverlay({
       : hyperscape.quickCommands.length > 0
         ? `${Math.min(hyperscape.quickCommands.length, 9)}`
         : null;
+  const streamPanelError = stream.error
+    ? operatorPanelErrorMessage(stream.error, t)
+    : null;
+  const emotesPanelError = emotes.error
+    ? operatorPanelErrorMessage(emotes.error, t)
+    : null;
 
   return (
     <>
@@ -479,9 +502,9 @@ export function CompanionStageOperatorOverlay({
                 <div className="mt-3 flex flex-wrap gap-2">
                   {ALICE_LIVE_ACTIONS.map(renderLiveAction)}
                 </div>
-                {stream.error ? (
+                {streamPanelError ? (
                   <p className="mt-3 text-[11px] leading-5 text-warn">
-                    {stream.error}
+                    {streamPanelError}
                   </p>
                 ) : null}
               </section>
@@ -557,9 +580,9 @@ export function CompanionStageOperatorOverlay({
                     </div>
                   </div>
                 ))}
-                {emotes.error ? (
+                {emotesPanelError ? (
                   <p className="mt-3 text-[11px] leading-5 text-warn">
-                    {emotes.error}
+                    {emotesPanelError}
                   </p>
                 ) : null}
               </section>

@@ -591,7 +591,7 @@ export function CompanionGoLiveModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="go-live-modal h-[min(94dvh,calc(100dvh-1rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)))] max-h-[min(94dvh,calc(100dvh-1rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)))] w-[min(calc(100vw-1.5rem),72rem)] max-w-[72rem] overflow-hidden border-0 bg-transparent p-0 shadow-none"
+        className="go-live-modal h-[min(92dvh,calc(100dvh-1rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)))] max-h-[min(92dvh,calc(100dvh-1rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)))] w-[min(calc(100vw-1.5rem),72rem)] max-w-[72rem] overflow-hidden border-0 bg-transparent p-0 shadow-none"
         showCloseButton={false}
       >
         <div className="go-live-modal__shell">

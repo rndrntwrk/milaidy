@@ -804,6 +804,46 @@ describe("CompanionView", () => {
     ).toBe("true");
   });
 
+  it("replaces raw auth failures in the Alice action panel", async () => {
+    mockClientFns.streamStatus.mockRejectedValue(new Error("Unauthorized"));
+    mockClientFns.getEmotes.mockRejectedValue(new Error("Unauthorized"));
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+        plugins: [{ id: "five55-games", enabled: true, isActive: true }],
+        t: (key: string, options?: Record<string, unknown>) =>
+          String(options?.defaultValue ?? key),
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const launcher = tree?.root.findByProps({
+      "data-testid": "companion-stage-actions-launcher",
+    });
+
+    await act(async () => {
+      launcher?.props.onClick();
+      await Promise.resolve();
+    });
+
+    const panel = tree?.root.findByProps({
+      "data-testid": "companion-stage-actions-bubble",
+    });
+    const panelText = text(panel);
+
+    expect(panelText).not.toContain("Unauthorized");
+    expect(panelText).toContain(
+      "Streaming controls need authentication. Open Go Live setup to reconnect.",
+    );
+  });
+
   it("logs Alice stage actions and collapses the sheet when bubble actions are triggered", async () => {
     const logConversationOperatorAction = vi.fn(async () => true);
     mockClientFns.streamStatus.mockResolvedValue({

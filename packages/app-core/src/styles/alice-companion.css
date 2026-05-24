@@ -18,6 +18,10 @@ body:has([data-testid="companion-stage-actions-bubble"]) .companion-stage-overla
   z-index: 35;
 }
 
+.companion-chat-dock {
+  z-index: 24;
+}
+
 .companion-chat-dock[data-companion-chat-empty="true"]
   [data-testid="chat-messages-scroll"] {
   max-height: 0;
@@ -25,20 +29,27 @@ body:has([data-testid="companion-stage-actions-bubble"]) .companion-stage-overla
   pointer-events: none;
 }
 
-.companion-chat-dock [data-chat-composer="true"] {
+.companion-chat-dock [data-testid="chat-composer-textarea"] {
   min-height: 46px;
   border-radius: 999px;
   box-shadow: inset 0 0 0 1px transparent;
   transition:
     background-color 160ms ease,
-    box-shadow 160ms ease;
+    box-shadow 160ms ease,
+    border-color 160ms ease;
 }
 
-.companion-chat-dock [data-chat-composer="true"]:focus-within {
+.companion-chat-dock [data-testid="chat-composer-textarea"]:focus {
   background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(var(--accent-rgb), 0.32);
   box-shadow:
     inset 0 0 0 1px rgba(var(--accent-rgb), 0.28),
     0 0 0 3px rgba(var(--accent-rgb), 0.09);
+}
+
+.companion-chat-dock [data-testid="chat-composer-action"],
+.companion-chat-dock button[aria-label] {
+  touch-action: manipulation;
 }
 
 @media (max-width: 767px) {
@@ -163,10 +174,19 @@ body:has([data-testid="companion-stage-actions-bubble"]) .companion-stage-overla
   top: calc(var(--safe-area-top, 0px) + 5rem) !important;
   right: auto !important;
   bottom: calc(var(--safe-area-bottom, 0px) + 1rem) !important;
+  display: flex !important;
+  min-height: 0 !important;
   width: min(25rem, calc(100vw - 6.25rem)) !important;
   max-width: min(25rem, calc(100vw - 6.25rem)) !important;
   height: auto !important;
-  max-height: none !important;
+  max-height: min(
+    38rem,
+    calc(
+      100dvh - 6rem - var(--safe-area-top, 0px) -
+        var(--safe-area-bottom, 0px)
+    )
+  ) !important;
+  overflow: hidden !important;
   transform: none !important;
   translate: 0 0 !important;
   border-radius: 24px !important;
@@ -181,7 +201,13 @@ body:has([data-testid="companion-stage-actions-bubble"]) .companion-stage-overla
     width: auto !important;
     max-width: none !important;
     height: auto !important;
-    max-height: min(58dvh, 32rem) !important;
+    max-height: min(
+      58dvh,
+      calc(
+        100dvh - 2rem - var(--safe-area-top, 0px) -
+          var(--safe-area-bottom, 0px)
+      )
+    ) !important;
     transform: none !important;
     translate: 0 0 !important;
     border-radius: 24px !important;
@@ -200,14 +226,14 @@ body:has([data-testid="companion-stage-actions-bubble"]) .companion-stage-overla
   width: min(calc(100vw - 1.5rem), 72rem) !important;
   max-width: 72rem !important;
   height: min(
-    94dvh,
+    92dvh,
     calc(
       100dvh - 1rem - var(--safe-area-top, 0px) -
         var(--safe-area-bottom, 0px)
     )
   ) !important;
   max-height: min(
-    94dvh,
+    92dvh,
     calc(
       100dvh - 1rem - var(--safe-area-top, 0px) -
         var(--safe-area-bottom, 0px)
@@ -737,6 +763,10 @@ body:has([data-testid="companion-stage-actions-bubble"]) .companion-stage-overla
 }
 
 @media (max-height: 520px) {
+  .go-live-modal {
+    width: min(calc(100vw - 0.75rem), 72rem) !important;
+  }
+
   .go-live-modal__footer-status {
     display: none;
   }

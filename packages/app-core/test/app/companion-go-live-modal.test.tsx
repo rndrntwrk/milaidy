@@ -210,7 +210,7 @@ describe("CompanionGoLiveModal", () => {
     ];
 
     for (const css of cssFiles) {
-      expect(css).toContain("94dvh");
+      expect(css).toContain("92dvh");
       expect(css).toContain("100dvh - 1rem");
       expect(css).toMatch(
         /\.go-live-modal__shell\s*\{[\s\S]*?min-height: 0;[\s\S]*?height: 100%;/,
