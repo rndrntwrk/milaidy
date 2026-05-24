@@ -2912,7 +2912,7 @@ new file mode 100644
 index 0000000000..7ca93dfc5e
 --- /dev/null
 +++ b/plugins/app-companion/src/components/operator/CompanionStageOperatorOverlay.tsx
-@@ -0,0 +1,663 @@
+@@ -0,0 +1,686 @@
 +import {
 +  Button,
 +  Dialog,
