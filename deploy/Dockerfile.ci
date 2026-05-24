@@ -32,14 +32,24 @@ RUN set -x; \
     # NOTE: Do NOT copy src/ - tsx will prefer raw .ts over compiled dist/
     # cp -a eliza/packages/core/src node_modules/@elizaos/core/src 2>/dev/null || true; \
     ls node_modules/@elizaos/core/dist/node/index.node.js 2>/dev/null && echo "@elizaos/core dist OK" || echo "WARN: core dist/node missing"; \
-    # @elizaos/agent: delete symlink, copy package + compiled dist
+    # @elizaos/agent: runtime compatibility alias for Milady's agent package.
+    # Eliza runtime code imports @elizaos/agent/*, but Alice's deployment
+    # expects those imports to resolve to the Milady fork.
     rm -rf node_modules/@elizaos/agent; \
     mkdir -p node_modules/@elizaos/agent; \
-    cp eliza/packages/agent/package.json node_modules/@elizaos/agent/; \
-    cp -a eliza/packages/agent/dist node_modules/@elizaos/agent/dist 2>/dev/null || true; \
-    # NOTE: Do NOT copy src/ - tsx will prefer raw .ts over compiled dist/
-    # cp -a eliza/packages/agent/src node_modules/@elizaos/agent/src 2>/dev/null || true; \
-    ls node_modules/@elizaos/agent/dist/ 2>/dev/null | head -3 && echo "@elizaos/agent dist OK" || echo "WARN: agent dist missing"; \
+    cp packages/agent/package.json node_modules/@elizaos/agent/; \
+    cp -a packages/agent/src node_modules/@elizaos/agent/src 2>/dev/null || true; \
+    cp -a packages/agent/dist node_modules/@elizaos/agent/dist 2>/dev/null || true; \
+    ls node_modules/@elizaos/agent/src/api/config-env.ts 2>/dev/null && echo "@elizaos/agent Milady alias OK" || echo "WARN: agent Milady alias missing"; \
+    # @elizaos/app-core: runtime compatibility alias for Milady's app-core.
+    # The server dynamically imports @elizaos/app-core for runtime hooks; the
+    # alias must be a real copied directory, not a symlink into eliza/packages.
+    rm -rf node_modules/@elizaos/app-core; \
+    mkdir -p node_modules/@elizaos/app-core; \
+    cp packages/app-core/package.json node_modules/@elizaos/app-core/; \
+    cp -a packages/app-core/src node_modules/@elizaos/app-core/src 2>/dev/null || true; \
+    cp -a packages/app-core/dist node_modules/@elizaos/app-core/dist 2>/dev/null || true; \
+    ls node_modules/@elizaos/app-core/src/index.ts 2>/dev/null && echo "@elizaos/app-core Milady alias OK" || echo "WARN: app-core Milady alias missing"; \
     # @elizaos/shared: DON'T replace — the npm version or resolved workspace symlink works.
     # Workspace package.json exports point to ./src/*.ts (tsx handles this).
     # Replacing with dist-only breaks resolution since exports don't match dist layout.
@@ -73,7 +83,9 @@ RUN for app_dir in eliza/apps/app-coding eliza/apps/app-shopify; do \
 # bun creates workspace symlinks like eliza/apps/app-lifeops/node_modules/@elizaos/core
 # that resolve correctly in CI but point nowhere in Docker. Removing them forces
 # Node's module resolution to walk up to root node_modules/@elizaos/core instead.
-RUN find eliza -path '*/node_modules/@elizaos/core' -not -path '*/node_modules/.bun/*' \
+RUN find eliza packages -path '*/node_modules/@elizaos/core' -not -path '*/node_modules/.bun/*' \
+    | while read p; do rm -rf "$p" && echo "Removed nested: $p"; done; true
+RUN find eliza packages -path '*/node_modules/@elizaos/agent' -not -path '*/node_modules/.bun/*' \
     | while read p; do rm -rf "$p" && echo "Removed nested: $p"; done; true
 
 # ===== End symlink replacement =====

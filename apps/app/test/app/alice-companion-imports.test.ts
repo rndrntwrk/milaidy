@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appSource = path.resolve(__dirname, "../../src/main.tsx");
+const dockerfile = path.resolve(__dirname, "../../../../deploy/Dockerfile.ci");
 const repoPackageJson = path.resolve(__dirname, "../../../../package.json");
 
 describe("Alice companion host imports", () => {
@@ -28,11 +29,19 @@ describe("Alice companion host imports", () => {
     );
   });
 
-  it("keeps the elizaOS app-core workspace installed for deployed runtime imports", () => {
+  it("keeps deployed @elizaos runtime aliases pointed at Milady packages", () => {
+    const dockerSource = fs.readFileSync(dockerfile, "utf8");
     const packageJson = JSON.parse(fs.readFileSync(repoPackageJson, "utf8"));
 
-    expect(packageJson.dependencies?.["@elizaos/app-core"]).toBe(
-      "workspace:*",
+    expect(packageJson.dependencies?.["@elizaos/app-core"]).toBeUndefined();
+    expect(dockerSource).toContain(
+      "cp packages/app-core/package.json node_modules/@elizaos/app-core/",
+    );
+    expect(dockerSource).toContain(
+      "cp packages/agent/package.json node_modules/@elizaos/agent/",
+    );
+    expect(dockerSource).not.toContain(
+      "cp eliza/packages/agent/package.json node_modules/@elizaos/agent/",
     );
   });
 });
