@@ -3,6 +3,7 @@ import {
   createPersistedActiveServer,
   ErrorBoundary,
   savePersistedActiveServer,
+  useApp,
 } from "@elizaos/app-core";
 // Styles bundled via the @elizaos/ui barrel. The Wave A refactor (eliza
 // commit 5a6f5f337) moved CSS out of @elizaos/app-core/styles/ but
@@ -75,7 +76,7 @@ import {
   startDeviceBridgeClient,
   type DeviceBridgeClient,
 } from "@elizaos/capacitor-llama";
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
   CompanionShell,
@@ -738,6 +739,16 @@ function isPhoneCompanionMode(): boolean {
   return params.get("mode") === "companion";
 }
 
+function CompanionRouteTabSync(): null {
+  const { setTab } = useApp();
+
+  useEffect(() => {
+    setTab("companion");
+  }, [setTab]);
+
+  return null;
+}
+
 function resolveAppWindowSlug(): string | null {
   if (!isAppWindowRoute()) return null;
   const path = getWindowNavigationPath();
@@ -766,9 +777,7 @@ function mountReactApp(): void {
     <ErrorBoundary>
       <StrictMode>
         <AppProvider branding={APP_BRANDING}>
-          {phoneCompanion ? (
-            <CompanionShell tab="companion" actionNotice={null} />
-          ) : detachedShell ? (
+          {detachedShell ? (
             <div className="flex h-[100dvh] min-h-0 w-full max-w-full flex-col overflow-hidden">
               <DetachedShellRoot route={windowShellRoute} />
             </div>
@@ -782,6 +791,7 @@ function mountReactApp(): void {
               <DesktopSurfaceNavigationRuntime />
               <DesktopTrayRuntime />
               <LifeOpsActivitySignalsEffect />
+              {phoneCompanion ? <CompanionRouteTabSync /> : null}
               <App />
             </>
           )}

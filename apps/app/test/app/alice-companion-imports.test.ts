@@ -14,4 +14,16 @@ describe("Alice companion host imports", () => {
     expect(source).toContain('from "@elizaos/app-companion/ui"');
     expect(source).toContain('import "@elizaos/app-companion/register"');
   });
+
+  it("keeps the companion route behind the normal startup and auth gates", () => {
+    const source = fs.readFileSync(appSource, "utf8");
+
+    expect(source).toContain("function CompanionRouteTabSync()");
+    expect(source).toContain(
+      "{phoneCompanion ? <CompanionRouteTabSync /> : null}",
+    );
+    expect(source).not.toContain(
+      'phoneCompanion ? (\n            <CompanionShell tab="companion"',
+    );
+  });
 });
