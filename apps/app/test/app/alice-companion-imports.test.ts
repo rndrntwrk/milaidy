@@ -46,6 +46,9 @@ describe("Alice companion host imports", () => {
     expect(dockerSource).toContain(
       "cp eliza/packages/vault/package.json node_modules/@elizaos/vault/",
     );
+    expect(dockerSource).toContain(
+      "ln -s \"../${pi_ai_store#node_modules/}\" node_modules/@mariozechner/pi-ai",
+    );
     expect(dockerSource).not.toContain(
       "cp eliza/packages/agent/package.json node_modules/@elizaos/agent/",
     );

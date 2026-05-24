@@ -64,6 +64,12 @@ RUN set -x; \
     cp -a packages/shared/src node_modules/@miladyai/shared/src 2>/dev/null || true; \
     cp -a packages/shared/dist node_modules/@miladyai/shared/dist 2>/dev/null || true; \
     ls node_modules/@miladyai/shared/src/index.ts 2>/dev/null && echo "@miladyai/shared src OK" || echo "WARN: @miladyai/shared src missing"; \
+    mkdir -p node_modules/@mariozechner; \
+    pi_ai_store="$(find node_modules/.bun -path '*/node_modules/@mariozechner/pi-ai' -type d | head -n 1)"; \
+    test -n "$pi_ai_store"; \
+    rm -rf node_modules/@mariozechner/pi-ai; \
+    ln -s "../${pi_ai_store#node_modules/}" node_modules/@mariozechner/pi-ai; \
+    ls node_modules/@mariozechner/pi-ai/package.json 2>/dev/null && echo "@mariozechner/pi-ai root link OK" || echo "WARN: @mariozechner/pi-ai root link missing"; \
     # @elizaos/shared: DON'T replace — the npm version or resolved workspace symlink works.
     # Workspace package.json exports point to ./src/*.ts (tsx handles this).
     # Replacing with dist-only breaks resolution since exports don't match dist layout.
