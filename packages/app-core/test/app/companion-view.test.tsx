@@ -842,6 +842,7 @@ describe("CompanionView", () => {
     expect(panelText).toContain(
       "Streaming controls need authentication. Open Go Live setup to reconnect.",
     );
+    expect(panelText).toContain("Open Go Live setup");
   });
 
   it("logs Alice stage actions and collapses the sheet when bubble actions are triggered", async () => {
@@ -1362,11 +1363,9 @@ describe("CompanionView", () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 140));
     });
-    expect(mockClientFns.setCompanionStageState).toHaveBeenLastCalledWith(
-      {
-        camera: { zoom: lastZoom },
-      },
-    );
+    expect(mockClientFns.setCompanionStageState).toHaveBeenLastCalledWith({
+      camera: { zoom: lastZoom },
+    });
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 

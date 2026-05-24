@@ -14,6 +14,10 @@ import {
 } from "./alice-operator-catalog";
 import { CompanionGoLiveModal } from "./CompanionGoLiveModal";
 import { OperatorPill } from "./OperatorPrimitives";
+import {
+  formatOperatorErrorMessage,
+  isOperatorAuthErrorMessage,
+} from "./operator-error-messages";
 import type { Stream555LaunchMode } from "./stream555-setup";
 
 type CompanionStageOperator = ReturnType<
@@ -22,28 +26,12 @@ type CompanionStageOperator = ReturnType<
 
 const SHEET_DIALOG_CLASSNAME =
   "!left-4 !top-20 !bottom-4 !m-0 !w-[min(24rem,calc(100vw-2rem))] !translate-x-0 !translate-y-0 gap-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#07090e]/94 p-0 shadow-[0_28px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl max-sm:!left-3 max-sm:!right-3 max-sm:!top-auto max-sm:!bottom-4 max-sm:!w-auto max-sm:!translate-x-0 max-sm:!translate-y-0";
-const SECTION_CLASSNAME = "border-t border-white/8 pt-4 first:border-t-0 first:pt-0";
+const SECTION_CLASSNAME =
+  "border-t border-white/8 pt-4 first:border-t-0 first:pt-0";
 const SECTION_TITLE_CLASSNAME =
-  "text-[10px] font-semibold uppercase tracking-[0.22em] text-white/44";
+  "text-[10px] font-semibold uppercase tracking-[0.2em] text-white/58";
 const ACTION_BUTTON_BASE_CLASSNAME =
-  "h-9 min-h-9 rounded-full border px-3.5 text-[11px] font-semibold uppercase tracking-[0.14em] shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition-colors disabled:cursor-not-allowed disabled:opacity-45";
-
-function isAuthErrorMessage(message: string) {
-  return /\b(401|403|unauthorized|forbidden|authentication required|not authenticated)\b/i.test(
-    message,
-  );
-}
-
-function operatorPanelErrorMessage(
-  message: string,
-  t: (key: string, options?: Record<string, unknown>) => string,
-) {
-  if (!isAuthErrorMessage(message)) return message;
-  return t("aliceoperator.authReconnectRequired", {
-    defaultValue:
-      "Streaming controls need authentication. Open Go Live setup to reconnect.",
-  });
-}
+  "h-10 min-h-10 rounded-full border px-3.5 text-[11px] font-semibold uppercase tracking-[0.13em] shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition-colors disabled:cursor-not-allowed disabled:opacity-65";
 
 function resolveActionToneClassName(
   tone: "stream" | "launch" | "avatar" | "utility" | "danger",
@@ -117,13 +105,40 @@ function BubbleActionButton({
       )} ${active ? "ring-1 ring-inset ring-white/16" : ""} ${className}`}
       {...props}
     >
-      <span className="inline-flex items-center gap-2">
-        <span className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full border border-white/10 bg-black/24 text-[8px] leading-none text-current">
-          +
-        </span>
-        <span>{children}</span>
-      </span>
+      <span className="min-w-0 truncate">{children}</span>
     </Button>
+  );
+}
+
+function PanelStatusNotice({
+  message,
+  actionLabel,
+  onAction,
+}: {
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      aria-live="polite"
+      aria-atomic="true"
+      className="mt-3 rounded-[18px] border border-warn/24 bg-warn/10 px-3 py-2.5 text-[12px] leading-5 text-[#f5d56a]"
+    >
+      <p>{message}</p>
+      {actionLabel && onAction ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="mt-2 h-8 min-h-8 rounded-full border border-warn/24 bg-black/24 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#ffe08a] hover:border-warn/40 hover:bg-warn/12"
+          onClick={onAction}
+        >
+          {actionLabel}
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
@@ -319,24 +334,45 @@ export function CompanionStageOperatorOverlay({
 
   const selectedGameLabel = arcade.selectedGameLabel;
   const launcherBadge = stream.live
-    ? "!"
+    ? "LIVE"
     : activeEmote
-      ? "M"
+      ? "MOVE"
       : hyperscape.quickCommands.length > 0
         ? `${Math.min(hyperscape.quickCommands.length, 9)}`
         : null;
   const streamPanelError = stream.error
-    ? operatorPanelErrorMessage(stream.error, t)
+    ? formatOperatorErrorMessage(
+        stream.error,
+        t("aliceoperator.streamStatusFailed", {
+          defaultValue: "Stream status is temporarily unavailable.",
+        }),
+        t,
+      )
     : null;
   const emotesPanelError = emotes.error
-    ? operatorPanelErrorMessage(emotes.error, t)
+    ? formatOperatorErrorMessage(
+        emotes.error,
+        t("aliceoperator.motionLoadFailed", {
+          defaultValue: "Failed to load motions.",
+        }),
+        t,
+      )
     : null;
+  const streamPanelAuthRequired = stream.error
+    ? isOperatorAuthErrorMessage(stream.error)
+    : false;
+  const emotesPanelAuthRequired = emotes.error
+    ? isOperatorAuthErrorMessage(emotes.error)
+    : false;
+  const openSetupLabel = t("aliceoperator.openGoLiveSetup", {
+    defaultValue: "Open Go Live setup",
+  });
 
   return (
     <>
       <aside
         // `companion-stage-overlay` is a stable hook the shared DialogContent
-        // effect uses to hide the stage rail (Action Log launcher + any
+        // effect uses to hide the stage rail (actions launcher + any
         // bubble/tooltip children) while a Dialog is open. Without this, the
         // rail sits in its own stacking context above the Dialog overlay on
         // the companion view.
@@ -359,8 +395,12 @@ export function CompanionStageOperatorOverlay({
               aria-expanded={expanded}
               aria-haspopup="dialog"
               aria-controls="alice-stage-actions-panel"
-              aria-label="Action Log"
-              title="Action Log"
+              aria-label={t("aliceoperator.actionsLauncher", {
+                defaultValue: "Alice actions",
+              })}
+              title={t("aliceoperator.actionsLauncher", {
+                defaultValue: "Alice actions",
+              })}
               data-testid="companion-stage-actions-launcher"
               data-no-camera-zoom="true"
               onClick={() => setExpanded((current) => !current)}
@@ -376,7 +416,9 @@ export function CompanionStageOperatorOverlay({
             </Button>
             <div className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
               <div className="whitespace-nowrap rounded-full border border-white/10 bg-black/88 px-3 py-2 text-[10px] uppercase tracking-[0.22em] text-white/74 shadow-[0_12px_28px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-                Action Log
+                {t("aliceoperator.actionsLauncher", {
+                  defaultValue: "Alice actions",
+                })}
               </div>
             </div>
           </div>
@@ -396,24 +438,28 @@ export function CompanionStageOperatorOverlay({
             launcherRef.current?.focus();
           }}
         >
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/8 bg-[rgba(9,13,20,0.98)] px-4 py-3 backdrop-blur-xl">
+          <div className="flex max-h-[inherit] min-h-0 flex-col overflow-hidden">
+            <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/10 bg-[rgba(9,13,20,0.98)] px-4 py-3 backdrop-blur-xl">
               <DialogTitle className="text-sm font-medium text-white/90">
-                Action Log
+                {t("aliceoperator.actionsTitle", {
+                  defaultValue: "Alice actions",
+                })}
               </DialogTitle>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="rounded-full"
-                aria-label="Close action log"
+                aria-label={t("aliceoperator.closeActions", {
+                  defaultValue: "Close Alice actions",
+                })}
                 onClick={() => setExpanded(false)}
               >
                 <CloseIcon className="h-4 w-4" />
               </Button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 [scrollbar-gutter:stable]">
               <div className="flex flex-wrap gap-2">
                 <OperatorPill tone="accent">
                   {t("aliceoperator.meta.alice", { defaultValue: "Alice" })}
@@ -447,7 +493,10 @@ export function CompanionStageOperatorOverlay({
                 ) : null}
               </div>
 
-              <section className={`${SECTION_CLASSNAME} mt-4`} aria-labelledby="alice-stage-live-actions">
+              <section
+                className={`${SECTION_CLASSNAME} mt-4`}
+                aria-labelledby="alice-stage-live-actions"
+              >
                 <div
                   className={SECTION_TITLE_CLASSNAME}
                   id="alice-stage-live-actions"
@@ -461,7 +510,7 @@ export function CompanionStageOperatorOverlay({
                   <div className="mt-3 rounded-[18px] border border-white/8 bg-black/18 p-2.5">
                     <label
                       htmlFor="alice-stage-selected-game"
-                      className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40"
+                      className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/58"
                     >
                       {t("aliceoperator.arcade.selectedGame", {
                         defaultValue: "Selected Game",
@@ -494,7 +543,9 @@ export function CompanionStageOperatorOverlay({
                     <div className="mt-2 flex flex-wrap gap-2">
                       <OperatorPill>{selectedGameLabel}</OperatorPill>
                       {arcade.gameState?.phase ? (
-                        <OperatorPill tone="success">{arcade.phaseLabel}</OperatorPill>
+                        <OperatorPill tone="success">
+                          {arcade.phaseLabel}
+                        </OperatorPill>
                       ) : null}
                     </div>
                   </div>
@@ -503,9 +554,17 @@ export function CompanionStageOperatorOverlay({
                   {ALICE_LIVE_ACTIONS.map(renderLiveAction)}
                 </div>
                 {streamPanelError ? (
-                  <p className="mt-3 text-[11px] leading-5 text-warn">
-                    {streamPanelError}
-                  </p>
+                  <PanelStatusNotice
+                    message={streamPanelError}
+                    actionLabel={
+                      streamPanelAuthRequired ? openSetupLabel : undefined
+                    }
+                    onAction={
+                      streamPanelAuthRequired
+                        ? () => openGoLive("camera")
+                        : undefined
+                    }
+                  />
                 ) : null}
               </section>
 
@@ -557,7 +616,7 @@ export function CompanionStageOperatorOverlay({
                 </div>
                 {emotes.groups.map((group) => (
                   <div key={group.group} className="mt-3.5">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/34">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/48">
                       {ALICE_EMOTE_GROUP_LABELS[group.group]}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -581,9 +640,17 @@ export function CompanionStageOperatorOverlay({
                   </div>
                 ))}
                 {emotesPanelError ? (
-                  <p className="mt-3 text-[11px] leading-5 text-warn">
-                    {emotesPanelError}
-                  </p>
+                  <PanelStatusNotice
+                    message={emotesPanelError}
+                    actionLabel={
+                      emotesPanelAuthRequired ? openSetupLabel : undefined
+                    }
+                    onAction={
+                      emotesPanelAuthRequired
+                        ? () => openGoLive("camera")
+                        : undefined
+                    }
+                  />
                 ) : null}
               </section>
 
@@ -652,7 +719,9 @@ export function CompanionStageOperatorOverlay({
                             )
                       }
                     >
-                      {t(action.labelKey, { defaultValue: action.defaultLabel })}
+                      {t(action.labelKey, {
+                        defaultValue: action.defaultLabel,
+                      })}
                     </BubbleActionButton>
                   ))}
                 </div>

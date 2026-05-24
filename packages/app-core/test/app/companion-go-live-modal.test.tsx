@@ -20,7 +20,11 @@ vi.mock("@miladyai/app-core/state", () => ({
 
 vi.mock("../../src/config/config-renderer", () => ({
   ConfigRenderer: () =>
-    React.createElement("div", { "data-testid": "config-renderer" }, "ConfigRenderer"),
+    React.createElement(
+      "div",
+      { "data-testid": "config-renderer" },
+      "ConfigRenderer",
+    ),
   defaultRegistry: {},
 }));
 
@@ -59,9 +63,7 @@ function createBlockedPlugin() {
   return {
     id: "555stream",
     name: "555 Stream",
-    parameters: [
-      { key: "STREAM555_DEST_X_ENABLED", currentValue: "true" },
-    ],
+    parameters: [{ key: "STREAM555_DEST_X_ENABLED", currentValue: "true" }],
     validationWarnings: [],
     validationErrors: [],
   };
@@ -150,7 +152,8 @@ describe("CompanionGoLiveModal", () => {
 
     const currentStep = tree?.root.find(
       (node) =>
-        node.props?.["aria-current"] === "step" && textOf(node).includes("Mode"),
+        node.props?.["aria-current"] === "step" &&
+        textOf(node).includes("Mode"),
     );
     const radios = tree?.root.findAll(
       (node) => node.type === "input" && node.props.type === "radio",
@@ -191,7 +194,8 @@ describe("CompanionGoLiveModal", () => {
     });
 
     const alert = tree?.root.find(
-      (node) => node.props?.role === "alert" && textOf(node).includes("Authenticate"),
+      (node) =>
+        node.props?.role === "alert" && textOf(node).includes("Authenticate"),
     );
 
     expect(alert).toBeDefined();
@@ -200,7 +204,10 @@ describe("CompanionGoLiveModal", () => {
   it("keeps the go-live modal body bounded and scrollable on short viewports", () => {
     const cssFiles = [
       readFileSync(
-        resolve(process.cwd(), "packages/app-core/src/styles/alice-companion.css"),
+        resolve(
+          process.cwd(),
+          "packages/app-core/src/styles/alice-companion.css",
+        ),
         "utf8",
       ),
       readFileSync(
@@ -219,7 +226,10 @@ describe("CompanionGoLiveModal", () => {
         /\.go-live-modal__header\s*\{[\s\S]*?flex: 0 0 auto;/,
       );
       expect(css).toMatch(
-        /\.go-live-modal__body\s*\{[\s\S]*?flex: 1 1 auto;[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;[\s\S]*?scrollbar-gutter: stable;/,
+        /\.go-live-modal__body\s*\{[\s\S]*?flex: 1 1 auto;[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;[\s\S]*?scroll-padding-bottom: 2rem;[\s\S]*?scrollbar-gutter: stable;/,
+      );
+      expect(css).toMatch(
+        /\.go-live-modal__setup-card\s*\{[\s\S]*?min-height: 8rem;/,
       );
       expect(css).toMatch(
         /\.go-live-modal__footer\s*\{[\s\S]*?flex: 0 0 auto;/,

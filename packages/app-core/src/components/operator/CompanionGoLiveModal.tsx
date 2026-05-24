@@ -19,7 +19,14 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { paramsToSchema } from "../pages/PluginsView";
 import { ConfigRenderer, defaultRegistry } from "../config-ui/config-renderer";
 import {
@@ -38,6 +45,10 @@ import {
   titleForStream555LaunchMode,
   type Stream555LaunchMode,
 } from "./stream555-setup";
+import {
+  formatOperatorErrorMessage,
+  formatUnknownOperatorError,
+} from "./operator-error-messages";
 import type { useCompanionStageOperator } from "./useCompanionStageOperator";
 
 type GoLiveStep =
@@ -62,7 +73,9 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function labelForDestinationReadiness(
-  readinessState: ReturnType<typeof buildStream555SetupSummary>["destinations"][number]["readinessState"],
+  readinessState: ReturnType<
+    typeof buildStream555SetupSummary
+  >["destinations"][number]["readinessState"],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   switch (readinessState) {
@@ -228,7 +241,15 @@ function InlineNoticeCard({
       className={`rounded-[1.5rem] border px-4 py-3 outline-none ${toneClass}`}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <OperatorPill tone={notice.tone === "success" ? "success" : notice.tone === "warning" ? "warning" : "danger"}>
+        <OperatorPill
+          tone={
+            notice.tone === "success"
+              ? "success"
+              : notice.tone === "warning"
+                ? "warning"
+                : "danger"
+          }
+        >
           {notice.state ?? notice.tone}
         </OperatorPill>
       </div>
@@ -317,7 +338,9 @@ export function CompanionGoLiveModal({
   );
   const setKeys = useMemo(
     () =>
-      new Set(setupParams.filter((param) => param.isSet).map((param) => param.key)),
+      new Set(
+        setupParams.filter((param) => param.isSet).map((param) => param.key),
+      ),
     [setupParams],
   );
   const { schema, hints } = useMemo(() => {
@@ -326,7 +349,9 @@ export function CompanionGoLiveModal({
     }
     const generated = paramsToSchema(setupParams, streamPlugin.id);
     if (streamPlugin.configUiHints) {
-      for (const [key, serverHint] of Object.entries(streamPlugin.configUiHints)) {
+      for (const [key, serverHint] of Object.entries(
+        streamPlugin.configUiHints,
+      )) {
         generated.hints[key] = { ...generated.hints[key], ...serverHint };
       }
     }
@@ -334,6 +359,10 @@ export function CompanionGoLiveModal({
   }, [setupParams, streamPlugin]);
 
   const preferredChain = walletAddresses?.solanaAddress ? "solana" : "evm";
+  const streamPluginMissingMessage = t("aliceoperator.streamPluginMissing", {
+    defaultValue:
+      "555stream is not running in this runtime. Refresh status after staging finishes loading, then reconnect setup.",
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -369,7 +398,9 @@ export function CompanionGoLiveModal({
   const executeSetupAction = useCallback(
     async (
       actionKey: string,
-      action: "STREAM555_AUTH_WALLET_LOGIN" | "STREAM555_AUTH_WALLET_PROVISION_LINKED",
+      action:
+        | "STREAM555_AUTH_WALLET_LOGIN"
+        | "STREAM555_AUTH_WALLET_PROVISION_LINKED",
       params: Record<string, unknown>,
       successMessage: string,
       errorMessage: string,
@@ -391,7 +422,7 @@ export function CompanionGoLiveModal({
       } catch (err) {
         setInlineNotice({
           tone: "error",
-          message: err instanceof Error ? err.message : errorMessage,
+          message: formatUnknownOperatorError(err, errorMessage, t),
         });
       } finally {
         setBusyAction(null);
@@ -430,12 +461,13 @@ export function CompanionGoLiveModal({
     } catch (err) {
       setInlineNotice({
         tone: "error",
-        message:
-          err instanceof Error
-            ? err.message
-            : t("aliceoperator.setupSaveFailed", {
-                defaultValue: "Failed to save 555stream setup.",
-              }),
+        message: formatUnknownOperatorError(
+          err,
+          t("aliceoperator.setupSaveFailed", {
+            defaultValue: "Failed to save 555stream setup.",
+          }),
+          t,
+        ),
       });
     }
   }, [
@@ -465,7 +497,13 @@ export function CompanionGoLiveModal({
     } finally {
       setLaunching(false);
     }
-  }, [launchMode, onOpenChange, onPreferredModeChange, operator, selectedChannels]);
+  }, [
+    launchMode,
+    onOpenChange,
+    onPreferredModeChange,
+    operator,
+    selectedChannels,
+  ]);
 
   const handleAdvance = useCallback(async () => {
     if (step === "setup-required") {
@@ -473,12 +511,14 @@ export function CompanionGoLiveModal({
         setInlineNotice({
           tone: "warning",
           state: "blocked",
-          message:
-            summary.runtimeWarnings[0] ??
+          message: formatOperatorErrorMessage(
+            summary.runtimeWarnings[0],
             t("aliceoperator.setupBlocked", {
               defaultValue:
                 "Authenticate and enable at least one ready destination before continuing.",
             }),
+            t,
+          ),
         });
         return;
       }
@@ -520,16 +560,16 @@ export function CompanionGoLiveModal({
 
   const modeOptions = useMemo(
     () =>
-      (["camera", "radio", "screen-share", "play-games", "reaction"] as const).map(
-        (mode) => ({
-          value: mode,
-          title: titleForStream555LaunchMode(mode, t),
-          description: descriptionForMode(mode, t),
-          availability: availabilityLabelForMode(mode, t),
-          support: supportLabelForMode(mode, operator, t),
-          enabled: modeEnabled(mode, operator),
-        }),
-      ),
+      (
+        ["camera", "radio", "screen-share", "play-games", "reaction"] as const
+      ).map((mode) => ({
+        value: mode,
+        title: titleForStream555LaunchMode(mode, t),
+        description: descriptionForMode(mode, t),
+        availability: availabilityLabelForMode(mode, t),
+        support: supportLabelForMode(mode, operator, t),
+        enabled: modeEnabled(mode, operator),
+      })),
     [operator, t],
   );
 
@@ -576,7 +616,13 @@ export function CompanionGoLiveModal({
           ]
         : []),
     ],
-    [launchMode, operator.arcade.selectedGameLabel, selectedChannels, summary.destinations, t],
+    [
+      launchMode,
+      operator.arcade.selectedGameLabel,
+      selectedChannels,
+      summary.destinations,
+      t,
+    ],
   );
 
   const activeInlineNotice = inlineNotice;
@@ -591,7 +637,7 @@ export function CompanionGoLiveModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="go-live-modal h-[min(92dvh,calc(100dvh-1rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)))] max-h-[min(92dvh,calc(100dvh-1rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)))] w-[min(calc(100vw-1.5rem),72rem)] max-w-[72rem] overflow-hidden border-0 bg-transparent p-0 shadow-none"
+        className="go-live-modal border-0 bg-transparent p-0 shadow-none"
         showCloseButton={false}
       >
         <div className="go-live-modal__shell">
@@ -651,8 +697,12 @@ export function CompanionGoLiveModal({
                     }
                     aria-current={isActive ? "step" : undefined}
                   >
-                    <span className="go-live-modal__step-index">{index + 1}</span>
-                    <span className="go-live-modal__step-label">{entry.label}</span>
+                    <span className="go-live-modal__step-index">
+                      {index + 1}
+                    </span>
+                    <span className="go-live-modal__step-label">
+                      {entry.label}
+                    </span>
                   </li>
                 );
               })}
@@ -660,413 +710,474 @@ export function CompanionGoLiveModal({
           </div>
 
           <div className="go-live-modal__body">
-          {step === "setup-required" ? (
-            <div className="space-y-5">
-              {renderInlineNotice()}
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
-                  <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                    {t("aliceoperator.setup.auth", { defaultValue: "Auth" })}
-                  </div>
-                  <div className="mt-2 text-lg font-semibold text-txt">
-                    {summary.authConnected
-                      ? t("aliceoperator.connected", { defaultValue: "Connected" })
-                      : t("aliceoperator.authRequired", {
-                          defaultValue: "Authentication required",
-                        })}
-                  </div>
-                  <div className="mt-1 text-sm text-muted-strong">
-                    {summary.authLabel}
-                  </div>
-                </div>
-                <div className="rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
-                  <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                    {t("aliceoperator.setup.readyChannels", {
-                      defaultValue: "Ready channels",
-                    })}
-                  </div>
-                  <div className="mt-2 text-lg font-semibold text-txt">
-                    {summary.readyDestinations}/{summary.enabledDestinations || summary.destinations.length}
-                  </div>
-                  <div className="mt-1 text-sm text-muted-strong">
-                    {t("aliceoperator.setup.channelHint", {
-                      defaultValue: "At least one ready destination is required.",
-                    })}
-                  </div>
-                </div>
-                <div className="rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
-                  <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                    {t("aliceoperator.setup.savedDestinations", {
-                      defaultValue: "Saved destinations",
-                    })}
-                  </div>
-                  <div className="mt-2 text-lg font-semibold text-txt">
-                    {summary.configuredDestinations}
-                  </div>
-                  <div className="mt-1 text-sm text-muted-strong">
-                    {t("aliceoperator.setup.savedHint", {
-                      defaultValue: "Destination keys and URLs available to 555stream.",
-                    })}
-                  </div>
-                </div>
-                <div className="rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
-                  <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                    {t("aliceoperator.setup.preferredChain", {
-                      defaultValue: "Preferred chain",
-                    })}
-                  </div>
-                  <div className="mt-2 text-lg font-semibold text-txt">
-                    {preferredChain === "solana" ? "Solana" : "Ethereum fallback"}
-                  </div>
-                  <div className="mt-1 text-sm text-muted-strong">
-                    {t("aliceoperator.setup.chainHint", {
-                      defaultValue: "Used for linked-wallet provisioning.",
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-[1.75rem] border border-border/35 bg-bg-elevated px-5 py-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <OperatorPill tone="warning">
-                    {t("aliceoperator.setupRequiredBadge", {
-                      defaultValue: "Setup required",
-                    })}
-                  </OperatorPill>
-                  {streamPlugin ? <OperatorPill>{streamPlugin.name}</OperatorPill> : null}
-                </div>
-                <p className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-3`}>
-                  {t("aliceoperator.setupStepDescription", {
-                    defaultValue:
-                      "Finish authentication and channel readiness here. You do not need to leave the stage to complete 555stream onboarding.",
-                  })}
-                </p>
-                {summary.runtimeWarnings.length > 0 ? (
-                  <div className="mt-4 space-y-2 rounded-[1.25rem] border border-border/35 bg-black/18 px-4 py-3 text-sm leading-6 text-warn">
-                    {summary.runtimeWarnings.map((warning) => (
-                      <div key={warning}>{warning}</div>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`${OPERATOR_ACTION_BUTTON_BASE_CLASSNAME} ${OPERATOR_ACTION_BUTTON_TONE_CLASSNAME.accent}`}
-                    disabled={Boolean(busyAction)}
-                    onClick={() =>
-                      void executeSetupAction(
-                        "wallet-login",
-                        "STREAM555_AUTH_WALLET_LOGIN",
-                        {},
-                        "Wallet authentication completed.",
-                        "Wallet authentication failed.",
-                      )
-                    }
-                  >
-                    {busyAction === "wallet-login"
-                      ? t("aliceoperator.authenticating", {
-                          defaultValue: "Authenticating...",
-                        })
-                      : t("aliceoperator.authenticate", {
-                          defaultValue: "Authenticate",
-                        })}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={OPERATOR_ACTION_BUTTON_BASE_CLASSNAME}
-                    disabled={Boolean(busyAction)}
-                    onClick={() =>
-                      void executeSetupAction(
-                        "wallet-provision",
-                        "STREAM555_AUTH_WALLET_PROVISION_LINKED",
-                        { targetChain: preferredChain },
-                        `Linked wallet provisioned for ${preferredChain}.`,
-                        "Linked wallet provisioning failed.",
-                      )
-                    }
-                  >
-                    {busyAction === "wallet-provision"
-                      ? t("aliceoperator.provisioning", {
-                          defaultValue: "Provisioning...",
-                        })
-                      : t("aliceoperator.provisionViaSw4p", {
-                          defaultValue: "Provision via sw4p",
-                        })}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={OPERATOR_ACTION_BUTTON_BASE_CLASSNAME}
-                    disabled={Boolean(busyAction)}
-                    onClick={() => void refreshRuntimeStatus()}
-                  >
-                    {t("aliceoperator.refreshStatus", {
-                      defaultValue: "Refresh status",
-                    })}
-                  </Button>
-                </div>
-
-                {schema ? (
-                  <div className="mt-5 rounded-[1.5rem] border border-border/35 bg-black/16 px-4 py-4">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                          {t("aliceoperator.configureNow", {
-                            defaultValue: "Configure now",
-                          })}
-                        </div>
-                        <div className="mt-1 text-sm text-muted-strong">
-                          {t("aliceoperator.configureNowHint", {
-                            defaultValue:
-                              "Save only the onboarding fields needed for authentication and channel readiness.",
-                          })}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={`${OPERATOR_ACTION_BUTTON_BASE_CLASSNAME} ${OPERATOR_ACTION_BUTTON_TONE_CLASSNAME.accent}`}
-                        disabled={!streamPlugin || pluginSaving.has(streamPlugin.id)}
-                        onClick={() => void handleSaveSetup()}
-                      >
-                        {streamPlugin && pluginSaving.has(streamPlugin.id)
-                          ? t("aliceoperator.savingSetup", {
-                              defaultValue: "Saving...",
-                            })
-                          : t("aliceoperator.saveSetup", {
-                              defaultValue: "Save setup",
-                            })}
-                      </Button>
+            {step === "setup-required" ? (
+              <div className="space-y-5">
+                {renderInlineNotice()}
+                <div className="go-live-modal__setup-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="go-live-modal__setup-card rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
+                    <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                      {t("aliceoperator.setup.auth", { defaultValue: "Auth" })}
                     </div>
-                    <ConfigRenderer
-                      schema={schema}
-                      hints={hints}
-                      values={mergedValues}
-                      setKeys={setKeys}
-                      registry={defaultRegistry}
-                      pluginId={streamPlugin?.id}
-                      onChange={(key, value) =>
-                        setDraftConfig((current) => ({ ...current, [key]: value }))
-                      }
-                    />
+                    <div className="mt-2 text-lg font-semibold text-txt">
+                      {summary.authConnected
+                        ? t("aliceoperator.connected", {
+                            defaultValue: "Connected",
+                          })
+                        : t("aliceoperator.authRequired", {
+                            defaultValue: "Authentication required",
+                          })}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-strong">
+                      {summary.authLabel}
+                    </div>
                   </div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
+                  <div className="go-live-modal__setup-card rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
+                    <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                      {t("aliceoperator.setup.readyChannels", {
+                        defaultValue: "Ready channels",
+                      })}
+                    </div>
+                    <div className="mt-2 text-lg font-semibold text-txt">
+                      {summary.readyDestinations}/
+                      {summary.enabledDestinations ||
+                        summary.destinations.length}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-strong">
+                      {t("aliceoperator.setup.channelHint", {
+                        defaultValue:
+                          "At least one ready destination is required.",
+                      })}
+                    </div>
+                  </div>
+                  <div className="go-live-modal__setup-card rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
+                    <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                      {t("aliceoperator.setup.savedDestinations", {
+                        defaultValue: "Saved destinations",
+                      })}
+                    </div>
+                    <div className="mt-2 text-lg font-semibold text-txt">
+                      {summary.configuredDestinations}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-strong">
+                      {t("aliceoperator.setup.savedHint", {
+                        defaultValue:
+                          "Destination keys and URLs available to 555stream.",
+                      })}
+                    </div>
+                  </div>
+                  <div className="go-live-modal__setup-card rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
+                    <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                      {t("aliceoperator.setup.preferredChain", {
+                        defaultValue: "Preferred chain",
+                      })}
+                    </div>
+                    <div className="mt-2 text-lg font-semibold text-txt">
+                      {preferredChain === "solana"
+                        ? "Solana"
+                        : "Ethereum fallback"}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-strong">
+                      {t("aliceoperator.setup.chainHint", {
+                        defaultValue: "Used for linked-wallet provisioning.",
+                      })}
+                    </div>
+                  </div>
+                </div>
 
-          {step === "channel-selection" ? (
-            <div className="space-y-4">
-              <div>
-                <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                  {t("aliceoperator.channelSelectionEyebrow", {
-                    defaultValue: "Channel selection",
-                  })}
-                </div>
-                <div className={`${OPERATOR_SECTION_TITLE_CLASSNAME} mt-2`}>
-                  {t("aliceoperator.channelSelectionTitle", {
-                    defaultValue: "Choose where Alice should go live",
-                  })}
-                </div>
-                <p className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-2`}>
-                  {t("aliceoperator.channelSelectionHint", {
-                    defaultValue:
-                      "Only ready destinations can be selected for the current launch.",
-                  })}
-                </p>
-              </div>
-              {renderInlineNotice()}
-              <fieldset
-                className="space-y-3"
-                aria-labelledby={channelSelectionTitleId}
-              >
-                <legend id={channelSelectionTitleId} className="sr-only">
-                  {t("aliceoperator.channelSelectionTitle", {
-                    defaultValue: "Choose where Alice should go live",
-                  })}
-                </legend>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {summary.destinations.map((destination) => {
-                  const active = selectedChannels.includes(destination.id);
-                  const selectable = destination.readinessState === "ready";
-                  return (
-                    <label
-                      key={destination.id}
-                      className={`rounded-[1.5rem] border px-4 py-4 text-left transition ${
-                        active
-                          ? "border-accent/35 bg-accent/12"
-                          : "border-border/35 bg-bg-elevated"
-                      } ${!selectable ? "cursor-not-allowed opacity-60" : "hover:border-border/60 hover:bg-bg-hover focus-within:ring-2 focus-within:ring-accent/35"}`}
+                <div className="go-live-modal__setup-panel rounded-[1.75rem] border border-border/35 bg-bg-elevated px-5 py-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <OperatorPill tone="warning">
+                      {t("aliceoperator.setupRequiredBadge", {
+                        defaultValue: "Setup required",
+                      })}
+                    </OperatorPill>
+                    {streamPlugin ? (
+                      <OperatorPill>{streamPlugin.name}</OperatorPill>
+                    ) : null}
+                  </div>
+                  <p
+                    className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-3`}
+                  >
+                    {t("aliceoperator.setupStepDescription", {
+                      defaultValue:
+                        "Finish authentication and channel readiness here. You do not need to leave the stage to complete 555stream onboarding.",
+                    })}
+                  </p>
+                  {!streamPlugin ? (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      aria-atomic="true"
+                      className="mt-4 rounded-[1.25rem] border border-warn/26 bg-warn/10 px-4 py-3 text-sm leading-6 text-warn"
                     >
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={active}
-                        disabled={!selectable}
-                        onChange={() =>
-                          setSelectedChannels((current) =>
-                            current.includes(destination.id)
-                              ? current.filter((entry) => entry !== destination.id)
-                              : [...current, destination.id],
-                          )
-                        }
-                      />
-                      <div className="flex items-start justify-between gap-3">
+                      {streamPluginMissingMessage}
+                    </div>
+                  ) : null}
+                  {summary.runtimeWarnings.length > 0 ? (
+                    <div className="mt-4 space-y-2 rounded-[1.25rem] border border-border/35 bg-black/18 px-4 py-3 text-sm leading-6 text-warn">
+                      {summary.runtimeWarnings.map((warning) => (
+                        <div key={warning}>
+                          {formatOperatorErrorMessage(
+                            warning,
+                            t("aliceoperator.streamRuntimeWarning", {
+                              defaultValue:
+                                "555stream setup needs attention before launch.",
+                            }),
+                            t,
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`${OPERATOR_ACTION_BUTTON_BASE_CLASSNAME} ${OPERATOR_ACTION_BUTTON_TONE_CLASSNAME.accent}`}
+                      disabled={Boolean(busyAction) || !streamPlugin}
+                      onClick={() =>
+                        void executeSetupAction(
+                          "wallet-login",
+                          "STREAM555_AUTH_WALLET_LOGIN",
+                          {},
+                          "Wallet authentication completed.",
+                          "Wallet authentication failed.",
+                        )
+                      }
+                    >
+                      {busyAction === "wallet-login"
+                        ? t("aliceoperator.authenticating", {
+                            defaultValue: "Authenticating...",
+                          })
+                        : t("aliceoperator.authenticate", {
+                            defaultValue: "Authenticate",
+                          })}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={OPERATOR_ACTION_BUTTON_BASE_CLASSNAME}
+                      disabled={Boolean(busyAction) || !streamPlugin}
+                      onClick={() =>
+                        void executeSetupAction(
+                          "wallet-provision",
+                          "STREAM555_AUTH_WALLET_PROVISION_LINKED",
+                          { targetChain: preferredChain },
+                          `Linked wallet provisioned for ${preferredChain}.`,
+                          "Linked wallet provisioning failed.",
+                        )
+                      }
+                    >
+                      {busyAction === "wallet-provision"
+                        ? t("aliceoperator.provisioning", {
+                            defaultValue: "Provisioning...",
+                          })
+                        : t("aliceoperator.provisionViaSw4p", {
+                            defaultValue: "Provision via sw4p",
+                          })}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={OPERATOR_ACTION_BUTTON_BASE_CLASSNAME}
+                      disabled={Boolean(busyAction)}
+                      onClick={() => void refreshRuntimeStatus()}
+                    >
+                      {t("aliceoperator.refreshStatus", {
+                        defaultValue: "Refresh status",
+                      })}
+                    </Button>
+                  </div>
+
+                  {schema ? (
+                    <div className="go-live-modal__setup-config mt-5 rounded-[1.5rem] border border-border/35 bg-black/16 px-4 py-4">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <div className="text-base font-medium text-txt">
-                            {destination.label}
+                          <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                            {t("aliceoperator.configureNow", {
+                              defaultValue: "Configure now",
+                            })}
                           </div>
                           <div className="mt-1 text-sm text-muted-strong">
-                            {labelForDestinationReadiness(destination.readinessState, t)}
+                            {t("aliceoperator.configureNowHint", {
+                              defaultValue:
+                                "Save only the onboarding fields needed for authentication and channel readiness.",
+                            })}
                           </div>
                         </div>
-                        {active ? <OperatorPill tone="accent">Selected</OperatorPill> : null}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`${OPERATOR_ACTION_BUTTON_BASE_CLASSNAME} ${OPERATOR_ACTION_BUTTON_TONE_CLASSNAME.accent}`}
+                          disabled={
+                            !streamPlugin || pluginSaving.has(streamPlugin.id)
+                          }
+                          onClick={() => void handleSaveSetup()}
+                        >
+                          {streamPlugin && pluginSaving.has(streamPlugin.id)
+                            ? t("aliceoperator.savingSetup", {
+                                defaultValue: "Saving...",
+                              })
+                            : t("aliceoperator.saveSetup", {
+                                defaultValue: "Save setup",
+                              })}
+                        </Button>
                       </div>
-                    </label>
-                  );
-                })}
-              </div>
-              </fieldset>
-            </div>
-          ) : null}
-
-          {step === "segment-selection" ? (
-            <div className="space-y-4">
-              <div>
-                <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                  {t("aliceoperator.modeSelectionEyebrow", {
-                    defaultValue: "Launch mode",
-                  })}
-                </div>
-                <div id={modeSelectionTitleId} className={`${OPERATOR_SECTION_TITLE_CLASSNAME} mt-2`}>
-                  {t("aliceoperator.modeSelectionTitle", {
-                    defaultValue: "Choose Alice's launch format",
-                  })}
-                </div>
-                <p className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-2`}>
-                  {t("aliceoperator.modeSelectionHint", {
-                    defaultValue:
-                      "These modes mirror the old Alice launch contract while using the current runtime.",
-                  })}
-                </p>
-              </div>
-              {renderInlineNotice()}
-              <fieldset
-                className="space-y-4"
-                aria-labelledby={modeSelectionTitleId}
-              >
-                <legend className="sr-only">
-                  {t("aliceoperator.modeSelectionTitle", {
-                    defaultValue: "Choose Alice's launch format",
-                  })}
-                </legend>
-              <div
-                className="go-live-modal__mode-grid"
-                data-go-live-mode-grid
-              >
-                {modeOptions.map((option) => {
-                  const active = option.value === launchMode;
-                  const icon =
-                    option.value === "camera" ? (
-                      <Camera className="h-5 w-5" />
-                    ) : option.value === "radio" ? (
-                      <Radio className="h-5 w-5" />
-                    ) : option.value === "play-games" ? (
-                      <Gamepad2 className="h-5 w-5" />
-                    ) : option.value === "reaction" ? (
-                      <Sparkles className="h-5 w-5" />
-                    ) : (
-                      <Video className="h-5 w-5" />
-                    );
-                  return (
-                    <label
-                      key={option.value}
-                      className={`go-live-modal__mode-card${
-                        active ? " go-live-modal__mode-card--active" : ""
-                      }${!option.enabled ? " cursor-not-allowed opacity-55" : ""}`}
-                      data-go-live-mode-card={option.value}
-                    >
-                      <input
-                        type="radio"
-                        name="alice-go-live-mode"
-                        className="sr-only"
-                        checked={active}
-                        disabled={!option.enabled}
-                        onChange={() => setLaunchMode(option.value)}
+                      <ConfigRenderer
+                        schema={schema}
+                        hints={hints}
+                        values={mergedValues}
+                        setKeys={setKeys}
+                        registry={defaultRegistry}
+                        pluginId={streamPlugin?.id}
+                        onChange={(key, value) =>
+                          setDraftConfig((current) => ({
+                            ...current,
+                            [key]: value,
+                          }))
+                        }
                       />
-                      <span className="go-live-modal__mode-card-head">
-                        <span className="go-live-modal__mode-card-icon">
-                          {icon}
-                        </span>
-                        <span className="go-live-modal__mode-card-copy">
-                          <span className="go-live-modal__mode-card-title">
-                            {option.title}
-                          </span>
-                          <span className="go-live-modal__mode-card-support">
-                            {option.support}
-                          </span>
-                        </span>
-                        {active ? (
-                          <span
-                            className="go-live-modal__mode-card-check"
-                            aria-hidden="true"
-                          >
-                            <Check className="h-4 w-4" />
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="go-live-modal__mode-card-description">
-                        {option.description}
-                      </span>
-                      <span className="go-live-modal__mode-card-meta">
-                        {option.availability}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              </fieldset>
-            </div>
-          ) : null}
-
-          {step === "review-and-launch" ? (
-            <div className="space-y-4">
-              <div>
-                <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                  {t("aliceoperator.reviewEyebrow", {
-                    defaultValue: "Review and launch",
-                  })}
-                </div>
-                <div id={reviewTitleId} className={`${OPERATOR_SECTION_TITLE_CLASSNAME} mt-2`}>
-                  {t("aliceoperator.reviewTitle", {
-                    defaultValue: "Ready to launch Alice live",
-                  })}
-                </div>
-                <p className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-2`}>
-                  {t("aliceoperator.reviewHint", {
-                    defaultValue:
-                      "Confirm the selected channels and mode before dispatching the guided launch plan.",
-                  })}
-                </p>
-              </div>
-              {renderInlineNotice()}
-              <div className="rounded-[1.75rem] border border-border/35 bg-bg-elevated px-5 py-5">
-                <div className="space-y-3">
-                  {reviewRows.map((row) => (
-                    <div
-                      key={row.label}
-                      className="flex flex-col items-start gap-1 rounded-[1.25rem] border border-border/35 bg-black/16 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-                    >
-                      <span className="text-sm text-muted-strong">{row.label}</span>
-                      <span className="text-sm font-medium text-txt">{row.value}</span>
                     </div>
-                  ))}
+                  ) : null}
                 </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+
+            {step === "channel-selection" ? (
+              <div className="space-y-4">
+                <div>
+                  <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                    {t("aliceoperator.channelSelectionEyebrow", {
+                      defaultValue: "Channel selection",
+                    })}
+                  </div>
+                  <div className={`${OPERATOR_SECTION_TITLE_CLASSNAME} mt-2`}>
+                    {t("aliceoperator.channelSelectionTitle", {
+                      defaultValue: "Choose where Alice should go live",
+                    })}
+                  </div>
+                  <p
+                    className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-2`}
+                  >
+                    {t("aliceoperator.channelSelectionHint", {
+                      defaultValue:
+                        "Only ready destinations can be selected for the current launch.",
+                    })}
+                  </p>
+                </div>
+                {renderInlineNotice()}
+                <fieldset
+                  className="space-y-3"
+                  aria-labelledby={channelSelectionTitleId}
+                >
+                  <legend id={channelSelectionTitleId} className="sr-only">
+                    {t("aliceoperator.channelSelectionTitle", {
+                      defaultValue: "Choose where Alice should go live",
+                    })}
+                  </legend>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {summary.destinations.map((destination) => {
+                      const active = selectedChannels.includes(destination.id);
+                      const selectable = destination.readinessState === "ready";
+                      return (
+                        <label
+                          key={destination.id}
+                          className={`rounded-[1.5rem] border px-4 py-4 text-left transition ${
+                            active
+                              ? "border-accent/35 bg-accent/12"
+                              : "border-border/35 bg-bg-elevated"
+                          } ${!selectable ? "cursor-not-allowed opacity-60" : "hover:border-border/60 hover:bg-bg-hover focus-within:ring-2 focus-within:ring-accent/35"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={active}
+                            disabled={!selectable}
+                            onChange={() =>
+                              setSelectedChannels((current) =>
+                                current.includes(destination.id)
+                                  ? current.filter(
+                                      (entry) => entry !== destination.id,
+                                    )
+                                  : [...current, destination.id],
+                              )
+                            }
+                          />
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-base font-medium text-txt">
+                                {destination.label}
+                              </div>
+                              <div className="mt-1 text-sm text-muted-strong">
+                                {labelForDestinationReadiness(
+                                  destination.readinessState,
+                                  t,
+                                )}
+                              </div>
+                            </div>
+                            {active ? (
+                              <OperatorPill tone="accent">
+                                Selected
+                              </OperatorPill>
+                            ) : null}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              </div>
+            ) : null}
+
+            {step === "segment-selection" ? (
+              <div className="space-y-4">
+                <div>
+                  <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                    {t("aliceoperator.modeSelectionEyebrow", {
+                      defaultValue: "Launch mode",
+                    })}
+                  </div>
+                  <div
+                    id={modeSelectionTitleId}
+                    className={`${OPERATOR_SECTION_TITLE_CLASSNAME} mt-2`}
+                  >
+                    {t("aliceoperator.modeSelectionTitle", {
+                      defaultValue: "Choose Alice's launch format",
+                    })}
+                  </div>
+                  <p
+                    className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-2`}
+                  >
+                    {t("aliceoperator.modeSelectionHint", {
+                      defaultValue:
+                        "These modes mirror the old Alice launch contract while using the current runtime.",
+                    })}
+                  </p>
+                </div>
+                {renderInlineNotice()}
+                <fieldset
+                  className="space-y-4"
+                  aria-labelledby={modeSelectionTitleId}
+                >
+                  <legend className="sr-only">
+                    {t("aliceoperator.modeSelectionTitle", {
+                      defaultValue: "Choose Alice's launch format",
+                    })}
+                  </legend>
+                  <div
+                    className="go-live-modal__mode-grid"
+                    data-go-live-mode-grid
+                  >
+                    {modeOptions.map((option) => {
+                      const active = option.value === launchMode;
+                      const icon =
+                        option.value === "camera" ? (
+                          <Camera className="h-5 w-5" />
+                        ) : option.value === "radio" ? (
+                          <Radio className="h-5 w-5" />
+                        ) : option.value === "play-games" ? (
+                          <Gamepad2 className="h-5 w-5" />
+                        ) : option.value === "reaction" ? (
+                          <Sparkles className="h-5 w-5" />
+                        ) : (
+                          <Video className="h-5 w-5" />
+                        );
+                      return (
+                        <label
+                          key={option.value}
+                          className={`go-live-modal__mode-card${
+                            active ? " go-live-modal__mode-card--active" : ""
+                          }${!option.enabled ? " cursor-not-allowed opacity-55" : ""}`}
+                          data-go-live-mode-card={option.value}
+                        >
+                          <input
+                            type="radio"
+                            name="alice-go-live-mode"
+                            className="sr-only"
+                            checked={active}
+                            disabled={!option.enabled}
+                            onChange={() => setLaunchMode(option.value)}
+                          />
+                          <span className="go-live-modal__mode-card-head">
+                            <span className="go-live-modal__mode-card-icon">
+                              {icon}
+                            </span>
+                            <span className="go-live-modal__mode-card-copy">
+                              <span className="go-live-modal__mode-card-title">
+                                {option.title}
+                              </span>
+                              <span className="go-live-modal__mode-card-support">
+                                {option.support}
+                              </span>
+                            </span>
+                            {active ? (
+                              <span
+                                className="go-live-modal__mode-card-check"
+                                aria-hidden="true"
+                              >
+                                <Check className="h-4 w-4" />
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="go-live-modal__mode-card-description">
+                            {option.description}
+                          </span>
+                          <span className="go-live-modal__mode-card-meta">
+                            {option.availability}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              </div>
+            ) : null}
+
+            {step === "review-and-launch" ? (
+              <div className="space-y-4">
+                <div>
+                  <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
+                    {t("aliceoperator.reviewEyebrow", {
+                      defaultValue: "Review and launch",
+                    })}
+                  </div>
+                  <div
+                    id={reviewTitleId}
+                    className={`${OPERATOR_SECTION_TITLE_CLASSNAME} mt-2`}
+                  >
+                    {t("aliceoperator.reviewTitle", {
+                      defaultValue: "Ready to launch Alice live",
+                    })}
+                  </div>
+                  <p
+                    className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-2`}
+                  >
+                    {t("aliceoperator.reviewHint", {
+                      defaultValue:
+                        "Confirm the selected channels and mode before dispatching the guided launch plan.",
+                    })}
+                  </p>
+                </div>
+                {renderInlineNotice()}
+                <div className="rounded-[1.75rem] border border-border/35 bg-bg-elevated px-5 py-5">
+                  <div className="space-y-3">
+                    {reviewRows.map((row) => (
+                      <div
+                        key={row.label}
+                        className="flex flex-col items-start gap-1 rounded-[1.25rem] border border-border/35 bg-black/16 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                      >
+                        <span className="text-sm text-muted-strong">
+                          {row.label}
+                        </span>
+                        <span className="text-sm font-medium text-txt">
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="go-live-modal__footer">

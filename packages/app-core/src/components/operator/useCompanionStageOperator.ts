@@ -21,6 +21,10 @@ import {
   titleForStream555LaunchMode,
   type Stream555LaunchMode,
 } from "./stream555-setup";
+import {
+  formatOperatorErrorMessage,
+  formatUnknownOperatorError,
+} from "./operator-error-messages";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ALICE_ARCADE_PLUGIN_IDS = new Set(["five55-games"]);
@@ -57,8 +61,7 @@ function getArcadeGameLabel(game: {
   label?: string | null;
 }) {
   return [game.title, game.label, game.name, game.id].find(
-    (candidate) =>
-      typeof candidate === "string" && candidate.trim().length > 0,
+    (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
   ) as string;
 }
 
@@ -113,9 +116,7 @@ function selectedResult(
   response: AliceOperatorPlanResponse,
   action: AliceOperatorActionName,
 ): AliceOperatorActionResult | null {
-  return (
-    response.results.find((entry) => entry.action === action) ?? null
-  );
+  return response.results.find((entry) => entry.action === action) ?? null;
 }
 
 function actionDidSucceed(
@@ -164,14 +165,17 @@ export function useCompanionStageOperator() {
 
   const [streamAvailable, setStreamAvailable] = useState(true);
   const [streamCapabilityPresent, setStreamCapabilityPresent] = useState(false);
-  const [streamCapabilityResolved, setStreamCapabilityResolved] = useState(false);
+  const [streamCapabilityResolved, setStreamCapabilityResolved] =
+    useState(false);
   const [streamLive, setStreamLive] = useState(false);
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [uptime, setUptime] = useState(0);
   const [frameCount, setFrameCount] = useState(0);
   const [destinationsLoading, setDestinationsLoading] = useState(false);
-  const [destinations, setDestinations] = useState<Array<{ id: string; name: string }>>([]);
+  const [destinations, setDestinations] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   const [activeDestination, setActiveDestination] = useState<{
     id: string;
     name: string;
@@ -241,7 +245,8 @@ export function useCompanionStageOperator() {
     () =>
       plugins.some(
         (plugin) =>
-          isStream555PrimaryPlugin(plugin) && (plugin.enabled || plugin.isActive),
+          isStream555PrimaryPlugin(plugin) &&
+          (plugin.enabled || plugin.isActive),
       ),
     [plugins],
   );
@@ -257,7 +262,13 @@ export function useCompanionStageOperator() {
         defaultValue: "No game selected",
       })
     );
-  }, [gameState?.activeGameId, gameState?.activeGameLabel, games, selectedGameId, t]);
+  }, [
+    gameState?.activeGameId,
+    gameState?.activeGameLabel,
+    games,
+    selectedGameId,
+    t,
+  ]);
 
   const activeQuickCommands = useMemo(
     () => hyperscapeQuickCommands.filter((command) => command.available),
@@ -317,12 +328,13 @@ export function useCompanionStageOperator() {
           setStreamError(null);
           return { status: null, error: null };
         }
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : t("aliceoperator.streamStatusFailed", {
-                defaultValue: "Stream status is temporarily unavailable.",
-              });
+        const errorMessage = formatUnknownOperatorError(
+          err,
+          t("aliceoperator.streamStatusFailed", {
+            defaultValue: "Stream status is temporarily unavailable.",
+          }),
+          t,
+        );
         setStreamCapabilityPresent(true);
         setStreamCapabilityResolved(true);
         setStreamAvailable(true);
@@ -385,7 +397,9 @@ export function useCompanionStageOperator() {
         setStreamCapabilityPresent(true);
         setStreamCapabilityResolved(true);
         setDestinations(nextDestinations);
-        setActiveDestination((current) => current ?? nextDestinations[0] ?? null);
+        setActiveDestination(
+          (current) => current ?? nextDestinations[0] ?? null,
+        );
       } catch {
         if (!mounted) return;
         setDestinations([]);
@@ -424,11 +438,13 @@ export function useCompanionStageOperator() {
       });
     } catch (err) {
       setCatalogError(
-        err instanceof Error
-          ? err.message
-          : t("aliceoperator.catalogLoadFailed", {
-              defaultValue: "Failed to load the Alice arcade catalog.",
-            }),
+        formatUnknownOperatorError(
+          err,
+          t("aliceoperator.catalogLoadFailed", {
+            defaultValue: "Failed to load the Alice arcade catalog.",
+          }),
+          t,
+        ),
       );
     } finally {
       setCatalogLoading(false);
@@ -442,14 +458,18 @@ export function useCompanionStageOperator() {
     try {
       const response = await client.getArcade555GameState();
       setGameState(response);
-      setSelectedGameId((current) => current || response.activeGameId || current);
+      setSelectedGameId(
+        (current) => current || response.activeGameId || current,
+      );
     } catch (err) {
       setStateError(
-        err instanceof Error
-          ? err.message
-          : t("aliceoperator.stateLoadFailed", {
-              defaultValue: "Failed to load Alice arcade session state.",
-            }),
+        formatUnknownOperatorError(
+          err,
+          t("aliceoperator.stateLoadFailed", {
+            defaultValue: "Failed to load Alice arcade session state.",
+          }),
+          t,
+        ),
       );
     } finally {
       setStateLoading(false);
@@ -495,7 +515,15 @@ export function useCompanionStageOperator() {
         setHyperscapeError(null);
       } else {
         setHyperscapeAvailable(true);
-        setHyperscapeError(err instanceof Error ? err.message : null);
+        setHyperscapeError(
+          formatUnknownOperatorError(
+            err,
+            t("aliceoperator.hyperscapeLoadFailed", {
+              defaultValue: "Hyperscape controls are temporarily unavailable.",
+            }),
+            t,
+          ),
+        );
       }
       setHyperscapeAgent(null);
       setHyperscapeQuickCommands([]);
@@ -503,7 +531,7 @@ export function useCompanionStageOperator() {
     } finally {
       setHyperscapeLoading(false);
     }
-  }, [hyperscapeRuntimeAvailable, isAliceActive]);
+  }, [hyperscapeRuntimeAvailable, isAliceActive, t]);
 
   useEffect(() => {
     if (!isAliceActive) return;
@@ -518,12 +546,20 @@ export function useCompanionStageOperator() {
       const response = await client.getEmotes();
       setEmotes(Array.isArray(response.emotes) ? response.emotes : []);
     } catch (err) {
-      setEmotesError(err instanceof Error ? err.message : "Failed to load motions.");
+      setEmotesError(
+        formatUnknownOperatorError(
+          err,
+          t("aliceoperator.motionLoadFailed", {
+            defaultValue: "Failed to load motions.",
+          }),
+          t,
+        ),
+      );
       setEmotes([]);
     } finally {
       setEmotesLoading(false);
     }
-  }, [isAliceActive]);
+  }, [isAliceActive, t]);
 
   useEffect(() => {
     if (!isAliceActive) return;
@@ -538,7 +574,14 @@ export function useCompanionStageOperator() {
   );
 
   const executePlan = useCallback(
-    async (steps: Array<{ id?: string; action: AliceOperatorActionName; params?: Record<string, unknown> }>, stopOnFailure = true) => {
+    async (
+      steps: Array<{
+        id?: string;
+        action: AliceOperatorActionName;
+        params?: Record<string, unknown>;
+      }>,
+      stopOnFailure = true,
+    ) => {
       return client.executeAliceOperatorPlan({ steps, stopOnFailure });
     },
     [],
@@ -569,11 +612,27 @@ export function useCompanionStageOperator() {
       const response = await executePlan([{ action, params }], true);
       const result = selectedResult(response, action);
       if (!result?.success) {
-        throw new Error(result?.message || fallbackMessage);
+        throw new Error(
+          formatOperatorErrorMessage(result?.message, fallbackMessage, t),
+        );
       }
       return result;
     },
-    [executePlan],
+    [executePlan, t],
+  );
+
+  const operatorActionMessage = useCallback(
+    (
+      response: AliceOperatorPlanResponse,
+      action: AliceOperatorActionName,
+      fallback: string,
+    ) =>
+      formatOperatorErrorMessage(
+        actionMessage(response, action, fallback),
+        fallback,
+        t,
+      ),
+    [t],
   );
 
   const performGuidedGoLive = useCallback(
@@ -583,7 +642,11 @@ export function useCompanionStageOperator() {
       selectedGameId?: string | null;
     }): Promise<AliceGoLiveLaunchResult> => {
       const selectedChannels = Array.from(
-        new Set(config.channels.map((entry) => entry.trim().toLowerCase()).filter(Boolean)),
+        new Set(
+          config.channels
+            .map((entry) => entry.trim().toLowerCase())
+            .filter(Boolean),
+        ),
       );
       const destinationPlatforms = selectedChannels.join(",");
       const layoutMode = layoutModeForLaunchMode(config.launchMode);
@@ -661,7 +724,7 @@ export function useCompanionStageOperator() {
           );
           if (!actionDidSucceed(response, "STREAM555_GO_LIVE")) {
             return failed(
-              actionMessage(
+              operatorActionMessage(
                 response,
                 "STREAM555_GO_LIVE",
                 t("aliceoperator.cameraLaunchFailed", {
@@ -674,7 +737,15 @@ export function useCompanionStageOperator() {
           // control-plane path; a second local delivery poll only adds lag.
           const refreshed = await refreshStreamStatus({ force: true });
           if (refreshed.error) {
-            return failed(refreshed.error);
+            return failed(
+              formatOperatorErrorMessage(
+                refreshed.error,
+                t("aliceoperator.streamStatusFailed", {
+                  defaultValue: "Stream status is temporarily unavailable.",
+                }),
+                t,
+              ),
+            );
           }
           if (!refreshed.status?.running || !refreshed.status.ffmpegAlive) {
             return partial(
@@ -730,7 +801,7 @@ export function useCompanionStageOperator() {
             );
           }
           return failed(
-            actionMessage(
+            operatorActionMessage(
               response,
               "STREAM555_GO_LIVE",
               t("aliceoperator.radioLaunchFailed", {
@@ -758,7 +829,7 @@ export function useCompanionStageOperator() {
           );
           if (!actionDidSucceed(response, "STREAM555_SCREEN_SHARE")) {
             return failed(
-              actionMessage(
+              operatorActionMessage(
                 response,
                 "STREAM555_SCREEN_SHARE",
                 t("aliceoperator.screenShareFailed", {
@@ -775,7 +846,7 @@ export function useCompanionStageOperator() {
               }),
             );
           }
-          const attachFailure = actionMessage(
+          const attachFailure = operatorActionMessage(
             response,
             "STREAM555_DESTINATIONS_APPLY",
             t("aliceoperator.destinationAttachFailed", {
@@ -840,22 +911,34 @@ export function useCompanionStageOperator() {
             );
           }
           if (actionDidSucceed(response, "STREAM555_GO_LIVE")) {
-            const bootstrapFailure = actionDidSucceed(response, "STREAM555_GO_LIVE_SEGMENTS")
+            const bootstrapFailure = actionDidSucceed(
+              response,
+              "STREAM555_GO_LIVE_SEGMENTS",
+            )
               ? null
-              : actionMessage(
+              : operatorActionMessage(
                   response,
                   "STREAM555_GO_LIVE_SEGMENTS",
                   "Reaction segment bootstrap failed.",
                 );
-            const overrideFailure = actionDidSucceed(response, "STREAM555_SEGMENT_OVERRIDE")
+            const overrideFailure = actionDidSucceed(
+              response,
+              "STREAM555_SEGMENT_OVERRIDE",
+            )
               ? null
-              : actionMessage(
+              : operatorActionMessage(
                   response,
                   "STREAM555_SEGMENT_OVERRIDE",
                   "Reaction segment override failed.",
                 );
-            await executePlan([{ action: "STREAM555_END_LIVE", params: {} }], false);
-            if (bootstrapFailure && isSegmentModeUnavailableFailure(bootstrapFailure)) {
+            await executePlan(
+              [{ action: "STREAM555_END_LIVE", params: {} }],
+              false,
+            );
+            if (
+              bootstrapFailure &&
+              isSegmentModeUnavailableFailure(bootstrapFailure)
+            ) {
               return blocked(
                 t("aliceoperator.reactionBlocked", {
                   defaultValue:
@@ -869,7 +952,7 @@ export function useCompanionStageOperator() {
             );
           }
           return failed(
-            actionMessage(
+            operatorActionMessage(
               response,
               "STREAM555_GO_LIVE",
               t("aliceoperator.reactionFailed", {
@@ -904,7 +987,7 @@ export function useCompanionStageOperator() {
           );
           if (!actionDidSucceed(response, "FIVE55_GAMES_GO_LIVE_PLAY")) {
             return failed(
-              actionMessage(
+              operatorActionMessage(
                 response,
                 "FIVE55_GAMES_GO_LIVE_PLAY",
                 t("aliceoperator.goLivePlayFailed", {
@@ -928,11 +1011,13 @@ export function useCompanionStageOperator() {
         );
       } catch (err) {
         return failed(
-          err instanceof Error
-            ? err.message
-            : t("aliceoperator.goLiveFailed", {
-                defaultValue: "Go-live launch failed.",
-              }),
+          formatUnknownOperatorError(
+            err,
+            t("aliceoperator.goLiveFailed", {
+              defaultValue: "Go-live launch failed.",
+            }),
+            t,
+          ),
         );
       }
     },
@@ -940,6 +1025,7 @@ export function useCompanionStageOperator() {
       executePlan,
       gameState?.activeGameId,
       loadGameState,
+      operatorActionMessage,
       recordOperatorAction,
       refreshStreamStatus,
       selectedGameId,
@@ -977,13 +1063,13 @@ export function useCompanionStageOperator() {
         }
         await loadGameState();
       } catch (err) {
-        const message = err instanceof Error ? err.message : fallbackMessage;
+        const message = formatUnknownOperatorError(err, fallbackMessage, t);
         setActionNotice(message, "error", 3600);
       } finally {
         setBusyAction(null);
       }
     },
-    [loadGameState, setActionNotice],
+    [loadGameState, setActionNotice, t],
   );
 
   const startSelectedGame = useCallback(async () => {
@@ -1004,7 +1090,13 @@ export function useCompanionStageOperator() {
         defaultValue: "Failed to start the selected Alice arcade game.",
       }),
     );
-  }, [recordOperatorAction, requireSelectedGameId, runArcadeAction, selectedGameLabel, t]);
+  }, [
+    recordOperatorAction,
+    requireSelectedGameId,
+    runArcadeAction,
+    selectedGameLabel,
+    t,
+  ]);
 
   const switchSelectedGame = useCallback(async () => {
     const gameId = requireSelectedGameId();
@@ -1024,7 +1116,13 @@ export function useCompanionStageOperator() {
         defaultValue: "Failed to switch the current Alice arcade game.",
       }),
     );
-  }, [recordOperatorAction, requireSelectedGameId, runArcadeAction, selectedGameLabel, t]);
+  }, [
+    recordOperatorAction,
+    requireSelectedGameId,
+    runArcadeAction,
+    selectedGameLabel,
+    t,
+  ]);
 
   const stopArcadeSession = useCallback(async () => {
     await recordOperatorAction({
@@ -1050,15 +1148,27 @@ export function useCompanionStageOperator() {
     try {
       const result = await performGuidedGoLive({
         channels:
-          activeDestination?.id != null ? [activeDestination.id] : destinations.map((entry) => entry.id),
+          activeDestination?.id != null
+            ? [activeDestination.id]
+            : destinations.map((entry) => entry.id),
         launchMode: "play-games",
         selectedGameId,
       });
-      setActionNotice(result.message, result.tone === "success" ? "success" : "error", 3800);
+      setActionNotice(
+        result.message,
+        result.tone === "success" ? "success" : "error",
+        3800,
+      );
     } finally {
       setBusyAction(null);
     }
-  }, [activeDestination?.id, destinations, performGuidedGoLive, selectedGameId, setActionNotice]);
+  }, [
+    activeDestination?.id,
+    destinations,
+    performGuidedGoLive,
+    selectedGameId,
+    setActionNotice,
+  ]);
 
   const runQuickCommand = useCallback(
     async (command: HyperscapeQuickCommand) => {
@@ -1087,11 +1197,13 @@ export function useCompanionStageOperator() {
         setActionNotice(command.label, "success", 2200);
       } catch (err) {
         setActionNotice(
-          err instanceof Error
-            ? err.message
-            : t("aliceoperator.quickCommandFailed", {
-                defaultValue: "Failed to send the selected quick command.",
-              }),
+          formatUnknownOperatorError(
+            err,
+            t("aliceoperator.quickCommandFailed", {
+              defaultValue: "Failed to send the selected quick command.",
+            }),
+            t,
+          ),
           "error",
           3200,
         );
@@ -1131,14 +1243,26 @@ export function useCompanionStageOperator() {
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error ? err.message : "End-live failed.",
+        formatUnknownOperatorError(
+          err,
+          t("aliceoperator.endLiveFailed", {
+            defaultValue: "End-live failed.",
+          }),
+          t,
+        ),
         "error",
         3600,
       );
     } finally {
       setBusyAction(null);
     }
-  }, [recordOperatorAction, refreshStreamStatus, runBridgeAction, setActionNotice, t]);
+  }, [
+    recordOperatorAction,
+    refreshStreamStatus,
+    runBridgeAction,
+    setActionNotice,
+    t,
+  ]);
 
   const runLiveUtilityAction = useCallback(
     async (
@@ -1156,14 +1280,10 @@ export function useCompanionStageOperator() {
           fallbackText: label,
         });
         const result = await runBridgeAction(action, params, fallbackMessage);
-        setActionNotice(
-          result.message || successMessage,
-          "success",
-          3200,
-        );
+        setActionNotice(result.message || successMessage, "success", 3200);
       } catch (err) {
         setActionNotice(
-          err instanceof Error ? err.message : fallbackMessage,
+          formatUnknownOperatorError(err, fallbackMessage, t),
           "error",
           3600,
         );
@@ -1171,7 +1291,7 @@ export function useCompanionStageOperator() {
         setBusyAction(null);
       }
     },
-    [recordOperatorAction, runBridgeAction, setActionNotice],
+    [recordOperatorAction, runBridgeAction, setActionNotice, t],
   );
 
   const runScreenShareAction = useCallback(async () => {
@@ -1203,18 +1323,26 @@ export function useCompanionStageOperator() {
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error
-          ? err.message
-          : t("aliceoperator.screenShareFailed", {
-              defaultValue: "Screen share launch failed.",
-            }),
+        formatUnknownOperatorError(
+          err,
+          t("aliceoperator.screenShareFailed", {
+            defaultValue: "Screen share launch failed.",
+          }),
+          t,
+        ),
         "error",
         3600,
       );
     } finally {
       setBusyAction(null);
     }
-  }, [recordOperatorAction, refreshStreamStatus, runBridgeAction, setActionNotice, t]);
+  }, [
+    recordOperatorAction,
+    refreshStreamStatus,
+    runBridgeAction,
+    setActionNotice,
+    t,
+  ]);
 
   const runRadioAction = useCallback(async () => {
     setBusyAction("STREAM555_RADIO_CONTROL");
@@ -1244,11 +1372,13 @@ export function useCompanionStageOperator() {
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error
-          ? err.message
-          : t("aliceoperator.radioLaunchFailed", {
-              defaultValue: "Lo-fi radio launch failed.",
-            }),
+        formatUnknownOperatorError(
+          err,
+          t("aliceoperator.radioLaunchFailed", {
+            defaultValue: "Lo-fi radio launch failed.",
+          }),
+          t,
+        ),
         "error",
         3600,
       );
@@ -1310,7 +1440,7 @@ export function useCompanionStageOperator() {
         "STREAM555_GO_LIVE_SEGMENTS",
       )
         ? null
-        : actionMessage(
+        : operatorActionMessage(
             response,
             "STREAM555_GO_LIVE_SEGMENTS",
             t("aliceoperator.reactionFailed", {
@@ -1322,7 +1452,7 @@ export function useCompanionStageOperator() {
         "STREAM555_SEGMENT_OVERRIDE",
       )
         ? null
-        : actionMessage(
+        : operatorActionMessage(
             response,
             "STREAM555_SEGMENT_OVERRIDE",
             t("aliceoperator.reactionFailed", {
@@ -1344,18 +1474,26 @@ export function useCompanionStageOperator() {
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error
-          ? err.message
-          : t("aliceoperator.reactionFailed", {
-              defaultValue: "Reaction launch failed.",
-            }),
+        formatUnknownOperatorError(
+          err,
+          t("aliceoperator.reactionFailed", {
+            defaultValue: "Reaction launch failed.",
+          }),
+          t,
+        ),
         "error",
         3600,
       );
     } finally {
       setBusyAction(null);
     }
-  }, [executePlan, recordOperatorAction, setActionNotice, t]);
+  }, [
+    executePlan,
+    operatorActionMessage,
+    recordOperatorAction,
+    setActionNotice,
+    t,
+  ]);
 
   const runAdsAction = useCallback(async () => {
     setBusyAction("STREAM555_AD_CREATE");
@@ -1401,7 +1539,13 @@ export function useCompanionStageOperator() {
       );
     } catch (err) {
       setActionNotice(
-        err instanceof Error ? err.message : "Ad setup failed.",
+        formatUnknownOperatorError(
+          err,
+          t("aliceoperator.adsFailed", {
+            defaultValue: "Ad setup failed.",
+          }),
+          t,
+        ),
         "error",
         3600,
       );
@@ -1410,48 +1554,57 @@ export function useCompanionStageOperator() {
     }
   }, [recordOperatorAction, runBridgeAction, setActionNotice, t]);
 
-  const playEmote = useCallback(async (emoteId: string) => {
-    setBusyAction(`emote:${emoteId}`);
-    try {
-      const nextEmote = emotes.find((entry) => entry.id === emoteId);
-      if (!nextEmote) {
-        throw new Error(
-          t("aliceoperator.motionUnavailable", {
-            defaultValue: "Motion metadata is unavailable right now.",
-          }),
+  const playEmote = useCallback(
+    async (emoteId: string) => {
+      setBusyAction(`emote:${emoteId}`);
+      try {
+        const nextEmote = emotes.find((entry) => entry.id === emoteId);
+        if (!nextEmote) {
+          throw new Error(
+            t("aliceoperator.motionUnavailable", {
+              defaultValue: "Motion metadata is unavailable right now.",
+            }),
+          );
+        }
+        await recordOperatorAction({
+          label: nextEmote.name,
+          kind: "avatar",
+          fallbackText: nextEmote.name,
+        });
+        clearPendingEmoteReset();
+        setActiveEmoteId(emoteId);
+        const detail = await playAppEmote(nextEmote, {
+          showOverlay: false,
+          singleCycle: true,
+        });
+        scheduleActiveEmoteReset(detail);
+      } catch (err) {
+        clearPendingEmoteReset();
+        setActiveEmoteId(null);
+        setActionNotice(
+          formatUnknownOperatorError(
+            err,
+            t("aliceoperator.motionPlayFailed", {
+              defaultValue: "Failed to play motion.",
+            }),
+            t,
+          ),
+          "error",
+          3000,
         );
+      } finally {
+        setBusyAction(null);
       }
-      await recordOperatorAction({
-        label: nextEmote.name,
-        kind: "avatar",
-        fallbackText: nextEmote.name,
-      });
-      clearPendingEmoteReset();
-      setActiveEmoteId(emoteId);
-      const detail = await playAppEmote(nextEmote, {
-        showOverlay: false,
-        singleCycle: true,
-      });
-      scheduleActiveEmoteReset(detail);
-    } catch (err) {
-      clearPendingEmoteReset();
-      setActiveEmoteId(null);
-      setActionNotice(
-        err instanceof Error ? err.message : "Failed to play motion.",
-        "error",
-        3000,
-      );
-    } finally {
-      setBusyAction(null);
-    }
-  }, [
-    clearPendingEmoteReset,
-    emotes,
-    recordOperatorAction,
-    scheduleActiveEmoteReset,
-    setActionNotice,
-    t,
-  ]);
+    },
+    [
+      clearPendingEmoteReset,
+      emotes,
+      recordOperatorAction,
+      scheduleActiveEmoteReset,
+      setActionNotice,
+      t,
+    ],
+  );
 
   const stopEmote = useCallback(() => {
     clearPendingEmoteReset();
