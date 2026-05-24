@@ -50,6 +50,13 @@ RUN set -x; \
     cp -a packages/app-core/src node_modules/@elizaos/app-core/src 2>/dev/null || true; \
     cp -a packages/app-core/dist node_modules/@elizaos/app-core/dist 2>/dev/null || true; \
     ls node_modules/@elizaos/app-core/src/index.ts 2>/dev/null && echo "@elizaos/app-core Milady alias OK" || echo "WARN: app-core Milady alias missing"; \
+    # @elizaos/vault: app-core/agent source imports must resolve under tsx.
+    rm -rf node_modules/@elizaos/vault; \
+    mkdir -p node_modules/@elizaos/vault; \
+    cp eliza/packages/vault/package.json node_modules/@elizaos/vault/; \
+    cp -a eliza/packages/vault/src node_modules/@elizaos/vault/src 2>/dev/null || true; \
+    cp -a eliza/packages/vault/dist node_modules/@elizaos/vault/dist 2>/dev/null || true; \
+    ls node_modules/@elizaos/vault/src/index.ts 2>/dev/null && echo "@elizaos/vault src OK" || echo "WARN: @elizaos/vault src missing"; \
     # @miladyai/shared: app-core and agent source imports must resolve at runtime.
     rm -rf node_modules/@miladyai/shared; \
     mkdir -p node_modules/@miladyai/shared; \
