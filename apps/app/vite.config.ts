@@ -1778,12 +1778,22 @@ export default defineConfig({
           ...(fs.existsSync(elizaUiPkgPath)
             ? buildWorkspaceExportAliases("@elizaos/ui", elizaUiPkgPath)
             : []),
+          // Alice's `@elizaos/app-core` IS the `@miladyai/app-core` fork: the
+          // deploy Dockerfile repoints node_modules/@elizaos/app-core at
+          // packages/app-core for the runtime. The SPA bundle must resolve the
+          // same way. In local mode (an `eliza/` checkout is present) keep the
+          // upstream alias; in packages mode (production deploy, no `eliza/`
+          // checkout) alias `@elizaos/app-core` to the milaidy fork instead of
+          // letting it fall through to the upstream npm package — which bundles
+          // a stale BroadcastShell missing the `window.__agentShowControl` /
+          // `.avatar-ready` capture handshake (milaidy PR #82), so the
+          // capture-service times out at 20s and renders the fallback avatar.
           ...(fs.existsSync(elizaAppCorePkgPath)
             ? buildWorkspaceExportAliases(
                 "@elizaos/app-core",
                 elizaAppCorePkgPath,
               )
-            : []),
+            : buildWorkspaceExportAliases("@elizaos/app-core", appCorePkgPath)),
           // @elizaos/capacitor-<name> — dynamic walk of
           // eliza/packages/native-plugins/ for src/index.ts entries.
           ...resolveNativePluginAliasEntries(),
