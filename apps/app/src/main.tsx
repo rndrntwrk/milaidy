@@ -1,5 +1,11 @@
+// Source `App` (which renders the broadcast route -> <BroadcastShell/> with the
+// window.__agentShowControl / .avatar-ready capture handshake, milaidy PR #82)
+// from the milaidy fork explicitly. apps/app imports App from "@elizaos/app-core",
+// which the production vite build resolves to the upstream eliza app-core that has
+// no BroadcastShell; only milaidy's packages/app-core/src/App.tsx has the broadcast
+// route. The remaining names below stay on @elizaos/app-core (the eliza framework).
+import { App } from "@miladyai/app-core/App";
 import {
-  App,
   createPersistedActiveServer,
   ErrorBoundary,
   savePersistedActiveServer,
