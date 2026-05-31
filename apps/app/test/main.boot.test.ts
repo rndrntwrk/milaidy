@@ -206,6 +206,19 @@ describe("renderer boot guard", () => {
     expect(wrapper).not.toContain('useApp } from "@elizaos/ui"');
   });
 
+  it("keeps cloud-hosted websocket upgrades available for post-open auth", () => {
+    const serverSecurity = fs.readFileSync(
+      path.join(APP_CORE_SRC_DIR, "api/server-security.ts"),
+      "utf-8",
+    );
+
+    expect(serverSecurity).toContain("shouldAllowPostOpenWebSocketAuth");
+    expect(serverSecurity).toContain("hasConfiguredPostOpenWebSocketToken");
+    expect(serverSecurity).toMatch(
+      /result\?\.status === 401[\s\S]*shouldAllowPostOpenWebSocketAuth/,
+    );
+  });
+
   it("keeps main.tsx milaidy app-core named imports backed by source exports", () => {
     const source = readSource("../src/main.tsx");
     const moduleEntries: Record<string, string> = {

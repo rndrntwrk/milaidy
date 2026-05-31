@@ -4,6 +4,7 @@
  */
 import {
   ensureApiTokenForBindHost as upstreamEnsureApiTokenForBindHost,
+  extractAuthToken,
   resolveMcpTerminalAuthorizationRejection as upstreamResolveMcpTerminalAuthorizationRejection,
   resolveTerminalRunClientId as upstreamResolveTerminalRunClientId,
   resolveTerminalRunRejection as upstreamResolveTerminalRunRejection,
@@ -15,6 +16,39 @@ import {
   normalizeCompatRejection,
   runWithCompatAuthContext,
 } from "./server-wallet-trade";
+
+function hasConfiguredPostOpenWebSocketToken(): boolean {
+  const token = process.env.MILADY_API_TOKEN ?? process.env.ELIZA_API_TOKEN;
+  return typeof token === "string" && token.trim().length > 0;
+}
+
+function hasWebSocketQueryToken(url: URL): boolean {
+  return (
+    url.searchParams.has("token") ||
+    url.searchParams.has("apiKey") ||
+    url.searchParams.has("api_key")
+  );
+}
+
+function hasWebSocketHandshakeToken(
+  req: Parameters<typeof upstreamResolveWebSocketUpgradeRejection>[0],
+  url: Parameters<typeof upstreamResolveWebSocketUpgradeRejection>[1],
+): boolean {
+  return Boolean(extractAuthToken(req) || hasWebSocketQueryToken(url));
+}
+
+function shouldAllowPostOpenWebSocketAuth(
+  req: Parameters<typeof upstreamResolveWebSocketUpgradeRejection>[0],
+  url: Parameters<typeof upstreamResolveWebSocketUpgradeRejection>[1],
+  result: ReturnType<typeof upstreamResolveWebSocketUpgradeRejection>,
+): boolean {
+  return (
+    result?.status === 401 &&
+    url.pathname === "/ws" &&
+    !hasWebSocketHandshakeToken(req, url) &&
+    hasConfiguredPostOpenWebSocketToken()
+  );
+}
 
 export function resolveMcpTerminalAuthorizationRejection(
   ...args: Parameters<typeof upstreamResolveMcpTerminalAuthorizationRejection>
@@ -39,10 +73,13 @@ export function resolveTerminalRunRejection(
 export function resolveWebSocketUpgradeRejection(
   ...args: Parameters<typeof upstreamResolveWebSocketUpgradeRejection>
 ): ReturnType<typeof upstreamResolveWebSocketUpgradeRejection> {
-  const [req] = args;
-  return runWithCompatAuthContext(req, () =>
-    upstreamResolveWebSocketUpgradeRejection(...args),
-  );
+  const [req, url] = args;
+  syncMiladyEnvToEliza();
+  return runWithCompatAuthContext(req, () => {
+    const result = upstreamResolveWebSocketUpgradeRejection(...args);
+    if (shouldAllowPostOpenWebSocketAuth(req, url, result)) return null;
+    return result;
+  });
 }
 
 export function resolveTerminalRunClientId(

@@ -25,6 +25,8 @@ describe("resolveWebSocketUpgradeRejection", () => {
     "MILADY_ALLOWED_ORIGINS",
     "ELIZA_ALLOW_NULL_ORIGIN",
     "MILADY_ALLOW_NULL_ORIGIN",
+    "ELIZA_CLOUD_PROVISIONED",
+    "MILADY_CLOUD_PROVISIONED",
   ]);
 
   beforeEach(() => {
@@ -59,6 +61,35 @@ describe("resolveWebSocketUpgradeRejection", () => {
       new URL("ws://localhost/ws"),
     );
     expect(rejection).toBeNull();
+  });
+
+  it("keeps post-open websocket auth available in Milady cloud containers", () => {
+    process.env.MILADY_API_TOKEN = "test-token";
+    process.env.MILADY_CLOUD_PROVISIONED = "1";
+
+    const rejection = resolveWebSocketUpgradeRejection(
+      mockReq({
+        origin: "https://alice.rndrntwrk.com",
+      }) as http.IncomingMessage,
+      new URL("wss://alice.rndrntwrk.com/ws"),
+    );
+
+    expect(rejection).toBeNull();
+  });
+
+  it("still rejects invalid websocket handshake auth in Milady cloud containers", () => {
+    process.env.MILADY_API_TOKEN = "test-token";
+    process.env.MILADY_CLOUD_PROVISIONED = "1";
+
+    const rejection = resolveWebSocketUpgradeRejection(
+      mockReq({
+        authorization: "Bearer wrong-token",
+        origin: "https://alice.rndrntwrk.com",
+      }) as http.IncomingMessage,
+      new URL("wss://alice.rndrntwrk.com/ws"),
+    );
+
+    expect(rejection).toEqual({ status: 401, reason: "Unauthorized" });
   });
 
   it("accepts valid bearer token", () => {
