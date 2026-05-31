@@ -93,4 +93,23 @@ describe("renderer boot guard", () => {
       /applyLaunchConnection[\s\S]*applyLaunchConnectionFromUrl[\s\S]*from "\.\/browser-launch"/,
     );
   });
+
+  it("keeps app-window navigation helpers available through the milaidy platform barrel", () => {
+    const testDir = path.dirname(fileURLToPath(import.meta.url));
+    const appCoreDir = path.resolve(testDir, "../../../packages/app-core/src");
+    const navigation = fs.readFileSync(
+      path.join(appCoreDir, "navigation/index.ts"),
+      "utf-8",
+    );
+    const platformIndex = fs.readFileSync(
+      path.join(appCoreDir, "platform/index.ts"),
+      "utf-8",
+    );
+
+    expect(navigation).toContain("export function isAppWindowRoute");
+    expect(navigation).toContain("export function getWindowNavigationPath");
+    expect(platformIndex).toMatch(
+      /getWindowNavigationPath[\s\S]*isAppWindowRoute[\s\S]*from "\.\.\/navigation"/,
+    );
+  });
 });

@@ -64,4 +64,9 @@ export {
 } from "./init";
 export * from "./lifeops-github";
 export * from "./onboarding-reset";
+export {
+  getWindowNavigationPath,
+  isAppWindowRoute,
+  shouldUseHashNavigation,
+} from "../navigation";
 export * from "./window-shell";
