@@ -112,4 +112,19 @@ describe("renderer boot guard", () => {
       /getWindowNavigationPath[\s\S]*isAppWindowRoute[\s\S]*from "\.\.\/navigation"/,
     );
   });
+
+  it("keeps mobile runtime mode change events exported from milaidy app-core events", () => {
+    const testDir = path.dirname(fileURLToPath(import.meta.url));
+    const events = fs.readFileSync(
+      path.resolve(testDir, "../../../packages/app-core/src/events/index.ts"),
+      "utf-8",
+    );
+
+    expect(events).toContain(
+      "export const MOBILE_RUNTIME_MODE_CHANGED_EVENT",
+    );
+    expect(events).toMatch(
+      /ElizaDocumentEventName[\s\S]*typeof MOBILE_RUNTIME_MODE_CHANGED_EVENT/,
+    );
+  });
 });
