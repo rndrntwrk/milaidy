@@ -34,12 +34,14 @@ import { MILADY_DEFAULT_THEME } from "@elizaos/shared";
 import {
   type AppBootConfig,
   getBootConfig,
+  setBootConfig,
+} from "@miladyai/app-core/config";
+import {
   ANDROID_LOCAL_AGENT_API_BASE,
   MOBILE_RUNTIME_MODE_STORAGE_KEY,
   normalizeMobileRuntimeMode,
-  preSeedAndroidLocalRuntimeIfFresh,
-  setBootConfig,
-} from "@miladyai/app-core/config";
+} from "@elizaos/ui/onboarding/mobile-runtime-mode";
+import { preSeedAndroidLocalRuntimeIfFresh } from "@elizaos/ui/onboarding/pre-seed-local-runtime";
 import {
   AGENT_READY_EVENT,
   APP_PAUSE_EVENT,

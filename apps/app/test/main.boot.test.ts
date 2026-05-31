@@ -51,4 +51,25 @@ describe("renderer boot guard", () => {
       /import\s*{[^}]*\buseApp\b[^}]*}\s*from "@elizaos\/app-core"/,
     );
   });
+
+  it("keeps upstream mobile runtime helpers on the UI onboarding subpaths", () => {
+    const testDir = path.dirname(fileURLToPath(import.meta.url));
+    const source = fs.readFileSync(
+      path.resolve(testDir, "../src/main.tsx"),
+      "utf-8",
+    );
+
+    expect(source).toMatch(
+      /MOBILE_RUNTIME_MODE_STORAGE_KEY[\s\S]*normalizeMobileRuntimeMode[\s\S]*from "@elizaos\/ui\/onboarding\/mobile-runtime-mode"/,
+    );
+    expect(source).toContain(
+      'import { preSeedAndroidLocalRuntimeIfFresh } from "@elizaos/ui/onboarding/pre-seed-local-runtime"',
+    );
+    expect(source).not.toMatch(
+      /MOBILE_RUNTIME_MODE_STORAGE_KEY[\s\S]*from "@miladyai\/app-core\/config"/,
+    );
+    expect(source).not.toMatch(
+      /preSeedAndroidLocalRuntimeIfFresh[\s\S]*from "@miladyai\/app-core\/config"/,
+    );
+  });
 });
