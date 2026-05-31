@@ -25,7 +25,10 @@ export const CompanionShell = memo(function CompanionShell(
 ) {
   useRenderGuard("CompanionShell");
   return (
-    <div className="relative h-[100vh] w-full min-h-0 overflow-hidden supports-[height:100dvh]:h-[100dvh]">
+    <div
+      className="relative h-screen w-full min-h-0 overflow-hidden"
+      style={{ height: "100dvh" }}
+    >
       <CompanionView />
     </div>
   );

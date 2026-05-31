@@ -148,6 +148,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
 import { CompanionSceneHost } from "../../src/components/companion/CompanionSceneHost";
 import { CompanionAppView } from "../../src/components/companion/CompanionAppView";
 import { CompanionView } from "../../src/components/pages/CompanionView";
+import { CompanionShell } from "../../src/components/shell/CompanionShell";
 
 const DEFAULT_COMPANION_ZOOM = 0.25;
 
@@ -766,6 +767,57 @@ describe("CompanionView", () => {
         "data-testid": "companion-chat-modal-stub",
       }),
     ).toHaveLength(1);
+  });
+
+  it("uses generated viewport height utilities for direct and overlay companion shells", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+      }),
+    );
+
+    let shellTree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      shellTree = TestRenderer.create(
+        React.createElement(CompanionShell, {
+          tab: "companion",
+          actionNotice: null,
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    const shellWrapper = shellTree?.root.findAll(
+      (node) =>
+        typeof node.props.className === "string" &&
+        node.props.className.includes("h-screen"),
+    )[0];
+    expect(String(shellWrapper?.props.className)).toContain("h-screen");
+    expect(String(shellWrapper?.props.className)).not.toContain("h-[100vh]");
+    expect(shellWrapper?.props.style).toEqual({ height: "100dvh" });
+
+    let appTree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      appTree = TestRenderer.create(
+        React.createElement(CompanionAppView, {
+          exitToApps: vi.fn(),
+          uiTheme: "dark",
+          t: (key: string) => key,
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    const appWrapper = appTree?.root.findAll(
+      (node) =>
+        typeof node.props.className === "string" &&
+        node.props.className.includes("fixed inset-0") &&
+        node.props.className.includes("h-screen"),
+    )[0];
+    expect(String(appWrapper?.props.className)).toContain("h-screen");
+    expect(String(appWrapper?.props.className)).not.toContain("h-[100vh]");
+    expect(appWrapper?.props.style).toEqual({ height: "100dvh" });
   });
 
   it("expands the Alice stage launcher into a scrollable action panel", async () => {

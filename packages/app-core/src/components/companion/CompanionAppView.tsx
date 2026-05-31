@@ -11,7 +11,10 @@ import { CompanionView } from "../pages/CompanionView";
  */
 export function CompanionAppView(_props: OverlayAppContext) {
   return (
-    <div className="fixed inset-0 z-50 h-[100vh] min-h-0 w-full overflow-hidden supports-[height:100dvh]:h-[100dvh]">
+    <div
+      className="fixed inset-0 z-50 h-screen min-h-0 w-full overflow-hidden"
+      style={{ height: "100dvh" }}
+    >
       <CompanionView />
     </div>
   );
