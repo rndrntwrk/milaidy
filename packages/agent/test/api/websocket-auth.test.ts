@@ -65,12 +65,28 @@ describe("resolveWebSocketUpgradeRejection", () => {
     expect(result).toBeNull();
   });
 
-  it("still requires post-open websocket auth for steward-managed cloud containers", () => {
+  it("allows cloud websocket upgrades without handshake auth so clients can authenticate after open", () => {
     process.env.MILADY_CLOUD_PROVISIONED = "1";
     process.env.STEWARD_AGENT_TOKEN = "steward-token";
     process.env.ELIZA_API_TOKEN = "cloud-token";
 
     const request = { headers: {} } as http.IncomingMessage;
+    const result = resolveWebSocketUpgradeRejection(
+      request,
+      new URL("ws://127.0.0.1/ws"),
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("rejects invalid websocket handshake auth for steward-managed cloud containers", () => {
+    process.env.MILADY_CLOUD_PROVISIONED = "1";
+    process.env.STEWARD_AGENT_TOKEN = "steward-token";
+    process.env.ELIZA_API_TOKEN = "cloud-token";
+
+    const request = {
+      headers: { authorization: "Bearer wrong-token" },
+    } as unknown as http.IncomingMessage;
     const result = resolveWebSocketUpgradeRejection(
       request,
       new URL("ws://127.0.0.1/ws"),

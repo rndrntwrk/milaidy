@@ -3566,12 +3566,6 @@ export function resolveWebSocketUpgradeRejection(
     return { status: 401, reason: "Unauthorized" };
   }
 
-  // Cloud containers must authenticate at the handshake level because there is
-  // no trusted upstream proxy handling auth for the WebSocket path.
-  if (!handshakeToken && isCloudProvisionedContainer()) {
-    return { status: 401, reason: "Unauthorized" };
-  }
-
   return null;
 }
 

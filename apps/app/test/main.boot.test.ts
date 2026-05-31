@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const APP_CORE_SRC_DIR = path.resolve(TEST_DIR, "../../../packages/app-core/src");
+const AGENT_SRC_DIR = path.resolve(TEST_DIR, "../../../packages/agent/src");
 
 function readSource(relativePath: string): string {
   return fs.readFileSync(path.resolve(TEST_DIR, relativePath), "utf-8");
@@ -217,6 +218,22 @@ describe("renderer boot guard", () => {
     expect(serverSecurity).toMatch(
       /result\?\.status === 401[\s\S]*shouldAllowPostOpenWebSocketAuth/,
     );
+  });
+
+  it("keeps agent websocket upgrades available for post-open auth in cloud", () => {
+    const agentSources = [
+      fs.readFileSync(path.join(AGENT_SRC_DIR, "api/server-auth.ts"), "utf-8"),
+      fs.readFileSync(path.join(AGENT_SRC_DIR, "api/server.ts"), "utf-8"),
+    ];
+
+    for (const source of agentSources) {
+      expect(source).toContain(
+        "if (handshakeToken && !tokenMatches(expected, handshakeToken))",
+      );
+      expect(source).not.toMatch(
+        /!handshakeToken && isCloudProvisionedContainer\(\)[\s\S]{0,120}Unauthorized/,
+      );
+    }
   });
 
   it("keeps main.tsx milaidy app-core named imports backed by source exports", () => {
