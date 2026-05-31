@@ -32,4 +32,23 @@ describe("renderer boot guard", () => {
       source.indexOf("Agent.getStatus()"),
     );
   });
+
+  it("keeps the milaidy App and provider on the same React context", () => {
+    const testDir = path.dirname(fileURLToPath(import.meta.url));
+    const source = fs.readFileSync(
+      path.resolve(testDir, "../src/main.tsx"),
+      "utf-8",
+    );
+
+    expect(source).toContain('import { App } from "@miladyai/app-core/App"');
+    expect(source).toMatch(
+      /AppProvider[\s\S]*useApp[\s\S]*from "@miladyai\/app-core\/state"/,
+    );
+    expect(source).not.toMatch(
+      /import\s*{[^}]*\bAppProvider\b[^}]*}\s*from "@elizaos\/app-core"/,
+    );
+    expect(source).not.toMatch(
+      /import\s*{[^}]*\buseApp\b[^}]*}\s*from "@elizaos\/app-core"/,
+    );
+  });
 });

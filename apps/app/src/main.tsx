@@ -1,16 +1,16 @@
-// Source `App` (which renders the broadcast route -> <BroadcastShell/> with the
-// window.__agentShowControl / .avatar-ready capture handshake, milaidy PR #82)
-// from the milaidy fork explicitly. apps/app imports App from "@elizaos/app-core",
-// which the production vite build resolves to the upstream eliza app-core that has
-// no BroadcastShell; only milaidy's packages/app-core/src/App.tsx has the broadcast
-// route. The remaining names below stay on @elizaos/app-core (the eliza framework).
+// Source the app shell and its provider from the same milaidy app-core module.
+// Mixing milaidy's <App /> with upstream @elizaos/app-core's AppProvider creates
+// separate React contexts and crashes `/companion` with
+// "useApp must be used within AppProvider".
 import { App } from "@miladyai/app-core/App";
 import {
+  AppProvider,
+  applyUiTheme,
   createPersistedActiveServer,
-  ErrorBoundary,
+  loadUiTheme,
   savePersistedActiveServer,
   useApp,
-} from "@elizaos/app-core";
+} from "@miladyai/app-core/state";
 // Styles bundled via the @elizaos/ui barrel. The Wave A refactor (eliza
 // commit 5a6f5f337) moved CSS out of @elizaos/app-core/styles/ but
 // didn't update this consumer; the new shape is a single subpath.
@@ -21,14 +21,15 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Keyboard, KeyboardResize } from "@capacitor/keyboard";
 import { Preferences } from "@capacitor/preferences";
-import { client } from "@elizaos/app-core";
 import {
   initializeCapacitorBridge,
   subscribeDesktopBridgeEvent,
   initializeStorageBridge,
   isElectrobunRuntime,
 } from "@elizaos/ui";
-import type { BrandingConfig } from "@elizaos/app-core";
+import { ErrorBoundary } from "@miladyai/ui";
+import { client } from "@miladyai/app-core/api";
+import type { BrandingConfig } from "@miladyai/app-core/config";
 import { MILADY_DEFAULT_THEME } from "@elizaos/shared";
 import {
   type AppBootConfig,
@@ -38,7 +39,7 @@ import {
   normalizeMobileRuntimeMode,
   preSeedAndroidLocalRuntimeIfFresh,
   setBootConfig,
-} from "@elizaos/app-core";
+} from "@miladyai/app-core/config";
 import {
   AGENT_READY_EVENT,
   APP_PAUSE_EVENT,
@@ -49,7 +50,7 @@ import {
   MOBILE_RUNTIME_MODE_CHANGED_EVENT,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
-} from "@elizaos/app-core";
+} from "@miladyai/app-core/events";
 import {
   applyForceFreshOnboardingReset,
   applyLaunchConnectionFromUrl,
@@ -63,19 +64,17 @@ import {
   resolveWindowShellRoute,
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
-} from "@elizaos/app-core";
+} from "@miladyai/app-core/platform";
 import { AppWindowRenderer } from "@elizaos/app-core";
 import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
-import type { ShareTargetPayload } from "@elizaos/app-core/platform";
+import type { ShareTargetPayload } from "@miladyai/app-core/platform";
 import {
   DESKTOP_TRAY_MENU_ITEMS,
   DesktopOnboardingRuntime,
   DesktopSurfaceNavigationRuntime,
   DesktopTrayRuntime,
   DetachedShellRoot,
-} from "@elizaos/app-core";
-import { AppProvider } from "@elizaos/app-core";
-import { applyUiTheme, loadUiTheme } from "@elizaos/app-core";
+} from "@miladyai/app-core/shell";
 import { Agent } from "@elizaos/capacitor-agent";
 import { Desktop } from "@elizaos/capacitor-desktop";
 import {
