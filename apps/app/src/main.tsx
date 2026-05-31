@@ -115,7 +115,7 @@ import {
   LifeOpsPageView,
   WebsiteBlockerSettingsCard,
 } from "@elizaos/app-lifeops/ui";
-import { LifeOpsActivitySignalsEffect } from "@elizaos/app-lifeops/components/LifeOpsActivitySignalsEffect";
+import { LifeOpsActivitySignalsEffect } from "./lifeops/LifeOpsActivitySignalsEffect";
 import {
   ApprovalQueue,
   StewardLogo,
