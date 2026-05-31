@@ -3,13 +3,94 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
+const APP_CORE_SRC_DIR = path.resolve(TEST_DIR, "../../../packages/app-core/src");
+
+function readSource(relativePath: string): string {
+  return fs.readFileSync(path.resolve(TEST_DIR, relativePath), "utf-8");
+}
+
+function collectNamedImports(source: string, moduleId: string): string[] {
+  const names = new Set<string>();
+  const escaped = moduleId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(
+    `import\\s+(?:type\\s+)?\\{([^}]*)\\}\\s+from\\s+["']${escaped}["']`,
+    "g",
+  );
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(source)) !== null) {
+    for (const raw of match[1].split(",")) {
+      const name = raw
+        .replace(/\btype\s+/g, "")
+        .trim()
+        .split(/\s+as\s+/)[0]
+        .trim();
+      if (name) names.add(name);
+    }
+  }
+  return [...names].sort();
+}
+
+function resolveSourcePath(fromFile: string, specifier: string): string {
+  const base = path.resolve(path.dirname(fromFile), specifier);
+  const candidates = [
+    base,
+    `${base}.ts`,
+    `${base}.tsx`,
+    path.join(base, "index.ts"),
+    path.join(base, "index.tsx"),
+  ];
+  const found = candidates.find(
+    (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile(),
+  );
+  if (!found) {
+    throw new Error(`Could not resolve ${specifier} from ${fromFile}`);
+  }
+  return found;
+}
+
+function collectExports(entryFile: string, visited = new Set<string>()): Set<string> {
+  const absoluteEntry = path.resolve(entryFile);
+  if (visited.has(absoluteEntry)) return new Set();
+  visited.add(absoluteEntry);
+
+  const source = fs.readFileSync(absoluteEntry, "utf-8");
+  const exports = new Set<string>();
+  for (const match of source.matchAll(
+    /export\s+(?:const|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/g,
+  )) {
+    exports.add(match[1]);
+  }
+  for (const match of source.matchAll(/export\s+\{([\s\S]*?)\}\s+from\s+["']([^"']+)["']/g)) {
+    const sourceFile = resolveSourcePath(absoluteEntry, match[2]);
+    if (match[1].includes("type ") && !match[1].replace(/\btype\s+/g, "").trim()) {
+      continue;
+    }
+    for (const raw of match[1].split(",")) {
+      const name = raw
+        .replace(/\btype\s+/g, "")
+        .trim()
+        .split(/\s+as\s+/)
+        .pop()
+        ?.trim();
+      if (name) exports.add(name);
+    }
+    for (const name of collectExports(sourceFile, visited)) {
+      exports.add(name);
+    }
+  }
+  for (const match of source.matchAll(/export\s+\*\s+from\s+["']([^"']+)["']/g)) {
+    const sourceFile = resolveSourcePath(absoluteEntry, match[1]);
+    for (const name of collectExports(sourceFile, visited)) {
+      exports.add(name);
+    }
+  }
+  return exports;
+}
+
 describe("renderer boot guard", () => {
   it("keeps React root and platform boot initialization idempotent", () => {
-    const testDir = path.dirname(fileURLToPath(import.meta.url));
-    const source = fs.readFileSync(
-      path.resolve(testDir, "../src/main.tsx"),
-      "utf-8",
-    );
+    const source = readSource("../src/main.tsx");
 
     expect(source).toContain("__MILADY_REACT_ROOT__?: Root");
     expect(source).toContain("__MILADY_APP_BOOT_PROMISE__?: Promise<void>");
@@ -18,11 +99,7 @@ describe("renderer boot guard", () => {
   });
 
   it("defers the eager Agent status probe while browser auth is required", () => {
-    const testDir = path.dirname(fileURLToPath(import.meta.url));
-    const source = fs.readFileSync(
-      path.resolve(testDir, "../src/main.tsx"),
-      "utf-8",
-    );
+    const source = readSource("../src/main.tsx");
 
     expect(source).toContain("const auth = await client.getAuthStatus()");
     expect(source).toContain(
@@ -34,11 +111,7 @@ describe("renderer boot guard", () => {
   });
 
   it("keeps the milaidy App and provider on the same React context", () => {
-    const testDir = path.dirname(fileURLToPath(import.meta.url));
-    const source = fs.readFileSync(
-      path.resolve(testDir, "../src/main.tsx"),
-      "utf-8",
-    );
+    const source = readSource("../src/main.tsx");
 
     expect(source).toContain('import { App } from "@miladyai/app-core/App"');
     expect(source).toMatch(
@@ -53,11 +126,7 @@ describe("renderer boot guard", () => {
   });
 
   it("keeps upstream mobile runtime helpers on the UI onboarding subpaths", () => {
-    const testDir = path.dirname(fileURLToPath(import.meta.url));
-    const source = fs.readFileSync(
-      path.resolve(testDir, "../src/main.tsx"),
-      "utf-8",
-    );
+    const source = readSource("../src/main.tsx");
 
     expect(source).toMatch(
       /MOBILE_RUNTIME_MODE_STORAGE_KEY[\s\S]*normalizeMobileRuntimeMode[\s\S]*from "@elizaos\/ui\/onboarding\/mobile-runtime-mode"/,
@@ -74,11 +143,7 @@ describe("renderer boot guard", () => {
   });
 
   it("exports the direct launch connection helper from the milaidy platform barrel", () => {
-    const testDir = path.dirname(fileURLToPath(import.meta.url));
-    const platformDir = path.resolve(
-      testDir,
-      "../../../packages/app-core/src/platform",
-    );
+    const platformDir = path.join(APP_CORE_SRC_DIR, "platform");
     const browserLaunch = fs.readFileSync(
       path.join(platformDir, "browser-launch.ts"),
       "utf-8",
@@ -95,14 +160,12 @@ describe("renderer boot guard", () => {
   });
 
   it("keeps app-window navigation helpers available through the milaidy platform barrel", () => {
-    const testDir = path.dirname(fileURLToPath(import.meta.url));
-    const appCoreDir = path.resolve(testDir, "../../../packages/app-core/src");
     const navigation = fs.readFileSync(
-      path.join(appCoreDir, "navigation/index.ts"),
+      path.join(APP_CORE_SRC_DIR, "navigation/index.ts"),
       "utf-8",
     );
     const platformIndex = fs.readFileSync(
-      path.join(appCoreDir, "platform/index.ts"),
+      path.join(APP_CORE_SRC_DIR, "platform/index.ts"),
       "utf-8",
     );
 
@@ -114,9 +177,8 @@ describe("renderer boot guard", () => {
   });
 
   it("keeps mobile runtime mode change events exported from milaidy app-core events", () => {
-    const testDir = path.dirname(fileURLToPath(import.meta.url));
     const events = fs.readFileSync(
-      path.resolve(testDir, "../../../packages/app-core/src/events/index.ts"),
+      path.join(APP_CORE_SRC_DIR, "events/index.ts"),
       "utf-8",
     );
 
@@ -126,5 +188,24 @@ describe("renderer boot guard", () => {
     expect(events).toMatch(
       /ElizaDocumentEventName[\s\S]*typeof MOBILE_RUNTIME_MODE_CHANGED_EVENT/,
     );
+  });
+
+  it("keeps main.tsx milaidy app-core named imports backed by source exports", () => {
+    const source = readSource("../src/main.tsx");
+    const moduleEntries: Record<string, string> = {
+      "@miladyai/app-core/config": "config/index.ts",
+      "@miladyai/app-core/events": "events/index.ts",
+      "@miladyai/app-core/platform": "platform/index.ts",
+      "@miladyai/app-core/shell": "shell/index.ts",
+      "@miladyai/app-core/state": "state/index.ts",
+    };
+
+    for (const [moduleId, entry] of Object.entries(moduleEntries)) {
+      const imported = collectNamedImports(source, moduleId);
+      if (imported.length === 0) continue;
+      const exported = collectExports(path.join(APP_CORE_SRC_DIR, entry));
+      const missing = imported.filter((name) => !exported.has(name));
+      expect(missing, `${moduleId} missing exports`).toEqual([]);
+    }
   });
 });
