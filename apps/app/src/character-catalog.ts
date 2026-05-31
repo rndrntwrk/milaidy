@@ -14,8 +14,17 @@ export const ALICE_CAMERA_DISTANCE_SCALE = 1.3;
 export function buildAppVrmAssets(
   stylePresets = getStylePresets(),
 ) {
-  return stylePresets
-    .slice()
+  const presetsByAvatarIndex = new Map<number, (typeof stylePresets)[number]>();
+
+  for (const preset of stylePresets) {
+    const avatarIndex = Math.trunc(preset.avatarIndex);
+    if (!Number.isFinite(avatarIndex) || avatarIndex < 1) continue;
+    if (!presetsByAvatarIndex.has(avatarIndex)) {
+      presetsByAvatarIndex.set(avatarIndex, preset);
+    }
+  }
+
+  return [...presetsByAvatarIndex.values()]
     .sort((left, right) => left.avatarIndex - right.avatarIndex)
     .map((preset) => ({
       title: preset.name,

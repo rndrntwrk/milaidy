@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  ALICE_CAMERA_DISTANCE_SCALE,
+  buildAppVrmAssets,
+} from "../src/character-catalog";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const APP_CORE_SRC_DIR = path.resolve(TEST_DIR, "../../../packages/app-core/src");
@@ -90,6 +94,30 @@ function collectExports(entryFile: string, visited = new Set<string>()): Set<str
 }
 
 describe("renderer boot guard", () => {
+  it("keeps duplicate style presets from shifting bundled VRM indices", () => {
+    const assets = buildAppVrmAssets([
+      { name: "First", avatarIndex: 1 },
+      { name: "Duplicate First", avatarIndex: 1 },
+      { name: "Second", avatarIndex: 2 },
+      { name: "Alice", avatarIndex: 9 },
+    ] as unknown as Parameters<typeof buildAppVrmAssets>[0]);
+
+    expect(assets.map((asset) => asset.slug)).toEqual([
+      "milady-1",
+      "milady-2",
+      "milady-9",
+    ]);
+    expect(assets.at(-1)).toMatchObject({
+      title: "Alice",
+      slug: "milady-9",
+      cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE,
+    });
+    expect(buildAppVrmAssets()[8]).toMatchObject({
+      slug: "milady-9",
+      cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE,
+    });
+  });
+
   it("keeps React root and platform boot initialization idempotent", () => {
     const source = readSource("../src/main.tsx");
 
