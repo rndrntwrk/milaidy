@@ -342,6 +342,12 @@
       ],
       "@elizaos/native-activity-tracker": [
         "./apps/app/src/native-plugin-stubs.ts"
+      ],
+      "@elizaos/capacitor-bun-runtime": [
+        "./apps/app/src/native-plugin-stubs.ts"
+      ],
+      "@elizaos/capacitor-bun-runtime/*": [
+        "./apps/app/src/native-plugin-stubs.ts"
       ]
     }
   },
