@@ -34,7 +34,10 @@ export function hasRequiredOnboardingPermissions(
 
 // ── Platform init ───────────────────────────────────────────────────────
 
-export { applyLaunchConnectionFromUrl } from "./browser-launch";
+export {
+  applyLaunchConnection,
+  applyLaunchConnectionFromUrl,
+} from "./browser-launch";
 export * from "./cloud-preference-patch";
 export * from "./desktop-permissions-client";
 export {

@@ -72,4 +72,25 @@ describe("renderer boot guard", () => {
       /preSeedAndroidLocalRuntimeIfFresh[\s\S]*from "@miladyai\/app-core\/config"/,
     );
   });
+
+  it("exports the direct launch connection helper from the milaidy platform barrel", () => {
+    const testDir = path.dirname(fileURLToPath(import.meta.url));
+    const platformDir = path.resolve(
+      testDir,
+      "../../../packages/app-core/src/platform",
+    );
+    const browserLaunch = fs.readFileSync(
+      path.join(platformDir, "browser-launch.ts"),
+      "utf-8",
+    );
+    const platformIndex = fs.readFileSync(
+      path.join(platformDir, "index.ts"),
+      "utf-8",
+    );
+
+    expect(browserLaunch).toContain("export function applyLaunchConnection");
+    expect(platformIndex).toMatch(
+      /applyLaunchConnection[\s\S]*applyLaunchConnectionFromUrl[\s\S]*from "\.\/browser-launch"/,
+    );
+  });
 });
