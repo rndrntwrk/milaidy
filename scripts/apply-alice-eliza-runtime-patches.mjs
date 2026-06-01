@@ -1904,9 +1904,15 @@ const coreBrowserIndexRelativePath = "packages/core/src/index.browser.ts";
 const coreNodeIndexRelativePath = "packages/core/src/index.node.ts";
 const coreNodeSecretAliasReexportSentinel =
   "// [milaidy:core-node-secret-alias-reexport]";
+const coreNodePromptFromStateReexportSentinel =
+  "// [milaidy:core-node-compose-prompt-from-state-reexport]";
+const coreNodePromptFromStateReexport = `${coreNodePromptFromStateReexportSentinel}
+export { composePromptFromState } from "./utils";
+`;
 const coreNodeSecretAliasReexportNames = [
   "resolveSecretKeyAlias",
   "SECRET_KEY_ALIASES",
+  "composePromptFromState",
 ];
 
 export function isAliceCoreNodeSecretAliasReexportPatched(source) {
@@ -1935,17 +1941,29 @@ export function applyAliceCoreNodeSecretAliasReexportPatch({
     return "already-applied";
   }
 
-  const anchor = "\tLOCAL_MODEL_PROVIDERS,\n} from \"./constants\";";
-  if (!source.includes(anchor)) {
-    throw new Error(
-      "core-node secret alias reexport patch drifted: constants export block anchor not found",
+  let next = source;
+  if (
+    !next.includes("resolveSecretKeyAlias") ||
+    !next.includes("SECRET_KEY_ALIASES")
+  ) {
+    const anchor = "\tLOCAL_MODEL_PROVIDERS,\n} from \"./constants\";";
+    if (!next.includes(anchor)) {
+      throw new Error(
+        "core-node secret alias reexport patch drifted: constants export block anchor not found",
+      );
+    }
+
+    next = next.replace(
+      anchor,
+      `\tLOCAL_MODEL_PROVIDERS,\n\tresolveSecretKeyAlias,\n\tSECRET_KEY_ALIASES,\n} from "./constants";\n${coreNodeSecretAliasReexportSentinel}`,
     );
   }
 
-  const next = source.replace(
-    anchor,
-    `\tLOCAL_MODEL_PROVIDERS,\n\tresolveSecretKeyAlias,\n\tSECRET_KEY_ALIASES,\n} from "./constants";\n${coreNodeSecretAliasReexportSentinel}`,
-  );
+  if (!next.includes("composePromptFromState")) {
+    next = next.endsWith("\n")
+      ? `${next}\n${coreNodePromptFromStateReexport}`
+      : `${next}\n\n${coreNodePromptFromStateReexport}`;
+  }
 
   if (!isAliceCoreNodeSecretAliasReexportPatched(next)) {
     throw new Error(

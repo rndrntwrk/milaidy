@@ -164,6 +164,7 @@ describe("Alice Eliza runtime patch contract", () => {
       expect(isAliceCoreNodeSecretAliasReexportPatched(patched)).toBe(true);
       expect(patched).toContain("resolveSecretKeyAlias");
       expect(patched).toContain("SECRET_KEY_ALIASES");
+      expect(patched).toContain("composePromptFromState");
 
       expect(
         applyAliceCoreNodeSecretAliasReexportPatch({
