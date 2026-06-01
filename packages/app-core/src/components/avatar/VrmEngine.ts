@@ -175,10 +175,27 @@ let teleportSparkleTexture: THREE.CanvasTexture | null = null;
 /** Module-level singleton: the polyfill overrides navigator.xr globally so
  *  multiple instances cause "attempted to assign baselayer twice" errors. */
 let sharedLkgPolyfill: unknown = null;
+/**
+ * Resolve a root-served public asset (e.g. vrm-decoders/, animations/, vrms/)
+ * to the site root regardless of the current page path.
+ *
+ * Pages served under a sub-path (e.g. /broadcast/alice-cam) would otherwise
+ * cause resolveAppAssetUrl to prefix the asset with /broadcast/, yielding a 404.
+ * Using window.location.origin anchors the URL to the site root in browser
+ * contexts; resolveAppAssetUrl handles the SSR / packaged fallback.
+ */
+function resolveRootPublicAssetUrl(assetPath: string): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const normalized = assetPath.startsWith("/") ? assetPath : `/${assetPath}`;
+    return new URL(normalized, window.location.origin).toString();
+  }
+  return resolveAppAssetUrl(assetPath);
+}
+
 let _cachedDracoDecoderPath: string | null = null;
 /** Lazy + cached: module-load resolution can be wrong in bundled/desktop init order. */
 function getDracoDecoderPath(): string {
-  _cachedDracoDecoderPath ??= resolveAppAssetUrl("vrm-decoders/draco/");
+  _cachedDracoDecoderPath ??= resolveRootPublicAssetUrl("vrm-decoders/draco/");
   return _cachedDracoDecoderPath;
 }
 
@@ -611,7 +628,9 @@ export class VrmEngine {
   private avatarFaceFrame: AvatarFaceFrame | null = null;
   private vrmName: string | null = null;
   private lookAtTarget = new THREE.Vector3(0, 0.5, 0);
-  private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb.gz");
+  private readonly idleGlbUrl = resolveRootPublicAssetUrl(
+    "animations/idle.glb.gz",
+  );
   private speechMotionPath: string | null = null;
 
   private outgoingVrm: VRM | null = null;
@@ -2109,7 +2128,7 @@ export class VrmEngine {
   /** Play a one-shot wave greeting after the VRM becomes visible. */
   playWaveGreeting(): void {
     this.playEmote(
-      resolveAppAssetUrl("animations/emotes/greeting.fbx"),
+      resolveRootPublicAssetUrl("animations/emotes/greeting.fbx"),
       3,
       false,
     );
