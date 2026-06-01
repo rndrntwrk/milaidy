@@ -69,6 +69,9 @@ interface StreamReadinessSnapshot {
   cfSessionId?: string;
   cloudflareConnected: boolean;
   cloudflareState?: string;
+  // media-engine distributor path: the control-plane reports outputs are
+  // delivering. There is no Cloudflare session on this path.
+  requiredOutputsReady: boolean;
   platforms: Record<string, unknown>;
   raw?: JsonObject;
 }
@@ -571,6 +574,7 @@ async function fetchStreamReadinessSnapshot(
     cfSessionId: getStringField(response.data, 'cfSessionId'),
     cloudflareConnected: Boolean(cloudflare?.isConnected),
     cloudflareState: getStringField(cloudflare, 'state'),
+    requiredOutputsReady: Boolean(response.data?.requiredOutputsReady),
     platforms,
     raw: response.data,
   };
@@ -588,10 +592,14 @@ async function waitForStreamReadiness(
 
   while (Date.now() <= deadline) {
     lastSnapshot = await fetchStreamReadinessSnapshot(baseUrl, headers, sessionId);
+    // Ready on either path: Cloudflare distributor (cfSessionId + connected) OR
+    // the media-engine distributor (control-plane reports requiredOutputsReady,
+    // which has no Cloudflare session). Without the media-engine branch this
+    // false-times-out on staging and tears down an otherwise-live broadcast.
     if (
       lastSnapshot.active &&
-      lastSnapshot.cfSessionId &&
-      lastSnapshot.cloudflareConnected
+      ((lastSnapshot.cfSessionId && lastSnapshot.cloudflareConnected) ||
+        lastSnapshot.requiredOutputsReady)
     ) {
       return { ready: true, lastSnapshot };
     }
