@@ -645,6 +645,38 @@ export class StreamControlService implements Service {
   }
 
   /**
+   * Broadcast an operator event (e.g. emote) to the live show. The
+   * control-plane relays it to the rendered broadcast: over LiveKit data
+   * for LiveKit-subscriber sessions, and over redis (show:emote:<session>)
+   * for local-VRM avatar broadcasts that never join a LiveKit room.
+   */
+  async broadcastEvent(
+    topic: string,
+    payload: unknown,
+    sessionId?: string
+  ): Promise<{ ok: boolean; sent: boolean }> {
+    if (!this.httpClient) {
+      throw new Error('[555stream] Service not initialized');
+    }
+
+    const id = sessionId || this.boundSessionId;
+    if (!id) {
+      throw new Error('[555stream] No session bound');
+    }
+
+    const response = await this.httpClient.post<{ ok: boolean; sent: boolean }>(
+      `/api/agent/v1/sessions/${id}/livekit/broadcast-event`,
+      { topic, payload }
+    );
+
+    if (!response.success || !response.data) {
+      throw new Error(response.error || 'Failed to broadcast event');
+    }
+
+    return response.data;
+  }
+
+  /**
    * Trigger server-side fallback capture
    */
   async fallbackStream(reason?: string, sessionId?: string): Promise<FallbackResult> {
