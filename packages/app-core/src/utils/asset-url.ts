@@ -119,13 +119,24 @@ export function resolveAppAssetUrl(
  * Pages served under a sub-path (e.g. /broadcast/alice-cam) would otherwise
  * cause resolveAppAssetUrl to prefix the asset with /broadcast/ (the vite
  * BASE_URL of the broadcast bundle), yielding a 404. Anchoring to
- * window.location.origin pins the URL to the site root in browser contexts;
- * resolveAppAssetUrl handles the SSR / packaged (file://) fallback.
+ * window.location.origin pins the URL to the site root in browser contexts.
+ *
+ * Two cases defer to resolveAppAssetUrl rather than origin-anchoring:
+ *  - A configured CDN base (`assetBaseUrl`) is absolute, so resolveAppAssetUrl
+ *    already resolves it without any vite BASE_URL prefix — origin-anchoring
+ *    would wrongly bypass the CDN for these (heavy) model assets.
+ *  - Opaque origins (packaged file:// renderers) report origin === "null", a
+ *    truthy string that `new URL()` rejects as a base; resolveAppAssetUrl's
+ *    file:// directory-relative handling resolves those correctly.
  */
 export function resolveRootPublicAssetUrl(assetPath: string): string {
-  if (typeof window !== "undefined" && window.location?.origin) {
-    const normalized = assetPath.startsWith("/") ? assetPath : `/${assetPath}`;
-    return new URL(normalized, window.location.origin).toString();
+  const cdnBase = getBootConfig().assetBaseUrl?.trim();
+  if (!cdnBase && typeof window !== "undefined") {
+    const origin = window.location?.origin;
+    if (origin && origin !== "null") {
+      const normalized = assetPath.startsWith("/") ? assetPath : `/${assetPath}`;
+      return new URL(normalized, origin).toString();
+    }
   }
   return resolveAppAssetUrl(assetPath);
 }

@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveAppAssetUrl } from "./asset-url";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveAppAssetUrl, resolveRootPublicAssetUrl } from "./asset-url";
+import { getBootConfig } from "../config/boot-config";
 
 vi.mock("../config/boot-config", () => ({
   getBootConfig: vi.fn(() => ({})),
@@ -116,5 +117,69 @@ describe("resolveAppAssetUrl", () => {
     it("returns an empty string for empty input", () => {
       expect(resolveAppAssetUrl("")).toBe("");
     });
+  });
+});
+
+describe("resolveRootPublicAssetUrl", () => {
+  const broadcastHref = "http://alice-bot:3000/broadcast/alice-cam";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getBootConfig).mockReturnValue(
+      {} as ReturnType<typeof getBootConfig>,
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("prefers a configured CDN assetBaseUrl over the page origin (does not bypass the CDN)", () => {
+    vi.mocked(getBootConfig).mockReturnValue({
+      assetBaseUrl: "https://cdn.example.com",
+    } as ReturnType<typeof getBootConfig>);
+    vi.stubGlobal("window", {
+      location: { origin: "http://alice-bot:3000", href: broadcastHref },
+    });
+    expect(resolveRootPublicAssetUrl("vrms/milady-9.vrm.gz")).toBe(
+      "https://cdn.example.com/vrms/milady-9.vrm.gz",
+    );
+  });
+
+  it("anchors to the site origin when no CDN is set, ignoring the /broadcast/ sub-path", () => {
+    vi.stubGlobal("window", {
+      location: { origin: "http://alice-bot:3000", href: broadcastHref },
+    });
+    const result = resolveRootPublicAssetUrl("vrms/milady-9.vrm.gz");
+    expect(result).toBe("http://alice-bot:3000/vrms/milady-9.vrm.gz");
+    expect(result).not.toContain("/broadcast/");
+  });
+
+  it("preserves cache-busting query strings when origin-anchoring", () => {
+    vi.stubGlobal("window", {
+      location: { origin: "http://alice-bot:3000", href: broadcastHref },
+    });
+    expect(
+      resolveRootPublicAssetUrl("vrms/previews/milady-9.png?v=20260413"),
+    ).toBe("http://alice-bot:3000/vrms/previews/milady-9.png?v=20260413");
+  });
+
+  it("does not throw on an opaque (file://) origin reported as the string 'null'", () => {
+    vi.stubGlobal("window", { location: { origin: "null" } });
+    expect(() =>
+      resolveRootPublicAssetUrl("vrms/milady-9.vrm.gz"),
+    ).not.toThrow();
+    // Falls through to resolveAppAssetUrl, which yields a root-relative path
+    // when no usable base href is available — never a thrown TypeError.
+    expect(resolveRootPublicAssetUrl("vrms/milady-9.vrm.gz")).toBe(
+      "/vrms/milady-9.vrm.gz",
+    );
+  });
+
+  it("falls back to resolveAppAssetUrl when there is no window (SSR)", () => {
+    vi.stubGlobal("window", undefined);
+    expect(resolveRootPublicAssetUrl("vrms/milady-9.vrm.gz")).toBe(
+      "/vrms/milady-9.vrm.gz",
+    );
   });
 });

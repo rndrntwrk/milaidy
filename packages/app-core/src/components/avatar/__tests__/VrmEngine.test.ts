@@ -540,6 +540,7 @@ vi.mock("@lookingglass/webxr", () => ({
 
 vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: vi.fn((p: string) => `/mock/${p}`),
+  resolveRootPublicAssetUrl: vi.fn((p: string) => `/mock/${p}`),
 }));
 
 // Stub DOM APIs that VrmEngine relies on
