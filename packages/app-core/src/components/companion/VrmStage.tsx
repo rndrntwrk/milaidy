@@ -4,7 +4,7 @@ import {
   STOP_EMOTE_EVENT,
 } from "@miladyai/app-core/events";
 import { useRenderGuard } from "@miladyai/app-core/hooks";
-import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
+import { resolveRootPublicAssetUrl } from "@miladyai/app-core/utils";
 import type { AvatarSpeechCapabilities } from "@miladyai/shared/contracts";
 import {
   memo,
@@ -114,7 +114,7 @@ export const VrmStage = memo(function VrmStage({
 
   const playGreetingWave = useCallback((engine: VrmEngine | null) => {
     if (!engine) return;
-    const resolvedPath = resolveAppAssetUrl(AVATAR_CHANGE_WAVE_EMOTE.path);
+    const resolvedPath = resolveRootPublicAssetUrl(AVATAR_CHANGE_WAVE_EMOTE.path);
     void engine.playEmote(
       resolvedPath,
       AVATAR_CHANGE_WAVE_EMOTE.duration ?? 3,
@@ -229,7 +229,7 @@ export const VrmStage = memo(function VrmStage({
       if (typeof engine.playEmote !== "function") return;
       const detail = (event as CustomEvent<AppEmoteEventDetail>).detail;
       if (!detail?.path) return;
-      const resolvedPath = resolveAppAssetUrl(detail.path);
+      const resolvedPath = resolveRootPublicAssetUrl(detail.path);
       const duration =
         typeof detail.duration === "number" && Number.isFinite(detail.duration)
           ? detail.duration
