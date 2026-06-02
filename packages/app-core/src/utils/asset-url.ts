@@ -112,6 +112,24 @@ export function resolveAppAssetUrl(
   return new URL(normalized, baseHref).toString();
 }
 
+/**
+ * Resolve a root-served public asset (e.g. vrm-decoders/, animations/, vrms/)
+ * to the site root regardless of the current page path.
+ *
+ * Pages served under a sub-path (e.g. /broadcast/alice-cam) would otherwise
+ * cause resolveAppAssetUrl to prefix the asset with /broadcast/ (the vite
+ * BASE_URL of the broadcast bundle), yielding a 404. Anchoring to
+ * window.location.origin pins the URL to the site root in browser contexts;
+ * resolveAppAssetUrl handles the SSR / packaged (file://) fallback.
+ */
+export function resolveRootPublicAssetUrl(assetPath: string): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const normalized = assetPath.startsWith("/") ? assetPath : `/${assetPath}`;
+    return new URL(normalized, window.location.origin).toString();
+  }
+  return resolveAppAssetUrl(assetPath);
+}
+
 /** Keep in sync with `MiladyClient` SESSION_STORAGE_API_BASE_KEY. */
 const MILADY_API_BASE_SESSION_KEY = "milady_api_base";
 

@@ -5,7 +5,7 @@ type LookingGlassWebXRPolyfillType = new (
   opts: Record<string, unknown>,
 ) => unknown;
 
-import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
+import { resolveRootPublicAssetUrl } from "@miladyai/app-core/utils";
 import type {
   AvatarFaceFrame,
   AvatarSpeechCapabilities,
@@ -175,23 +175,6 @@ let teleportSparkleTexture: THREE.CanvasTexture | null = null;
 /** Module-level singleton: the polyfill overrides navigator.xr globally so
  *  multiple instances cause "attempted to assign baselayer twice" errors. */
 let sharedLkgPolyfill: unknown = null;
-/**
- * Resolve a root-served public asset (e.g. vrm-decoders/, animations/, vrms/)
- * to the site root regardless of the current page path.
- *
- * Pages served under a sub-path (e.g. /broadcast/alice-cam) would otherwise
- * cause resolveAppAssetUrl to prefix the asset with /broadcast/, yielding a 404.
- * Using window.location.origin anchors the URL to the site root in browser
- * contexts; resolveAppAssetUrl handles the SSR / packaged fallback.
- */
-function resolveRootPublicAssetUrl(assetPath: string): string {
-  if (typeof window !== "undefined" && window.location?.origin) {
-    const normalized = assetPath.startsWith("/") ? assetPath : `/${assetPath}`;
-    return new URL(normalized, window.location.origin).toString();
-  }
-  return resolveAppAssetUrl(assetPath);
-}
-
 let _cachedDracoDecoderPath: string | null = null;
 /** Lazy + cached: module-load resolution can be wrong in bundled/desktop init order. */
 function getDracoDecoderPath(): string {

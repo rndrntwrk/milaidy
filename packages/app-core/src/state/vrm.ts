@@ -1,5 +1,5 @@
 import { type BundledVrmAsset, getBootConfig } from "../config/boot-config";
-import { resolveAppAssetUrl } from "../utils/asset-url";
+import { resolveRootPublicAssetUrl } from "../utils/asset-url";
 import type { UiTheme } from "./ui-preferences";
 import { DEFAULT_VISUAL_AVATAR_INDEX } from "@miladyai/shared/onboarding-presets";
 
@@ -20,7 +20,7 @@ const BUNDLED_AVATAR_IMAGE_VERSION_BY_SLUG: Record<string, string> = {
 function resolveBundledAvatarImageUrl(assetPath: string, slug: string): string {
   const version = BUNDLED_AVATAR_IMAGE_VERSION_BY_SLUG[slug];
   const versionedPath = version ? `${assetPath}?v=${version}` : assetPath;
-  return resolveAppAssetUrl(versionedPath);
+  return resolveRootPublicAssetUrl(versionedPath);
 }
 
 /**
@@ -71,11 +71,11 @@ export function isAliceBundledAvatarIndex(index: number): boolean {
 export function getVrmUrl(index: number): string {
   const assets = getAssets();
   if (assets.length === 0)
-    return resolveAppAssetUrl(`vrms/${BUNDLED_VRM_FALLBACK_SLUG}.vrm.gz`);
+    return resolveRootPublicAssetUrl(`vrms/${BUNDLED_VRM_FALLBACK_SLUG}.vrm.gz`);
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : getDefaultBundledVrmIndex();
   const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
-  return resolveAppAssetUrl(`vrms/${slug}.vrm.gz`);
+  return resolveRootPublicAssetUrl(`vrms/${slug}.vrm.gz`);
 }
 
 /** Per-avatar camera distance multiplier (default 1). */
@@ -91,7 +91,7 @@ export function getCameraDistanceScale(index: number): number {
 export function getVrmPreviewUrl(index: number): string {
   const assets = getAssets();
   if (assets.length === 0)
-    return resolveAppAssetUrl(`vrms/previews/${BUNDLED_VRM_FALLBACK_SLUG}.png`);
+    return resolveRootPublicAssetUrl(`vrms/previews/${BUNDLED_VRM_FALLBACK_SLUG}.png`);
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : getDefaultBundledVrmIndex();
   const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
@@ -102,7 +102,7 @@ export function getVrmPreviewUrl(index: number): string {
 export function getVrmBackgroundUrl(index: number): string {
   const assets = getAssets();
   if (assets.length === 0)
-    return resolveAppAssetUrl(
+    return resolveRootPublicAssetUrl(
       `vrms/backgrounds/${BUNDLED_VRM_FALLBACK_SLUG}.png`,
     );
   const n = normalizeAvatarIndex(index);
