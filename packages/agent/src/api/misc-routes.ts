@@ -360,12 +360,30 @@ export async function handleMiscRoutes(
     if (streamControl && typeof streamControl.broadcastEvent === "function") {
       void streamControl
         .broadcastEvent("emote", emotePayload)
+        .then((res: unknown) => {
+          logger.info?.(
+            `[misc-routes] emote broadcast relayed (emoteId=${emotePayload.emoteId}):`,
+            res,
+          );
+        })
         .catch((err: unknown) => {
-          logger.debug?.(
-            "[misc-routes] LiveKit emote broadcast failed (non-fatal):",
-            err instanceof Error ? err.message : String(err),
+          // Surface at WARN, not DEBUG: a failed broadcast means the
+          // emote never reaches the live stream, which is a real (if
+          // non-fatal) functional gap that must be visible in prod logs.
+          logger.warn?.(
+            `[misc-routes] LiveKit emote broadcast FAILED (emoteId=${emotePayload.emoteId}, non-fatal):`,
+            err instanceof Error ? (err.stack ?? err.message) : String(err),
           );
         });
+    } else {
+      // Distinguish "plugin not present / not yet a function" from a
+      // broadcast throw so a missing emote relay is never silently
+      // invisible during diagnosis.
+      logger.warn?.(
+        `[misc-routes] emote broadcast SKIPPED (emoteId=${emotePayload.emoteId}): stream555 service ${
+          streamControl ? "has no broadcastEvent method" : "not available"
+        }`,
+      );
     }
 
     json(res, { ok: true });
