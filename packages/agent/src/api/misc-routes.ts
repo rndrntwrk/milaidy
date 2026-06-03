@@ -354,39 +354,61 @@ export async function handleMiscRoutes(
             broadcastEvent?: (
               topic: string,
               payload: unknown,
+              sessionId?: string,
             ) => Promise<unknown>;
+            getBoundSessionId?: () => string | null;
           }
         | undefined) ?? undefined;
+
+    // Emote broadcast outcome is surfaced in the HTTP response (not just
+    // logs): on this deployment alice-bot stdout is not captured past
+    // boot, so a swallowed broadcast failure is otherwise invisible. The
+    // `broadcast` field lets a single `POST /api/emote` reveal whether the
+    // 555stream relay fired and, if not, exactly why.
+    const broadcast: Record<string, unknown> = {
+      hasService: Boolean(streamControl),
+      hasBroadcastEvent: typeof streamControl?.broadcastEvent === "function",
+      boundSessionId:
+        typeof streamControl?.getBoundSessionId === "function"
+          ? streamControl.getBoundSessionId()
+          : null,
+    };
     if (streamControl && typeof streamControl.broadcastEvent === "function") {
-      void streamControl
-        .broadcastEvent("emote", emotePayload)
-        .then((res: unknown) => {
-          logger.info?.(
-            `[misc-routes] emote broadcast relayed (emoteId=${emotePayload.emoteId}):`,
-            res,
-          );
-        })
-        .catch((err: unknown) => {
-          // Surface at WARN, not DEBUG: a failed broadcast means the
-          // emote never reaches the live stream, which is a real (if
-          // non-fatal) functional gap that must be visible in prod logs.
-          logger.warn?.(
-            `[misc-routes] LiveKit emote broadcast FAILED (emoteId=${emotePayload.emoteId}, non-fatal):`,
-            err instanceof Error ? (err.stack ?? err.message) : String(err),
-          );
-        });
+      try {
+        const result = await streamControl.broadcastEvent(
+          "emote",
+          emotePayload,
+        );
+        broadcast.sent = true;
+        broadcast.result = result;
+        logger.info?.(
+          `[misc-routes] emote broadcast relayed (emoteId=${emotePayload.emoteId}):`,
+          result,
+        );
+      } catch (err: unknown) {
+        broadcast.sent = false;
+        broadcast.error =
+          err instanceof Error ? (err.stack ?? err.message) : String(err);
+        // Surface at WARN, not DEBUG: a failed broadcast means the emote
+        // never reaches the live stream, a real (if non-fatal) gap.
+        logger.warn?.(
+          `[misc-routes] LiveKit emote broadcast FAILED (emoteId=${emotePayload.emoteId}, non-fatal):`,
+          broadcast.error,
+        );
+      }
     } else {
-      // Distinguish "plugin not present / not yet a function" from a
-      // broadcast throw so a missing emote relay is never silently
-      // invisible during diagnosis.
+      broadcast.sent = false;
+      broadcast.reason = streamControl
+        ? "stream555 service has no broadcastEvent method"
+        : "stream555 service not available";
       logger.warn?.(
-        `[misc-routes] emote broadcast SKIPPED (emoteId=${emotePayload.emoteId}): stream555 service ${
-          streamControl ? "has no broadcastEvent method" : "not available"
-        }`,
+        `[misc-routes] emote broadcast SKIPPED (emoteId=${emotePayload.emoteId}): ${String(
+          broadcast.reason,
+        )}`,
       );
     }
 
-    json(res, { ok: true });
+    json(res, { ok: true, broadcast });
     return true;
   }
 
