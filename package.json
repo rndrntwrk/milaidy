@@ -397,6 +397,7 @@
   "overrides": {
     "@electric-sql/pglite": "^0.4.5",
     "@elizaos/plugin-cli": "2.0.0-alpha.9",
+    "@elizaos/plugin-shell": "2.0.0-alpha.10",
     "@elizaos/core": "workspace:*",
     "@elizaos/plugin-discord": "workspace:*",
     "@elizaos/plugin-knowledge": "workspace:*",
