@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAliceAppCoreBrowserEntryPatch,
+  isAliceAppCoreBrowserEntryPatched,
   applyAliceAppCoreAgentStatusAuthBridgePatch,
   applyAliceAppCoreCodingAgentsFallbackPatch,
   applyAliceAppCoreCompanionStagePatch,
@@ -2715,6 +2717,118 @@ describe("Alice Eliza runtime patch contract", () => {
           elizaRoot: tempDir,
           log: () => undefined,
         }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("app-core server/client boundary (browser-entry patch)", () => {
+  const UPSTREAM_INDEX = [
+    "// Node/runtime barrel for @elizaos/app-core.",
+    'export * from "./api/server";',
+    'export * from "./runtime/eliza";',
+    'export * from "./registry";',
+    'export * from "./services/vault-bootstrap";',
+    "",
+  ].join("\n");
+
+  function seedAppCore(elizaRoot: string, indexContents: string): void {
+    const srcDir = path.join(elizaRoot, "packages/app-core/src");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(path.join(srcDir, "index.ts"), indexContents);
+    writeFileSync(
+      path.join(srcDir, "ui-compat.ts"),
+      'export * from "@elizaos/ui";\n',
+    );
+  }
+
+  it("writes a browser barrel and keeps the server index.ts UI-free", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-appcore-"));
+    try {
+      const elizaRoot = path.join(tempDir, "eliza");
+      seedAppCore(elizaRoot, UPSTREAM_INDEX);
+
+      expect(
+        applyAliceAppCoreBrowserEntryPatch({
+          elizaRoot,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const srcDir = path.join(elizaRoot, "packages/app-core/src");
+      const serverIndex = readFileSync(path.join(srcDir, "index.ts"), "utf8");
+      const browserIndex = readFileSync(
+        path.join(srcDir, "index.browser.ts"),
+        "utf8",
+      );
+
+      // Node smoke invariant: the server barrel must NOT pull React / the UI
+      // package / import.meta.env into the runtime graph.
+      expect(serverIndex).not.toContain('from "@elizaos/ui"');
+      expect(serverIndex).not.toContain('from "./ui-compat"');
+      expect(serverIndex).not.toContain("import.meta.env");
+
+      // SPA invariant: the browser barrel re-exports index + ui-compat + ui.
+      expect(browserIndex).toContain('export * from "./index"');
+      expect(browserIndex).toContain('export * from "./ui-compat"');
+      expect(browserIndex).toContain('export * from "@elizaos/ui"');
+
+      expect(isAliceAppCoreBrowserEntryPatched({ elizaRoot })).toBe(true);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("self-heals an index.ts previously polluted with @elizaos/ui re-exports", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-appcore-"));
+    try {
+      const elizaRoot = path.join(tempDir, "eliza");
+      const polluted = [
+        UPSTREAM_INDEX.trimEnd(),
+        "",
+        "// [milaidy:app-core-ui-compat-reexport]",
+        'export * from "./ui-compat";',
+        "",
+        "// [milaidy:app-core-ui-full-reexport]",
+        'export * from "@elizaos/ui";',
+        "export const DesktopOnboardingRuntime = (): null => null;",
+        "",
+      ].join("\n");
+      seedAppCore(elizaRoot, polluted);
+
+      expect(
+        applyAliceAppCoreBrowserEntryPatch({
+          elizaRoot,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const serverIndex = readFileSync(
+        path.join(elizaRoot, "packages/app-core/src/index.ts"),
+        "utf8",
+      );
+      expect(serverIndex).not.toContain('from "@elizaos/ui"');
+      expect(serverIndex).not.toContain("app-core-ui-full-reexport");
+      expect(serverIndex).not.toContain("app-core-ui-compat-reexport");
+      expect(serverIndex).toContain('export * from "./services/vault-bootstrap"');
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("is idempotent once applied", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-appcore-"));
+    try {
+      const elizaRoot = path.join(tempDir, "eliza");
+      seedAppCore(elizaRoot, UPSTREAM_INDEX);
+
+      expect(
+        applyAliceAppCoreBrowserEntryPatch({ elizaRoot, log: () => undefined }),
+      ).toBe("applied");
+      expect(
+        applyAliceAppCoreBrowserEntryPatch({ elizaRoot, log: () => undefined }),
       ).toBe("already-applied");
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
