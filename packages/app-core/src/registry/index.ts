@@ -50,8 +50,25 @@ export function loadRegistry(): LoadedRegistry {
     for (const filename of entries) {
       if (!filename.endsWith(".json")) continue;
       const file = join(kindDir, filename);
-      const data = JSON.parse(readFileSync(file, "utf-8"));
-      raws.push({ file, data });
+      // A single malformed/binary entry must not crash the entire agent boot
+      // (loadRegistry runs early, inside vault-bootstrap). Skip and warn so the
+      // runtime comes up; the bad entry just isn't registered.
+      let raw: string;
+      try {
+        raw = readFileSync(file, "utf-8");
+      } catch (err) {
+        console.warn(
+          `[registry] skipping unreadable entry ${file}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        continue;
+      }
+      try {
+        raws.push({ file, data: JSON.parse(raw) });
+      } catch (err) {
+        console.warn(
+          `[registry] skipping invalid JSON entry ${file} (${raw.length} bytes, starts ${JSON.stringify(raw.slice(0, 16))}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
   }
 
