@@ -2,25 +2,71 @@
 
 Milady is a local-first AI assistant built on [elizaOS](https://github.com/elizaOS). It wraps the elizaOS runtime with a CLI, desktop app (Electrobun), web dashboard, and platform connectors (Telegram, Discord, WeChat, etc.). Inherits `~/.codex/AGENTS.md`.
 
+## Cloud frontend visual review (REQUIRED for any UI change)
+
+Any change in `eliza/packages/cloud-frontend/` MUST go through the manual-review
+loop before being declared done. Automated tests catch what they assert; hover
+regressions, palette drift, broken empty states, and mobile layout breaks slip
+through. The harness produces evidence — you produce the verdicts.
+
+### How to run
+
+```bash
+bun run --cwd eliza/packages/cloud-frontend audit:cloud
+```
+
+This runs `tests/e2e/aesthetic-audit.spec.ts` headlessly across every route in
+`src/App.tsx` (53 routes × desktop + mobile × rest + hover ≈ 200 screenshots).
+The injected-ethereum login flow is wired into the spec so dashboard pages
+render their authed content; admin pages are dev-open via `import.meta.env.DEV`.
+Output lands in:
+
+```
+eliza/packages/cloud-frontend/aesthetic-audit-output/
+  desktop/<slug>.png            rest screenshot
+  desktop/<slug>--hover.png     hover state (primary button focused)
+  mobile/<slug>.png
+  mobile/<slug>--hover.png
+  manual-review/<slug>.md       REQUIRED per-page verdict markdown
+  contact-sheet.html            grid view of every shot + flagged issues
+  report.json                   machine-readable audit data
+```
+
+### Required loop (run 5+ iterations until every page hits verdict=good)
+
+1. Run `audit:cloud`.
+2. Open `contact-sheet.html`. Walk every page touched by your change (and every
+   page reachable through transitive deps — header, footer, theme, buttons).
+3. For each page, open `manual-review/<slug>.md` and fill in:
+   - Visual issues (anything that looks wrong or off-brand)
+   - Color / hover violations (orange→black or any blue is banned)
+   - Layout breaks (viewport + element)
+   - Interaction targets the e2e suite should cover
+   - **Verdict**: `good` · `needs-work` · `needs-eyeball` · `broken`
+4. Fix the issues.
+5. Commit screenshots + reviews + code together.
+6. Re-run the audit. Repeat. Do not declare done until every page is `good`.
+
+### Hard rules
+
+- Every page must have a screenshot AND a `manual-review/<slug>.md` checked in.
+- Verdicts of `needs-work` or `broken` block "done." Fix or document why.
+- Never overwrite an existing `manual-review/<slug>.md` from automation — the
+  human notes are load-bearing. The spec only auto-stubs new routes.
+- The contact sheet is the index, NOT the review. The review is the per-page
+  markdown.
+
+Full protocol: `eliza/packages/cloud-frontend/AGENTS.md`.
+
 ## elizaOS naming
 
-
 - Write the framework name as **elizaOS** in prose, comments, user-facing strings, and docs — never `ElizaOS`. The npm scope remains **`@elizaos/*`** (lowercase).
-## Wallet + trading architecture (locked)
+- Say **Eliza agents** (not "elizaOS agents") in plain language.
+- The **Eliza Classic** plugin name is the one exception (Eliza = the 1966 chatbot).
 
-The wallet and trading stack is governed by `docs/architecture/wallet-and-trading.md`. The non-negotiable shape:
+## Native over Docker on Linux x64
 
-- **Steward is cloud-only.** Eliza Cloud (web) and mobile (Capacitor) route signing through the multi-tenant Steward service. Desktop defaults to `LocalEoaBackend` (keys hydrated from the OS keychain). No Vincent, no Lit Protocol — Steward is the only custody primitive in cloud, full stop.
-- **One canonical surface: action + provider + validate.** Roughly 9 canonical planner-visible actions (`TRADE`, `MANAGE_POSITION`, `QUERY_MARKET`, `QUERY_PORTFOLIO`, `LEND`, `MANAGE_LP`, `TRANSFER`, `SET_AUTOMATION`, `MANAGE_AUTOMATION`) plus 13 typed providers. Adding a new venue means adding a provider, **not** a new planner verb. Validate is a strict 6-step gate (zod parse → plugin enabled → provider health → wallet capability → policy → preconditions); handlers trust pre-validated input. Read-only `QUERY_*` actions skip wallet + policy.
-- **No fallback sludge.** Silent autogen of EVM/Solana keys is removed. `POST /api/wallet/export` is removed. Steward unreachable = fail loud, not silent fallback to local. Local policy is absolute (no human approval loop) except the explicit `prompt_user_first` rule kind, which surfaces a chat-surface confirmation above a configurable USD threshold (default $50).
-- **Hyperliquid live mainnet only**, agent-key delegation auto-registered on first use. **Polymarket** has both reads (lifted from otaku) and writes (CLOB place/cancel + on-chain `redeemPositions`). Geographic restrictions surface as `VENUE_GEO_RESTRICTED` at validate based on a client-supplied region.
-- **Audit log is evidence-grade.** Append-only Postgres / PGLite table with row-chained sha256, verified at boot, 90-day rolling retention with checkpoint hashes every 1000 rows. Privacy filter is mandatory on every write.
-- **Ships everywhere.** Desktop (Electrobun + LocalEoaBackend), Eliza Cloud (web + StewardBackend), mobile (Capacitor + cloud-routed StewardBackend).
-
-Implementation order is `docs/architecture/wallet-and-trading.md` §I. Coordinator routes by phase; specialists implement against the spec, not against narrative.
-
-### elizaOS naming (agents & editors)
-
+Linux x86_64 dev boxes should build and run every toolchain locally — RTL sims, synthesis, formal, PD (OpenLane/OpenROAD/magic/klayout/netgen), LLVM, Chipyard, AlphaChip CUDA, QEMU, Renode. Native is faster and far easier to troubleshoot than Docker: no bind-mount syscall overhead, real stack traces, normal `gdb`/`perf`, no daemon lifecycle to babysit. Keep Docker recipes around as a documented fallback for macOS, reproducibility audits, and pinned-image CI lanes only. If a script forces Docker on Linux even when a working native binary is on `$PATH`, that's a bug — fix the script.
 
 ## Quick start (dev)
 
@@ -34,17 +80,24 @@ bun run dev:desktop:watch  # Vite dev server + Electrobun (HMR). Set MILADY_DESK
 Optional — link a local elizaOS source checkout:
 
 ```bash
-bun run setup:upstreams    # clone ./eliza if needed and link local @elizaos/* packages
-bun run eliza:packages     # switch back to published @elizaos/* packages
+bun run setup:upstreams    # initialize repo-local ./eliza and link local @elizaos/* packages
 ```
 
 Desktop dev observability (Codex cannot see the native window):
 
 - `GET /api/dev/stack` (or `bun run desktop:stack-status -- --json`) — running window/process state.
-- `GET /api/dev/console-log` — loopback tail of `.milady/desktop-dev-console.log` (default-on aggregated log).
+- `GET /api/dev/console-log` — loopback tail of `~/.local/state/milady/desktop-dev-console.log` (default-on aggregated log).
 - `GET /api/dev/cursor-screenshot` — loopback full-screen OS capture (default-on).
 
 See `eliza/docs/apps/desktop-local-development.md`.
+
+## Electrobun agentic desktop rules pack
+
+The Electrobun Agentic Desktop 2026 rules pack is applied locally for desktop-shell work. Root project guidance remains authoritative; use the pack as an additional checklist when touching `eliza/packages/app-core/platforms/electrobun`, `apps/app`, desktop RPC, webviews, tray/menu/deep-link surfaces, updater/release code, or local model/tool orchestration.
+
+Read `rules/`, `checklists/`, `hooks/README.md`, `commands/README.md`, `docs/research-brief-2026.md`, and `docs/porting-map-from-apple-swift.md` before implementing Electrobun-specific changes. The original source bundle is preserved under `docs/agent-packs/electrobun-agentic-desktop-2026/`.
+
+Do not activate the archived workflow examples under `docs/agent-packs/electrobun-agentic-desktop-2026/.github/workflows/` without explicit approval for CI/CD changes.
 
 ## Build & test
 
@@ -58,12 +111,10 @@ bun run db:check    # database security + readonly tests
 
 ## Project layout
 
-Milady defaults to published `@elizaos/*` packages. A repo-local `./eliza` checkout is optional, ignored by git, and used only when explicitly selected with `bun run setup:upstreams` / `bun run eliza:local`.
+First-party packages, apps, and orchestrator scripts live under the `eliza/` submodule. The top-level repo holds Milady-specific glue (`apps/app/`, `packages/{vault,confidant}/`, top-level `scripts/`).
 
 ```
-node_modules/@elizaos/*             Default runtime source: published elizaOS packages
-
-eliza/                              Optional ignored local checkout (elizaOS/eliza)
+eliza/                              Local elizaOS/eliza checkout — source of truth for runtime
   packages/
     app-core/                       Main runtime package
       src/
@@ -121,7 +172,7 @@ Two distinct skill systems live in this repo. Don't conflate them.
 
 Bundled `@elizaos/skills` are the default knowledge base for the running Eliza agent and for any code agent working in this repo. Repo setup mirrors them into `skills/.defaults/` for workspace access.
 
-- **Source of truth:** `eliza/packages/skills/skills/` (33 bundled skills).
+- **Source of truth:** `eliza/packages/skills/skills/` (31 bundled skills).
 - **Workspace mirror:** `skills/.defaults/` — refreshed by `scripts/sync-workspace-default-skills.mjs` during setup; do not hand-edit.
 - **Managed store seed:** `eliza/packages/app-core/scripts/ensure-skills.mjs` seeds the bundled skills on first run.
 - **Runtime knowledge seed:** `eliza/packages/agent/src/runtime/default-knowledge.ts` seeds baseline runtime knowledge (including Eliza Cloud guidance).
@@ -134,12 +185,10 @@ Open the `SKILL.md` of any of these from the workspace mirror when relevant:
 - `elizaos` — runtime concepts, plugin abstractions, AgentRuntime, actions/providers/evaluators/services.
 - `eliza-cloud` — Cloud as managed backend, app registration, hosted APIs, billing, monetization, container deploys.
 - `build-monetized-app` — building a Cloud app that earns via inference markup; pairs with `eliza-cloud`.
-- `eliza-cloud-buy-domain` — registering a confirmed custom domain for an Eliza Cloud app.
-- `eliza-cloud-manage-domain` — listing, verifying, syncing, detaching, and editing DNS for app domains.
 
 **Agent-orchestration / authoring:**
 - `coding-agent` — spawning Codex / Claude Code / OpenCode / Pi via PTY-backed bash for sub-agent work.
-- `task-agent-eliza-bridge` — loopback endpoints exposing parent runtime context to a spawned coding task agent.
+- `claude-subagent-milady-bridge` — loopback endpoints exposing parent runtime context to a spawned coding sub-agent.
 - `skill-creator` — authoring new SKILL.md packages (frontmatter, scripts, references, progressive disclosure).
 
 **Connectors / OS / SaaS integrations** (use when the task touches that surface):
@@ -157,14 +206,14 @@ When Eliza Cloud is enabled or requested, prefer it as the managed backend (app 
 
 ## Dependencies on elizaOS
 
-- Milady defaults to published `@elizaos/*` packages. The dist tag defaults to `alpha`; override with `MILADY_ELIZAOS_DIST_TAG`, `ELIZAOS_NPM_TAG`, or `bun run eliza:packages -- --tag <alpha|beta|main>`.
-- Local source mode is opt-in: `bun run setup:upstreams` / `bun run eliza:local -- --install` clones `https://github.com/elizaOS/eliza.git` into ignored `./eliza` if missing, then links local packages.
-- Return to standalone package mode with `bun run eliza:packages -- --install`. Do not add `./eliza` as a submodule or workspace dependency.
-- The elizaOS source checkout is hosted at **elizaOS/eliza**, not the personal `Dexploarer` fork. Pushes and PRs for elizaOS source changes go to `elizaOS/eliza`.
+- All `@elizaos/*` packages use the `beta` dist-tag. `bun run setup:upstreams` links repo-local `./eliza` and `./plugins` packages so changes are picked up immediately. `MILADY_SKIP_LOCAL_UPSTREAMS=1` falls back to npm.
+- `@elizaos/plugin-agent-orchestrator` resolves from `eliza/plugins/plugin-agent-orchestrator` via `workspace:*`. Updating the submodule updates the orchestrator.
+- All official elizaOS plugin repos live under https://github.com/elizaOS-plugins. For plugin work, prefer adding the plugin repo as a git submodule under `eliza/plugins/` (tracked in `eliza/.gitmodules`) and depending via `workspace:*`. Publish to npm when ready.
+- The eliza source checkout is hosted at **elizaOS/eliza**. Pushes and PRs always go to `elizaOS/eliza`.
 
 ## Environment variables (commonly touched)
 
-- `MILADY_STATE_DIR` / `ELIZA_STATE_DIR` — per-user state root (default `~/.milady`).
+- `MILADY_STATE_DIR` / `ELIZA_STATE_DIR` — per-user state root (default `~/.local/state/milady`).
 - `MILADY_CONFIG_PATH` / `ELIZA_CONFIG_PATH` — config file resolution.
 - `ELIZA_DISABLE_TRAJECTORY_LOGGING=1` (or `NODE_ENV=test`) — opt out of trajectory persistence.
 - `MILADY_DISABLE_AUTO_BOOTSTRAP=1` — skip the runtime native-optimization bootstrap.
@@ -185,9 +234,9 @@ Port env vars (never hardcoded — the dev orchestrator auto-shifts to the next 
 - `USE_SKILL` is the only canonical entry point for invoking an enabled skill. Legacy `RUN_SKILL_SCRIPT` / `GET_SKILL_GUIDANCE` are removed; `RUN_SKILL` / `INVOKE_SKILL` remain as similes.
 - The `enabled_skills` provider runs at position `-10` and surfaces eligible skills to the planner each turn.
 - Trajectory persistence is on by default. Every turn lands in the `trajectories` table unless `ELIZA_DISABLE_TRAJECTORY_LOGGING=1`.
-- Native optimization (`--backend native`) is the default training backend (MIPRO / GEPA / bootstrap-fewshot). Outputs land under `~/.milady/optimized-prompts/<task>/` and `OptimizedPromptService` auto-loads at boot.
+- Native optimization (`--backend native`) is the default training backend (MIPRO / GEPA / bootstrap-fewshot). Outputs land under `~/.local/state/milady/optimized-prompts/<task>/` and `OptimizedPromptService` auto-loads at boot.
 - Auto-training defaults: 100 trajectories per task, 12h cooldown. Adjust via `/api/training/auto/config` or Settings → Auto-Training.
-- The privacy filter at `eliza/apps/app-training/src/core/privacy-filter.ts` is mandatory on every write path that touches real user trajectories — both the nightly export cron and the on-demand training orchestrator run it before any JSONL is written.
+- The privacy filter at `eliza/plugins/app-training/src/core/privacy-filter.ts` is mandatory on every write path that touches real user trajectories — both the nightly export cron and the on-demand training orchestrator run it before any JSONL is written.
 
 ## App and plugin primitives
 
@@ -208,7 +257,7 @@ Coding sub-agents spawned by the orchestrator (Claude Code, Codex, etc.) live in
 - `GET /api/coding-agents/:sessionId/memory?q=<query>&limit=<N>` — query the parent agent's memory.
 - `GET /api/coding-agents/:sessionId/active-workspaces` — list the parent's currently-active workspaces.
 
-All bridge responses are read-only. Mutations stay with the orchestrator — sub-agents cannot write parent state through the bridge. The `task-agent-eliza-bridge` skill (in `skills/.defaults/`) documents the calling pattern in detail.
+All bridge responses are read-only. Mutations stay with the orchestrator — sub-agents cannot write parent state through the bridge. The `claude-subagent-milady-bridge` skill (in `skills/.defaults/`) documents the calling pattern in detail.
 
 ### Mandatory verification loop for `create` modes
 
@@ -235,8 +284,8 @@ If any claim fails verification, the parent issues a structured failure prompt a
 
 ### Templates
 
-- `@elizaos/app-core` package templates — minimal Eliza app/project scaffolds.
-- `@elizaos/agent` / `@elizaos/app-core` package templates — minimal runtime plugin scaffolds.
+- `eliza/templates/min-app/` — minimal Eliza app (Vite + React entry, `Plugin` with one action, `package.json` with `elizaos.app` metadata, vitest smoke test, hero image placeholder, `SCAFFOLD.md` agent contract).
+- `eliza/templates/min-plugin/` — minimal Eliza runtime plugin (one action, one provider, `package.json` with `elizaos.plugin` metadata, vitest smoke test, `SCAFFOLD.md` agent contract).
 
 Both use placeholders (`__APP_NAME__`, `__APP_DISPLAY_NAME__`, `__PLUGIN_NAME__`, `__PLUGIN_DISPLAY_NAME__`) replaced by the scaffold copy step. Read each template's `SCAFFOLD.md` before customizing.
 

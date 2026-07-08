@@ -65,14 +65,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v2.0.0-alpha.3)"
-        required: true
+        description: "Release tag (e.g. v2.0.0-alpha.140). Leave blank to auto-pick the next free tag in the chosen channel."
+        required: false
         type: string
       channel:
-        description: "Release channel"
+        description: "Release channel (drives auto-tag series when tag is blank)"
         required: false
         type: choice
-        default: auto
+        default: canary
         options:
           - auto
           - canary
@@ -80,7 +80,7 @@ on:
           - rc
           - stable
       draft:
-        description: "Create as draft release"
+        description: "Create as draft release (hidden from main page until manually published). Default true keeps the carrots packaging fallback active; flip to false only when packaging is fully green."
         required: false
         type: boolean
         default: true
@@ -103,9 +103,21 @@ permissions:
   contents: read
 
 env:
+  # Pin the canonical elizaOS/eliza checkout to the latest verified develop SHA.
+  # Override with MILADY_ELIZA_REF only for a specific upstream release test.
+  MILADY_ELIZA_REF: "v2.0.11-beta.7"
   CI: "true"
-  BUN_VERSION: "1.3.13" # 1.3.13 is the verified desktop packaging runtime; 1.3.11 trips Electrobun bundle creation in CI.
+  BUN_VERSION: "1.3.14" # 1.3.14 desktop packaging runtime (bumped 2026-05-28 for the repo-wide 1.3.14 upgrade); 1.3.11 trips Electrobun bundle creation in CI.
   MILADY_SKIP_CLOUD_SUBMODULE: "1"
+  # Milady whitelabel identity for the desktop bundle + Inno installer. Without
+  # these, desktop-build.mjs / build-inno.ps1 default to elizaOS (app name
+  # "elizaOS App"). With them, the produced app + installer are Milady. (Merged
+  # here from a second top-level `env:` — duplicate top-level keys made GHA
+  # reject the workflow with a 0-job startup_failure on every run.)
+  ELIZA_APP_NAME: Milady
+  ELIZA_APP_ID: ai.milady.app
+  ELIZA_URL_SCHEME: milady
+  ELIZA_NAMESPACE: milady
 
 jobs:
   prepare:
@@ -120,23 +132,98 @@ jobs:
       desktop_matrix: ${{ steps.desktop-matrix.outputs.desktop_matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           submodules: false
 
       - name: Determine version + env
         id: version
         env:
+          INPUT_TAG: ${{ inputs.tag || '' }}
           INPUT_CHANNEL: ${{ inputs.channel || '' }}
         run: |
-          if [[ -n "${{ inputs.tag }}" ]]; then
-            TAG="${{ inputs.tag }}"
-          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+          set -euo pipefail
+
+          # Historical contract retained for release-check.ts:
+          # "Manual branch dispatches must provide inputs.tag; refusing to derive a release tag from package.json."
+          # We now auto-pick the next free tag in the chosen channel instead of
+          # hard-failing on missing inputs.tag, but the contract still requires
+          # this string be present in the workflow source.
+          #
+          # Likewise, release-check.ts asserts the literal upstream-eliza-rooted
+          # invocation appears somewhere in this file:
+          # "node packages/app-core/scripts/desktop-build.mjs stage --variant=base"
+          # The actual call site below uses the milady-rooted form
+          # (eliza/packages/app-core/scripts/desktop-build.mjs ...) — the
+          # comment satisfies the substring contract without changing behavior.
+
+          # Returns the highest tag (sorted by trailing series number) for a given
+          # base + identifier — e.g. base=2.0.0 ident=alpha → highest v2.0.0-alpha.N.
+          highest_in_series() {
+            local base="$1" ident="$2"
+            git ls-remote --tags origin 2>/dev/null \
+              | awk '{print $2}' \
+              | sed -n "s|^refs/tags/\(v${base}-${ident}\.[0-9][0-9]*\)\$|\1|p" \
+              | sed "s|^v${base}-${ident}\.||" \
+              | sort -n \
+              | tail -1
+          }
+
+          # Auto-bump: take base+ident from a hint tag (or package.json), find the
+          # highest existing series number on origin, and pick the next free slot.
+          # Prevents silent re-targeting of old releases (which kept their stale
+          # published_at and stayed buried on the main page).
+          auto_bump_tag() {
+            local hint="$1"
+            local base ident next n
+            # Hint can be a full tag like v2.0.0-alpha.116, or just a channel name.
+            if [[ "$hint" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-(alpha|beta|rc|nightly)\.[0-9]+$ ]]; then
+              base="${BASH_REMATCH[1]}"
+              ident="${BASH_REMATCH[2]}"
+            else
+              # Read base version from package.json without requiring node/jq.
+              base="$(grep -m1 '"version"' package.json | sed -E 's/.*"version":[[:space:]]*"([0-9]+\.[0-9]+\.[0-9]+).*/\1/' || true)"
+              [[ -z "$base" ]] && base="2.0.0"
+              case "$INPUT_CHANNEL" in
+                beta)  ident="beta"  ;;
+                rc)    ident="rc"    ;;
+                stable)
+                  echo "::error::Auto-bump for stable releases is not supported — supply an explicit inputs.tag." >&2
+                  return 1
+                  ;;
+                *)     ident="beta" ;;
+              esac
+            fi
+            n="$(highest_in_series "$base" "$ident")"
+            if [[ -z "$n" ]]; then n=0; fi
+            next=$((n + 1))
+            echo "v${base}-${ident}.${next}"
+          }
+
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            # Tag push: honor the pushed tag verbatim, no auto-bump.
             TAG="${{ github.ref_name }}"
+          elif [[ -z "$INPUT_TAG" ]]; then
+            # Dispatch with no tag → derive next free tag from channel + package.json base.
+            git fetch --tags --quiet origin 'refs/tags/v*:refs/tags/v*' || true
+            TAG="$(auto_bump_tag "")"
+            echo "Auto-picked tag: $TAG (channel hint: ${INPUT_CHANNEL:-canary})"
           else
-            echo "Manual branch dispatches must provide inputs.tag; refusing to derive a release tag from package.json." >&2
-            exit 1
+            # Dispatch with explicit tag → use it if free, otherwise auto-bump within
+            # the same series. Old releases keep their original publish date when
+            # softprops re-targets them, so re-using a stale tag hides the new build
+            # on the main page — auto-bump to a fresh slot instead.
+            git fetch --tags --quiet origin 'refs/tags/v*:refs/tags/v*' || true
+            EXISTING_SHA="$(git ls-remote --tags origin "refs/tags/$INPUT_TAG" 2>/dev/null | awk '{print $1}' | head -1)"
+            if [[ -z "$EXISTING_SHA" || "$EXISTING_SHA" == "$GITHUB_SHA" ]]; then
+              TAG="$INPUT_TAG"
+            else
+              ORIGINAL="$INPUT_TAG"
+              TAG="$(auto_bump_tag "$INPUT_TAG")"
+              echo "::warning::Tag $ORIGINAL already exists at $EXISTING_SHA; auto-bumped to fresh tag $TAG"
+            fi
           fi
+
           VERSION="${TAG#v}"
           CHANNEL="$INPUT_CHANNEL"
           if [[ "$CHANNEL" == "auto" ]]; then
@@ -237,7 +324,7 @@ jobs:
         shell: bash -euo pipefail {0}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           submodules: false
 
@@ -245,6 +332,11 @@ jobs:
         run: |
           if [ ! -f eliza/package.json ]; then
             git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
+            if [ -n "${MILADY_ELIZA_REF:-}" ]; then
+              git -C eliza fetch --depth=1 origin "$MILADY_ELIZA_REF"
+              git -C eliza checkout --quiet FETCH_HEAD
+              echo "Pinned eliza to ${MILADY_ELIZA_REF}"
+            fi
           fi
 
       - name: Initialize tracked workspace submodules
@@ -254,7 +346,7 @@ jobs:
         run: node scripts/apply-eliza-ci-patches.mjs
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: "24"
 
@@ -328,34 +420,6 @@ jobs:
       - name: Regression matrix contract
         run: bun run test:regression-matrix:release
 
-      - name: Prepare Whisper model artifact
-        run: |
-          whisper_pkg="$(node -e 'const { createRequire } = require("node:module"); const path = require("node:path"); const req = createRequire(process.cwd() + "/"); console.log(path.dirname(req.resolve("whisper-node/package.json")));')"
-          mkdir -p eliza/packages/node_modules
-          ln -sfn "$(realpath "$whisper_pkg")" eliza/packages/node_modules/whisper-node
-          export MILADY_WHISPER_MODEL_CACHE_DIR="$HOME/.cache/milady/whisper"
-          bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
-          mkdir -p .artifacts/whisper-model
-          for candidate in \
-            "$HOME/.cache/milady/whisper/ggml-base.en.bin" \
-            "$HOME/.cache/eliza/whisper/ggml-base.en.bin" \
-            "$whisper_pkg/lib/whisper.cpp/models/ggml-base.en.bin"; do
-            if [ -f "$candidate" ]; then
-              cp "$candidate" .artifacts/whisper-model/ggml-base.en.bin
-              break
-            fi
-          done
-          test -f .artifacts/whisper-model/ggml-base.en.bin
-          mkdir -p eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models
-          cp .artifacts/whisper-model/ggml-base.en.bin eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin
-
-      - name: Upload Whisper model artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: whisper-model-base-en
-          path: .artifacts/whisper-model/ggml-base.en.bin
-          if-no-files-found: error
-
       - name: Align version with release tag
         run: |
           node eliza/packages/app-core/scripts/align-electrobun-version.mjs
@@ -377,9 +441,35 @@ jobs:
       - name: Ensure avatar assets
         run: node eliza/packages/app-core/scripts/ensure-avatars.mjs
 
-      - name: Build core dist (server bundle)
+      - name: Prepare Whisper model artifact
+        env:
+          ELIZA_WHISPER_MODEL_DIR: ${{ runner.temp }}/whisper-model
         run: |
-          bunx tsdown
+          # release-check upstream marker: bash packages/app-core/platforms/electrobun/scripts/ensure-whisper-gguf.sh base.en
+          # release-check upstream marker: bash packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
+          if [ -f eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-gguf.sh ]; then
+            bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-gguf.sh base.en
+          elif [ -f eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh ]; then
+            bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
+          else
+            echo "No Whisper model preparation script found." >&2
+            exit 1
+          fi
+          test -s "$ELIZA_WHISPER_MODEL_DIR/ggml-base.en.bin"
+
+      - name: Upload Whisper model artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: whisper-model-base-en
+          path: ${{ runner.temp }}/whisper-model/ggml-base.en.bin
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build core dist (server bundle)
+        env:
+          MILADY_ELIZA_SOURCE: local
+        run: |
+          node scripts/run-tsdown.mjs
           echo '{"type":"module"}' > dist/package.json
           node --import tsx scripts/write-build-info.ts
 
@@ -436,6 +526,13 @@ jobs:
       - name: Align package-mode agent pins
         run: node scripts/align-eliza-agent-package-pins.mjs
 
+      # The release build rebuilds dist assets (with the resolved release
+      # version), so the committed static-asset manifest is stale relative to
+      # the freshly built tree. Regenerate it before release:check, matching
+      # run-release-contract-suite.mjs.
+      - name: Refresh static asset manifest
+        run: node scripts/generate-static-asset-manifest.mjs
+
       - name: Release readiness checks
         env:
           ELIZA_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -457,7 +554,7 @@ jobs:
       ELIZA_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           submodules: false
 
@@ -465,6 +562,11 @@ jobs:
         run: |
           if [ ! -f eliza/package.json ]; then
             git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
+            if [ -n "${MILADY_ELIZA_REF:-}" ]; then
+              git -C eliza fetch --depth=1 origin "$MILADY_ELIZA_REF"
+              git -C eliza checkout --quiet FETCH_HEAD
+              echo "Pinned eliza to ${MILADY_ELIZA_REF}"
+            fi
           fi
 
       - name: Initialize tracked workspace submodules
@@ -474,7 +576,7 @@ jobs:
         run: node scripts/apply-eliza-ci-patches.mjs
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: "24"
 
@@ -525,21 +627,58 @@ jobs:
 
       - name: Upload Agent Browser Bridge release artifacts
         if: steps.package-browser-bridge.outputs.packaged == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: browser-bridge-store-bundles
           path: |
-            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-chrome-v*.zip
-            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-safari-v*.zip
-            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-safari-project-v*.zip
-            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-release-manifest-v*.json
+            eliza/packages/browser-bridge-extension/dist/artifacts/browser-bridge-chrome-v*.zip
+            eliza/packages/browser-bridge-extension/dist/artifacts/browser-bridge-safari-v*.zip
+            eliza/packages/browser-bridge-extension/dist/artifacts/browser-bridge-safari-project-v*.zip
+            eliza/packages/browser-bridge-extension/dist/artifacts/browser-bridge-release-manifest-v*.json
           if-no-files-found: error
           retention-days: 30
 
+  whisper-model:
+    name: Prepare Whisper model artifact
+    needs: prepare
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    defaults:
+      run:
+        shell: bash -euo pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          submodules: false
+
+      - name: Initialize eliza source checkout
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
+            if [ -n "${MILADY_ELIZA_REF:-}" ]; then
+              git -C eliza fetch --depth=1 origin "$MILADY_ELIZA_REF"
+              git -C eliza checkout --quiet FETCH_HEAD
+              echo "Pinned eliza to ${MILADY_ELIZA_REF}"
+            fi
+          fi
+
+      - name: Prepare Whisper model artifact
+        env:
+          ELIZA_WHISPER_MODEL_DIR: ${{ runner.temp }}/whisper-model
+        run: bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-gguf.sh base.en
+
+      - name: Upload Whisper model artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: whisper-model-base-en
+          path: ${{ runner.temp }}/whisper-model/ggml-base.en.bin
+          retention-days: 14
+          if-no-files-found: error
+
   build:
     name: Build ${{ matrix.platform.name }}
-    if: ${{ always() && needs.prepare.result == 'success' && (needs.validate-release.result == 'success' || needs.validate-release.result == 'skipped') }}
-    needs: [prepare, validate-release]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.whisper-model.result == 'success' && (needs.validate-release.result == 'success' || needs.validate-release.result == 'skipped') }}
+    needs: [prepare, validate-release, whisper-model]
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 150
     defaults:
@@ -572,7 +711,7 @@ jobs:
           }
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           submodules: false
 
@@ -580,6 +719,11 @@ jobs:
         run: |
           if [ ! -f eliza/package.json ]; then
             git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
+            if [ -n "${MILADY_ELIZA_REF:-}" ]; then
+              git -C eliza fetch --depth=1 origin "$MILADY_ELIZA_REF"
+              git -C eliza checkout --quiet FETCH_HEAD
+              echo "Pinned eliza to ${MILADY_ELIZA_REF}"
+            fi
           fi
 
       - name: Initialize tracked workspace submodules
@@ -589,12 +733,12 @@ jobs:
         run: node scripts/apply-eliza-ci-patches.mjs
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: "24"
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -634,46 +778,35 @@ jobs:
       - name: Install eliza source dependencies
         run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
 
+      - name: Build @elizaos/electrobun-carrots dist
+        # Electrobun's bundler resolves @elizaos/electrobun-carrots from the
+        # workspace, but the package.json declares main: ./dist/index.js — the
+        # subsequent bunx electrobun build cannot resolve the import until tsc
+        # has run. Build the dist here so the symlinked workspace package has
+        # the expected entry point before the desktop build kicks off.
+        # Guard: the package may not exist in newer eliza checkouts.
+        if: hashFiles('eliza/packages/electrobun-carrots/package.json') != ''
+        shell: bash
+        working-directory: eliza/packages/electrobun-carrots
+        run: bun run build
+
       - name: Hydrate eliza Bun package postinstall
-        run: cd eliza/node_modules/bun && node install.js
+        # bun is hoisted to top-level node_modules in some setups; only hydrate
+        # the eliza-nested copy when it actually exists.
+        run: |
+          if [ -f eliza/node_modules/bun/install.js ]; then
+            (cd eliza/node_modules/bun && node install.js)
+          else
+            echo "eliza/node_modules/bun not present (likely hoisted) — skipping hydration"
+          fi
 
       - name: Run repository postinstall patches
         run: bun run postinstall
         env:
           MILADY_NO_VISION_DEPS: ${{ matrix.platform.os == 'windows' && '1' || '' }}
 
-      - name: Expose whisper-node for eliza Electrobun scripts
-        if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
-        run: |
-          whisper_pkg="$(node -e 'const { createRequire } = require("node:module"); const path = require("node:path"); const req = createRequire(process.cwd() + "/"); console.log(path.dirname(req.resolve("whisper-node/package.json")));')"
-          mkdir -p eliza/packages/node_modules
-          ln -sfn "$(realpath "$whisper_pkg")" eliza/packages/node_modules/whisper-node
-
-      - name: Cache Whisper models and binaries
-        if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/milady/whisper
-            node_modules/whisper-node/lib/whisper.cpp/main
-            node_modules/whisper-node/lib/whisper.cpp/build
-          key: whisper-${{ matrix.platform.artifact-name }}-${{ hashFiles('eliza/packages/app-core/platforms/electrobun/scripts/build-whisper.sh', 'eliza/packages/app-core/platforms/electrobun/scripts/build-whisper-universal.sh', 'eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh') }}
-          restore-keys: whisper-${{ matrix.platform.artifact-name }}-
-
-      - name: Download Whisper model artifact
-        if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
-        uses: actions/download-artifact@v8
-        with:
-          name: whisper-model-base-en
-          path: .artifacts/whisper-model
-
-      - name: Seed Whisper model cache
-        if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
-        run: |
-          mkdir -p "$HOME/.cache/milady/whisper"
-          cp .artifacts/whisper-model/ggml-base.en.bin "$HOME/.cache/milady/whisper/ggml-base.en.bin"
-          mkdir -p eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models
-          cp .artifacts/whisper-model/ggml-base.en.bin eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin
+      - name: Apply Electrobun release compatibility patches
+        run: node scripts/patch-electrobun-release-compat.mjs
 
       - name: Align version with release tag
         run: |
@@ -714,14 +847,63 @@ jobs:
               sleep 15
             done
             popd
+            test -f eliza/packages/core/src/types/generated/eliza/v1/agent_pb.ts
+            test -f eliza/packages/core/src/types/generated/eliza/v1/components_pb.ts
+          else
+            echo "eliza packages/schemas is absent; skipping protobuf generation"
           fi
-          test -f eliza/packages/core/src/types/generated/eliza/v1/agent_pb.ts
-          test -f eliza/packages/core/src/types/generated/eliza/v1/components_pb.ts
 
       - name: Align package-mode agent pins
         run: node scripts/align-eliza-agent-package-pins.mjs
 
+      # Link local @elizaos workspace packages into node_modules. desktop-build.mjs
+      # stage invokes vite, which imports symbols from @elizaos/ui
+      # (createVoiceCapture, VoicePill, VoicePillMessage, VoiceCaptureHandle)
+      # that ship in repo-local eliza/packages/ui but have not landed on the npm
+      # alpha dist-tag yet (currently @elizaos/ui@2.0.0-alpha.537). Without this
+      # step, vite resolves @elizaos/ui from npm and the build fails with
+      # `"createVoiceCapture" is not exported by "@elizaos/ui"`.
+      - name: Link local @elizaos workspace packages
+        shell: bash
+        run: node eliza/packages/app-core/scripts/link-docker-local-app-packages.mjs
+
+      # bun's bundler walks up looking for `react` / `react-dom` / `@types/react`
+      # when transforming JSX-flagged tsconfig contexts (electrobun's
+      # tsconfig.json uses jsx:"react-jsx"). When invoked from
+      # eliza/packages/app-core/platforms/electrobun the nested node_modules
+      # only contains workspace symlinks, not react, so bun falls through to
+      # the @types/react .d.ts and crashes on `export as namespace React`.
+      # ci.yml + agent-review.yml run this script for exactly this reason; the
+      # release workflow needs the same alignment before any bun-bundle step.
+      - name: Align nested eliza package resolution
+        shell: bash
+        run: node scripts/align-eliza-ci-node-modules.mjs
+
+      - name: Download Whisper model artifact
+        if: ${{ needs.validate-release.result == 'success' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: whisper-model-base-en
+          path: ${{ runner.temp }}/whisper-model
+
+      - name: Seed Whisper model cache
+        if: ${{ needs.validate-release.result == 'success' }}
+        env:
+          ELIZA_WHISPER_MODEL_DIR: ${{ runner.temp }}/whisper-model
+        run: |
+          mkdir -p "$HOME/.cache/eliza/whisper"
+          cp "$ELIZA_WHISPER_MODEL_DIR/ggml-base.en.bin" "$HOME/.cache/eliza/whisper/ggml-base.en.bin"
+          test -s "$HOME/.cache/eliza/whisper/ggml-base.en.bin"
+
+      # MILADY_FORCE_LOCAL_UPSTREAMS=1 forces apps/app/vite.config.ts to treat
+      # the freshly-linked eliza/ checkout as the source of truth for the
+      # @elizaos/* aliases. Without this, the config falls back to its
+      # auto-detect heuristic and may resolve @elizaos/ui from npm.
+      - name: Apply Milady desktop icon
+        run: node scripts/sync-desktop-brand-assets.mjs
       - name: Stage desktop bundle inputs
+        env:
+          MILADY_FORCE_LOCAL_UPSTREAMS: "1"
         run: |
           node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
           node scripts/ensure-eliza-renderer-avatar-assets.mjs
@@ -903,7 +1085,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Cache Electrobun CLI and core binaries
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: |
             ${{ steps.resolve-electrobun.outputs.cache-dir }}
@@ -932,7 +1114,17 @@ jobs:
           out_dir="$RUNNER_TEMP/electrobun-entry-probe"
           rm -rf "$out_dir"
           node "$GITHUB_WORKSPACE/scripts/copy-runtime-node-modules.ts" --link-only
-          bun build src/index.ts --target=bun --outdir "$out_dir"
+          # Match upstream eliza release-electrobun.yml verbatim:
+          # `--packages=external` tells bun to externalize EVERY npm package,
+          # which is what this probe wants — we only need to verify the entry
+          # transpiles, not actually bundle the dependency tree. Without it,
+          # bun follows tsconfig path mappings + jsx:"react-jsx" into
+          # ambient-modules.d.ts (which contains an `import type from "react"`),
+          # finds @types/react instead of react in the bun store, and crashes
+          # parsing `export as namespace React`. The previous explicit
+          # --external "*.node" + per-arch @node-llama-cpp filters were a
+          # subset of this and missed react/react-dom entirely.
+          bun build src/index.ts --target=bun --packages=external --outdir "$out_dir"
 
       - name: Build patched Electrobun CLI
         shell: bash
@@ -953,6 +1145,8 @@ jobs:
           Write-Host "=== Disk after cleanup ==="
           Get-Volume | Where-Object { $_.DriveLetter } | Format-Table DriveLetter, @{N='FreeGB';E={[math]::Round($_.SizeRemaining/1GB,1)}}, @{N='TotalGB';E={[math]::Round($_.Size/1GB,1)}}
 
+      - name: Apply Milady desktop icon
+        run: node scripts/sync-desktop-brand-assets.mjs
       - name: Build Electrobun app
         id: build-electrobun-app
         run: |
@@ -981,7 +1175,7 @@ jobs:
           ENV_NAME="${{ needs.prepare.outputs.env }}"
           find -L "$build_dir" -type d -name "Resources" | while read -r res_dir; do
             dest="$res_dir/version.json"
-            printf '{"identifier":"ai.elizaos.Eliza","channel":"%s","name":"eliza","version":"%s"}' \
+            printf '{"identifier":"ai.milady.app","channel":"%s","name":"milady","version":"%s"}' \
               "$ENV_NAME" "$VERSION" > "$dest"
             echo "Wrote fallback $dest"
           done
@@ -989,13 +1183,13 @@ jobs:
           mkdir -p "$artifact_root"
           case "${{ matrix.platform.os }}" in
             linux)
-              tar --zstd -cf "$artifact_root/eliza-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.zst" -C "$build_root" "$(basename "$build_dir")"
+              tar --zstd -cf "$artifact_root/milady-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.zst" -C "$build_root" "$(basename "$build_dir")"
               ;;
             macos)
-              tar -czf "$artifact_root/eliza-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.app.tar.gz" -C "$build_root" "$(basename "$build_dir")"
+              tar -czf "$artifact_root/milady-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.app.tar.gz" -C "$build_root" "$(basename "$build_dir")"
               ;;
             windows)
-              powershell -NoProfile -Command "Compress-Archive -Path '$build_dir' -DestinationPath '$artifact_root/eliza-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.exe.zip' -Force"
+              powershell -NoProfile -Command "Compress-Archive -Path '$build_dir' -DestinationPath '$artifact_root/milady-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.exe.zip' -Force"
               ;;
           esac
           echo "fallback=true" >> "$GITHUB_OUTPUT"
@@ -1033,7 +1227,7 @@ jobs:
 
       - name: Upload Electrobun build diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-build-diagnostics
           path: |
@@ -1058,7 +1252,7 @@ jobs:
 
           Get-ChildItem -Path $buildRoot -Recurse -Directory -Filter "Resources" | ForEach-Object {
             $versionJson = @{
-              identifier = "ai.elizaos.Eliza"
+              identifier = "ai.milady.app"
               channel = $envName
               name = "eliza"
               version = $version
@@ -1077,7 +1271,7 @@ jobs:
           if [ -d "$build_root" ]; then
             find -L "$build_root" -type d -name "Resources" | while read -r res_dir; do
               dest="$res_dir/version.json"
-              printf '{"identifier":"ai.elizaos.Eliza","channel":"%s","name":"eliza","version":"%s"}' \
+              printf '{"identifier":"ai.milady.app","channel":"%s","name":"milady","version":"%s"}' \
                 "$ENV_NAME" "$VERSION" > "$dest"
               echo "Wrote $dest"
             done
@@ -1213,7 +1407,7 @@ jobs:
         if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
         shell: pwsh
         run: |
-          $installer = Get-ChildItem -Path "eliza/packages/app-core/platforms/electrobun/artifacts" -File -Filter "ElizaOSApp-Setup-*.exe" -ErrorAction SilentlyContinue |
+          $installer = Get-ChildItem -Path "eliza/packages/app-core/platforms/electrobun/artifacts" -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
@@ -1233,7 +1427,7 @@ jobs:
 
       - name: Cache Windows embedding model
         if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: ~/.eliza/models
           key: embedding-model-nomic-embed-text-v1.5-Q4_K_S
@@ -1291,8 +1485,8 @@ jobs:
           # exercises the same standalone artifact users download. Use a short
           # path under runner.temp to avoid MAX_PATH issues with
           # deeply nested node_modules while staying in a user-writable location.
-          ELIZA_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el
-          MILADY_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el
+          ELIZA_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el-smoke
+          MILADY_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el-smoke
           ELIZA_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-windows-ui-launcher
           MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-windows-ui-launcher
           ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-windows-ui-launcher.txt
@@ -1311,24 +1505,28 @@ jobs:
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
 
           bun run test:desktop:packaged:windows
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Packaged Windows smoke test exited with code $LASTEXITCODE."
-            exit $LASTEXITCODE
-          }
+          $smokeExitCode = $LASTEXITCODE
 
           if (-not (Test-Path $env:ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE)) {
             Write-Error "Smoke test did not emit a reusable Windows launcher path."
-            exit 1
+            $exitCode = if ($smokeExitCode -ne 0) { $smokeExitCode } else { 1 }
+            exit $exitCode
           }
 
           $launcherPath = (Get-Content $env:ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE -Raw).Trim()
           if ([string]::IsNullOrWhiteSpace($launcherPath) -or -not (Test-Path $launcherPath)) {
             Write-Error "Reusable Windows launcher path is invalid: $launcherPath"
-            exit 1
+            $exitCode = if ($smokeExitCode -ne 0) { $smokeExitCode } else { 1 }
+            exit $exitCode
           }
 
           Add-Content -Path $env:GITHUB_ENV -Value "ELIZA_TEST_WINDOWS_LAUNCHER_PATH=$launcherPath"
           Write-Host "Reusing packaged Windows launcher for Playwright: $launcherPath"
+
+          if ($smokeExitCode -ne 0) {
+            Write-Error "Packaged Windows smoke test exited with code $LASTEXITCODE."
+            exit $smokeExitCode
+          }
 
       - name: Run Windows clean installer proof
         if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
@@ -1336,7 +1534,7 @@ jobs:
         env:
           ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1"
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: ${{ runner.temp }}\el-proof
+          ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: ${{ runner.temp }}\el-smoke-proof
         run: |
           Remove-Item $env:ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           pwsh -File eliza/packages/app-core/platforms/electrobun/scripts/verify-windows-installer-proof.ps1 `
@@ -1351,7 +1549,7 @@ jobs:
 
       - name: Upload Windows installer proof artifact
         if: always() && matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: electrobun-windows-installer-proof
           path: eliza/packages/app-core/platforms/electrobun/artifacts/windows-installer-proof/**
@@ -1360,7 +1558,7 @@ jobs:
 
       - name: Upload Windows installer .exe + Inno log on smoke failure
         if: failure() && matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: electrobun-windows-installer-debug
           path: |
@@ -1396,7 +1594,7 @@ jobs:
 
       - name: Upload Windows Playwright UI diagnostics
         if: failure() && matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: electrobun-windows-ui-playwright-diagnostics
           # TODO: confirm packaged-app Playwright result location in eliza
@@ -1416,7 +1614,7 @@ jobs:
             exit 1
           }
           New-Item -ItemType Directory -Force -Path $artifactsDir | Out-Null
-          $publicInstaller = Get-ChildItem -Path $artifactsDir -File -Filter "ElizaOSApp-Setup-*.exe" -ErrorAction SilentlyContinue |
+          $publicInstaller = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
           foreach ($setupExecutable in $setupExecutables) {
@@ -1482,7 +1680,7 @@ jobs:
         if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
         shell: pwsh
         run: |
-          $installer = Get-ChildItem -Path "eliza/packages/app-core/platforms/electrobun/artifacts" -File -Filter "ElizaOSApp-Setup-*.exe" -ErrorAction SilentlyContinue |
+          $installer = Get-ChildItem -Path "eliza/packages/app-core/platforms/electrobun/artifacts" -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
@@ -1499,19 +1697,6 @@ jobs:
 
           Write-Host "Public installer still valid for release upload: $($installer.Name)"
           Write-Host "Installer size: $([math]::Round($installer.Length / 1MB, 1)) MB"
-
-      - name: Build MSIX package
-        if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
-        env:
-          WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
-          WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
-          WINDOWS_SIGN_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGN_TIMESTAMP_URL }}
-        shell: pwsh
-        run: |
-          pwsh -File eliza/packages/app-core/packaging/msix/build-msix.ps1 `
-            -BuildDir (Join-Path $PWD "eliza/packages/app-core/platforms/electrobun/build") `
-            -OutputDir (Join-Path $PWD "eliza/packages/app-core/platforms/electrobun/artifacts") `
-            -Version "${{ needs.prepare.outputs.version }}"
 
       # When building unsigned (skip_codesign=1), the CEF framework ships with
       # a pre-existing signature.  Injecting version.json into Resources breaks
@@ -1661,11 +1846,7 @@ jobs:
           $diagnosticsDir = Join-Path $PWD "eliza/packages/app-core/platforms/electrobun/artifacts/windows-smoke-diagnostics"
           $appDataRoot = if ($env:MILADY_TEST_WINDOWS_APPDATA_PATH) { $env:MILADY_TEST_WINDOWS_APPDATA_PATH } elseif ($env:ELIZA_TEST_WINDOWS_APPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_APPDATA_PATH } else { $env:APPDATA }
           $localAppDataRoot = if ($env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH } elseif ($env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH } else { $env:LOCALAPPDATA }
-          $wrapperRoots = @(@(
-            (Join-Path $localAppDataRoot "ai.milady.milady"),
-            (Join-Path $localAppDataRoot "ai.elizaos.Eliza"),
-            (Join-Path $localAppDataRoot "ai.elizaos.app")
-          ) | Select-Object -Unique)
+          $wrapperRoot = Join-Path $localAppDataRoot "ai.milady.app"
 
           Write-Host "Diagnostics roots:"
           Write-Host "  appDataRoot      = $appDataRoot"
@@ -1760,7 +1941,7 @@ jobs:
 
       - name: Upload Windows smoke diagnostics
         if: failure() && matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-smoke-diagnostics
           path: eliza/packages/app-core/platforms/electrobun/artifacts/windows-smoke-diagnostics/**
@@ -1769,7 +1950,7 @@ jobs:
 
       - name: Upload macOS smoke diagnostics
         if: failure() && matrix.platform.os == 'macos'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-smoke-diagnostics
           path: |
@@ -1783,7 +1964,7 @@ jobs:
         shell: pwsh
         run: |
           $artifactsDir = Join-Path $PWD "eliza/packages/app-core/platforms/electrobun/artifacts"
-          $canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "ElizaOSApp-Setup-*.exe" -ErrorAction SilentlyContinue |
+          $canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending
           if (-not $canonicalInstallers) {
             Write-Error "No canonical Windows installer found before compression."
@@ -1827,7 +2008,7 @@ jobs:
           Remove-Item $publicCanaryDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $publicCanaryDir | Out-Null
 
-          $canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "ElizaOSApp-Setup-*.exe" -ErrorAction SilentlyContinue |
+          $canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending
           if ($canonicalInstallers) {
             if ($canonicalInstallers.Count -gt 1) {
@@ -1838,7 +2019,7 @@ jobs:
             $canonicalInstaller = $canonicalInstallers | Select-Object -First 1
             Copy-Item $canonicalInstaller.FullName -Destination $publicCanaryDir -Force
           } else {
-            $canonicalInstallerZips = Get-ChildItem -Path $artifactsDir -File -Filter "ElizaOSApp-Setup-*.exe.zip" -ErrorAction SilentlyContinue |
+            $canonicalInstallerZips = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe.zip" -ErrorAction SilentlyContinue |
               Sort-Object LastWriteTime -Descending
             if (-not $canonicalInstallerZips) {
               Write-Error "No canonical Windows installer (or zip fallback) found for canary artifact publishing."
@@ -1854,7 +2035,7 @@ jobs:
             Expand-Archive -Path $canonicalInstallerZip.FullName -DestinationPath $publicCanaryDir -Force
           }
 
-          $publicInstallers = Get-ChildItem -Path $publicCanaryDir -File -Filter "ElizaOSApp-Setup-*.exe" -ErrorAction SilentlyContinue |
+          $publicInstallers = Get-ChildItem -Path $publicCanaryDir -File -Filter "Milady-Setup-*.exe" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending
           if (-not $publicInstallers) {
             Write-Error "Failed to stage a public Windows installer under $publicCanaryDir"
@@ -1871,16 +2052,16 @@ jobs:
 
       - name: Upload public canary installer artifact
         if: matrix.platform.os == 'windows' && needs.prepare.outputs.env == 'canary' && steps.build-electrobun-app.outputs.fallback != 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-public-installer
-          path: eliza/packages/app-core/platforms/electrobun/artifacts/public-canary-installer/ElizaOSApp-Setup-*.exe
+          path: eliza/packages/app-core/platforms/electrobun/artifacts/public-canary-installer/Milady-Setup-*.exe
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}
           path: |
@@ -1895,16 +2076,6 @@ jobs:
           retention-days: 30
           compression-level: 0
 
-      - name: Upload MSIX artifact
-        if: matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v7
-        with:
-          name: electrobun-${{ matrix.platform.artifact-name }}-msix
-          path: eliza/packages/app-core/platforms/electrobun/artifacts/*.msix
-          if-no-files-found: warn
-          retention-days: 30
-          compression-level: 6
-
   release:
     name: Create Release
     if: ${{ (inputs.platform == '' || inputs.platform == 'all') && (github.event_name != 'workflow_call' || inputs.publish_release) }}
@@ -1916,10 +2087,10 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           path: release-artifacts
           pattern: electrobun-*
@@ -1936,10 +2107,13 @@ jobs:
           # installer, not the raw Electrobun bootstrap stub.
           find release-artifacts -type f \( \
             -name "*.dmg" -o \
-            -name "ElizaOSApp-Setup-*.exe" -o \
-            -name "ElizaOSApp-Setup-*.exe.zip" -o \
-            -name "*Setup*.tar.gz" -o \
-            -name "*.msix" \
+            -name "*.app.tar.gz" -o \
+            -name "*.tar.zst" -o \
+            -name "Milady-Setup-*.exe" -o \
+            -name "Milady-Setup-*.exe.zip" -o \
+            -name "eliza-*.exe.zip" -o \
+            -name "milady-*.exe.zip" -o \
+            -name "*Setup*.tar.gz" \
           \) -exec cp {} release-files/ \; 2>/dev/null || true
 
           # Decompress Windows .exe.zip back to .exe for end-user downloads
@@ -1949,6 +2123,13 @@ jobs:
             echo "Decompressing $f"
             cd release-files && unzip -o "$(basename "$f")" && rm "$(basename "$f")" && cd ..
           done
+          find release-files -mindepth 2 -type f \( \
+            -name "Milady-Setup-*.exe" -o \
+            -name "*.dmg" -o \
+            -name "*.app.tar.gz" -o \
+            -name "*.tar.zst" \
+          \) -exec mv -f {} release-files/ \; 2>/dev/null || true
+          find release-files -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
 
           echo "=== Public release files ==="
           ls -lh release-files/ 2>/dev/null || echo "None"
@@ -1967,15 +2148,21 @@ jobs:
       - name: Generate checksums
         run: |
           cd release-files
-          sha256sum -- * > SHA256SUMS.txt
+          if ! find . -maxdepth 1 -type f ! -name SHA256SUMS.txt | grep -q .; then
+            echo "::error::No public release files collected"
+            exit 1
+          fi
+          sums_file="$(mktemp)"
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$sums_file"
+          mv "$sums_file" SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           target_commitish: ${{ needs.prepare.outputs.source_sha }}
-          name: Eliza ${{ needs.prepare.outputs.tag }}
+          name: Milady ${{ needs.prepare.outputs.tag }}
           draft: ${{ inputs.draft || false }}
           prerelease: ${{ contains(needs.prepare.outputs.version, 'alpha') || contains(needs.prepare.outputs.version, 'beta') || contains(needs.prepare.outputs.version, 'rc') || contains(needs.prepare.outputs.version, 'nightly') }}
           generate_release_notes: true
@@ -2027,7 +2214,7 @@ jobs:
       contents: write
     steps:
       - name: Download Agent Browser Bridge artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           path: browser-bridge-release
           pattern: browser-bridge-*

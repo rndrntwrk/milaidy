@@ -16,15 +16,35 @@ interface AppWebConfig {
   themeColor: string;
   backgroundColor: string;
   shareImagePath: string;
+  /** Opaque brand color the app-icon mark is flattened onto (iOS icon, Android
+   * legacy launcher + adaptive-icon background). Read by run-mobile-build.mjs. */
+  iconBackgroundColor: string;
+}
+
+// AospVariantConfig does not yet include propertyPrefix (Milady-specific
+// extension). Declaring a concrete interface avoids TypeScript 6 excess-
+// property-check issues with indexed-access type intersections.
+interface MiladyAospConfig {
+  productLunch: string;
+  vendorDir: string;
+  variantName: string;
+  productName: string;
+  packageName: string;
+  appName: string;
+  commonMk: string;
+  modelSourceLabel: string;
+  bootanimationAssetDir: string;
+  /** Milady-specific: system-property prefix (e.g. "miladyos"). Falls back to vendorDir when absent. */
+  propertyPrefix?: string;
 }
 
 type AppConfigWithAospPropertyPrefix = Omit<AppConfig, "aosp"> & {
-  aosp: NonNullable<AppConfig["aosp"]> & { propertyPrefix?: string };
+  aosp: MiladyAospConfig;
 };
 
 const config = {
   appName: "Milady",
-  appId: "ai.milady.milady",
+  appId: "ai.milady.app",
   orgName: "milady-ai",
   repoName: "milady",
   cliName: "milady",
@@ -34,7 +54,7 @@ const config = {
   defaultApps: [],
 
   desktop: {
-    bundleId: "ai.milady.milady",
+    bundleId: "ai.milady.app",
     urlScheme: "milady",
   },
 
@@ -43,6 +63,9 @@ const config = {
     themeColor: "#08080a",
     backgroundColor: "#0a0a0a",
     shareImagePath: "/og-image.png",
+    // Milady brand gold (matches --classic-gold in brand-gold.css). The dark
+    // chibi mark in public/brand/app-icon.png is flattened onto this.
+    iconBackgroundColor: "#f0b90b",
   },
 
   android: {
@@ -71,7 +94,7 @@ const config = {
     propertyPrefix: "miladyos",
     variantName: "MiladyOS",
     productName: "milady",
-    packageName: "ai.milady.milady",
+    packageName: "ai.milady.app",
     appName: "Milady",
     commonMk: "vendor/milady/milady_common.mk",
     modelSourceLabel: "milady-download",

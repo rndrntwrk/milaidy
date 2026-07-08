@@ -50,6 +50,11 @@ function patchFile(filePath, patcher) {
 }
 
 function writeFileIfChanged(filePath, contents) {
+  const parentDir = path.dirname(filePath);
+  if (!fs.existsSync(filePath) && !fs.existsSync(parentDir)) {
+    return false;
+  }
+
   const original = fs.existsSync(filePath)
     ? fs.readFileSync(filePath, "utf8")
     : null;
@@ -105,6 +110,7 @@ const fallbackPackageExportSources = new Map([
   ["./services/github-credentials", "services/github-credentials"],
   ["./services/n8n-mode", "services/n8n-mode"],
   ["./services/n8n-sidecar", "services/n8n-sidecar"],
+  ["./ui-compat", "ui-compat"],
   ["./widgets/registry", "widgets/registry"],
 ]);
 
@@ -211,6 +217,99 @@ function appCorePackageSourcePath(packageDir, relativePath) {
   return path.join(packageDir, "packages", "app-core", "src", relativePath);
 }
 
+function localAppCoreDistPath(relativePath) {
+  const localPath = path.join(
+    process.cwd(),
+    "eliza",
+    "packages",
+    "app-core",
+    "dist",
+    relativePath,
+  );
+  return fs.existsSync(localPath) ? localPath : null;
+}
+
+function ensureUiCompatExportFiles(packageDir) {
+  let patched = false;
+  for (const extension of ["js", "d.ts"]) {
+    const targetPath = appCorePackageSourcePath(
+      packageDir,
+      `ui-compat.${extension}`,
+    );
+    if (fs.existsSync(targetPath)) {
+      continue;
+    }
+    const sourcePath = localAppCoreDistPath(`ui-compat.${extension}`);
+    if (!sourcePath) {
+      continue;
+    }
+    patched =
+      writeFileIfChanged(targetPath, fs.readFileSync(sourcePath, "utf8")) ||
+      patched;
+  }
+  return patched;
+}
+
+function patchWindowShellJs(source) {
+  let next = source;
+
+  if (!next.includes('shell === "pill"')) {
+    next = next.replace(
+      '    if (shell === "surface") {',
+      '    if (shell === "pill") {\n        return { mode: "pill" };\n    }\n    if (shell === "surface") {',
+    );
+  }
+
+  if (!next.includes('shellMode === "chat-overlay"')) {
+    next = next.replace(
+      '    const shell = params.get("shell");\n',
+      '    const shell = params.get("shell");\n    const shellMode = params.get("shellMode") ?? params.get("shell-mode");\n    if (shellMode === "chat-overlay") {\n        return { mode: "chat-overlay" };\n    }\n',
+    );
+  }
+
+  next = next.replace(
+    'export function isDetachedWindowShell(route) {\n    return route.mode !== "main";\n}',
+    'export function isDetachedWindowShell(route) {\n    return (route.mode !== "main" &&\n        route.mode !== "pill" &&\n        route.mode !== "chat-overlay");\n}',
+  );
+
+  if (!next.includes("export function isChatOverlayWindowShell")) {
+    next = next.replace(
+      'export function shouldInstallMainWindowOnboardingPatches(route) {\n    return route.mode === "main";\n}\n',
+      'export function isChatOverlayWindowShell(route) {\n    return route.mode === "chat-overlay";\n}\nexport function isStandaloneWindowShell(route) {\n    return route.mode !== "main";\n}\nexport function isPillWindowShell(route) {\n    return route.mode === "pill";\n}\nexport function shouldInstallMainWindowOnboardingPatches(route) {\n    return route.mode === "main";\n}\n',
+    );
+  }
+
+  next = next.replace(
+    '    if (route.mode === "main") {\n        throw new Error("Main windows do not have a detached shell target");\n    }\n',
+    '    if (route.mode === "main") {\n        throw new Error("Main windows do not have a detached shell target");\n    }\n    if (route.mode === "pill" || route.mode === "chat-overlay") {\n        throw new Error(`${route.mode} windows do not have a detached shell target`);\n    }\n',
+  );
+
+  next = next.replace(
+    '    if (route.mode === "main") {\n        return false;\n    }\n',
+    '    if (route.mode === "main" || route.mode === "pill" || route.mode === "chat-overlay") {\n        return false;\n    }\n',
+  );
+
+  return next;
+}
+
+function patchWindowShellTypes(source) {
+  let next = source;
+
+  if (!next.includes('mode: "pill"')) {
+    next = next.replace(
+      '} | {\n    mode: "surface";\n    tab: DetachedSurfaceTab;\n};',
+      '} | {\n    mode: "surface";\n    tab: DetachedSurfaceTab;\n} | {\n    mode: "chat-overlay";\n} | {\n    mode: "pill";\n};',
+    );
+  }
+
+  next = next.replace(
+    'export declare function isDetachedWindowShell(route: WindowShellRoute): route is Exclude<WindowShellRoute, {\n    mode: "main";\n}>;\n',
+    'export declare function isDetachedWindowShell(route: WindowShellRoute): route is Exclude<WindowShellRoute, {\n    mode: "main";\n} | {\n    mode: "pill";\n} | {\n    mode: "chat-overlay";\n}>;\nexport declare function isChatOverlayWindowShell(route: WindowShellRoute): route is Extract<WindowShellRoute, {\n    mode: "chat-overlay";\n}>;\nexport declare function isStandaloneWindowShell(route: WindowShellRoute): route is Exclude<WindowShellRoute, {\n    mode: "main";\n}>;\nexport declare function isPillWindowShell(route: WindowShellRoute): route is Extract<WindowShellRoute, {\n    mode: "pill";\n}>;\n',
+  );
+
+  return next;
+}
+
 const appShellRegistrySource = `const APP_SHELL_PAGE_REGISTRY_KEY = Symbol.for("elizaos.app-core.app-shell-page-registry");
 function getAppShellPageRegistryStore() {
     const globalObject = globalThis;
@@ -263,6 +362,61 @@ function replaceAnyPrototypeFunction(source, methodName, replacement) {
   return source.replace(pattern, replacement);
 }
 
+function patchIosRuntimeJs(source) {
+  let next = source;
+
+  if (!next.includes('case "tunnel-to-mobile":')) {
+    next = next.replace(
+      '        case "local":\n            return "local";\n        default:',
+      '        case "local":\n            return "local";\n        case "tunnel-to-mobile":\n        case "mobile-tunnel":\n        case "host-with-tunnel":\n        case "tunneled":\n            return "tunnel-to-mobile";\n        default:',
+    );
+  }
+
+  if (!next.includes("VITE_MILADY_TUNNEL_RELAY_URL")) {
+    next = next.replace(
+      '    const deviceBridgeToken = readString(env, [\n        "VITE_MILADY_DEVICE_BRIDGE_TOKEN",\n        "VITE_ELIZA_DEVICE_BRIDGE_TOKEN",\n    ]);\n',
+      '    const deviceBridgeToken = readString(env, [\n        "VITE_MILADY_DEVICE_BRIDGE_TOKEN",\n        "VITE_ELIZA_DEVICE_BRIDGE_TOKEN",\n    ]);\n    const tunnelRelayUrl = readString(env, [\n        "VITE_MILADY_TUNNEL_RELAY_URL",\n        "VITE_ELIZA_TUNNEL_RELAY_URL",\n    ]);\n    const tunnelPairingToken = readString(env, [\n        "VITE_MILADY_TUNNEL_PAIRING_TOKEN",\n        "VITE_ELIZA_TUNNEL_PAIRING_TOKEN",\n    ]);\n',
+    );
+  }
+
+  if (!next.includes("tunnelRelayUrl ? { tunnelRelayUrl }")) {
+    next = next.replace(
+      "        ...(deviceBridgeToken ? { deviceBridgeToken } : {}),\n    };",
+      "        ...(deviceBridgeToken ? { deviceBridgeToken } : {}),\n        ...(tunnelRelayUrl ? { tunnelRelayUrl } : {}),\n        ...(tunnelPairingToken ? { tunnelPairingToken } : {}),\n    };",
+    );
+  }
+
+  return next;
+}
+
+function patchIosRuntimeTypes(source) {
+  return source
+    .replace(
+      'export type IosRuntimeMode = "remote-mac" | "cloud" | "cloud-hybrid" | "local";',
+      'export type IosRuntimeMode = "remote-mac" | "cloud" | "cloud-hybrid" | "local" | "tunnel-to-mobile";',
+    )
+    .replace(
+      "    deviceBridgeToken?: string;\n}",
+      "    deviceBridgeToken?: string;\n    tunnelRelayUrl?: string;\n    tunnelPairingToken?: string;\n}",
+    );
+}
+
+function patchDevUiViteCommand(source) {
+  let next = source;
+
+  next = next.replace(
+    'const viteCmd = hasBun ? "bunx" : "npx";',
+    'const viteCmd = hasBun ? "bun" : "npx";',
+  );
+
+  next = next.replace(
+    '  const viteArgs = viteForce\n    ? ["vite", "--force", "--port", String(UI_PORT)]\n    : ["vite", "--port", String(UI_PORT)];',
+    '  const viteArgs = hasBun\n    ? viteForce\n      ? ["x", "vite", "--force", "--port", String(UI_PORT)]\n      : ["x", "vite", "--port", String(UI_PORT)]\n    : viteForce\n      ? ["vite", "--force", "--port", String(UI_PORT)]\n      : ["vite", "--port", String(UI_PORT)];',
+  );
+
+  return next;
+}
+
 const openExternalUrlPath = path.join(
   appCoreDir,
   "packages/app-core/src/utils/openExternalUrl.js",
@@ -306,6 +460,7 @@ const appCorePackageDirs = [
 ];
 
 for (const packageDir of appCorePackageDirs) {
+  changed = ensureUiCompatExportFiles(packageDir) || changed;
   changed =
     patchPackageJsonExports(
       path.join(packageDir, "package.json"),
@@ -426,6 +581,36 @@ for (const packageDir of appCorePackageDirs) {
         }
         return `${source.trimEnd()}\n${appShellRegistryTypesSource}`;
       },
+    ) || changed;
+
+  changed =
+    patchFile(
+      appCorePackageSourcePath(packageDir, "platform/ios-runtime.js"),
+      patchIosRuntimeJs,
+    ) || changed;
+
+  changed =
+    patchFile(
+      appCorePackageSourcePath(packageDir, "platform/ios-runtime.d.ts"),
+      patchIosRuntimeTypes,
+    ) || changed;
+
+  changed =
+    patchFile(
+      appCorePackageSourcePath(packageDir, "platform/window-shell.js"),
+      patchWindowShellJs,
+    ) || changed;
+
+  changed =
+    patchFile(
+      appCorePackageSourcePath(packageDir, "platform/window-shell.d.ts"),
+      patchWindowShellTypes,
+    ) || changed;
+
+  changed =
+    patchFile(
+      path.join(packageDir, "scripts/dev-ui.mjs"),
+      patchDevUiViteCommand,
     ) || changed;
 }
 

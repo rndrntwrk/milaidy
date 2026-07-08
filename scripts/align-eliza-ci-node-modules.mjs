@@ -136,7 +136,7 @@ function ensureBuiltLocalPackage(
   packageName,
   sourceRel,
   outputRelPaths,
-  { optional = false } = {},
+  { optional = false, runtimeBundleOnly = false } = {},
 ) {
   const source = path.join(repoRoot, sourceRel);
   if (!fs.existsSync(path.join(source, "package.json"))) {
@@ -161,11 +161,14 @@ function ensureBuiltLocalPackage(
   console.log(
     `[align-eliza-ci-node-modules] building ${packageName}; missing ${missingOutputs.join(", ")}`,
   );
-  const result = spawnSync("bun", ["run", "build"], {
+  const spawnOptions = {
     cwd: source,
     env: process.env,
     stdio: "inherit",
-  });
+  };
+  const result = runtimeBundleOnly
+    ? spawnSync("bunx", ["tsup"], spawnOptions)
+    : spawnSync("bun", ["run", "build"], spawnOptions);
   if (result.error) {
     throw result.error;
   }
@@ -246,10 +249,18 @@ linkRootPackage("drizzle-orm", [
   "eliza/plugins/plugin-sql/node_modules/drizzle-orm",
 ]);
 
+linkLocalPackage("@elizaos/logger", "vendor/elizaos-logger", [
+  "node_modules/@elizaos/logger",
+  "eliza/node_modules/@elizaos/logger",
+  "eliza/packages/core/node_modules/@elizaos/logger",
+  "eliza/packages/app-core/node_modules/@elizaos/logger",
+]);
+
 linkLocalPackage("@elizaos/core", "eliza/packages/core", [
   "node_modules/@elizaos/core",
   "eliza/node_modules/@elizaos/core",
   "eliza/packages/skills/node_modules/@elizaos/core",
+  "eliza/plugins/plugin-agent-skills/node_modules/@elizaos/core",
   "apps/app/node_modules/@elizaos/core",
   "apps/homepage/node_modules/@elizaos/core",
 ]);
@@ -258,6 +269,7 @@ linkLocalPackage("@elizaos/skills", "eliza/packages/skills", [
   "node_modules/@elizaos/skills",
   "eliza/node_modules/@elizaos/skills",
   "eliza/packages/agent/node_modules/@elizaos/skills",
+  "eliza/plugins/plugin-agent-skills/node_modules/@elizaos/skills",
   "apps/app/node_modules/@elizaos/skills",
   "apps/homepage/node_modules/@elizaos/skills",
 ]);
@@ -266,6 +278,7 @@ linkLocalPackage("@elizaos/shared", "eliza/packages/shared", [
   "node_modules/@elizaos/shared",
   "eliza/node_modules/@elizaos/shared",
   "eliza/packages/agent/node_modules/@elizaos/shared",
+  "eliza/plugins/plugin-agent-skills/node_modules/@elizaos/shared",
   "apps/app/node_modules/@elizaos/shared",
   "apps/homepage/node_modules/@elizaos/shared",
 ]);
@@ -334,8 +347,8 @@ ensureBuiltLocalPackage(
 ensureBuiltLocalPackage(
   "@elizaos/plugin-agent-skills",
   "eliza/plugins/plugin-agent-skills",
-  ["dist/index.js", "dist/index.d.ts"],
-  { optional: true },
+  ["dist/index.js"],
+  { optional: true, runtimeBundleOnly: true },
 );
 
 ensureBuiltLocalPackage(
@@ -348,7 +361,7 @@ ensureBuiltLocalPackage(
 ensureBuiltLocalPackage(
   "@elizaos/plugin-sql",
   "eliza/plugins/plugin-sql",
-  ["typescript/dist/index.js", "typescript/dist/index.d.ts"],
+  ["src/dist/node/index.node.js", "src/dist/index.d.ts"],
   { optional: true },
 );
 

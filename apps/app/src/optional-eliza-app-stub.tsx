@@ -1,17 +1,19 @@
+import type { DropStatus, MintResult } from "@elizaos/shared";
 import type {
   CompanionSceneStatus,
   CompanionShellComponentProps,
-  VincentStateHookArgs,
-  VincentStateHookResult,
-} from "@elizaos/app-core";
+  InventoryChainFilters,
+} from "@elizaos/ui";
 import type {
-  DropStatus,
-  MintResult,
   RegistryStatus,
   WalletExportResult,
   WhitelistStatus,
-} from "@elizaos/app-core/api";
-import type { InventoryChainFilters } from "@elizaos/app-core/state/types";
+} from "@elizaos/ui/api";
+
+// No upstream elizaOS export; local types for this stub's hook signature.
+type VincentStateHookArgs = Record<string, unknown>;
+type VincentStateHookResult = unknown;
+
 import type {
   WalletAddresses,
   WalletBalancesResponse,
@@ -27,6 +29,19 @@ import type {
 } from "@elizaos/shared";
 import type { ComponentType } from "react";
 import * as THREE from "three";
+
+// Mirrors @elizaos/ui's confirm-dialog PromptOptions. Declared locally because
+// the tsconfig path-map bypasses the package exports field, so the deep
+// confirm-dialog subpath does not resolve in this stub.
+type PromptOptions = {
+  title?: string;
+  description?: string;
+  placeholder?: string;
+  defaultValue?: string;
+  initialValue?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+};
 
 const EmptyComponent: ComponentType = () => null;
 
@@ -49,9 +64,6 @@ export const CodingAgentTasksPanel = EmptyComponent;
 export const PtyConsoleDrawer = EmptyComponent;
 export const FineTuningView = EmptyComponent;
 
-// Restored from before upstream 0a75bd6eb dropped it — main.tsx still imports
-// `prefetchVrmToCache` and registers it on the boot config (used by
-// startup-phase-hydrate to warm the VRM cache before companion mount).
 export function prefetchVrmToCache(_url?: string): Promise<void> {
   return Promise.resolve();
 }
@@ -70,7 +82,7 @@ export function resolveCompanionInferenceNotice(): null {
 // wallet surface). Each export below mirrors a real symbol that
 // @elizaos/app-core source files import so typecheck stays green.
 export function buildWalletRpcUpdateRequest(_args: {
-  walletConfig?: unknown;
+  walletConfig?: WalletConfigStatus | null;
   rpcFieldValues: Partial<Record<WalletRpcCredentialKey, string>>;
   selectedProviders:
     | WalletRpcSelections
@@ -84,7 +96,7 @@ export function buildWalletRpcUpdateRequest(_args: {
 }
 
 export function resolveInitialWalletRpcSelections(
-  _walletConfig?: unknown,
+  _walletConfig?: WalletConfigStatus | null,
 ): WalletRpcSelections {
   return {} as WalletRpcSelections;
 }
@@ -190,10 +202,9 @@ export function useInventoryData(): {
   return { tokens: [], nfts: [], loading: false };
 }
 
-// Wallet sidebar widget. Component prop type comes from
-// @elizaos/app-core/components/chat/widgets/types so the seed registry
-// accepts this stub as a valid ChatSidebarWidgetDefinition.
-import type { ChatSidebarWidgetDefinition } from "@elizaos/app-core/components/chat/widgets/types";
+// Wallet sidebar widget. Component prop type comes from app-core so the seed
+// registry accepts this stub as a valid ChatSidebarWidgetDefinition.
+import type { ChatSidebarWidgetDefinition } from "@elizaos/ui";
 export const WALLET_STATUS_WIDGET: ChatSidebarWidgetDefinition = {
   id: "wallet.status",
   pluginId: "wallet",
@@ -276,7 +287,7 @@ export function useWalletState(_args: {
     once?: boolean,
     busy?: boolean,
   ) => void;
-  promptModal?: unknown;
+  promptModal?: (opts: PromptOptions) => Promise<string | null>;
   agentName?: string;
   characterName?: string;
 }): WalletStateHook {
@@ -493,18 +504,15 @@ export interface TaskCompletionSummary {
 
 export { THREE };
 
-// ── @elizaos/app-wallet/wallet-rpc helpers ─────────────────────────────
-// `buildWalletRpcUpdateRequest` is already declared earlier in this file
-// (typed against WalletRpcCredentialKey/WalletRpcSelections); upstream
-// 49778114a5 accidentally re-added an `_args: unknown` copy that broke the
-// renderer build with "Multiple exports with the same name". The two helpers
-// below are the unique additions from that commit and stay.
-export function normalizeWalletRpcSelections(
-  _selections: unknown,
-): Record<string, never> {
-  return {};
-}
+// ── @elizaos/app-wallet/wallet-rpc stubs ───────────────────────────────
+// Real wallet RPC builder lives in `eliza/plugins/app-wallet`. When milady
+// is in npm-package mode (no local link), stub satisfies imports from
+// useOnboardingCallbacks and the wallet onboarding flow degrades to a
+// no-op RPC update. With `bun run eliza:local`, the alias auto-detect in
+// vite.config.ts routes through the real package instead.
 
-export function collectSelectedCredentialKeys(_selections: unknown): string[] {
+export function collectSelectedCredentialKeys(
+  _selections: WalletRpcSelections | null | undefined,
+): string[] {
   return [];
 }

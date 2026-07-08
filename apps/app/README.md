@@ -84,15 +84,25 @@ milady agent --message "hello" --thinking high
 git clone https://github.com/milady-ai/milady.git
 cd milady
 
-bun install
+./install
 bun run build
 ```
 
+`./install` opens the source setup picker in an interactive terminal. Use Space
+to select package mode, local elizaOS source mode, or all developer paths; use
+Enter to install. For CI or scripted setup, use `./install --profile packages`.
+Plain `bun install` remains package-mode only and fails fast with the same
+toolchain doctor when Node or Python would break native install scripts.
+
 ### Run the App (Desktop)
 
+The `build:desktop` / `dev:desktop` scripts live only at the **repo root**, not in
+`apps/app`. They also require **local mode** first (`bun run eliza:local`) — packages
+mode ships no `platforms/` directory for Electrobun to resolve against.
+
 ```bash
-cd apps/app
-bun install
+# from the repo root
+bun run eliza:local       # one-time: clone + link the local elizaOS source
 bun run build:desktop
 bun run dev:desktop
 ```

@@ -17,8 +17,8 @@ const repoRoot = path.resolve(__dirname, "..");
 
 function usage() {
   console.log(`usage:
-  node scripts/eliza-source-mode.mjs local [--install]
-  node scripts/eliza-source-mode.mjs packages [--tag <dist-tag>] [--version <exact>] [--rename] [--install]
+  node scripts/eliza-source-mode.mjs local [--install] [-- <bun install args>]
+  node scripts/eliza-source-mode.mjs packages [--tag <dist-tag>] [--version <exact>] [--rename] [--install] [-- <bun install args>]
 
 Modes:
   local      Restore or clone repo-local elizaOS source and link workspace packages.
@@ -44,10 +44,15 @@ function parseArgs(argv) {
     rename: false,
     tag: null,
     version: null,
+    installArgs: [],
   };
 
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index];
+    if (arg === "--") {
+      options.installArgs.push(...rest.slice(index + 1));
+      break;
+    }
     if (arg === "--install") {
       options.install = true;
       continue;
@@ -78,7 +83,8 @@ function runNode(script, args, env) {
   return run(process.execPath, [script, ...args], env);
 }
 
-function run(command, args, env) {
+function run(command, args, env, options = {}) {
+  const { allowFailure = false } = options;
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: repoRoot,
@@ -92,6 +98,13 @@ function run(command, args, env) {
         return;
       }
       if ((code ?? 1) !== 0) {
+        if (allowFailure) {
+          console.warn(
+            `[eliza-source-mode] ${command} exited ${code ?? 1} (tolerated)`,
+          );
+          resolve();
+          return;
+        }
         reject(new Error(`${command} exited with code ${code ?? 1}`));
         return;
       }
@@ -124,13 +137,20 @@ async function runLocalMode(options) {
     ELIZA_SKIP_LOCAL_UPSTREAMS: "",
   };
 
+  if (options.install) {
+    const packageEnv = {
+      ...process.env,
+      MILADY_ELIZA_SOURCE: "packages",
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1",
+      MILADY_DISABLE_LOCAL_UPSTREAMS: "force",
+    };
+    await runNode("scripts/disable-local-eliza-workspace.mjs", [], packageEnv);
+    await run("bun", ["install", ...options.installArgs], packageEnv);
+  }
+
   restoreLocalElizaWorkspace(repoRoot);
   await cloneLocalElizaIfMissing(env);
   await runNode("scripts/setup-upstreams.mjs", [], env);
-
-  if (options.install) {
-    await run("bun", ["install"], env);
-  }
 
   console.log("[eliza-source-mode] local elizaOS source mode is ready.");
 }
@@ -156,7 +176,11 @@ async function runPackageMode(options) {
   await runNode("scripts/disable-local-eliza-workspace.mjs", [], env);
 
   if (options.install) {
-    await run("bun", ["install", "--no-frozen-lockfile"], env);
+    const installArgs =
+      options.installArgs.length > 0
+        ? options.installArgs
+        : ["--no-frozen-lockfile"];
+    await run("bun", ["install", ...installArgs], env);
   }
 
   console.log(

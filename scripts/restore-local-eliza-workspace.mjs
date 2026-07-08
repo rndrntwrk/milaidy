@@ -8,7 +8,24 @@ import { applyCiOnlyOverrides } from "./disable-local-eliza-workspace.mjs";
 import { applyTsconfigMode } from "./lib/tsconfig-mode.mjs";
 
 function getNestedElizaSubmoduleSkipArgs() {
-  const skipped = ["plugin-openrouter"];
+  // Skip nested submodules whose upstream refs are unreachable or that we
+  // don't need locally. `name` is the submodule name from eliza/.gitmodules.
+  const skipped = [
+    "plugin-openrouter",
+    // asimov-1 (robot vendor) and opencode (agent-orchestrator vendor) carry
+    // stale/conflicting local git-dir state that aborts the recursive init
+    // ("destination path already exists" / "submodule git dir is inside git
+    // dir"); neither is needed by the app or runtime, so skip them.
+    "packages/robot/vendor/asimov-1",
+    "plugins/plugin-agent-orchestrator/vendor/opencode",
+    // omnivoice.cpp is voice-only; the elizaOS/omnivoice.cpp fork has
+    // force-pushed master so the tracked ref in eliza/develop is no longer
+    // reachable. Skipping unblocks local desktop builds that don't need
+    // voice. Re-enable by setting MILADY_FORCE_OMNIVOICE_SUBMODULE=1.
+    ...(process.env.MILADY_FORCE_OMNIVOICE_SUBMODULE === "1"
+      ? []
+      : ["plugins/plugin-local-inference/native/omnivoice.cpp"]),
+  ];
   if (
     process.env.MILADY_SKIP_CLOUD_SUBMODULE === "1" ||
     process.env.ELIZA_SKIP_CLOUD_SUBMODULE === "1"
@@ -160,10 +177,10 @@ export function restoreLocalElizaWorkspace(
   if (!fs.existsSync(disabledElizaRoot)) {
     if (!fs.existsSync(elizaRoot)) {
       log(
-        "restore-local-eliza-workspace: .eliza.ci-disabled not present and eliza/ is missing; skipping restore.",
+        "restore-local-eliza-workspace: .eliza.ci-disabled not present and eliza/ is missing; using package-mode paths.",
       );
       restoreRootPackageJson(repoRoot, { log, errorLog });
-      applyTsconfigMode(repoRoot, "local", { log });
+      applyTsconfigMode(repoRoot, "packages", { log });
       return false;
     }
     ensureNestedElizaSubmodules(repoRoot, { log, errorLog });

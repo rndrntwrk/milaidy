@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveElizaAppCoreScript } from "./lib/resolve-eliza-app-core-script.mjs";
+import { syncElizaEnvAliases } from "./lib/sync-eliza-env-aliases.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -42,27 +43,30 @@ if (!scriptName) {
   process.exit(1);
 }
 
+syncElizaEnvAliases({ defaultNamespace: "milady" });
+
+// Desktop and iOS builds compile @elizaos/app-core source directly out of the
+// repo-local eliza/ checkout, which only exists in local mode. In packages
+// mode the script file is absent and the build dies with a cryptic
+// missing-package error. Fail fast with an actionable message instead.
+const localModeActive =
+  fs.existsSync(localElizaRoot) ||
+  (process.env.MILADY_ELIZA_SOURCE ?? "").trim().toLowerCase() === "local";
+const isDesktopBuild =
+  scriptName === "desktop-build.mjs" || scriptName === "dev-platform.mjs";
+const isIosBuild =
+  scriptName === "run-mobile-build.mjs" &&
+  (scriptArgs[0] ?? "").startsWith("ios");
+if ((isDesktopBuild || isIosBuild) && !localModeActive) {
+  console.error(
+    `[milady] ${scriptName} requires local mode — the desktop/iOS build compiles @elizaos/app-core source from the repo-local eliza/ checkout, which is not present in packages mode.\n` +
+      "[milady] Run: bun run eliza:local",
+  );
+  process.exit(1);
+}
+
 const scriptPath = resolveElizaAppCoreScript(scriptName, { repoRoot });
-const localScriptPath = path.join(
-  localElizaRoot,
-  "packages",
-  "app-core",
-  "scripts",
-  scriptName,
-);
-const localRegressionMatrix = path.join(
-  localElizaRoot,
-  "packages",
-  "app-core",
-  "test",
-  "regression-matrix.json",
-);
-const shouldUseLocalScript =
-  fs.existsSync(localScriptPath) &&
-  (scriptName === "ensure-shared-i18n-data.mjs" ||
-    (scriptName === "validate-regression-matrix.mjs" &&
-      fs.existsSync(localRegressionMatrix)));
-const resolvedScriptPath = shouldUseLocalScript ? localScriptPath : scriptPath;
+const resolvedScriptPath = scriptPath;
 const useBun = path
   .resolve(resolvedScriptPath)
   .startsWith(`${path.resolve(localElizaRoot)}${path.sep}`);
@@ -71,7 +75,26 @@ const child = spawn(
   [resolvedScriptPath, ...scriptArgs],
   {
     cwd: repoRoot,
-    env: process.env,
+    // app-core scripts that diff/validate the consuming repo (e.g.
+    // validate-regression-matrix.mjs) resolve their repo root via
+    // `git rev-parse --show-toplevel`, which points at the nested eliza/
+    // checkout in CI rather than this milady workspace. Anchor them to the
+    // milady root so the regression-matrix contract validates milady's
+    // workflows and resolves the milady base SHA. validate-regression-matrix
+    // reads ELIZA_REGRESSION_MATRIX_REPO_ROOT for this override; only it reads
+    // the var, so setting it for every app-core invocation has no other effect.
+    env: {
+      ...process.env,
+      ELIZA_REGRESSION_MATRIX_REPO_ROOT:
+        process.env.ELIZA_REGRESSION_MATRIX_REPO_ROOT?.trim() || repoRoot,
+      // Milady renames the runtime entry `eliza.mjs` -> `milady.mjs`. Upstream
+      // run-node.mjs (elizaOS/eliza#8126) honors ELIZA_ENTRY_FILE to spawn the
+      // fork's entry instead of the hardcoded `eliza.mjs`; without this, `doctor`
+      // (and any run-node.mjs-routed script) fails "Module not found eliza.mjs"
+      // since this fork ships no eliza.mjs shim. No-op for app-core builds that
+      // predate #8126 (they fall back to eliza.mjs); ignored by other scripts.
+      ELIZA_ENTRY_FILE: process.env.ELIZA_ENTRY_FILE?.trim() || "milady.mjs",
+    },
     stdio: "inherit",
   },
 );

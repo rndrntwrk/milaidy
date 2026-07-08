@@ -44,6 +44,13 @@ concurrency:
 
 permissions:
   contents: read
+  # The publish job calls reusable-npm-publish.yml, which requests
+  # id-token: write for npm provenance/OIDC. A top-level permissions block
+  # resets unlisted scopes to `none`, so without this the whole release call
+  # graph (Release → release-orchestrator → publish-npm → reusable-npm-publish)
+  # fails GitHub's startup validation: "requesting id-token: write, but only
+  # allowed id-token: none".
+  id-token: write
 
 env:
   CI: "true"
@@ -57,7 +64,7 @@ jobs:
       dist_tag: ${{ steps.meta.outputs.dist_tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Determine version and dist-tag
         id: meta

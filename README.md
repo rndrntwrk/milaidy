@@ -34,7 +34,7 @@ Milady ships with native **BNB Smart Chain (BSC)** support — your agent can tr
 
 The built-in `EXECUTE_TRADE` action lets your agent swap tokens on BSC via PancakeSwap. Supports buy/sell with configurable slippage.
 
-To enable BSC trading, add to your `.env` or `~/.milady/.env`:
+To enable BSC trading, add to your `.env` or `~/.local/state/milady/.env`:
 
 ```bash
 EVM_PRIVATE_KEY=0x...                    # wallet private key (hex, 0x-prefixed)
@@ -61,7 +61,7 @@ Install from the Skills Marketplace in the app, or ask your agent to install it.
 
 ### Wallet
 
-Milady auto-generates EVM and Solana wallet addresses on startup. For BSC trading you need to import your own private key (see above). If connected to **Eliza Cloud**, managed wallets via Privy are available without local key management.
+Milady auto-generates EVM and Solana wallet addresses on startup. For BSC trading you need to import your own private key (see above). If connected to **Eliza Cloud**, managed wallets via Steward are available without local key management.
 
 View your agent's wallet addresses in the Settings tab or ask: *"what's my wallet address?"*
 
@@ -73,14 +73,14 @@ View your agent's wallet addresses in the Settings tab or ask: *"what's my walle
 
 Grab from **[Releases](https://github.com/milady-ai/milady/releases/latest)**:
 
-| Platform | File | |
-|----------|------|---|
-| macOS (Apple Silicon) | [`Milady-arm64.dmg`](https://github.com/milady-ai/milady/releases/latest) | for your overpriced rectangle |
-| macOS (Intel) | [`Milady-x64.dmg`](https://github.com/milady-ai/milady/releases/latest) | boomer mac (why separate arm64/x64: [Build & release](docs/build-and-release.md#macos-why-two-dmgs-arm64-and-x64)) |
-| Windows | [`Milady-Setup.exe`](https://github.com/milady-ai/milady/releases/latest) | for the gamer anons |
+| Platform | Download | |
+|----------|----------|---|
+| macOS (Apple Silicon) | [latest macOS installer](https://github.com/milady-ai/milady/releases/latest) | for your overpriced rectangle |
+| macOS (Intel) | [latest macOS installer](https://github.com/milady-ai/milady/releases/latest) | boomer mac (why separate arm64/x64: [Build & release](docs/build-and-release.md#macos-why-two-dmgs-arm64-and-x64)) |
+| Windows | [latest Windows installer](https://github.com/milady-ai/milady/releases/latest) | for the gamer anons |
 | iOS | App Store (coming soon) | for the privacy-pilled |
 | Android | [Google Play](https://play.google.com/store/apps/details?id=ai.milady.app) / [APK](https://github.com/milady-ai/milady/releases/latest) | for the degen on the go |
-| Linux | [`.AppImage`](https://github.com/milady-ai/milady/releases/latest) / [`.deb`](https://github.com/milady-ai/milady/releases/latest) / [Snap](#snap) / [Flatpak](#flatpak) / [APT repo](#debian--ubuntu-apt) | I use arch btw |
+| Linux | [`stable-linux-x64-Milady-Setup.tar.gz`](https://github.com/milady-ai/milady/releases/latest) | I use arch btw — see [Linux install](#linux) |
 
 Signed and notarized. No Gatekeeper FUD. We're legit.
 
@@ -169,7 +169,7 @@ milady setup
 
 ### Building from source (developers)
 
-Milady builds against the **published `@elizaos/*` npm packages** (`alpha` dist-tag) by default. The repo no longer tracks `eliza/` as a submodule — a fresh clone has no `eliza/` checkout and `bun install` resolves everything from npm.
+Milady builds against the **published `@elizaos/*` npm packages** (`beta` dist-tag) by default. The repo no longer tracks `eliza/` as a submodule — a fresh clone has no `eliza/` checkout and `bun install` resolves everything from npm.
 
 **First install after cloning:**
 
@@ -179,9 +179,16 @@ cd milady
 
 ./install                 # Unix / macOS — chmod +x install if needed
 # install.cmd on Windows
-# Both wrappers run `bun install` with MILADY_ELIZA_SOURCE=packages.
+# With no args, the wrapper opens a Space/Enter multi-select picker:
+# packages, local elizaOS source, or all developer paths.
 
-# Plain `bun install` also works once you've cloned.
+# Non-interactive examples:
+./install --profile packages
+./install --profile local
+./install --profile all
+
+# Plain `bun install` is package-mode only and runs a preflight doctor.
+# If Node/Python is outside the supported native install lane, run ./install.
 ```
 
 #### elizaOS source modes (eject / uneject)
@@ -190,7 +197,7 @@ Milady has two source modes for `@elizaos/*` packages, selected via `MILADY_ELIZ
 
 | Mode | When to use | What resolves `@elizaos/*` |
 |---|---|---|
-| `packages` (default) | App development, builds, releases | npm registry (`alpha` dist-tag) |
+| `packages` (default) | App development, builds, releases | npm registry (`beta` dist-tag) |
 | `local` | Patching elizaOS upstream alongside Milady | A repo-local `eliza/` checkout linked into `node_modules/` |
 
 **Switch to local mode (uneject)** — clones `eliza/` if absent, links workspace packages, swaps the root tsconfig to source-priority paths:
@@ -202,8 +209,8 @@ bun run eliza:local            # clone (or restore) eliza/, link packages, run b
 **Switch back to packages mode (eject)** — rewrites the root `package.json` to pin npm versions, swaps the root tsconfig back to packages-mode-clean, and regenerates the lockfile:
 
 ```bash
-bun run eliza:packages                  # default: alpha tag
-bun run eliza:packages:alpha            # explicit alpha
+bun run eliza:packages                  # default: beta tag
+bun run eliza:packages:alpha            # explicit alpha (legacy)
 bun run eliza:packages -- --tag beta    # any other dist-tag
 bun run eliza:packages -- --version 2.0.0-alpha.116   # pin an exact version
 bun run eliza:packages -- --rename      # also rename eliza/ → .eliza.ci-disabled/
@@ -221,14 +228,15 @@ The checked-in `tsconfig.json` always matches the packages-mode template; the [s
 **Configuration env vars** (read by `scripts/lib/eliza-package-mode.mjs`):
 
 - `MILADY_ELIZA_SOURCE` — `local` or `packages` (default)
-- `MILADY_ELIZAOS_DIST_TAG` / `ELIZAOS_NPM_TAG` — npm dist-tag in packages mode (default `alpha`)
+- `MILADY_ELIZAOS_DIST_TAG` / `ELIZAOS_NPM_TAG` — npm dist-tag in packages mode (default `beta`)
 - `MILADY_ELIZAOS_VERSION` — pin an exact version
 - `MILADY_ELIZA_GIT_URL` / `MILADY_ELIZA_BRANCH` — override the eliza source clone target
 - `MILADY_SKIP_LOCAL_UPSTREAMS=1` — legacy flag equivalent to `MILADY_ELIZA_SOURCE=packages`
 
 **Test coverage in each mode:**
 
-- `bun run test`, `bun run verify:typecheck`, `bun run verify:lint`, `bun run build:web`, `bun run build:desktop`, `bun run build:ios`, `bun run build:android` — all work in both modes.
+- `bun run test`, `bun run verify:typecheck`, `bun run verify:lint`, `bun run build:web`, `bun run build:android` — work in both modes.
+- `bun run build:desktop` and `bun run build:ios` (plus `dev:desktop`) require **local mode** first (`bun run eliza:local`). Packages mode ships no `platforms/` directory, so the published `@elizaos/app-core` tarball has nothing for Electrobun / the iOS Capacitor shell to resolve against.
 - The packaged-Electrobun E2E suite at `apps/app/test/electrobun-packaged/` requires **local mode** (it imports source-level test helpers from `eliza/packages/app-core/test/helpers/`).
 
 #### Windows: enable long paths
@@ -251,50 +259,26 @@ git config --global core.longPaths true
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew tap milady-ai/milady
-brew install milady          # CLI
-brew install --cask milady   # Desktop app (macOS only)
+brew tap milady-ai/tap
+brew install milady-ai/tap/milady          # CLI
+brew install --cask milady-ai/tap/milady   # Desktop app (macOS only)
 ```
 
-### Snap
+<a id="linux"></a>
+
+### Linux
+
+The Linux desktop app ships as a single installer tarball: **`stable-linux-x64-Milady-Setup.tar.gz`** on the [latest release](https://github.com/milady-ai/milady/releases/latest). There is no AppImage, `.deb`, Snap, Flatpak, or APT repo today.
 
 ```bash
-sudo snap install milady
-milady setup
+cd ~/Downloads
+curl -fsSLO https://github.com/milady-ai/milady/releases/latest/download/stable-linux-x64-Milady-Setup.tar.gz
+tar -xzf stable-linux-x64-Milady-Setup.tar.gz
+# Extracts `installer` + `README.txt` into the current directory; run the installer:
+./installer
 ```
 
-Snap packages auto-update in the background. Available on Ubuntu, Fedora, Manjaro, and any distro with [snapd](https://snapcraft.io/docs/installing-snapd) installed.
-
-For the latest development builds:
-```bash
-sudo snap install milady --edge
-```
-
-### Flatpak
-
-```bash
-flatpak install flathub ai.milady.Milady
-flatpak run ai.milady.Milady
-```
-
-Or sideload from a [release bundle](https://github.com/milady-ai/milady/releases/latest):
-```bash
-flatpak --user install milady.flatpak
-```
-
-### Debian / Ubuntu (APT)
-
-```bash
-# Add the repository
-curl -fsSL https://apt.milady.ai/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/milady.gpg
-echo "deb [signed-by=/usr/share/keyrings/milady.gpg] https://apt.milady.ai stable main" | \
-  sudo tee /etc/apt/sources.list.d/milady.list
-
-# Install
-sudo apt update && sudo apt install milady
-```
-
-Works on Debian 12+, Ubuntu 22.04+, Linux Mint 22+, Pop!_OS, and other Debian derivatives. Updates come through `apt upgrade`.
+x86_64 only. (Prefer the terminal? The `curl … | bash` CLI install above works on any Linux box.)
 
 ### Security: API token
 
@@ -528,7 +512,7 @@ MILADY_GATEWAY_PORT=19000 MILADY_PORT=3000 milady start
 
 ## Config
 
-Lives at `~/.milady/milady.json` (override with `MILADY_CONFIG_PATH` or `MILADY_STATE_DIR`)
+Lives at `~/.local/state/milady/milady.json` (override with `MILADY_CONFIG_PATH` or `MILADY_STATE_DIR`)
 
 ```json5
 {
@@ -542,7 +526,7 @@ Lives at `~/.milady/milady.json` (override with `MILADY_CONFIG_PATH` or `MILADY_
 }
 ```
 
-Or use `~/.milady/.env` for secrets.
+Or use `~/.local/state/milady/.env` for secrets.
 
 ---
 
@@ -584,7 +568,7 @@ ollama pull gemma3:4b
 
 > **⚠️ Known issue:** The `@elizaos/plugin-ollama` has an SDK version incompatibility with the current AI SDK. Use Ollama's **OpenAI-compatible endpoint** as a workaround:
 
-Edit `~/.milady/milady.json`:
+Edit `~/.local/state/milady/milady.json`:
 
 ```json5
 {
@@ -629,10 +613,14 @@ This routes through the OpenAI plugin instead of the broken Ollama plugin. Works
 ```bash
 git clone https://github.com/milady-ai/milady.git
 cd milady
-bun install          # runs postinstall hooks (patches deps, seeds skills, etc.)
+./install            # interactive source setup picker (Space selects, Enter installs)
 bun run build
 bun run milady start
 ```
+
+For scripted package-mode setup, run `./install --profile packages`. Plain
+`bun install` remains supported when you only need the default published-package
+dependency graph.
 
 > `bun run build` runs the production build via Node ([scripts/run-production-build.mjs](scripts/run-production-build.mjs) — forks between published `@elizaos/app-core` and the local `eliza/` checkout depending on `MILADY_ELIZA_SOURCE`).
 
@@ -658,7 +646,7 @@ bun run dev:desktop:watch  # + Vite dev server and MILADY_RENDERER_URL (HMR for 
 
 **Why a separate flow:** the desktop stack runs **multiple processes** (orchestrator, Vite and/or built assets, API, Electrobun). The orchestrator **pre-allocates** free **API** and **Vite** ports when defaults are taken so every child gets consistent env—**why:** misaligned ports cause blank UI or 502s on `/api`. See **[docs/apps/desktop-local-development.md](docs/apps/desktop-local-development.md)** (including [when default ports are busy](docs/apps/desktop-local-development.md#when-default-ports-are-busy)) for signals, shutdown when you quit the app, and env vars.
 
-**IDE / agent hooks** — Editors and agents do not see the native window or auto-discover localhost. **Why we added hooks:** with desktop dev running, the API exposes **`GET /api/dev/stack`** (JSON: ports, renderer URL, which features are on). **`bun run desktop:stack-status -- --json`** probes ports and merges stack + health + status. By default, **`.milady/desktop-dev-console.log`** mirrors prefixed child logs and **`GET /api/dev/cursor-screenshot`** (loopback) returns a full-screen PNG via OS capture — both are opt-out via env (see doc). Cursor uses **`.cursor/rules/milady-desktop-dev-observability.mdc`** plus that guide.
+**IDE / agent hooks** — Editors and agents do not see the native window or auto-discover localhost. **Why we added hooks:** with desktop dev running, the API exposes **`GET /api/dev/stack`** (JSON: ports, renderer URL, which features are on). **`bun run desktop:stack-status -- --json`** probes ports and merges stack + health + status. By default, **`~/.local/state/milady/desktop-dev-console.log`** mirrors prefixed child logs and **`GET /api/dev/cursor-screenshot`** (loopback) returns a full-screen PNG via OS capture — both are opt-out via env (see doc). Cursor uses **`.cursor/rules/milady-desktop-dev-observability.mdc`** plus that guide.
 
 ```bash
 bun run verify       # typecheck + lint + test (run before committing; `check` aliases this)

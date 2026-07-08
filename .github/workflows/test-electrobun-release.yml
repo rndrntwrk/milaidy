@@ -21,7 +21,10 @@ permissions:
   contents: read
 
 env:
-  BUN_VERSION: "1.3.13"
+  # Pin the canonical elizaOS/eliza checkout to the latest verified develop SHA.
+  # Override with MILADY_ELIZA_REF only for a specific upstream release test.
+  MILADY_ELIZA_REF: "v2.0.11-beta.7"
+  BUN_VERSION: "1.3.14"
   NODE_NO_WARNINGS: "1"
 
 jobs:
@@ -34,7 +37,7 @@ jobs:
         shell: bash -euo pipefail {0}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           fetch-depth: 0
           submodules: false
@@ -43,10 +46,15 @@ jobs:
         run: |
           if [ ! -f eliza/package.json ]; then
             git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/elizaOS/eliza.git eliza
+            if [ -n "${MILADY_ELIZA_REF:-}" ]; then
+              git -C eliza fetch --depth=1 origin "$MILADY_ELIZA_REF"
+              git -C eliza checkout --quiet FETCH_HEAD
+              echo "Pinned eliza to ${MILADY_ELIZA_REF}"
+            fi
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: "24"
 
@@ -56,18 +64,23 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts
           install-native-deps: "false"
-          run-postinstall: "false"
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
-        env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
-          SKIP_AVATAR_CLONE: "1"
-          ELIZA_NO_VISION_DEPS: "1"
-          MILADY_NO_VISION_DEPS: "1"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+          skip-local-upstreams-postinstall: "true"
 
       - name: Run regression matrix contract
         run: bun run test:regression-matrix:release-contract
+        env:
+          # On pull_request, actions/checkout does not create refs/remotes/origin/develop,
+          # so the changed-files diff against origin/develop throws "Unable to resolve
+          # changed files". validate-regression-matrix.mjs prefers GITHUB_BASE_SHA (a
+          # non-default var); supply the PR base SHA (present in the merge ref's ancestry
+          # under fetch-depth:0) so the diff resolves. Empty on push, where the script
+          # early-returns with no changed files.
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
       - name: Run release contract suite
         run: bun run test:release:contract
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}

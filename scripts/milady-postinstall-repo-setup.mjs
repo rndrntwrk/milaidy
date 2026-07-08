@@ -13,6 +13,7 @@
  * of @elizaos/app-core.
  */
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isLocalElizaDisabled } from "./lib/eliza-package-mode.mjs";
@@ -50,11 +51,6 @@ if (packageMode) {
 // link-external-plugins, etc.) and we want our patches to win on top.
 // Remove an entry once the corresponding upstream PR lands and a new
 // compatible package is published.
-const localSourceBridgePatchScripts = [
-  // Temporary overlay for elizaOS/eliza Windows smoke startup trace drift.
-  "patch-eliza-electrobun-windows-smoke-startup.mjs",
-];
-
 const packageSafeBridgePatchScripts = [
   "repair-elizaos-package-links.mjs",
   "ensure-elizaos-optional-app-stubs.mjs",
@@ -62,18 +58,21 @@ const packageSafeBridgePatchScripts = [
   "patch-elizaos-app-core-native-browser-package.mjs",
   "patch-noble-curves-hashes-v2.mjs",
   "patch-elizaos-app-core-windows-shell.mjs",
-  "patch-elizaos-app-core-mobile-package.mjs",
   "patch-elizaos-plugin-browser-bridge-package.mjs",
   // milady-only fix for claude.ai OAuth tier — see script header.
   "patch-coding-agent-adapters-tools-flag.mjs",
+  // milady-only fix for codex 0.128 — see script header.
+  "patch-coding-agent-adapters-codex-full-auto.mjs",
 ];
 
-const miladyBridgePatchScripts = packageMode
-  ? packageSafeBridgePatchScripts
-  : [...localSourceBridgePatchScripts, ...packageSafeBridgePatchScripts];
-
-for (const scriptName of miladyBridgePatchScripts) {
+for (const scriptName of packageSafeBridgePatchScripts) {
   const scriptPath = path.join(repoRoot, "scripts", scriptName);
+  if (!existsSync(scriptPath)) {
+    console.warn(
+      `[milady-postinstall] optional patch script ${scriptName} is not present; skipping.`,
+    );
+    continue;
+  }
   await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [scriptPath], {
       cwd: repoRoot,

@@ -1,12 +1,53 @@
 # Milady — Agent Conventions
 
-## What This Is
+Local-first AI assistant on [elizaOS](https://github.com/elizaOS). CLI + desktop (Electrobun) + web dashboard + connectors.
 
-Milady is a local-first AI assistant built on [elizaOS](https://github.com/elizaOS). It wraps the elizaOS runtime with a CLI, desktop app (Electrobun), web dashboard, and platform connectors (Telegram, Discord, etc.).
+Architecture commandments, QA protocol, git workflow: [AGENTS.md](AGENTS.md). Sandbox/distribution: [docs/sandbox-mode.md](docs/sandbox-mode.md).
 
-### elizaOS naming (agents & editors)
+## Naming
 
-Write the framework name as **elizaOS** in prose, comments, user-facing strings, and documentation — not `ElizaOS`. The npm scope remains **`@elizaos/*`** (lowercase). Say **Eliza agents** when you mean agents in plain language (not **elizaOS agents**). The **Eliza Classic** plugin name is an exception (**Eliza** = the 1966 chatbot), not “elizaOS Classic”. Cursor picks this up via `.cursor/rules/elizaos-branding.mdc`.
+Write **elizaOS** (not `ElizaOS`). npm scope `@elizaos/*`. Plain language: **Eliza agents**. Exception: **Eliza Classic** plugin keeps `Eliza` (the 1966 chatbot).
+
+## Cloud frontend visual review (REQUIRED for any UI change)
+
+> Path/mode note: `cloud-frontend` lives at `eliza/packages/cloud-frontend` and is on disk only in **local mode** (`bun run eliza:local`). Every `packages/cloud-frontend/…` path in this section is relative to `eliza/packages/cloud-frontend/`.
+
+For ANY change in `eliza/packages/cloud-frontend/` (or any shared package whose UI bleeds into cloud-frontend), follow this loop until every touched page reaches verdict `good`:
+
+```bash
+bun run --cwd eliza/packages/cloud-frontend audit:cloud
+```
+
+This boots the dev server, performs an injected-ethereum login (synthetic JWT in `localStorage.steward_session_token`), visits every route in `src/App.tsx` at desktop + mobile, captures rest + hover screenshots, and writes:
+
+```
+packages/cloud-frontend/aesthetic-audit-output/
+  desktop/<slug>.png            rest screenshot
+  desktop/<slug>--hover.png     primary-button hover state
+  mobile/<slug>.png
+  mobile/<slug>--hover.png
+  manual-review/<slug>.md       REQUIRED per-page verdict markdown (auto-stubbed)
+  contact-sheet.html            grid index
+  report.json                   machine-readable findings
+```
+
+**The 5-loop grind:**
+
+1. Run the audit.
+2. Open `contact-sheet.html`. Walk every affected page.
+3. Fill in the verdict in `manual-review/<slug>.md`: visual issues, color/hover violations, layout breaks, e2e gaps, `good` · `needs-work` · `needs-eyeball` · `broken`.
+4. Fix issues in source.
+5. Commit screenshots + reviews + fixes together.
+6. Re-run. Repeat until every page is `good`. Five loops is the floor for any meaningful redesign.
+
+**Hard rules:**
+
+- Every page has a screenshot AND a `manual-review/<slug>.md` checked in.
+- `needs-work` / `broken` pages block "done."
+- Brand orange is accent only. No blue anywhere. Orange-resting → darker-orange hover (never orange→black). Neutral resting → neutral-with-opacity hover.
+- In local dev, the admin pages are accessible to any authenticated user (production keeps the role gate).
+
+Full protocol + checklist template: [packages/cloud-frontend/AGENTS.md](packages/cloud-frontend/AGENTS.md). Color rules: [packages/cloud-frontend/docs/HOVER_SYSTEM.md](packages/cloud-frontend/docs/HOVER_SYSTEM.md). E2E gap catalog: [packages/cloud-frontend/docs/E2E_COVERAGE_GAPS.md](packages/cloud-frontend/docs/E2E_COVERAGE_GAPS.md). Dashboard IA: [packages/cloud-frontend/docs/DASHBOARD_REDESIGN.md](packages/cloud-frontend/docs/DASHBOARD_REDESIGN.md).
 
 ## Scope Discipline
 
@@ -14,120 +55,157 @@ Write the framework name as **elizaOS** in prose, comments, user-facing strings,
 - Before adding new capabilities, verify they align with the existing product model by reading docs/README first.
 - When unsure about product semantics (e.g., SOL-only vs SPL, community vs custom flows), ASK before implementing.
 
+## Native over Docker on Linux x64
+
+On Linux x86_64 development hosts, build and run the full toolchain locally — Verilator, Icarus, Yosys, SymbiYosys, OpenROAD, OpenLane, magic, klayout, netgen, QEMU, Renode, LLVM, Chipyard, AlphaChip CUDA, all of it. Native is faster and far easier to debug than Docker (no bind-mount latency, real stack traces, normal `gdb` / `perf`, no daemon lifecycle). Docker stays as a documented fallback for macOS hosts, reproducibility audits, and CI lanes that need a pinned image — but it should not be the default invocation path on Linux. If a script forces Docker on Linux when a native binary exists, fix the script.
+
 ## Quick Start (Dev)
 
 ```bash
-bun install          # runs postinstall hooks automatically
-bun run dev          # API on :31337, UI on :2138 with hot reload (defaults; busy ports → next free + env sync)
-bun run dev:desktop  # Electrobun; skips vite build when apps/app/dist is up to date
-bun run dev:desktop:watch  # Vite **dev** server + Electrobun `MILADY_RENDERER_URL` (HMR). Orchestrator pre-picks free API/UI loopback ports when defaults are in use so proxy + env match. Rollup watch: also set MILADY_DESKTOP_VITE_BUILD_WATCH=1
-
-Desktop dev observability (agents cannot see the native window; Cursor does not auto-poll localhost): `GET /api/dev/stack` on the API; `bun run desktop:stack-status -- --json`; default-on aggregated log (`.milady/desktop-dev-console.log`) + `GET /api/dev/console-log` (loopback tail); default-on screenshot proxy `GET /api/dev/cursor-screenshot` (loopback, full-screen OS capture). Opt-out: `MILADY_DESKTOP_SCREENSHOT_SERVER=0`, `MILADY_DESKTOP_DEV_LOG=0`. See `docs/apps/desktop-local-development.md` and `.cursor/rules/milady-desktop-dev-observability.mdc`.
+bun install                # postinstall hooks
+bun run dev                # API :31337, UI :2138 — auto-shifts to free ports + syncs env
+bun run dev:desktop        # Electrobun; reuses apps/app/dist when fresh
+bun run dev:desktop:watch  # Vite dev + Electrobun HMR
+bun run eliza:local        # clone ./eliza, link @elizaos/*, swap tsconfig
+bun run eliza:packages     # restore npm packages mode
 ```
 
-Desktop dev rationale (signals, Quit, `detached` children): `docs/apps/desktop-local-development.md`.
+### Which app do you build/run? — follow the cwd
 
-Optional — link a local elizaOS source checkout for live package development:
+- **At the Milady root (`/home/shaw/milady`), always build, run, test, and verify
+  the Milady (white-label) app.** That is the product here — its scripts set the
+  Milady brand (`ELIZA_NAMESPACE=milady`, `ELIZA_APP_ID=ai.milady.app`,
+  `ELIZA_URL_SCHEME=milady`).
+- **If the cwd is the eliza checkout (`/home/shaw/milady/eliza`), build, run,
+  test, and verify eliza itself — NOT Milady.** Use eliza's own scripts
+  (`ELIZA_NAMESPACE=eliza`); never invoke Milady's branded build from inside
+  eliza. Running a branded build against the shared eliza tree pollutes app
+  id / Android tree / desktop brand assets / state and boots the wrong product
+  (old UI, wrong identity, corrupted build). The brand guard
+  (`ELIZA_ANDROID_USE_APP_DIR`, `assertSharedTreeOnlyForEliza` in
+  `eliza/packages/app-core/scripts/run-mobile-build.mjs`) exists for this.
+
+The rule is simply: **the repo your cwd is in is the app you build** — Milady at
+the Milady root, eliza inside `eliza/`. The matching note lives in
+`eliza/CLAUDE.md` / `eliza/AGENTS.md`.
+
+## Build & test
+
 ```bash
-bun run eliza:local       # clone ./eliza, link local @elizaos/* packages, swap tsconfig to local-mode (alias: setup:upstreams)
-bun run eliza:packages    # rewrite manifests for npm @elizaos/* packages, restore packages-mode tsconfig
+bun run build       # tsdown + vite
+bun run verify      # typecheck + lint (alias: bun run check)
+bun run test        # parallel suite
+bun run test:server # agent + core + plugins
+bun run test:client # app + ui + lifeops
+bun run test:e2e
+bun run db:check
+bun run --cwd packages/app test:e2e         # Playwright UI smoke
+TEST_LANE=post-merge bun run test           # include *.real.test.ts (live APIs)
 ```
+
+## Dev observability (agents can't see the native window)
+
+Loopback endpoints — use instead of hardcoding ports:
+
+- `GET /api/dev/stack` — discovery (ports, renderer URL, paths). Start here. [eliza/packages/app-core/src/api/dev-stack.ts](eliza/packages/app-core/src/api/dev-stack.ts).
+- `GET /api/dev/cursor-screenshot` — PNG of Electrobun window (OS-level).
+- `GET /api/dev/console-log?maxLines=400` — tail of Vite + API + Electrobun logs.
+- `bun run desktop:stack-status -- --json` — one-shot probe.
+
+## Electrobun Agentic Desktop 2026
+
+The local rules pack is installed for desktop-shell work. Use root `AGENTS.md`
+as authoritative, then read `rules/`, `checklists/`, `hooks/README.md`,
+`commands/README.md`, `docs/research-brief-2026.md`, and
+`docs/porting-map-from-apple-swift.md` when changing Electrobun, desktop RPC,
+webviews, tray/menu/deep-link surfaces, updater/release code, or local
+model/tool orchestration.
+
+Milady's Electrobun workspace is `eliza/packages/app-core/platforms/electrobun`;
+the renderer app is `apps/app`. The original pack is archived at
+`docs/agent-packs/electrobun-agentic-desktop-2026/`. Its workflow examples are
+not active CI unless explicitly approved.
+
+## Training & inference (locked)
+
+- **Training always uses APOLLO optimizer** (memory-efficient). No alternatives.
+- **Inference always applies every optimization** we have (DSPy artifacts under `~/.local/state/milady/optimized-prompts/<task>/` auto-load at boot via `OptimizedPromptService`).
+- **Recommended local model: `eliza-1`** — not enforced. Users can search + download any HuggingFace model via the models surface.
+
+## Deployment topologies
+
+Every device supports **local-only mode**. Eliza Cloud login is optional but improves the experience. Supported shapes — mix freely:
+
+- Cloud on remote VPS (agent + services in cloud).
+- Desktop with local agent (no cloud required).
+- Mobile with local agent + Cloud-routed inference / services.
+- Cloud handles anything not local (auth, hosted APIs, billing, domains, container deploys, monetization).
+
+Prefer Cloud primitives over inventing custom backend infra.
 
 ## Environment variables
 
-Runtime knobs that affect training, skills, code execution, and state placement. Defaults listed are what ships with the repo.
+- `MILADY_STATE_DIR` / `ELIZA_STATE_DIR` — per-user state root. Default `~/.local/state/milady`.
+- `MILADY_WORKSPACE_DIR` / `ELIZA_WORKSPACE_DIR` — override agent workspace (else follows runtime `cwd` if it has `package.json` / `AGENTS.md` / `skills/`).
+- `ELIZA_DISABLE_TRAJECTORY_LOGGING=1` — opt out of trajectory writes (also off when `NODE_ENV=test`).
+- Ports (never hardcode — orchestrator auto-shifts + syncs): `MILADY_API_PORT` (31337), `MILADY_PORT` (2138), `MILADY_GATEWAY_PORT` (18789), `MILADY_HOME_PORT` (2142), `MILADY_WECHAT_WEBHOOK_PORT` (18790).
 
-- `MILADY_STATE_DIR` / `ELIZA_STATE_DIR` — root for per-user state (curated skills, training state, trigger counters, optimized prompts). Default `~/.milady`.
-- `MILADY_CONFIG_PATH` / `MILADY_STATE_DIR` / `ELIZA_CONFIG_PATH` / `ELIZA_STATE_DIR` — resolution order for the config file (`milady.json`).
-- `ELIZA_DISABLE_TRAJECTORY_LOGGING` — set to `1` to opt out of trajectory persistence. Default: off (trajectories are written).
-- `NODE_ENV=test` — also disables trajectory persistence (same effect as `ELIZA_DISABLE_TRAJECTORY_LOGGING=1`).
-- `MILADY_DISABLE_AUTO_BOOTSTRAP` — set to `1` to skip the one-shot native optimization bootstrap at runtime boot. Default: bootstrap runs when trajectory counters are over threshold and no artifact exists.
-- `MILADY_ENABLE_CHILD_SKILL_CALLBACK` — set to `0` to disable the child→parent `USE_SKILL` bridge for spawned coding agents. Default: enabled.
-- `EXECUTECODE_TIMEOUT_MS` — default script timeout for the `EXECUTE_CODE` action, in ms. Default: 30000.
-- `EXECUTECODE_DISABLE` — set to `true` / `1` to disable the `EXECUTE_CODE` action entirely. Default: enabled.
-- `ATROPOS_DATA_DIR` — staging directory used by the atropos training backend for dataset files.
-- `ATROPOS_BIN` — override path to the atropos binary when dispatching to that backend.
-- `MILADY_APP_VERIFICATION_MAX_RETRIES` — max retry rounds when `APP create` / `PLUGIN create` verification fails. The parent re-prompts the sub-agent with a structured failure report each round; after the cap the failure is surfaced to the user verbatim. Default `3`.
-- `MILADY_APP_VERIFICATION_DEFAULT_PROFILE` — `fast` (typecheck + lint, ~10s) or `full` (all checks including launch + headless browser smoke test, ~30–90s). Default `full` for create flows, `fast` for relaunch.
-- `MILADY_PROTECTED_APPS` — comma-separated app names that cannot be overridden via `APP load_from_directory`. Apps shipped under `eliza/apps/` are always implicitly included. Names normalize through scope-strip and `app-` prefix-strip before lookup, so `@evil/app-companion`, `app-companion`, and `companion` all collide with first-party `eliza/apps/app-companion`. Enforced by `eliza/plugins/plugin-app-control/typescript/src/protected-apps.ts`.
-- `MILADY_APP_LOAD_AUDIT_LOG` — path to the audit log written when `APP load_from_directory` registers a new app source. Default `~/.milady/audit/app-loads.jsonl`.
-- `MILADY_BROWSER_VERIFY_OPTIONAL` — set to `1` to acknowledge skipping the headless-browser check in `AppVerificationService` when `puppeteer-core` isn't installed. Default: unset, in which case missing puppeteer-core is a hard verification failure with an actionable diagnostic. Use this only on environments where the operator deliberately accepts no rendering verification.
-- `PARALLAX_OPENCODE_LOCAL` — set to `1` to opt the OpenCode coding-agent fallback into local-model mode. The orchestrator generates a per-spawn `OPENCODE_CONFIG_CONTENT` that points OpenCode at `http://localhost:11434/v1` (Ollama default). Used when neither Claude nor Codex sub is available and Eliza Cloud is not paired. Default: unset (cloud or user-managed `opencode.json`).
-- `PARALLAX_OPENCODE_BASE_URL` — override the local OpenAI-compatible endpoint used in OpenCode local mode (e.g. `http://localhost:1234/v1` for LM Studio, `http://localhost:8000/v1` for vLLM). Default: `http://localhost:11434/v1`.
-- `PARALLAX_OPENCODE_API_KEY` — optional auth header injected into the OpenCode local provider config. Most local servers (Ollama, llama.cpp) don't need this; LM Studio and hosted endpoints often do.
-- `PARALLAX_OPENCODE_MODEL_POWERFUL` / `PARALLAX_OPENCODE_MODEL_FAST` — pin the OpenCode model identifiers used in cloud mode (against the `elizacloud` provider) and local mode (against the `milady-local` provider). In subscription mode (no cloud, no local opt-in), setting `PARALLAX_OPENCODE_MODEL_POWERFUL` makes the orchestrator emit a thin override that defers provider resolution to the user's `~/.config/opencode/opencode.json`.
+Model defaults (sub-agents inherit):
+- Anthropic large `claude-opus-4-7`, small `claude-haiku-4-5-20251001`. Registry: `eliza/packages/app-core/src/registry/entries/plugins/anthropic.json`.
+- OpenAI `gpt-5.5` / `gpt-5.5-mini`. Override via `OPENAI_LARGE_MODEL` / `OPENAI_SMALL_MODEL`.
 
-Model defaults (orchestrator-spawned coding sub-agents inherit these unless explicitly overridden):
+## Skills
 
-- The Anthropic large default is `claude-opus-4-7` (set via `ANTHROPIC_LARGE_MODEL` in the registry at `eliza/packages/app-core/src/registry/entries/plugins/anthropic.json`, the agent provider switch at `eliza/packages/agent/src/api/provider-switch-config.ts`, and `runtime/eliza.ts`'s fallback). Sub-agents that read `ANTHROPIC_MODEL` from their parent env will see Opus 4.7 unless the user overrides it in onboarding.
-- The Anthropic small default stays `claude-haiku-4-5-20251001`.
-- The OpenAI plugin large/small defaults are `gpt-5.5` / `gpt-5.5-mini` (registry: `eliza/packages/app-core/src/registry/entries/plugins/openai.json`). Override via `OPENAI_LARGE_MODEL` / `OPENAI_SMALL_MODEL`.
+Two skill systems — don't conflate.
 
-Port env vars (never hardcoded — the dev orchestrator auto-shifts to the next free port and syncs env):
-- `MILADY_API_PORT` (31337), `MILADY_PORT` (2138), `MILADY_GATEWAY_PORT` (18789), `MILADY_HOME_PORT` (2142), `MILADY_WECHAT_WEBHOOK_PORT` (18790).
+**1. elizaOS runtime skills** (Eliza agent knowledge):
+- `USE_SKILL` = canonical TS entry. `RUN_SKILL` / `INVOKE_SKILL` are similes. Legacy `RUN_SKILL_SCRIPT` / `GET_SKILL_GUIDANCE` removed.
+- `enabled_skills` provider runs at position `-10`.
+- Source: `eliza/packages/skills/skills/`. Workspace mirror: `skills/.defaults/` (regenerated by `scripts/sync-workspace-default-skills.mjs` — don't hand-edit). Custom: add dirs under `skills/`.
 
-## Skills + Training Architecture
+**2. Claude Code project skills** (`/<name>` slash commands) — `.claude/skills/<name>/SKILL.md`. **Not** the same as `USE_SKILL`.
+- `/phase-review` — run at every Phase A/B/C or P0/P1 boundary before declaring done.
 
-- `USE_SKILL` is the canonical and only TypeScript entry point for invoking an enabled skill. Legacy `RUN_SKILL_SCRIPT` / `GET_SKILL_GUIDANCE` actions have been removed; `RUN_SKILL` and `INVOKE_SKILL` remain as similes on `USE_SKILL` so older inbound callers still resolve.
-- The `enabled_skills` provider runs at position `-10` and surfaces enabled + eligible skills to the planner on every turn.
-- Trajectory persistence is on by default. Every turn lands in the `trajectories` table unless `ELIZA_DISABLE_TRAJECTORY_LOGGING=1` (see above).
-- Native optimization (`--backend native`) is the default training backend: MIPRO / GEPA / bootstrap-fewshot run against trajectory data, and outputs land as prompt artifacts under `~/.milady/optimized-prompts/<task>/`. `OptimizedPromptService` auto-loads those at boot.
-- Auto-training thresholds: default 100 trajectories accumulated per task with a 12h cooldown. Adjust via `/api/training/auto/config` or Settings → Auto-Training.
-- The privacy filter (`eliza/apps/app-training/src/core/privacy-filter.ts`) is mandatory on every write path that touches real user trajectories — both the nightly export cron and the on-demand training orchestrator run it before any JSONL is written.
+## Project layout
 
-## Build & Test
-
-```bash
-bun run build        # tsdown + vite
-bun run verify       # typecheck + lint (`bun run check` aliases this)
-bun run test         # parallel test suite
-bun run test:e2e     # end-to-end tests
-bun run db:check     # database security + readonly tests
+# Runtime source-of-truth is the @elizaos/* packages: consumed from npm (packages
+# mode, the default) or from the gitignored eliza/ clone (local mode). Root
+# packages/ does NOT exist — only apps/, scripts/, and (in local mode) eliza/ are
+# on disk at the repo root. The eliza/packages/* paths below exist only in local mode.
+```
+eliza/packages/     Runtime source (local mode) == published @elizaos/* (packages mode)
+  app-core/         Main runtime
+    src/entry.ts             CLI bootstrap
+    src/cli/                 Commander CLI (milady)
+    src/runtime/eliza.ts     Agent loader (sets NODE_PATH, loads plugins)
+    src/runtime/dev-server.ts
+    src/api/                 Dashboard API (31337 dev, 2138 prod)
+    src/config/              Plugin auto-enable, schemas
+    src/connectors/          Connector code
+    src/services/            Business logic
+  agent/          Upstream elizaOS agent
+  ui/             Shared component library
+  shared/         Shared utils (runtime-env, dev-settings, env aliases)
+apps/             Milady-owned client (committable in this repo)
+  app/          Web + desktop UI (Vite + React); electrobun/ = desktop shell
+  homepage/     Marketing site
+scripts/          Milady-owned automation (committable in this repo)
+  dev-ui.mjs                Dev orchestrator (API + Vite)
+  eliza-source-mode.mjs     local ↔ packages mode
+  setup-upstreams.mjs       Init repo-local upstreams (eliza:local)
+  patch-deps.mjs            Post-install patches for upstream exports
 ```
 
-## Project Layout
+## elizaOS source modes
 
-```
-packages/
-  app-core/             Main application package (source of truth for runtime)
-    src/
-      entry.ts          CLI bootstrap (env, log level)
-      cli/              Commander CLI (milady command)
-      runtime/
-        eliza.ts        Agent loader — sets NODE_PATH, loads plugins dynamically
-        dev-server.ts   Dev mode entry point (started by dev-ui.mjs)
-      api/              Dashboard API (port 31337 in dev, 2138 in prod)
-      config/           Plugin auto-enable, config schemas
-      connectors/       Connector integration code
-      services/         Business logic
-  agent/                Upstream elizaOS agent (core plugins, auto-enable maps)
-  plugin-wechat/        WeChat connector plugin (@elizaos/plugin-wechat)
-  ui/                   Shared UI component library
-  shared/               Shared utilities
-apps/
-  app/                  Main web + desktop UI (Vite + React)
-    electrobun/         Electrobun desktop shell
-  homepage/             Marketing site
-scripts/
-  dev-ui.mjs            Dev orchestrator (API + Vite)
-  eliza/packages/app-core/scripts/run-node.mjs   CLI runner (spawns entry.js with NODE_PATH)
-  run-repo-setup.mjs    Postinstall sequencer
-  eliza-source-mode.mjs Switch between `local` (repo-local ./eliza) and `packages` (npm @elizaos/*) modes; backed by disable-local-eliza-workspace.mjs + restore-local-eliza-workspace.mjs
-  lib/tsconfig-mode.mjs Apply scripts/templates/tsconfig.{packages,local}-mode.json on mode switches
-  setup-upstreams.mjs   Initialize repo-local upstreams and link @elizaos packages (called by eliza:local)
-  patch-deps.mjs        Post-install patches for broken upstream exports
-```
+Builds against published `@elizaos/*` (`beta` dist-tag). `eliza/` gitignored — fresh clone resolves from npm.
 
-### App and plugin scaffold templates
+- **`packages` (default):** `MILADY_ELIZA_SOURCE=packages`. Tsconfig: `scripts/templates/tsconfig.packages-mode.json`. Enforced: `scripts/standalone-eliza-package-contract.test.ts`.
+- **`local`:** `MILADY_ELIZA_SOURCE=local`. `eliza:local` clones `eliza/`, links workspace packages, swaps to `scripts/templates/tsconfig.local-mode.json`. Use when patching upstream alongside Milady.
 
-Two scaffolds live in the elizaOS source tree (`eliza/templates/...` in local mode, or under the published `@elizaos/app-core` package in packages mode) and are copied + customized when the orchestrator handles `APP create` or `PLUGIN create`:
+Other knobs: `MILADY_ELIZAOS_DIST_TAG`, `MILADY_ELIZAOS_VERSION`, `MILADY_ELIZA_GIT_URL`, `MILADY_ELIZA_BRANCH`. See `scripts/lib/eliza-package-mode.mjs`.
 
-- `eliza/templates/min-app/` — minimal Eliza app (Vite + React entry, runtime `Plugin` with one trivial action, `package.json` with the `elizaos.app` metadata block, vitest smoke test, hero image placeholder, `SCAFFOLD.md` with the sub-agent contract).
-- `eliza/templates/min-plugin/` — minimal Eliza runtime plugin (one action, one provider, `package.json` with the `elizaos.plugin` metadata block, vitest smoke test, `SCAFFOLD.md` with the sub-agent contract).
-
-Both use placeholders (`__APP_NAME__`, `__APP_DISPLAY_NAME__`, `__PLUGIN_NAME__`, `__PLUGIN_DISPLAY_NAME__`) that the scaffold copy step replaces. After scaffolding, the spawned coding sub-agent must run `bun run typecheck && bun run lint && bun run test` and emit a structured `APP_CREATE_DONE {...}` / `PLUGIN_CREATE_DONE {...}` line; see `AGENTS.md` for the full verification contract.
-
-## Default Agent Knowledge
+In local mode, `@elizaos/plugin-agent-orchestrator` resolves to `eliza/plugins/plugin-agent-orchestrator` via `workspace:*`. Official plugin repos: [github.com/elizaOS-plugins](https://github.com/elizaOS-plugins).
 
 Two distinct skill systems live in this repo. Don't conflate them.
 
@@ -135,7 +213,7 @@ Two distinct skill systems live in this repo. Don't conflate them.
 
 Bundled `@elizaos/skills` are the default knowledge base for the running Eliza agent and for any code agent working in this repo. Repo setup mirrors them into `skills/.defaults/` so workspace task agents (Claude, Codex) can read them directly from the checkout.
 
-- **Source of truth:** `eliza/packages/skills/skills/` (33 bundled skills).
+- **Source of truth:** `eliza/packages/skills/skills/` (31 bundled skills).
 - **Workspace mirror:** `skills/.defaults/` — refreshed by `scripts/sync-workspace-default-skills.mjs` during repo setup.
 - **Managed store seed:** `eliza/packages/app-core/scripts/ensure-skills.mjs` seeds the bundled skills into the user's managed skills store on first run.
 - **Runtime knowledge seed:** `eliza/packages/agent/src/runtime/default-knowledge.ts` seeds baseline runtime knowledge items (including Eliza Cloud guidance) into the agent.
@@ -148,12 +226,10 @@ Open the `SKILL.md` of any of these directly from the workspace mirror when rele
 - `elizaos` — runtime concepts, plugin abstractions, AgentRuntime, actions/providers/evaluators/services.
 - `eliza-cloud` — Cloud as managed backend, app registration, hosted APIs, billing, monetization, container deploys.
 - `build-monetized-app` — building a Cloud app that earns via inference markup; pairs with `eliza-cloud`.
-- `eliza-cloud-buy-domain` — registering a confirmed custom domain for an Eliza Cloud app.
-- `eliza-cloud-manage-domain` — listing, verifying, syncing, detaching, and editing DNS for app domains.
 
 **Agent-orchestration / authoring:**
 - `coding-agent` — spawning Codex / Claude Code / OpenCode / Pi via PTY-backed bash for sub-agent work.
-- `task-agent-eliza-bridge` — read-only loopback endpoints (`/api/coding-agents/<sessionId>/...`) that give a spawned coding task agent access to parent runtime context.
+- `claude-subagent-milady-bridge` — read-only loopback endpoints (`/api/coding-agents/<sessionId>/...`) that give a spawned coding sub-agent access to parent runtime context.
 - `skill-creator` — authoring new SKILL.md packages (frontmatter, scripts, references, progressive disclosure).
 
 **Connectors / OS / SaaS integrations** (use when the task touches that surface):
@@ -179,18 +255,11 @@ Cloud monetization is a first-class product constraint. App creators can earn th
 
 ## Dependencies on elizaOS
 
-Milady builds against published `@elizaos/*` packages by default (`alpha` dist-tag). The `eliza/` directory is gitignored — a fresh clone has no local elizaOS checkout, and `bun install` resolves everything from npm.
+All `@elizaos/*` packages use the `beta` dist-tag. When developing locally, `bun run setup:upstreams` links packages from repo-local `./eliza` and `./plugins` so changes are picked up immediately. Set `MILADY_SKIP_LOCAL_UPSTREAMS=1` to use only npm-published versions.
 
-Two source modes, switched by `bun run eliza:local` / `bun run eliza:packages` (full docs in [README — elizaOS source modes](README.md#elizaos-source-modes-eject--uneject)):
+**`@elizaos/plugin-agent-orchestrator`:** Milady currently resolves this plugin from the repo-local `eliza/plugins/plugin-agent-orchestrator` submodule (nested under the `eliza/` submodule) via `workspace:*`. That submodule tracks upstream `dev`, so updating the submodule updates the orchestrator used in local development checkouts. Set `MILADY_SKIP_LOCAL_UPSTREAMS=1` to force npm-published packages instead.
 
-- **`packages` (default):** `MILADY_ELIZA_SOURCE=packages`. Runtime resolves `@elizaos/*` from npm. Checked-in `tsconfig.json` matches [scripts/templates/tsconfig.packages-mode.json](scripts/templates/tsconfig.packages-mode.json). Enforced by [scripts/standalone-eliza-package-contract.test.ts](scripts/standalone-eliza-package-contract.test.ts).
-- **`local`:** `MILADY_ELIZA_SOURCE=local`. `bun run eliza:local` clones `eliza/` (default URL `https://github.com/milady-ai/eliza.git`), links workspace packages into `node_modules/@elizaos/*`, and swaps the root tsconfig to source-priority paths from [scripts/templates/tsconfig.local-mode.json](scripts/templates/tsconfig.local-mode.json). Use this when patching elizaOS upstream alongside Milady.
-
-`MILADY_SKIP_LOCAL_UPSTREAMS=1` is the legacy equivalent of `MILADY_ELIZA_SOURCE=packages` — still respected for back-compat. Other knobs: `MILADY_ELIZAOS_DIST_TAG`, `MILADY_ELIZAOS_VERSION`, `MILADY_ELIZA_GIT_URL`, `MILADY_ELIZA_BRANCH` (see [scripts/lib/eliza-package-mode.mjs](scripts/lib/eliza-package-mode.mjs)).
-
-**`@elizaos/plugin-agent-orchestrator`:** in packages mode, resolved from npm. In local mode, Milady resolves it from the repo-local `eliza/plugins/plugin-agent-orchestrator` checkout (nested under `eliza/`) via `workspace:*`. Updating the local checkout in local mode updates the orchestrator used in development.
-
-All official elizaOS plugin repos live under [https://github.com/elizaOS-plugins](https://github.com/elizaOS-plugins). For plugin work, prefer adding the plugin repo under `eliza/plugins/` in local mode and depending on it via `workspace:*`. Publish to npm when ready, then switch back to packages mode.
+All official elizaOS plugin repos live under [https://github.com/elizaOS-plugins](https://github.com/elizaOS-plugins). For plugin work, prefer adding the relevant plugin repo as a git submodule under `eliza/plugins/` (tracked in `eliza/.gitmodules`) so we keep a local checkout we can patch when needed, and depend on it via `workspace:*` so Milady resolves the local package directly during development. Publish new versions to npm when ready.
 
 ## File Operations
 
