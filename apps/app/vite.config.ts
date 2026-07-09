@@ -1797,6 +1797,28 @@ export default defineConfig({
           // @elizaos/capacitor-<name> — dynamic walk of
           // eliza/packages/native-plugins/ for src/index.ts entries.
           ...resolveNativePluginAliasEntries(),
+          // @elizaos/capacitor-bun-runtime is a post-pin native plugin that
+          // does not exist in this eliza checkout, so the walker above never
+          // aliases it. Static imports (mobile local-runtime boot) resolve to
+          // the renderer stub (ElizaBunRuntime = null) and the boot no-ops
+          // gracefully. Guarded so a real checkout of the plugin (WP6 eliza
+          // bump) takes precedence via the walker instead of the stub.
+          ...(fs.existsSync(
+            path.join(
+              miladyRoot,
+              "eliza/packages/native-plugins/bun-runtime/src/index.ts",
+            ),
+          )
+            ? []
+            : [
+                {
+                  find: /^@elizaos\/capacitor-bun-runtime$/,
+                  replacement: path.resolve(
+                    here,
+                    "src/native-plugin-stubs.ts",
+                  ),
+                },
+              ]),
         ];
 
         // @elizaos/app-<name>{,/subpath} — dynamic walk of
