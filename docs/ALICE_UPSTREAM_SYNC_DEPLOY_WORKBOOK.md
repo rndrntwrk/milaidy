@@ -3,6 +3,21 @@
 This workbook keeps Alice-specific runtime integrity explicit while pulling new
 work from `milady-ai/develop` and the nested Eliza source.
 
+## Port, Do Not Merge (2026-07-07 learning)
+
+Alice is a DEEP FORK, not a downstream branch: milady's packages are rebranded
+into an `@miladyai/*` namespace vendored under `packages/`, the build runs
+local-mode, and upstream has relocated the companion into
+`packages/ui/src/companion/`. A full `git merge upstream/develop` was proven the
+wrong vehicle (WIP `e0edc320b`): it touched 491 files but ZERO under `packages/`,
+dumped ~397 infra files Alice never deploys, and landed upstream's feature files
+UNWIRED (dead `@elizaos/*` imports Alice's `main.tsx` never calls). Therefore
+upstream work is PORTED onto Alice's `@miladyai/*` topology feature by feature and
+wired into Alice's entry, each verified against the surface inventory, never
+bulk-merged. `@elizaos/*` imports of packages Alice did NOT fork stay eliza-resolved.
+Full program: `docs/HANDOVER-alice-upstream-integration-2026-07-07.md` and
+`docs/superpowers/plans/2026-07-07-alice-upstream-integration.md`.
+
 ## Branch And Ownership Model
 
 - `milaidy:alice` owns Alice runtime code and Alice-owned patches applied to the
