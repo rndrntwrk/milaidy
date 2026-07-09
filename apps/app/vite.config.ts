@@ -678,7 +678,7 @@ function generateNodeBuiltinStub(moduleId: string, req = _require): string {
     // and is a valid class base (so `class X extends noop` works).
     "function noop() { return noop; }",
     "const asyncNoop = () => Promise.resolve();",
-    "const handler = { get(t, p) { if (typeof p === 'symbol') return undefined; if (p === '__esModule') return true; if (p === 'default') return t; if (p === 'prototype') return {}; return noop; }, has() { return true; }, ownKeys() { return []; }, getOwnPropertyDescriptor() { return { configurable: true, enumerable: true }; } };",
+    "const handler = { get(t, p) { if (typeof p === 'symbol') return undefined; if (p === '__esModule') return true; if (p === 'default') return t; if (p === 'prototype') return {}; return noop; }, has() { return true; }, ownKeys(t) { return Reflect.ownKeys(t); }, getOwnPropertyDescriptor(t, p) { return Reflect.getOwnPropertyDescriptor(t, p) || { configurable: true, enumerable: true }; } };",
     "const stub = new Proxy({}, handler);",
     "export default stub;",
   ];
@@ -1987,6 +1987,13 @@ export default defineConfig({
       "@node-llama-cpp/mac-arm64-metal",
       // Contains native-only pty-state-capture import; skip pre-bundling.
       "@elizaos/plugin-agent-orchestrator",
+      // @elizaos/agent is server-only and must never be dep-prebundled for
+      // the renderer. esbuild's dev-server prebundle scan can resolve the
+      // package (workspace source in local mode, a stale published alpha in
+      // packages mode) and crash before resolve.alias maps the bare import
+      // to eliza's elizaos-agent-browser-stub.ts. Ported from upstream
+      // milady 83e7c4577 (hunk A). Dev-server-only.
+      "@elizaos/agent",
       // Ships its own @elizaos/core copy that references exports missing from
       // the browser entry; skip pre-bundling so it's served on-demand via the
       // transform plugin that patches missing exports.
