@@ -57,3 +57,14 @@ Result: 2996 packages (root) + nested eliza install (~5.1G) + eliza package buil
 - The pin/resolve scripts mutate manifests at install time (root `package.json`, several package `package.json`s, `bun.lock`): kept as working-tree state, same as the Modal build's ephemeral mutations. Snapshot: `/tmp/claude-501/wp0-pre-scripts-status.txt` vs `git status`.
 - The eliza worktree carries the patch chain's 43 mutated files (by design; regenerable via the chain).
 - `eliza/plugins/plugin-browser-bridge/` provisioned manifest (see §2.2) — inside the gitignored eliza worktree.
+
+## 7. WP6 pre-flight finding (2026-07-09): companion ABSENT at the chosen eliza target
+
+Verified against the WP6 eliza worktree (`.worktrees/milaidy-eliza-fold-2026-07-09/eliza` @ `d7d3ed31a3d`, elizaOS develop 2026-07-08):
+
+- `plugins/app-companion`: GONE (whole app-* tree removed; `plugins.json` = empty; `upstreams/` = electrobun only — NOT externalized to another repo).
+- `packages/ui/src/companion`: GONE.
+- `CompanionShell` and `GlobalEmoteOverlay`: ZERO hits in the entire tracked tree.
+- By contrast: v2.0.3 (fa240156ed9, May 20) has 15 companion files; the June-1 develop snapshot (5f70793a3c) has 10 + both symbols. The July develop lineage (force-pushed) simply does not carry the companion surface.
+
+Implication: "fold to latest develop" cannot adopt an upstream companion — there is none. Alice's companion+emote system must be VENDORED as Alice-owned fork code (seeded from a companion-bearing ref + Alice's patches) if the latest-develop target stands. Founder decision required; recorded in the session log.
