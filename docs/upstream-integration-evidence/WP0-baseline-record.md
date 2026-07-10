@@ -68,3 +68,14 @@ Verified against the WP6 eliza worktree (`.worktrees/milaidy-eliza-fold-2026-07-
 - By contrast: v2.0.3 (fa240156ed9, May 20) has 15 companion files; the June-1 develop snapshot (5f70793a3c) has 10 + both symbols. The July develop lineage (force-pushed) simply does not carry the companion surface.
 
 Implication: "fold to latest develop" cannot adopt an upstream companion — there is none. Alice's companion+emote system must be VENDORED as Alice-owned fork code (seeded from a companion-bearing ref + Alice's patches) if the latest-develop target stands. Founder decision required; recorded in the session log.
+
+### §7 resolution (founder, 2026-07-09): KEEP THE COMPANION — vendor it
+
+Founder decision: "we need to keep the companion." WP6 direction confirmed:
+the companion+emote surface becomes PERMANENT first-party Alice code (vendored
+into the fork, seeded from Alice's currently-running patched source at the pin),
+and the eliza fold proceeds against latest develop (d7d3ed31a3d). Vendoring
+removes the companion from the patch-chain re-anchoring problem entirely: those
+patches become source. The vendored package must keep serving /companion
+(VRM canvas + GlobalEmoteOverlay), /api/emote + stream555 relay, stage/operator
+routes on top of the new runtime.
