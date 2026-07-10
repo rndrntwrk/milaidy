@@ -1,0 +1,8 @@
+# Binary asset payloads are PROVISIONED, not tracked (founder-pending default
+# 2026-07-09, matching repo policy of ignoring .glb/.vrm under apps/app):
+# ~94M of VRMs/emote animations/raw sources vs ~2M of tracked code.
+# Provision from Alice's patched eliza tree (or the Modal source tarball):
+#   rsync -a <patched-eliza>/plugins/app-companion/public/     packages/app-companion/public/
+#   rsync -a <patched-eliza>/plugins/app-companion/public_src/ packages/app-companion/public_src/
+public/
+public_src/

@@ -125,9 +125,11 @@
         "./apps/app/src/optional-eliza-app-stub.tsx"
       ],
       "@elizaos/app-companion": [
+        "./packages/app-companion/src/index.ts",
         "./apps/app/src/optional-eliza-app-stub.tsx"
       ],
       "@elizaos/app-companion/*": [
+        "./packages/app-companion/src/*",
         "./apps/app/src/optional-eliza-app-stub.tsx"
       ],
       "@elizaos/app-contacts": [
