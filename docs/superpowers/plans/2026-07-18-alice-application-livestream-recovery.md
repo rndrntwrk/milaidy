@@ -288,11 +288,11 @@ git add -A
 git commit -m "fix(app): retain reviewed browser bundle hardening"
 ```
 
-- [ ] **Step 4: Admit secure-store modules and their tests**
+- [x] **Step 4: Admit secure-store modules and their tests**
 
 ```bash
 git cherry-pick -n 5158b9f5
-bunx vitest run apps/app/test/secure-store/secure-store.test.ts apps/app/test/security/update-verifier.test.ts apps/app/test/security/vision-consent.test.ts
+bunx vitest run --environment node apps/app/test/secure-store/secure-store.test.ts apps/app/test/security/update-verifier.test.ts apps/app/test/security/vision-consent.test.ts
 git add -A
 git commit -m "feat(app): port reviewed secure storage support"
 ```
