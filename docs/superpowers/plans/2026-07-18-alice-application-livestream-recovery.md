@@ -496,6 +496,24 @@ git add package.json apps/app/tsconfig.json apps/app/vite.config.ts apps/app/tes
 git commit -m "feat(alice): vendor companion as first-party source"
 ```
 
+- [x] **Review follow-up: fail closed on first-party runtime ownership**
+
+An independent review found that the moved companion still read Eliza UI's
+boot-config store while the host writes Milady app-core's canonical store. That
+could empty the roster and fall back to Milady 1 despite the Milady 9 unit
+fixture. The first-party package now reads `@miladyai/app-core/config`, owns a
+package-local TSUP config, has a matching lockfile importer, and includes its
+source exports in the package file set. Docker source replacement is mandatory,
+and the cloud workflow preserves `packages/app-companion` rather than an
+obsolete generated-upstream path.
+
+The release build now runs `verify-alice-companion-assets.mjs` before either
+build mode. It requires all four Milady 9 files and exact manifest SHA-256
+digests. Evidence: eight ownership/integrity assertions pass, the exact checked
+in assets pass all four hashes, the canonical boot-store VRM suite passes 3/3,
+and `bun run build` succeeds for `packages/app-companion` in the clean hydrated
+assembly.
+
 ---
 
 ### Task 4: Split the mixed companion patch by ownership

@@ -79,9 +79,10 @@ RUN set -x; \
     rm -rf node_modules/@elizaos/app-companion; \
     mkdir -p node_modules/@elizaos/app-companion; \
     cp packages/app-companion/package.json node_modules/@elizaos/app-companion/; \
-    cp -a packages/app-companion/src node_modules/@elizaos/app-companion/src 2>/dev/null || true; \
-    cp packages/app-companion/assets.json node_modules/@elizaos/app-companion/assets.json 2>/dev/null || true; \
-    ls node_modules/@elizaos/app-companion/src/plugin.ts 2>/dev/null && echo "@elizaos/app-companion src OK" || echo "WARN: app-companion src missing"; \
+    cp -a packages/app-companion/src node_modules/@elizaos/app-companion/src; \
+    cp packages/app-companion/assets.json node_modules/@elizaos/app-companion/assets.json; \
+    test -f node_modules/@elizaos/app-companion/src/plugin.ts; \
+    echo "@elizaos/app-companion src OK"; \
     # @elizaos/app-lifeops: runtime statically imports /plugin, so ship real package contents
     rm -rf node_modules/@elizaos/app-lifeops; \
     mkdir -p node_modules/@elizaos/app-lifeops; \

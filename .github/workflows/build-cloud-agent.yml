@@ -375,7 +375,7 @@ jobs:
         run: |
           cp eliza/packages/app-core/deploy/.dockerignore.ci .dockerignore
           # Whitelist runtime-required app packages (agent imports these at boot)
-          echo '!eliza/apps/app-companion' >> .dockerignore
+          echo '!packages/app-companion' >> .dockerignore
           echo '!eliza/apps/app-lifeops' >> .dockerignore
 
       # ── 10. Set up Docker Buildx ────────────────────────────────

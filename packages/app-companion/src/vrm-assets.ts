@@ -1,10 +1,6 @@
 import { DEFAULT_VISUAL_AVATAR_INDEX } from "@elizaos/shared/onboarding-presets";
-import {
-  type BundledVrmAsset,
-  getBootConfig,
-  resolveAppAssetUrl,
-  type UiTheme,
-} from "@elizaos/ui";
+import { resolveAppAssetUrl, type UiTheme } from "@elizaos/ui";
+import { type BundledVrmAsset, getBootConfig } from "@miladyai/app-core/config";
 
 const BUNDLED_VRM_FALLBACK_SLUG = "milady-1";
 const BUNDLED_AVATAR_IMAGE_VERSION_BY_SLUG: Record<string, string> = {

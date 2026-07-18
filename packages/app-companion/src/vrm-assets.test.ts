@@ -6,11 +6,14 @@ type VrmAsset = { title: string; slug: string };
 
 let bootConfig: BootConfig = { branding: {} };
 
-vi.mock("@elizaos/ui", () => ({
+vi.mock("@miladyai/app-core/config", () => ({
   getBootConfig: () => bootConfig,
   setBootConfig: (config: BootConfig) => {
     bootConfig = config;
   },
+}));
+
+vi.mock("@elizaos/ui", () => ({
   resolveAppAssetUrl: (assetPath: string) =>
     `/${assetPath.replace(/^\/+/, "")}`,
 }));

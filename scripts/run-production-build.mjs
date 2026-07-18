@@ -105,6 +105,8 @@ function run(command, args, cwd = repoRoot) {
   });
 }
 
+await run(node, ["scripts/verify-alice-companion-assets.mjs"]);
+
 if (isLocalElizaDisabled()) {
   // Upstream: packages-mode path — delegate to the elizaOS app-core script
   await run(node, [
@@ -147,7 +149,9 @@ if (isLocalElizaDisabled()) {
   ]);
 
   // Upstream: post-tsdown patch for native browser package
-  await run(node, ["scripts/patch-elizaos-app-core-native-browser-package.mjs"]);
+  await run(node, [
+    "scripts/patch-elizaos-app-core-native-browser-package.mjs",
+  ]);
 
   // Vite SPA build
   await run(node, [viteCli, "build"], appDir);
