@@ -930,7 +930,12 @@ export function useCompanionStageOperator() {
               {
                 id: "go-live-play",
                 action: "FIVE55_GAMES_GO_LIVE_PLAY",
-                params: { gameId, mode: "agent" },
+                params: {
+                  gameId,
+                  mode: "agent",
+                  avatarIdentity: "alice",
+                  sceneId: "active-pip",
+                },
               },
             ],
             true,

@@ -893,7 +893,7 @@ git commit -m "fix(alice): preserve browser server runtime boundary"
 - Consumes: modal props `open`, `onOpenChange`, `preferredMode`, `onPreferredModeChange`, `operator`; operator call `performGuidedGoLive({ channels, launchMode, selectedGameId })`.
 - Produces: test-proven step navigation, cancel safety, alert focus, camera launch, screen-share PiP, game source, and responsive scrolling.
 
-- [ ] **Step 1: Create a typed modal harness**
+- [x] **Step 1: Create a typed modal harness**
 
 Mock `useApp()` with one ready 555stream Twitch destination. Use non-secret sentinel values only:
 
@@ -922,7 +922,7 @@ refreshRuntimeStatus: vi.fn(async () => undefined),
 
 Fill every required field explicitly; do not cast the fixture through `unknown`.
 
-- [ ] **Step 2: Prove Cancel closes without launching**
+- [x] **Step 2: Prove Cancel closes without launching**
 
 ```ts
 it("closes without launching when Cancel is pressed", async () => {
@@ -934,7 +934,7 @@ it("closes without launching when Cancel is pressed", async () => {
 });
 ```
 
-- [ ] **Step 3: Prove Setup/Channels/Mode/Review launches the selected contract**
+- [x] **Step 3: Prove Setup/Channels/Mode/Review launches the selected contract**
 
 ```ts
 it("launches the reviewed channel and camera mode", async () => {
@@ -954,7 +954,7 @@ it("launches the reviewed channel and camera mode", async () => {
 
 Because setup is complete, the modal opens on Channels. Assert `aria-current="step"` on Channels before the first click.
 
-- [ ] **Step 4: Prove invalid progress is announced and focused**
+- [x] **Step 4: Prove invalid progress is announced and focused**
 
 ```ts
 it("focuses an actionable alert when no channel is selected", async () => {
@@ -970,7 +970,7 @@ it("focuses an actionable alert when no channel is selected", async () => {
 
 Make the minimal accessibility fix by adding `state: "blocked"` to the no-channel inline notice. This uses the existing `InlineNoticeCard` rule that blocked notices receive `role="alert"` and focus.
 
-- [ ] **Step 5: Preserve screen-share and game PiP operator contracts**
+- [x] **Step 5: Preserve screen-share and game PiP operator contracts**
 
 Keep the existing screen-share assertion:
 
@@ -1024,7 +1024,7 @@ Make the minimal hook change in the `play-games` branch:
 }
 ```
 
-- [ ] **Step 6: Prove the Alice avatar-action catalog reaches the operator**
+- [x] **Step 6: Prove the Alice avatar-action catalog reaches the operator**
 
 Hoist `mockGetEmotes` in `useCompanionStageOperator.test.tsx`, return a deterministic catalog, mount with `selectedVrmIndex: 9`, and assert the pinned action is exposed:
 
@@ -1045,7 +1045,7 @@ expect(operatorRef.current?.emotes.pinned.map((emote) => emote.id)).toEqual([
 
 Expected: the catalog is not suppressed as unauthorized and the action drawer receives non-empty pinned actions.
 
-- [ ] **Step 7: Add a static modal overflow contract**
+- [x] **Step 7: Add a static modal overflow contract**
 
 Read `alice-companion.css` and assert:
 
@@ -1056,7 +1056,7 @@ expect(css).toMatch(/\.go-live-modal__footer\s*{[^}]*flex:\s*0 0 auto/s);
 expect(css).toMatch(/@media \(max-height: 680px\)[\s\S]*overflow-x:\s*auto/);
 ```
 
-- [ ] **Step 8: Run focused tests and make only test-driven fixes**
+- [x] **Step 8: Run focused tests and make only test-driven fixes**
 
 ```bash
 bunx vitest run --config packages/app-companion/vitest.config.ts packages/app-companion/src/components/operator/CompanionGoLiveModal.test.tsx packages/app-companion/src/components/operator/useCompanionStageOperator.test.tsx
@@ -1065,7 +1065,13 @@ bun --cwd packages/app-companion run typecheck
 
 Expected: pass. Preserve the current shell/body/footer design unless a test demonstrates failure.
 
-- [ ] **Step 9: Commit workflow contracts**
+Evidence: the hydrated release assembly passes all nine focused modal/operator
+contracts. The only production changes are the test-proven blocked notice state
+and the game launch's existing Alice `active-pip` scene identity. Biome is clean,
+the package typecheck completes without diagnostics, and the declared package
+build succeeds for both JavaScript and declarations.
+
+- [x] **Step 9: Commit workflow contracts**
 
 ```bash
 git add packages/app-companion/src/components/operator/CompanionGoLiveModal.test.tsx packages/app-companion/src/components/operator/useCompanionStageOperator.test.tsx packages/app-companion/src/components/operator/CompanionGoLiveModal.tsx packages/app-core/src/styles/alice-companion.css

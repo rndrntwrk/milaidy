@@ -9,11 +9,13 @@ const {
   mockStreamStatus,
   mockGetStreamingDestinations,
   mockExecuteAliceOperatorPlan,
+  mockGetEmotes,
 } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
   mockStreamStatus: vi.fn(),
   mockGetStreamingDestinations: vi.fn(),
   mockExecuteAliceOperatorPlan: vi.fn(),
+  mockGetEmotes: vi.fn(),
 }));
 
 vi.mock("@elizaos/ui", () => ({
@@ -35,7 +37,7 @@ vi.mock("@elizaos/ui", () => ({
       destination: null,
     })),
     listHyperscapeEmbeddedAgents: vi.fn(async () => ({ agents: [] })),
-    getEmotes: vi.fn(async () => ({ emotes: [] })),
+    getEmotes: (...args: unknown[]) => mockGetEmotes(...args),
     playEmote: vi.fn(async () => ({ ok: true })),
   },
   dispatchAppEmoteEvent: vi.fn(),
@@ -87,10 +89,12 @@ describe("useCompanionStageOperator stream health", () => {
     mockStreamStatus.mockReset();
     mockGetStreamingDestinations.mockReset();
     mockExecuteAliceOperatorPlan.mockReset();
+    mockGetEmotes.mockReset();
     mockUseApp.mockReturnValue(createContext());
     mockGetStreamingDestinations.mockResolvedValue({
       destinations: [{ id: "twitch", name: "Twitch" }],
     });
+    mockGetEmotes.mockResolvedValue({ emotes: [] });
   });
 
   afterEach(() => {
@@ -271,5 +275,119 @@ describe("useCompanionStageOperator stream health", () => {
         }),
       ]),
     });
+  });
+
+  it("keeps game launch on the active Alice PiP scene", async () => {
+    const operatorRef: {
+      current: ReturnType<typeof useCompanionStageOperator> | null;
+    } = { current: null };
+    mockUseApp.mockReturnValue(
+      createContext({
+        plugins: [
+          { id: "@rndrntwrk/plugin-555stream", enabled: true },
+          { id: "five55-games", enabled: true },
+        ],
+      }),
+    );
+    mockStreamStatus.mockResolvedValue({
+      ok: true,
+      running: true,
+      ffmpegAlive: true,
+      uptime: 12,
+      frameCount: 48,
+      destination: { id: "twitch", name: "Twitch" },
+    });
+    mockExecuteAliceOperatorPlan.mockResolvedValue({
+      results: [
+        {
+          action: "FIVE55_GAMES_GO_LIVE_PLAY",
+          success: true,
+          message: "Game launch accepted.",
+        },
+      ],
+    });
+
+    await act(async () => {
+      TestRenderer.create(
+        <Harness
+          onOperator={(operator) => {
+            operatorRef.current = operator;
+          }}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await operatorRef.current?.performGuidedGoLive({
+        channels: ["twitch"],
+        launchMode: "play-games",
+        selectedGameId: "game-1",
+      });
+    });
+
+    expect(mockExecuteAliceOperatorPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            action: "FIVE55_GAMES_GO_LIVE_PLAY",
+            params: expect.objectContaining({
+              gameId: "game-1",
+              mode: "agent",
+              avatarIdentity: "alice",
+              sceneId: "active-pip",
+            }),
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("exposes Alice's pinned avatar actions without auth suppression", async () => {
+    const operatorRef: {
+      current: ReturnType<typeof useCompanionStageOperator> | null;
+    } = { current: null };
+    mockGetEmotes.mockResolvedValue({
+      emotes: [
+        {
+          id: "wave",
+          name: "Wave",
+          description: "Wave hello",
+          path: "/emotes/wave.glb",
+          duration: 1,
+          loop: false,
+          category: "greeting",
+        },
+        {
+          id: "dance-happy",
+          name: "Dance Happy",
+          description: "A happy dance",
+          path: "/emotes/dance-happy.glb",
+          duration: 2,
+          loop: false,
+          category: "dance",
+        },
+      ],
+    });
+
+    await act(async () => {
+      TestRenderer.create(
+        <Harness
+          onOperator={(operator) => {
+            operatorRef.current = operator;
+          }}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockGetEmotes).toHaveBeenCalled();
+    expect(operatorRef.current?.emotes.error).toBeNull();
+    expect(operatorRef.current?.emotes.pinned.map((emote) => emote.id)).toEqual(
+      ["wave", "dance-happy"],
+    );
   });
 });

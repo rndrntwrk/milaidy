@@ -509,6 +509,7 @@ export function CompanionGoLiveModal({
       if (selectedChannels.length === 0) {
         setInlineNotice({
           tone: "warning",
+          state: "blocked",
           message: t("aliceoperator.selectChannels", {
             defaultValue: "Select at least one ready channel for this launch.",
           }),
