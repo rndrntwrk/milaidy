@@ -94,27 +94,57 @@ mkdir -p docs/alice/release
 source ~/.nvm/nvm.sh
 nvm use
 node --version
-bun --version
+ALICE_BUN_BIN="${ALICE_BUN_BIN:-$(command -v bun)}"
+"$ALICE_BUN_BIN" --version
+test "$("$ALICE_BUN_BIN" --version)" = "1.3.10"
+export PATH="$(dirname "$ALICE_BUN_BIN"):$PATH"
 ```
 
-Expected: Node `v22.22.0`, Bun `1.3.10`.
+Expected: Node `v22.22.0`, Bun `1.3.10`. If the machine-wide Bun differs,
+download or select an isolated `1.3.10` binary and set `ALICE_BUN_BIN`; do not
+mutate the global installation or weaken the version check.
 
-- [ ] **Step 5: Hydrate and capture baseline gates**
+- [ ] **Step 5: Hydrate and capture baseline gates in a disposable worktree**
 
 ```bash
-node scripts/resolve-milaidy-missing-workspaces.mjs
-node scripts/pin-alice-release-runtime-deps.mjs
-bun install --ignore-scripts --linker=hoisted
-node scripts/build-milaidy-runtime-plugin-workspaces.mjs
-bun run postinstall
-bunx vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
-bunx vitest run packages/agent/src/providers/workspace.test.ts
-node scripts/run-production-build.mjs
-bunx tsc --noEmit --pretty false 2>&1 | tee /tmp/alice-baseline-tsc.txt
-rg -c 'error TS[0-9]+' /tmp/alice-baseline-tsc.txt
+baseline_root=$(mktemp -d /tmp/alice-release-baseline.XXXXXX)
+tools_root=$(mktemp -d /tmp/alice-release-build-tools.XXXXXX)
+git worktree add --detach "$baseline_root" e855a9bb16e9b19809e4ac0d8f93fb5effb672d0
+git -C "$baseline_root" submodule update --init eliza
+
+for file in \
+  resolve-milaidy-missing-workspaces.mjs \
+  pin-alice-release-runtime-deps.mjs \
+  build-milaidy-runtime-plugin-workspaces.mjs; do
+  git show "09c38abc:scripts/$file" > "$tools_root/$file"
+done
+
+(
+  cd "$baseline_root"
+  node "$tools_root/resolve-milaidy-missing-workspaces.mjs" "$baseline_root"
+  node "$tools_root/pin-alice-release-runtime-deps.mjs" "$baseline_root"
+  "$ALICE_BUN_BIN" install --ignore-scripts --linker=hoisted
+  node "$tools_root/build-milaidy-runtime-plugin-workspaces.mjs" "$baseline_root"
+  "$ALICE_BUN_BIN" run postinstall
+  "$ALICE_BUN_BIN" x vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
+  "$ALICE_BUN_BIN" x vitest run packages/agent/src/providers/workspace.test.ts
+  node scripts/run-production-build.mjs
+  "$ALICE_BUN_BIN" x tsc --noEmit --pretty false 2>&1 | tee /tmp/alice-baseline-tsc.txt
+  rg -c 'error TS[0-9]+' /tmp/alice-baseline-tsc.txt
+)
+
+git worktree remove --force "$baseline_root"
 ```
 
-Expected: patch tests, the non-string runtime-directory regression, and production build pass. `resolveDefaultAgentWorkspaceDir` must fall back safely when `cwd()` returns a non-string value; `dir.replace is not a function` cannot recur. Record the existing TypeScript error count; later work may not increase it.
+The build-orchestration scripts are intentionally read from reviewed commit
+`09c38abc` because they are not present on the release base and are not admitted
+to the release branch until Task 5. Every script receives the disposable root
+argument required by its CLI. Expected: patch tests, the non-string
+runtime-directory regression, and production build pass.
+`resolveDefaultAgentWorkspaceDir` must fall back safely when `cwd()` returns a
+non-string value; `dir.replace is not a function` cannot recur. Record the
+existing TypeScript error count; later work may not increase it. The release
+worktree must remain unchanged except for the manifest.
 
 - [ ] **Step 6: Commit the manifest**
 
@@ -602,10 +632,10 @@ bunx vitest run packages/app-core/src/registry/index.test.ts
 - [ ] **Step 6: Run both build consumers**
 
 ```bash
-node scripts/resolve-milaidy-missing-workspaces.mjs
-node scripts/pin-alice-release-runtime-deps.mjs
+node scripts/resolve-milaidy-missing-workspaces.mjs "$PWD"
+node scripts/pin-alice-release-runtime-deps.mjs "$PWD"
 bun install --ignore-scripts --linker=hoisted
-node scripts/build-milaidy-runtime-plugin-workspaces.mjs
+node scripts/build-milaidy-runtime-plugin-workspaces.mjs "$PWD"
 bun run postinstall
 node scripts/run-production-build.mjs
 ```
