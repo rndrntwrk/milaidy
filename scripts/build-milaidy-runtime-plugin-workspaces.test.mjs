@@ -146,9 +146,13 @@ test("a successful build with fresh runtime output is accepted", () => {
 });
 
 for (const packageName of [
+  "@elizaos/app-task-coordinator",
   "@elizaos/app-lifeops",
+  "@elizaos/plugin-agent-orchestrator",
   "@elizaos/plugin-app-control",
+  "@elizaos/plugin-edge-tts",
   "@elizaos/plugin-google",
+  "@elizaos/plugin-video",
 ]) {
   test(`Alice core runtime builds ${packageName} when its dist entry is absent`, () => {
     const fixture = createPluginFixture({
@@ -169,3 +173,44 @@ for (const packageName of [
     }
   });
 }
+
+test("Alice runtime workspaces build dependencies before their consumers", () => {
+  const fixture = createPluginFixture({
+    packageName: "@elizaos/plugin-agent-orchestrator",
+    fakeBunBody: "mkdir -p dist\ntouch dist/index.js\nexit 0",
+    workspaceRoot: join("eliza", "plugins"),
+  });
+  const coordinatorDir = join(
+    fixture.root,
+    "eliza",
+    "plugins",
+    "app-task-coordinator",
+    "typescript",
+  );
+  mkdirSync(coordinatorDir, { recursive: true });
+  writeFileSync(
+    join(coordinatorDir, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@elizaos/app-task-coordinator",
+        version: "2.0.0-alpha.8",
+        main: "dist/index.js",
+        scripts: { build: "echo build" },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  try {
+    const result = runBuilder(fixture.root, fixture.fakeBin);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.ok(
+      result.stdout.indexOf("@elizaos/app-task-coordinator") <
+        result.stdout.indexOf("@elizaos/plugin-agent-orchestrator"),
+      result.stdout,
+    );
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});

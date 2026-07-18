@@ -54,6 +54,19 @@ test("release runtime pins are exact and normalization is idempotent", () => {
       2,
     )}\n`,
   );
+  const companionDir = join(root, "packages", "app-companion");
+  mkdirSync(companionDir, { recursive: true });
+  writeFileSync(
+    join(companionDir, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@elizaos/app-companion",
+        dependencies: { "@elizaos/agent": "2.0.0-beta.1" },
+      },
+      null,
+      2,
+    )}\n`,
+  );
   writeFileSync(join(root, "bun.lock"), "{}\n");
 
   try {
@@ -79,6 +92,13 @@ test("release runtime pins are exact and normalization is idempotent", () => {
     );
     assert.equal(
       normalizedLifeOps.dependencies["@elizaos/agent"],
+      "workspace:*",
+    );
+    const normalizedCompanion = JSON.parse(
+      readFileSync(join(companionDir, "package.json"), "utf8"),
+    );
+    assert.equal(
+      normalizedCompanion.dependencies["@elizaos/agent"],
       "workspace:*",
     );
     assert.equal(existsSync(join(root, "bun.lock")), false);

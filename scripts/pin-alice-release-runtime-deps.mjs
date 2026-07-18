@@ -66,6 +66,7 @@ const RUNTIME_WORKSPACE_SELECTIONS = [
 ];
 
 const RELEASE_WORKSPACE_DEPENDENCIES = new Map([
+  ["@elizaos/app-companion", new Map([["@elizaos/agent", "workspace:*"]])],
   ["@elizaos/app-lifeops", new Map([["@elizaos/agent", "workspace:*"]])],
 ]);
 

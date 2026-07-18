@@ -11,13 +11,18 @@ if (!root) {
   process.exit(1);
 }
 
-const RUNTIME_PLUGIN_PACKAGES = new Set([
+const RUNTIME_PLUGIN_PACKAGES = [
+  // Keep shared app code ahead of the packages that consume it. A clean
+  // assembly cannot rely on filesystem traversal order for workspace builds.
+  "@elizaos/app-task-coordinator",
   "@elizaos/app-lifeops",
   "@elizaos/plugin-agent-skills",
+  "@elizaos/plugin-agent-orchestrator",
   "@elizaos/plugin-anthropic",
   "@elizaos/plugin-app-control",
   "@elizaos/plugin-commands",
   "@elizaos/plugin-cron",
+  "@elizaos/plugin-edge-tts",
   "@elizaos/plugin-elizacloud",
   "@elizaos/plugin-experience",
   "@elizaos/plugin-form",
@@ -32,7 +37,12 @@ const RUNTIME_PLUGIN_PACKAGES = new Set([
   "@elizaos/plugin-shell",
   "@elizaos/plugin-sql",
   "@elizaos/plugin-trust",
-]);
+  "@elizaos/plugin-video",
+];
+const RUNTIME_PLUGIN_PACKAGE_NAMES = new Set(RUNTIME_PLUGIN_PACKAGES);
+const RUNTIME_PLUGIN_PACKAGE_PRIORITY = new Map(
+  RUNTIME_PLUGIN_PACKAGES.map((packageName, index) => [packageName, index]),
+);
 
 const SEARCH_ROOTS = [join(root, "plugins"), join(root, "eliza", "plugins")];
 const CORE_PACKAGE_DIR = join(root, "eliza", "packages", "core");
@@ -118,7 +128,7 @@ function linkHoistedToolchain(packageDir) {
 function walk(dir, depth = 0) {
   const packageDirs = [];
   const packageJson = readPackageJson(dir);
-  if (packageJson?.name && RUNTIME_PLUGIN_PACKAGES.has(packageJson.name)) {
+  if (packageJson?.name && RUNTIME_PLUGIN_PACKAGE_NAMES.has(packageJson.name)) {
     packageDirs.push([dir, packageJson]);
   }
 
@@ -149,7 +159,14 @@ const runtimePackages = [
     ? [[CORE_PACKAGE_DIR, corePackageJson]]
     : []),
   ...searchRoots.flatMap((searchRoot) => walk(searchRoot)),
-];
+].sort(([, packageA], [, packageB]) => {
+  if (packageA.name === "@elizaos/core") return -1;
+  if (packageB.name === "@elizaos/core") return 1;
+  return (
+    (RUNTIME_PLUGIN_PACKAGE_PRIORITY.get(packageA.name) ?? Number.MAX_SAFE_INTEGER) -
+    (RUNTIME_PLUGIN_PACKAGE_PRIORITY.get(packageB.name) ?? Number.MAX_SAFE_INTEGER)
+  );
+});
 for (const [packageDir, packageJson] of runtimePackages) {
   if (hasRuntimeEntry(packageDir, packageJson)) {
     continue;
