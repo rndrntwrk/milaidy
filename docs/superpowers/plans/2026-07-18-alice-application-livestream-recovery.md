@@ -43,12 +43,13 @@
 - Create: `scripts/pin-alice-release-runtime-deps.mjs`
 - Create: `scripts/pin-alice-release-runtime-deps.test.mjs`
 - Create: `scripts/build-milaidy-runtime-plugin-workspaces.mjs`
+- Create: `scripts/build-milaidy-runtime-plugin-workspaces.test.mjs`
 
 **Interfaces:**
 - Consumes: only the three build scripts from `09c38abc555c8b4c770943f34d5c5d9dd02471e4` and the exact local workspace versions recorded by the base `bun.lock`.
 - Produces: a strict release normalizer that never resolves a moving npm dist-tag and can hydrate a clean checkout whose optional plugin submodules are absent.
 
-- [ ] **Step 1: Materialize only the reviewed build scripts**
+- [x] **Step 1: Materialize only the reviewed build scripts**
 
 ```bash
 git checkout 09c38abc -- \
@@ -61,7 +62,7 @@ if git diff --name-only | rg -q 'seed-knowledge'; then
 fi
 ```
 
-- [ ] **Step 2: Add and run a failing strict-pin regression**
+- [x] **Step 2: Add and run a failing strict-pin regression**
 
 Create `scripts/resolve-milaidy-missing-workspaces.test.mjs` with a fixture whose
 root dependencies use `alpha` for the base release's absent optional plugins.
@@ -78,7 +79,7 @@ node --test scripts/resolve-milaidy-missing-workspaces.test.mjs
 Expected RED: at least one dependency remains `alpha`. The failure must be an
 assertion failure, not a syntax or fixture error.
 
-- [ ] **Step 3: Implement strict deterministic resolution**
+- [x] **Step 3: Implement strict deterministic resolution**
 
 Extend `KNOWN_PINS` with the exact base-lock versions above. When a dependency
 or override uses `alpha`, `beta`, or `next` and no matching workspace package is
@@ -86,21 +87,27 @@ present, resolve it through `KNOWN_PINS`. Under
 `ALICE_RELEASE_STRICT_PINS=1`, an absent known pin is an error; the script must
 not call `npm view` or accept a moving dist-tag.
 
-- [ ] **Step 4: Verify red-green and existing pin behavior**
+- [x] **Step 4: Verify red-green and existing pin behavior**
 
 ```bash
 node --test scripts/resolve-milaidy-missing-workspaces.test.mjs
 node --test scripts/pin-alice-release-runtime-deps.test.mjs
+node --test scripts/build-milaidy-runtime-plugin-workspaces.test.mjs
 ```
 
 Expected GREEN: strict known tags become exact versions, an unknown strict
-dependency fails closed, valid hydrated workspaces still resolve locally, and
-release runtime pins remain unchanged.
+dependency fails atomically without touching manifests or lockfiles, valid
+hydrated workspaces still resolve locally, release runtime pins remain
+unchanged, and required runtime-plugin builds fail closed unless a successful
+build produces a runtime entry. The builder discovers both `plugins/` and
+`eliza/plugins/`, builds `@elizaos/core` before plugin declarations, and uses
+the exact `ALICE_BUN_BIN` with the hoisted install made available to each source
+workspace.
 
 - [ ] **Step 5: Commit the deterministic build input**
 
 ```bash
-git add scripts/resolve-milaidy-missing-workspaces.mjs scripts/resolve-milaidy-missing-workspaces.test.mjs scripts/pin-alice-release-runtime-deps.mjs scripts/pin-alice-release-runtime-deps.test.mjs scripts/build-milaidy-runtime-plugin-workspaces.mjs
+git add scripts/resolve-milaidy-missing-workspaces.mjs scripts/resolve-milaidy-missing-workspaces.test.mjs scripts/pin-alice-release-runtime-deps.mjs scripts/pin-alice-release-runtime-deps.test.mjs scripts/build-milaidy-runtime-plugin-workspaces.mjs scripts/build-milaidy-runtime-plugin-workspaces.test.mjs
 git commit -m "fix(alice): make release hydration deterministic"
 ```
 
@@ -192,7 +199,10 @@ git -C "$eliza_source" archive 17930c97b97cedb8fe64124e327c023cd526cc8b | tar -x
   ALICE_RELEASE_STRICT_PINS=1 node "$release_root/scripts/resolve-milaidy-missing-workspaces.mjs" "$baseline_root"
   node "$release_root/scripts/pin-alice-release-runtime-deps.mjs" "$baseline_root"
   "$ALICE_BUN_BIN" install --ignore-scripts --linker=hoisted
-  node "$release_root/scripts/build-milaidy-runtime-plugin-workspaces.mjs" "$baseline_root"
+  node scripts/apply-alice-eliza-runtime-patches.mjs
+  node scripts/ensure-eliza-generated-types.mjs
+  node scripts/patch-eliza-bun-compat.mjs
+  ALICE_BUN_BIN="$ALICE_BUN_BIN" node "$release_root/scripts/build-milaidy-runtime-plugin-workspaces.mjs" "$baseline_root"
   "$ALICE_BUN_BIN" x vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
   "$ALICE_BUN_BIN" x vitest run packages/agent/src/providers/workspace.test.ts
   node scripts/run-production-build.mjs
@@ -206,9 +216,12 @@ git worktree remove --force "$baseline_root"
 The deterministic build-orchestration scripts are committed by Task 0 and run
 against the disposable base worktree. Every script receives the disposable
 root argument required by its CLI, and strict mode prohibits moving npm
-dist-tags. The sequence intentionally matches the deploy image and does not run
-the repository `postinstall`, which can reinitialize submodules inside an
-already hydrated Alice tree. Expected: patch tests, the non-string
+dist-tags. The sequence intentionally does not run the repository `postinstall`,
+which can reinitialize submodules inside an already hydrated Alice tree. It
+does run the tracked Alice runtime patch driver because `postinstall` normally
+invokes it through `run-repo-setup.mjs`; omitting it would not reproduce the
+deploy build contract. It then runs only the safe generated-type and Bun-compat
+steps that the host-hydrated deploy context normally provides. Expected: patch tests, the non-string
 runtime-directory regression, and production build pass.
 `resolveDefaultAgentWorkspaceDir` must fall back safely when `cwd()` returns a
 non-string value; `dir.replace is not a function` cannot recur. Record the
@@ -608,7 +621,7 @@ if git ls-files | rg -q 'scripts/seed-knowledge'; then
   echo "unrelated seed script entered the release" >&2
   exit 1
 fi
-node --test scripts/resolve-milaidy-missing-workspaces.test.mjs scripts/pin-alice-release-runtime-deps.test.mjs
+node --test scripts/resolve-milaidy-missing-workspaces.test.mjs scripts/pin-alice-release-runtime-deps.test.mjs scripts/build-milaidy-runtime-plugin-workspaces.test.mjs
 ```
 
 Expected: diffs are limited to the reviewed strict-pin hardening and tests from
@@ -735,7 +748,9 @@ git -C "$eliza_source" archive 17930c97b97cedb8fe64124e327c023cd526cc8b | tar -x
   ALICE_RELEASE_STRICT_PINS=1 node "$release_root/scripts/resolve-milaidy-missing-workspaces.mjs" "$assembly_root"
   node "$release_root/scripts/pin-alice-release-runtime-deps.mjs" "$assembly_root"
   "$ALICE_BUN_BIN" install --ignore-scripts --linker=hoisted
-  node "$release_root/scripts/build-milaidy-runtime-plugin-workspaces.mjs" "$assembly_root"
+  node scripts/ensure-eliza-generated-types.mjs
+  node scripts/patch-eliza-bun-compat.mjs
+  ALICE_BUN_BIN="$ALICE_BUN_BIN" node "$release_root/scripts/build-milaidy-runtime-plugin-workspaces.mjs" "$assembly_root"
   node scripts/run-production-build.mjs
   shasum -a 256 package.json bun.lock > /tmp/alice-release-normalized-inputs.sha256
 )
