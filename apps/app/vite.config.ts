@@ -1794,6 +1794,25 @@ export default defineConfig({
         );
 
         const generatedAliases = [
+          // Durable server/client boundary: the Node runtime resolves
+          // @elizaos/app-core to the server-safe src/index.ts (no UI), while
+          // the SPA must resolve the bare specifier to the browser barrel
+          // (src/index.browser.ts = ./index + ./ui-compat + @elizaos/ui) so
+          // main.tsx's ~50 UI imports bind. First-match-wins ordering puts this
+          // ahead of the exports-field bare alias generated below; subpath
+          // imports (@elizaos/app-core/<sub>) fall through to those. Written by
+          // apply-alice-eliza-runtime-patches.mjs (applyAliceAppCoreBrowserEntryPatch).
+          ...(fs.existsSync(elizaAppCorePkgPath)
+            ? [
+                {
+                  find: /^@elizaos\/app-core$/,
+                  replacement: path.join(
+                    path.dirname(elizaAppCorePkgPath),
+                    "src/index.browser.ts",
+                  ),
+                },
+              ]
+            : []),
           ...buildWorkspaceExportAliases("@miladyai/app-core", appCorePkgPath),
           ...buildWorkspaceExportAliases("@miladyai/agent", agentPkgPath),
           ...buildWorkspaceExportAliases("@miladyai/shared", sharedPkgPath),

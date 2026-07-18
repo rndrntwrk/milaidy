@@ -28,3 +28,10 @@ export {
   startAccountPoolKeepAlive,
 } from "./services/account-pool";
 export { hydrateWalletKeysFromNodePlatformSecureStore } from "./security/hydrate-wallet-keys-from-platform-store";
+// getBuildVariant + isStoreBuild are part of the same AppCoreRuntimeModule
+// surface the eliza agent destructures from `await import("@elizaos/app-core")`
+// (eliza/packages/agent/src/runtime/eliza.ts ~line 3038). They are eliza-core
+// build-variant helpers, so re-export them from @elizaos/core; without this the
+// destructure yields undefined and runtime-boot crashes with
+// `TypeError: isStoreBuild is not a function`.
+export { getBuildVariant, isStoreBuild } from "@elizaos/core";

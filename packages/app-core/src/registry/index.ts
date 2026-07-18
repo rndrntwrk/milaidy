@@ -32,12 +32,12 @@ const entriesDir = join(moduleDir, "entries");
 
 let cache: LoadedRegistry | null = null;
 
-export function loadRegistry(): LoadedRegistry {
-  if (cache) return cache;
-
+export function readRegistryRawEntries(
+  rootDir: string = entriesDir,
+): Array<{ file: string; data: unknown }> {
   const raws: { file: string; data: unknown }[] = [];
   for (const kind of ["apps", "plugins", "connectors"] as const) {
-    const kindDir = join(entriesDir, kind);
+    const kindDir = join(rootDir, kind);
     let entries: string[];
     try {
       entries = readdirSync(kindDir);
@@ -50,12 +50,34 @@ export function loadRegistry(): LoadedRegistry {
     for (const filename of entries) {
       if (!filename.endsWith(".json")) continue;
       const file = join(kindDir, filename);
-      const data = JSON.parse(readFileSync(file, "utf-8"));
-      raws.push({ file, data });
+      // A single malformed/binary entry must not crash the entire agent boot
+      // (loadRegistry runs early, inside vault-bootstrap). Skip and warn so the
+      // runtime comes up; the bad entry just isn't registered.
+      let raw: string;
+      try {
+        raw = readFileSync(file, "utf-8");
+      } catch (error) {
+        console.warn(
+          `[registry] skipping unreadable entry ${file}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
+      try {
+        raws.push({ file, data: JSON.parse(raw) });
+      } catch {
+        console.warn(
+          `[registry] skipping invalid JSON entry ${file} (${raw.length} bytes)`,
+        );
+      }
     }
   }
+  return raws;
+}
 
-  cache = loadRegistryFromRawEntries(raws);
+export function loadRegistry(): LoadedRegistry {
+  if (cache) return cache;
+
+  cache = loadRegistryFromRawEntries(readRegistryRawEntries());
   return cache;
 }
 

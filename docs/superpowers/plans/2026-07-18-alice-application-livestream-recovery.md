@@ -655,7 +655,7 @@ git commit -m "refactor(alice): move companion ownership into Milady"
 - Consumes: `afe853a8`, `f79b821d`, `801ab2cb`, and Task 0's reviewed deterministic build scripts from `09c38abc`.
 - Produces: UI-free server barrel, source browser barrel, build-variant exports, tolerant registry loading, reproducible build hydration.
 
-- [ ] **Step 1: Apply reviewed commits without committing**
+- [x] **Step 1: Apply reviewed commits without committing**
 
 ```bash
 git fetch origin alice-runtime-boundary-browser-entry
@@ -667,7 +667,10 @@ git diff --stat
 
 Resolve overlap by preserving Task 4's UI-only patch names and the browser/server boundary.
 
-- [ ] **Step 2: Check whether `f2b8e4f4` is subsumed**
+Evidence: `afe853a8`, `f79b821d`, and `801ab2cb` applied without conflicts;
+Task 4's UI-only companion patch path and driver names remained intact.
+
+- [x] **Step 2: Check whether `f2b8e4f4` is subsumed**
 
 ```bash
 git diff f2b8e4f4^ f2b8e4f4 -- apps/app/vite.config.ts
@@ -676,7 +679,11 @@ rg -n 'index\.browser|@elizaos/app-core' apps/app/vite.config.ts scripts/apply-a
 
 Expected: do not cherry-pick `f2b8e4f4` if `afe853a8` already provides first-match browser aliasing. Admit only a test-proven missing hunk.
 
-- [ ] **Step 3: Verify Task 0 kept the build-script allowlist**
+Evidence: `f2b8e4f4` was not cherry-picked. The current Vite config already
+contains its packages-mode fallback, while `afe853a8` adds the earlier exact
+bare-specifier alias to generated `index.browser.ts` for source mode.
+
+- [x] **Step 3: Verify Task 0 kept the build-script allowlist**
 
 ```bash
 git diff --name-only 09c38abc -- scripts/resolve-milaidy-missing-workspaces.mjs scripts/pin-alice-release-runtime-deps.mjs scripts/build-milaidy-runtime-plugin-workspaces.mjs
@@ -690,7 +697,10 @@ node --test scripts/resolve-milaidy-missing-workspaces.test.mjs scripts/pin-alic
 Expected: diffs are limited to the reviewed strict-pin hardening and tests from
 Task 0; no unrelated build or knowledge-seeding source enters the release.
 
-- [ ] **Step 4: Run boundary tests**
+Evidence: all 11 build-orchestration assertions pass and no tracked
+`scripts/seed-knowledge` path exists.
+
+- [x] **Step 4: Run boundary tests**
 
 The test suite must retain these assertions:
 
@@ -709,7 +719,10 @@ bunx vitest run apps/app/test/app/vite-config.test.ts
 bunx vitest run packages/app-core/src/app-core-runtime-hook-surface.test.ts
 ```
 
-- [ ] **Step 5: Add a malformed-registry regression**
+Evidence: the hydrated assembly passes 43 patch-contract assertions, six Vite
+alias assertions, and nine app-core boundary/registry assertions.
+
+- [x] **Step 5: Add a malformed-registry regression**
 
 Extract the file-reading loop in `packages/app-core/src/registry/index.ts` into an exported helper used by `loadRegistry`:
 
@@ -793,10 +806,18 @@ it("skips one invalid JSON entry without losing valid entries", () => {
 Run:
 
 ```bash
-bunx vitest run packages/app-core/src/registry/index.test.ts
+node node_modules/vitest/vitest.mjs run \
+  --config "$PWD/test/vitest/default.config.ts" \
+  --root packages/app-core \
+  src/registry/index.test.ts
 ```
 
-- [ ] **Step 6: Run both build consumers in a disposable assembly**
+Evidence: the test first failed because the exported helper was absent. Its
+first implementation then exposed that native `JSON.parse` error text echoed
+malformed content; the warning was reduced to filename and byte count, and the
+regression passed without losing the valid neighbor entry.
+
+- [x] **Step 6: Run both build consumers in a disposable assembly**
 
 ```bash
 release_root="$PWD"
@@ -811,6 +832,7 @@ git -C "$eliza_source" archive 17930c97b97cedb8fe64124e327c023cd526cc8b | tar -x
   ALICE_RELEASE_STRICT_PINS=1 node "$release_root/scripts/resolve-milaidy-missing-workspaces.mjs" "$assembly_root"
   node "$release_root/scripts/pin-alice-release-runtime-deps.mjs" "$assembly_root"
   "$ALICE_BUN_BIN" install --ignore-scripts --linker=hoisted
+  MILAIDY_PATCH_STRICT=1 node scripts/apply-alice-eliza-runtime-patches.mjs
   node scripts/ensure-eliza-generated-types.mjs
   node scripts/patch-eliza-bun-compat.mjs
   ALICE_BUN_BIN="$ALICE_BUN_BIN" node "$release_root/scripts/build-milaidy-runtime-plugin-workspaces.mjs" "$assembly_root"
@@ -824,7 +846,15 @@ unresolved module. The release worktree remains clean; the normalized
 `package.json` and `bun.lock` hashes enter the evidence manifest so the accepted
 artifact is tied to the exact generated inputs rather than uncommitted source.
 
-- [ ] **Step 7: Commit boundary fixes**
+Evidence: a clean detached assembly built all runtime workspaces and both
+server/browser consumers. Production Vite completed in 1 minute 14 seconds;
+the patch driver stripped legacy UI exports from the server barrel and wrote
+the browser barrel. Global TypeScript remained at the admitted 468 ceiling
+with no diagnostics in Task 5 paths. Normalized hashes: package manifest
+`150f1285b202af9dbe6eaaff963992942da87bcb46eae3a8a570cf3d474da07c`,
+lockfile `dc2c94b6980f188783fd6fd662072381102f7196af46af05f54e8c055293ecd7`.
+
+- [x] **Step 7: Commit boundary fixes**
 
 ```bash
 git add apps/app/vite.config.ts packages/app-core/src/index.ts packages/app-core/src/app-core-runtime-hook-surface.test.ts packages/app-core/src/registry/index.ts packages/app-core/src/registry/index.test.ts scripts/apply-alice-eliza-runtime-patches.mjs scripts/apply-alice-eliza-runtime-patches.test.ts
