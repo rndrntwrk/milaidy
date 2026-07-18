@@ -15,6 +15,7 @@
     "strict": true,
     "target": "es2023",
     "useDefineForClassFields": false,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@miladyai/plugin-selfcontrol": [

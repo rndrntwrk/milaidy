@@ -250,7 +250,7 @@ git commit -m "docs(alice): pin livestream recovery inputs"
 - Consumes: PR #207 head `3191bb1a788074b617c903fc111058246b1c7845`.
 - Produces: reviewed Milady improvements without replacing Alice-protected behavior.
 
-- [ ] **Step 1: Fetch and verify the commit graph**
+- [x] **Step 1: Fetch and verify the commit graph**
 
 ```bash
 git fetch origin integration/alice-upstream-2026-07-07
@@ -259,7 +259,7 @@ git log --reverse --format='%H %s' e855a9bb16e9b19809e4ac0d8f93fb5effb672d0..ori
 
 Expected: `218d936f`, `dbe07bf4`, `35d26977`, `5158b9f5`, `a0d04422`, `245aa0e6`, `982057bc`, and `5bbbfa4b` exist. `218d936f` is mixed documentation: only `PROTECTED_DIVERGENCES.md` is admitted, while its superseded July 7 plan is excluded. Other planning-only commits are not admitted.
 
-- [ ] **Step 2: Admit registry/baseline repairs and test**
+- [x] **Step 2: Admit registry/baseline repairs and test**
 
 ```bash
 git checkout 218d936f -- PROTECTED_DIVERGENCES.md
@@ -267,10 +267,17 @@ git cherry-pick -n dbe07bf4
 git diff --stat
 bunx vitest run --environment node scripts/apply-alice-eliza-runtime-patches.test.ts
 bunx tsc --noEmit --pretty false 2>&1 | tee /tmp/alice-reviewed-baseline-tsc.txt
-test "$(rg -c 'error TS[0-9]+' /tmp/alice-reviewed-baseline-tsc.txt)" -le 466
+test "$(rg -c 'error TS[0-9]+' /tmp/alice-reviewed-baseline-tsc.txt)" -le 468
 git add PROTECTED_DIVERGENCES.md docs/upstream-integration-evidence/WP0-baseline-record.md tsconfig.json vitest.config.ts
 git commit -m "chore(alice): establish reviewed Milady baseline"
 ```
+
+The historical July 9 environment recorded 466 errors. The fresh July 18
+dependency tree identified by the release manifest's normalized `bun.lock`
+hash records 468: 437 in `packages/app-core`, 30 in `packages/agent`, and one
+in `packages/plugin-selfcontrol`. The refreshed 468 measurement is the release
+ceiling; every admitted commit must keep the total at or below it and keep its
+new or modified files clean.
 
 - [ ] **Step 3: Admit browser hardening and test the production consumer**
 

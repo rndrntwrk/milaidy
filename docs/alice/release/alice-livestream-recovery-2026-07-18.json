@@ -26,9 +26,21 @@
       "config": "packages/agent/vitest.config.ts"
     },
     "rootPatchTestHarness": {
-      "status": "blocked-before-test-import",
-      "reason": "missing @miladyai/app-core bridge alias",
-      "repairCommit": "dbe07bf4"
+      "statusBeforeRepair": "blocked-before-test-import",
+      "repairCommit": "dbe07bf4",
+      "statusAfterRepair": "passed",
+      "tests": 38
+    },
+    "typecheck": {
+      "status": "known-debt",
+      "currentErrors": 468,
+      "historicalErrors": 466,
+      "currentBreakdown": {
+        "packages/app-core": 437,
+        "packages/agent": 30,
+        "packages/plugin-selfcontrol": 1
+      },
+      "noRegressionCeiling": 468
     }
   },
   "streamMediaCommits": ["0d00fc75", "04bffeb6", "acfb6e4a", "4e4b6cd1"],

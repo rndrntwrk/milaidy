@@ -40,6 +40,17 @@ export default defineConfig({
         find: /^@elizaos\/app-core\/electrobun-(rpc|runtime)$/,
         replacement: appCoreBridgeStub,
       },
+      // Alice's fork namespace: apps/app/test/setup.ts mocks
+      // @miladyai/app-core/bridge/electrobun-rpc.js, so the root config needs
+      // the same bridge-stub redirect the apps/app vitest config already has.
+      {
+        find: /^@miladyai\/app-core\/bridge(?:\/.*)?$/,
+        replacement: appCoreBridgeStub,
+      },
+      {
+        find: /^@miladyai\/app-core\/electrobun-(rpc|runtime)$/,
+        replacement: appCoreBridgeStub,
+      },
     ],
   },
   test: {
