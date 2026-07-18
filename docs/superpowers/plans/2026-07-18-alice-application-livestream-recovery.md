@@ -123,7 +123,7 @@ git commit -m "fix(alice): make release hydration deterministic"
 - Consumes: Milady base `e855a9bb16e9b19809e4ac0d8f93fb5effb672d0`, design `66aaf48b7`, and Eliza pin `17930c97b97cedb8fe64124e327c023cd526cc8b`.
 - Produces: immutable input manifest and baseline build/type counts.
 
-- [ ] **Step 1: Verify the volume, worktree, branch, and design commit**
+- [x] **Step 1: Verify the volume, worktree, branch, and design commit**
 
 ```bash
 test -d "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555"
@@ -134,7 +134,7 @@ git show --stat --oneline 66aaf48b7
 
 Run in the Milady worktree. Expected: the release branch is active, `66aaf48b7` is reachable, and no unexpected tracked changes appear. If the drive is unmounted, stop; do not repair it.
 
-- [ ] **Step 2: Read every source checkout before reconciling dirty work**
+- [x] **Step 2: Read every source checkout before reconciling dirty work**
 
 ```bash
 git -C "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555" status --short --branch
@@ -145,7 +145,7 @@ git -C "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy" status --sh
 
 Expected: all user changes are inventoried and none are reverted, reset, or blindly stashed.
 
-- [ ] **Step 3: Create the immutable release manifest with `apply_patch`**
+- [x] **Step 3: Create the immutable release manifest with `apply_patch`**
 
 ```bash
 mkdir -p docs/alice/release
@@ -168,7 +168,7 @@ mkdir -p docs/alice/release
 }
 ```
 
-- [ ] **Step 4: Use repository-pinned Node and Bun**
+- [x] **Step 4: Use repository-pinned Node and Bun**
 
 ```bash
 source ~/.nvm/nvm.sh
@@ -184,7 +184,7 @@ Expected: Node `v22.22.0`, Bun `1.3.10`. If the machine-wide Bun differs,
 download or select an isolated `1.3.10` binary and set `ALICE_BUN_BIN`; do not
 mutate the global installation or weaken the version check.
 
-- [ ] **Step 5: Hydrate and capture baseline gates in a disposable worktree**
+- [x] **Step 5: Hydrate and capture baseline gates in a disposable worktree**
 
 ```bash
 baseline_root=$(mktemp -d /tmp/alice-release-baseline.XXXXXX)
@@ -203,11 +203,11 @@ git -C "$eliza_source" archive 17930c97b97cedb8fe64124e327c023cd526cc8b | tar -x
   node scripts/ensure-eliza-generated-types.mjs
   node scripts/patch-eliza-bun-compat.mjs
   ALICE_BUN_BIN="$ALICE_BUN_BIN" node "$release_root/scripts/build-milaidy-runtime-plugin-workspaces.mjs" "$baseline_root"
-  "$ALICE_BUN_BIN" x vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
-  "$ALICE_BUN_BIN" x vitest run packages/agent/src/providers/workspace.test.ts
+  (
+    cd packages/agent
+    ../../node_modules/.bin/vitest run --config vitest.config.ts src/providers/workspace.test.ts
+  )
   node scripts/run-production-build.mjs
-  "$ALICE_BUN_BIN" x tsc --noEmit --pretty false 2>&1 | tee /tmp/alice-baseline-tsc.txt
-  rg -c 'error TS[0-9]+' /tmp/alice-baseline-tsc.txt
 )
 
 git worktree remove --force "$baseline_root"
@@ -221,14 +221,17 @@ which can reinitialize submodules inside an already hydrated Alice tree. It
 does run the tracked Alice runtime patch driver because `postinstall` normally
 invokes it through `run-repo-setup.mjs`; omitting it would not reproduce the
 deploy build contract. It then runs only the safe generated-type and Bun-compat
-steps that the host-hydrated deploy context normally provides. Expected: patch tests, the non-string
-runtime-directory regression, and production build pass.
+steps that the host-hydrated deploy context normally provides. Expected: the
+non-string runtime-directory regression and production build pass.
 `resolveDefaultAgentWorkspaceDir` must fall back safely when `cwd()` returns a
 non-string value; `dir.replace is not a function` cannot recur. Record the
-existing TypeScript error count; later work may not increase it. The release
-worktree must remain unchanged except for the manifest.
+artifact hashes in the release manifest. Root patch tests and the TypeScript
+error count run after the reviewed `dbe07bf4` Vitest/TypeScript baseline repair
+in Task 2; before that repair, the root suite fails before test import on the
+missing `@miladyai/app-core` bridge alias. The release worktree must remain
+unchanged except for the manifest.
 
-- [ ] **Step 6: Commit the manifest**
+- [x] **Step 6: Commit the manifest**
 
 ```bash
 git add docs/alice/release/alice-livestream-recovery-2026-07-18.json
@@ -262,7 +265,9 @@ Expected: `218d936f`, `dbe07bf4`, `35d26977`, `5158b9f5`, `a0d04422`, `245aa0e6`
 git checkout 218d936f -- PROTECTED_DIVERGENCES.md
 git cherry-pick -n dbe07bf4
 git diff --stat
-bunx vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
+bunx vitest run --environment node scripts/apply-alice-eliza-runtime-patches.test.ts
+bunx tsc --noEmit --pretty false 2>&1 | tee /tmp/alice-reviewed-baseline-tsc.txt
+test "$(rg -c 'error TS[0-9]+' /tmp/alice-reviewed-baseline-tsc.txt)" -le 466
 git add PROTECTED_DIVERGENCES.md docs/upstream-integration-evidence/WP0-baseline-record.md tsconfig.json vitest.config.ts
 git commit -m "chore(alice): establish reviewed Milady baseline"
 ```
