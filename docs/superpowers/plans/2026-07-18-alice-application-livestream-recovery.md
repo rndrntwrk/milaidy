@@ -324,7 +324,7 @@ Evidence: 38 patch assertions passed, the production Vite consumer built 25,367
 modules in 51.04 seconds, and TypeScript remained at the 468-error admitted
 ceiling with no diagnostics in the files introduced or modified by this step.
 
-- [ ] **Step 7: Audit the final admitted range**
+- [x] **Step 7: Audit the final admitted range**
 
 ```bash
 git log --format='%h %s' e855a9bb16e9b19809e4ac0d8f93fb5effb672d0..HEAD
@@ -332,6 +332,12 @@ git diff --name-status e855a9bb16e9b19809e4ac0d8f93fb5effb672d0..HEAD
 ```
 
 Expected: only allowlisted implementation changes and release documents; Alice companion, model, chat, and stream contracts are not deleted.
+
+Evidence: the admitted range contains 11 review commits and 44 changed paths.
+There are no deleted or renamed paths, and the only existing Alice-surface path
+touched is `packages/app-core/src/api/client-chat.ts` from the reviewed baseline
+repair. Companion, VRM/model, avatar-action, and livestream source are preserved
+for the explicit first-party restoration tasks below.
 
 ---
 
