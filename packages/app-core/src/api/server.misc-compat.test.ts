@@ -22,4 +22,31 @@ describe("compat misc route wiring", () => {
     expect(status).toBe(200);
     expect(Array.isArray(data.emotes)).toBe(true);
   });
+
+  it("serves the empty computer-use approvals fallback", async () => {
+    const { status, data } = await req(
+      port,
+      "GET",
+      "/api/computer-use/approvals",
+    );
+
+    expect(status).toBe(200);
+    expect(data).toEqual({
+      mode: "full_control",
+      pendingCount: 0,
+      pendingApprovals: [],
+    });
+  });
+
+  it("acknowledges overlay presence without requiring an app registry", async () => {
+    const { status, data } = await req(
+      port,
+      "POST",
+      "/api/apps/overlay-presence",
+      { appName: null },
+    );
+
+    expect(status).toBe(200);
+    expect(data).toEqual({ ok: true, appName: null });
+  });
 });

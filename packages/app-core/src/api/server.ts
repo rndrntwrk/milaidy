@@ -135,6 +135,7 @@ import {
   sanitizeIdentifier,
   sqlLiteral,
 } from "../utils/sql-compat";
+import { handleAliceDashboardFallbackRoutes } from "./alice-dashboard-fallback-routes";
 import { handleAuthPairingCompatRoutes } from "./auth-pairing-compat-routes";
 import { handleCharacterRoutes } from "./character-routes";
 import { handleCloudRoute } from "./cloud-routes";
@@ -1088,6 +1089,11 @@ async function handleMiladyCompatRoute(
 
   // Wallet trade / transfer routes — extracted to wallet-trade-compat-routes.ts
   if (await handleWalletTradeCompatRoutes(req, res, state)) return true;
+
+  // Alice dashboard compatibility routes are first-party Milady behavior.
+  // Handle them before generic app/plugin routing so absent optional plugins
+  // degrade to stable empty-state responses instead of 404/500 retry loops.
+  if (await handleAliceDashboardFallbackRoutes(req, res, state)) return true;
 
   // Plugin routes — extracted to plugins-compat-routes.ts
   if (await handlePluginsCompatRoutes(req, res, state)) return true;
