@@ -35,6 +35,77 @@
 
 ---
 
+### Task 0: Make clean-source hydration deterministic
+
+**Files:**
+- Create: `scripts/resolve-milaidy-missing-workspaces.mjs`
+- Create: `scripts/resolve-milaidy-missing-workspaces.test.mjs`
+- Create: `scripts/pin-alice-release-runtime-deps.mjs`
+- Create: `scripts/pin-alice-release-runtime-deps.test.mjs`
+- Create: `scripts/build-milaidy-runtime-plugin-workspaces.mjs`
+
+**Interfaces:**
+- Consumes: only the three build scripts from `09c38abc555c8b4c770943f34d5c5d9dd02471e4` and the exact local workspace versions recorded by the base `bun.lock`.
+- Produces: a strict release normalizer that never resolves a moving npm dist-tag and can hydrate a clean checkout whose optional plugin submodules are absent.
+
+- [ ] **Step 1: Materialize only the reviewed build scripts**
+
+```bash
+git checkout 09c38abc -- \
+  scripts/resolve-milaidy-missing-workspaces.mjs \
+  scripts/pin-alice-release-runtime-deps.mjs \
+  scripts/build-milaidy-runtime-plugin-workspaces.mjs
+if git diff --name-only | rg -q 'seed-knowledge'; then
+  echo "unrelated seed script entered the release" >&2
+  exit 1
+fi
+```
+
+- [ ] **Step 2: Add and run a failing strict-pin regression**
+
+Create `scripts/resolve-milaidy-missing-workspaces.test.mjs` with a fixture whose
+root dependencies use `alpha` for the base release's absent optional plugins.
+Run the resolver with `ALICE_RELEASE_STRICT_PINS=1` and assert the exact versions
+from the base lock: cron `2.0.0-alpha.8`, EVM `2.0.0-alpha.8`, experience
+`2.0.0-alpha.11`, personality `2.0.0-alpha.9`, pi-ai `1.7.3-alpha.4`, plugin
+manager `2.0.0-alpha.8`, scratchpad `2.0.0-alpha.7`, secrets manager
+`2.0.0-alpha.10`, trust `2.0.0-alpha.7`, and Solana `2.0.0-alpha.6`.
+
+```bash
+node --test scripts/resolve-milaidy-missing-workspaces.test.mjs
+```
+
+Expected RED: at least one dependency remains `alpha`. The failure must be an
+assertion failure, not a syntax or fixture error.
+
+- [ ] **Step 3: Implement strict deterministic resolution**
+
+Extend `KNOWN_PINS` with the exact base-lock versions above. When a dependency
+or override uses `alpha`, `beta`, or `next` and no matching workspace package is
+present, resolve it through `KNOWN_PINS`. Under
+`ALICE_RELEASE_STRICT_PINS=1`, an absent known pin is an error; the script must
+not call `npm view` or accept a moving dist-tag.
+
+- [ ] **Step 4: Verify red-green and existing pin behavior**
+
+```bash
+node --test scripts/resolve-milaidy-missing-workspaces.test.mjs
+node --test scripts/pin-alice-release-runtime-deps.test.mjs
+```
+
+Expected GREEN: strict known tags become exact versions, an unknown strict
+dependency fails closed, valid hydrated workspaces still resolve locally, and
+release runtime pins remain unchanged.
+
+- [ ] **Step 5: Commit the deterministic build input**
+
+```bash
+git add scripts/resolve-milaidy-missing-workspaces.mjs scripts/resolve-milaidy-missing-workspaces.test.mjs scripts/pin-alice-release-runtime-deps.mjs scripts/pin-alice-release-runtime-deps.test.mjs scripts/build-milaidy-runtime-plugin-workspaces.mjs
+git commit -m "fix(alice): make release hydration deterministic"
+```
+
+---
+
 ### Task 1: Re-establish and record the exact release baseline
 
 **Files:**
@@ -82,6 +153,8 @@ mkdir -p docs/alice/release
   "miladyPullRequest": 207,
   "companionVendorCommit": "d747565d1b3d01f8c141597e9bdc61ad69190eda",
   "runtimeBoundaryCommits": ["afe853a8", "f79b821d", "801ab2cb"],
+  "buildOrchestrationSource": "09c38abc555c8b4c770943f34d5c5d9dd02471e4",
+  "strictReleasePins": true,
   "streamMediaCommits": ["0d00fc75", "04bffeb6", "acfb6e4a", "4e4b6cd1"],
   "promotionPolicy": "promote-exact-accepted-modal-revision",
   "elizaUpstreamFoldIncluded": false
@@ -108,24 +181,18 @@ mutate the global installation or weaken the version check.
 
 ```bash
 baseline_root=$(mktemp -d /tmp/alice-release-baseline.XXXXXX)
-tools_root=$(mktemp -d /tmp/alice-release-build-tools.XXXXXX)
+release_root="$PWD"
 git worktree add --detach "$baseline_root" e855a9bb16e9b19809e4ac0d8f93fb5effb672d0
-git -C "$baseline_root" submodule update --init eliza
-
-for file in \
-  resolve-milaidy-missing-workspaces.mjs \
-  pin-alice-release-runtime-deps.mjs \
-  build-milaidy-runtime-plugin-workspaces.mjs; do
-  git show "09c38abc:scripts/$file" > "$tools_root/$file"
-done
+eliza_source="/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/eliza"
+test "$(git -C "$eliza_source" rev-parse HEAD)" = "17930c97b97cedb8fe64124e327c023cd526cc8b"
+git -C "$eliza_source" archive 17930c97b97cedb8fe64124e327c023cd526cc8b | tar -x -C "$baseline_root/eliza"
 
 (
   cd "$baseline_root"
-  node "$tools_root/resolve-milaidy-missing-workspaces.mjs" "$baseline_root"
-  node "$tools_root/pin-alice-release-runtime-deps.mjs" "$baseline_root"
+  ALICE_RELEASE_STRICT_PINS=1 node "$release_root/scripts/resolve-milaidy-missing-workspaces.mjs" "$baseline_root"
+  node "$release_root/scripts/pin-alice-release-runtime-deps.mjs" "$baseline_root"
   "$ALICE_BUN_BIN" install --ignore-scripts --linker=hoisted
-  node "$tools_root/build-milaidy-runtime-plugin-workspaces.mjs" "$baseline_root"
-  "$ALICE_BUN_BIN" run postinstall
+  node "$release_root/scripts/build-milaidy-runtime-plugin-workspaces.mjs" "$baseline_root"
   "$ALICE_BUN_BIN" x vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
   "$ALICE_BUN_BIN" x vitest run packages/agent/src/providers/workspace.test.ts
   node scripts/run-production-build.mjs
@@ -136,10 +203,12 @@ done
 git worktree remove --force "$baseline_root"
 ```
 
-The build-orchestration scripts are intentionally read from reviewed commit
-`09c38abc` because they are not present on the release base and are not admitted
-to the release branch until Task 5. Every script receives the disposable root
-argument required by its CLI. Expected: patch tests, the non-string
+The deterministic build-orchestration scripts are committed by Task 0 and run
+against the disposable base worktree. Every script receives the disposable
+root argument required by its CLI, and strict mode prohibits moving npm
+dist-tags. The sequence intentionally matches the deploy image and does not run
+the repository `postinstall`, which can reinitialize submodules inside an
+already hydrated Alice tree. Expected: patch tests, the non-string
 runtime-directory regression, and production build pass.
 `resolveDefaultAgentWorkspaceDir` must fall back safely when `cwd()` returns a
 non-string value; `dir.replace is not a function` cannot recur. Record the
@@ -172,16 +241,16 @@ git fetch origin integration/alice-upstream-2026-07-07
 git log --reverse --format='%H %s' e855a9bb16e9b19809e4ac0d8f93fb5effb672d0..origin/integration/alice-upstream-2026-07-07
 ```
 
-Expected: `218d936f`, `dbe07bf4`, `35d26977`, `5158b9f5`, `a0d04422`, `245aa0e6`, `982057bc`, and `5bbbfa4b` exist. Planning-only commits are not admitted.
+Expected: `218d936f`, `dbe07bf4`, `35d26977`, `5158b9f5`, `a0d04422`, `245aa0e6`, `982057bc`, and `5bbbfa4b` exist. `218d936f` is mixed documentation: only `PROTECTED_DIVERGENCES.md` is admitted, while its superseded July 7 plan is excluded. Other planning-only commits are not admitted.
 
 - [ ] **Step 2: Admit registry/baseline repairs and test**
 
 ```bash
-git cherry-pick -n 218d936f
+git checkout 218d936f -- PROTECTED_DIVERGENCES.md
 git cherry-pick -n dbe07bf4
 git diff --stat
 bunx vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
-git add -A
+git add PROTECTED_DIVERGENCES.md docs/upstream-integration-evidence/WP0-baseline-record.md tsconfig.json vitest.config.ts
 git commit -m "chore(alice): establish reviewed Milady baseline"
 ```
 
@@ -240,7 +309,9 @@ Expected: only allowlisted implementation changes and release documents; Alice c
 **Files:**
 - Create: `packages/app-companion/**`
 - Modify: `package.json`, `apps/app/tsconfig.json`, `apps/app/vite.config.ts`
+- Modify: `deploy/Dockerfile.ci`, `scripts/templates/tsconfig.local-mode.json`
 - Modify: `apps/app/test/app/vite-config.test.ts`
+- Create: `scripts/app-companion-source-ownership.test.mjs`
 - Create: `docs/alice/release/alice-companion-assets.json`
 
 **Interfaces:**
@@ -341,10 +412,25 @@ trap - EXIT
 
 Expected: the build succeeds while generated upstream companion source is hidden, then the directory is restored.
 
-- [ ] **Step 6: Commit vendoring**
+- [ ] **Step 6: Prove every code consumer uses first-party source**
+
+Update `deploy/Dockerfile.ci` and `scripts/templates/tsconfig.local-mode.json` so
+their companion code paths resolve `packages/app-companion`. Create
+`scripts/app-companion-source-ownership.test.mjs` to scan Vite, TypeScript,
+Docker, and template consumers. Code imports or copies from
+`eliza/apps/app-companion` or `eliza/plugins/app-companion` fail the test. The
+existing asset-provisioning path may continue reading static public assets from
+`eliza/plugins/app-companion/public`; that exception is data-only and must be
+named explicitly in the test.
 
 ```bash
-git add package.json apps/app/tsconfig.json apps/app/vite.config.ts apps/app/test/app/vite-config.test.ts packages/app-companion docs/alice/release/alice-companion-assets.json
+node --test scripts/app-companion-source-ownership.test.mjs
+```
+
+- [ ] **Step 7: Commit vendoring**
+
+```bash
+git add package.json apps/app/tsconfig.json apps/app/vite.config.ts apps/app/test/app/vite-config.test.ts deploy/Dockerfile.ci scripts/templates/tsconfig.local-mode.json scripts/app-companion-source-ownership.test.mjs packages/app-companion docs/alice/release/alice-companion-assets.json
 git commit -m "feat(alice): vendor companion as first-party source"
 ```
 
@@ -490,7 +576,7 @@ git commit -m "refactor(alice): move companion ownership into Milady"
 - Create or modify: `scripts/build-milaidy-runtime-plugin-workspaces.mjs`
 
 **Interfaces:**
-- Consumes: `afe853a8`, `f79b821d`, `801ab2cb`, and only three build scripts from `09c38abc`.
+- Consumes: `afe853a8`, `f79b821d`, `801ab2cb`, and Task 0's reviewed deterministic build scripts from `09c38abc`.
 - Produces: UI-free server barrel, source browser barrel, build-variant exports, tolerant registry loading, reproducible build hydration.
 
 - [ ] **Step 1: Apply reviewed commits without committing**
@@ -514,15 +600,19 @@ rg -n 'index\.browser|@elizaos/app-core' apps/app/vite.config.ts scripts/apply-a
 
 Expected: do not cherry-pick `f2b8e4f4` if `afe853a8` already provides first-match browser aliasing. Admit only a test-proven missing hunk.
 
-- [ ] **Step 3: Take only the three build scripts from `09c38abc`**
+- [ ] **Step 3: Verify Task 0 kept the build-script allowlist**
 
 ```bash
-git checkout 09c38abc -- scripts/resolve-milaidy-missing-workspaces.mjs scripts/pin-alice-release-runtime-deps.mjs scripts/build-milaidy-runtime-plugin-workspaces.mjs
-if git diff --name-only | rg -q 'seed-knowledge'; then
+git diff --name-only 09c38abc -- scripts/resolve-milaidy-missing-workspaces.mjs scripts/pin-alice-release-runtime-deps.mjs scripts/build-milaidy-runtime-plugin-workspaces.mjs
+if git ls-files | rg -q 'scripts/seed-knowledge'; then
   echo "unrelated seed script entered the release" >&2
   exit 1
 fi
+node --test scripts/resolve-milaidy-missing-workspaces.test.mjs scripts/pin-alice-release-runtime-deps.test.mjs
 ```
+
+Expected: diffs are limited to the reviewed strict-pin hardening and tests from
+Task 0; no unrelated build or knowledge-seeding source enters the release.
 
 - [ ] **Step 4: Run boundary tests**
 
@@ -577,7 +667,7 @@ export function readRegistryRawEntries(
         raws.push({ file, data: JSON.parse(raw) });
       } catch (error) {
         console.warn(
-          `[registry] skipping invalid JSON entry ${file} (${raw.length} bytes, starts ${JSON.stringify(raw.slice(0, 16))}): ${error instanceof Error ? error.message : String(error)}`,
+          `[registry] skipping invalid JSON entry ${file} (${raw.length} bytes): ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
@@ -620,6 +710,7 @@ it("skips one invalid JSON entry without losing valid entries", () => {
     },
   ]);
   expect(warn).toHaveBeenCalledWith(expect.stringContaining("invalid.json"));
+  expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("not-json"));
 });
 ```
 
@@ -629,23 +720,36 @@ Run:
 bunx vitest run packages/app-core/src/registry/index.test.ts
 ```
 
-- [ ] **Step 6: Run both build consumers**
+- [ ] **Step 6: Run both build consumers in a disposable assembly**
 
 ```bash
-node scripts/resolve-milaidy-missing-workspaces.mjs "$PWD"
-node scripts/pin-alice-release-runtime-deps.mjs "$PWD"
-bun install --ignore-scripts --linker=hoisted
-node scripts/build-milaidy-runtime-plugin-workspaces.mjs "$PWD"
-bun run postinstall
-node scripts/run-production-build.mjs
+release_root="$PWD"
+assembly_root=$(mktemp -d /tmp/alice-release-assembly.XXXXXX)
+git archive HEAD | tar -x -C "$assembly_root"
+mkdir -p "$assembly_root/eliza"
+eliza_source="/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/eliza"
+test "$(git -C "$eliza_source" rev-parse HEAD)" = "17930c97b97cedb8fe64124e327c023cd526cc8b"
+git -C "$eliza_source" archive 17930c97b97cedb8fe64124e327c023cd526cc8b | tar -x -C "$assembly_root/eliza"
+(
+  cd "$assembly_root"
+  ALICE_RELEASE_STRICT_PINS=1 node "$release_root/scripts/resolve-milaidy-missing-workspaces.mjs" "$assembly_root"
+  node "$release_root/scripts/pin-alice-release-runtime-deps.mjs" "$assembly_root"
+  "$ALICE_BUN_BIN" install --ignore-scripts --linker=hoisted
+  node "$release_root/scripts/build-milaidy-runtime-plugin-workspaces.mjs" "$assembly_root"
+  node scripts/run-production-build.mjs
+  shasum -a 256 package.json bun.lock > /tmp/alice-release-normalized-inputs.sha256
+)
 ```
 
-Expected: no React server leakage, `isStoreBuild` failure, missing export, or unresolved module.
+Expected: no React server leakage, `isStoreBuild` failure, missing export, or
+unresolved module. The release worktree remains clean; the normalized
+`package.json` and `bun.lock` hashes enter the evidence manifest so the accepted
+artifact is tied to the exact generated inputs rather than uncommitted source.
 
 - [ ] **Step 7: Commit boundary fixes**
 
 ```bash
-git add apps/app/vite.config.ts packages/app-core/src/index.ts packages/app-core/src/app-core-runtime-hook-surface.test.ts packages/app-core/src/registry/index.ts packages/app-core/src/registry/index.test.ts scripts/apply-alice-eliza-runtime-patches.mjs scripts/apply-alice-eliza-runtime-patches.test.ts scripts/resolve-milaidy-missing-workspaces.mjs scripts/pin-alice-release-runtime-deps.mjs scripts/build-milaidy-runtime-plugin-workspaces.mjs
+git add apps/app/vite.config.ts packages/app-core/src/index.ts packages/app-core/src/app-core-runtime-hook-surface.test.ts packages/app-core/src/registry/index.ts packages/app-core/src/registry/index.test.ts scripts/apply-alice-eliza-runtime-patches.mjs scripts/apply-alice-eliza-runtime-patches.test.ts
 git commit -m "fix(alice): preserve browser server runtime boundary"
 ```
 
