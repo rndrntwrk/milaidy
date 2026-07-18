@@ -279,7 +279,7 @@ in `packages/plugin-selfcontrol`. The refreshed 468 measurement is the release
 ceiling; every admitted commit must keep the total at or below it and keep its
 new or modified files clean.
 
-- [ ] **Step 3: Admit browser hardening and test the production consumer**
+- [x] **Step 3: Admit browser hardening and test the production consumer**
 
 ```bash
 git cherry-pick -n 35d26977
