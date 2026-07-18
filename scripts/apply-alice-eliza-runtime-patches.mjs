@@ -7312,6 +7312,41 @@ export function applyAliceElizaRuntimePatches({
   const elizaRoot = path.join(rootDir, "eliza");
   const runtimePath = path.join(elizaRoot, runtimeRelativePath);
 
+  // Strict mode (MILAIDY_PATCH_STRICT=1): a patch that skips because its
+  // source file is absent (moved/renamed/deleted by an eliza bump) is a
+  // silently-dropped Alice patch that resurfaces as a runtime regression.
+  // Collect every skip logged by the patch functions and, in strict mode,
+  // fail the whole run with the full list so an upstream fold is forced to
+  // re-home each patch instead of silently losing it. The positive-condition
+  // skip ("already present from upstream", i.e. the real source replaced our
+  // stub) is intentionally exempt. Default behavior (no env) is unchanged.
+  // Known-inapplicable at the CURRENT eliza pin (17930c97b9): the target
+  // file does not exist at this pin at all, so the patch has always skipped
+  // and Alice runs live with it inapplicable. Any eliza bump (WP6) MUST
+  // re-evaluate each entry: if the target appears at the new pin, remove the
+  // entry so strict mode enforces the patch again.
+  const KNOWN_INAPPLICABLE_AT_PIN = [
+    // trusted-local-request.ts is absent from app-core at this pin; the
+    // open-access patch has never applied here (pre-existing, verified
+    // 2026-07-09 against a fresh checkout + full patch run).
+    "app-core trusted-local-request source absent",
+  ];
+  const strictSkips = [];
+  const baseLog = log;
+  log = (...args) => {
+    const first = args[0];
+    if (
+      typeof first === "string" &&
+      first.startsWith("[alice-eliza-runtime-patches]") &&
+      first.includes("skipping") &&
+      !first.includes("already present from upstream") &&
+      !KNOWN_INAPPLICABLE_AT_PIN.some((k) => first.includes(k))
+    ) {
+      strictSkips.push(first);
+    }
+    baseLog(...args);
+  };
+
   const results = [
     applyAliceRuntimeApiBindPatch({ rootDir, elizaRoot, runtimePath, log }),
     applyAliceKubeHealthReadinessPatch({ elizaRoot, log }),
@@ -7392,6 +7427,17 @@ export function applyAliceElizaRuntimePatches({
     // applyAliceLifeOpsRuntimeImportPatch({ elizaRoot, log }),
     // applyAliceLifeOpsNativeActivityTrackerPatch({ elizaRoot, log }),
   ];
+
+  if (strictSkips.length > 0) {
+    baseLog(
+      `[alice-eliza-runtime-patches] ${strictSkips.length} patch(es) skipped (source absent or no targets)`,
+    );
+    if (process.env.MILAIDY_PATCH_STRICT === "1") {
+      throw new Error(
+        `MILAIDY_PATCH_STRICT: ${strictSkips.length} Alice patch(es) were skipped and would be silently lost:\n  - ${strictSkips.join("\n  - ")}`,
+      );
+    }
+  }
 
   return results.includes("applied")
     ? "applied"

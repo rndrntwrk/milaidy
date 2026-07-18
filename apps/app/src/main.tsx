@@ -158,6 +158,8 @@ import {
   VoicePill,
   type VoicePillMessage,
 } from "./pill-stubs";
+import { bootAndroidLocalRuntimeIfApplicable } from "./android-local-runtime-boot";
+import { bootIosLocalRuntimeIfApplicable } from "./ios-local-runtime-boot";
 import {
   apiBaseToDeviceBridgeUrl,
   type IosRuntimeConfig,
@@ -508,6 +510,15 @@ async function initializePlatform(): Promise<void> {
     initializeAppLifecycle();
     initializeMobileRuntimeModeListener();
     void initializeMobileDeviceBridge();
+    // iOS local runtime: when ios-runtime mode resolves to "local", the
+    // on-device JS runtime (@elizaos/capacitor-bun-runtime) is started here.
+    // At the current eliza pin the plugin resolves to the renderer stub
+    // (ElizaBunRuntime = null), so both boots no-op gracefully; they become
+    // functional at the WP6 eliza bump. Ported from upstream milady main.tsx.
+    void bootIosLocalRuntimeIfApplicable();
+    // Android local runtime: when mobile-runtime-mode is "local", calls
+    // ElizaBunRuntimePlugin.start().
+    void bootAndroidLocalRuntimeIfApplicable();
   }
 
   if (isDesktopPlatform()) {

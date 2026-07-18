@@ -307,16 +307,22 @@ git add -A
 git commit -m "feat(app): port reviewed voice and stub updates"
 ```
 
-- [ ] **Step 6: Admit mobile boot, Milady mark, and strict patch mode**
+- [x] **Step 6: Admit mobile boot, Milady mark, and strict patch mode**
 
 ```bash
 git cherry-pick -n 982057bc
 git cherry-pick -n 5bbbfa4b
-bunx vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
+bunx vitest run --environment node scripts/apply-alice-eliza-runtime-patches.test.ts
 node scripts/run-production-build.mjs
+bunx tsc --noEmit --pretty false 2>&1 | tee /tmp/alice-reviewed-mobile-tsc.txt
+test "$(rg -c 'error TS[0-9]+' /tmp/alice-reviewed-mobile-tsc.txt)" -le 468
 git add -A
 git commit -m "feat(app): port reviewed mobile boot and strict patch checks"
 ```
+
+Evidence: 38 patch assertions passed, the production Vite consumer built 25,367
+modules in 51.04 seconds, and TypeScript remained at the 468-error admitted
+ceiling with no diagnostics in the files introduced or modified by this step.
 
 - [ ] **Step 7: Audit the final admitted range**
 
