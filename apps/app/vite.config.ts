@@ -259,18 +259,56 @@ function resolveElizaAppAliasEntries(): {
   aliases: Array<{ find: RegExp; replacement: string }>;
   realAppNames: string[];
 } {
-  const elizaPluginsRoot = path.join(miladyRoot, "eliza/plugins");
-  if (!fs.existsSync(elizaPluginsRoot)) {
-    return { aliases: [], realAppNames: [] };
-  }
-
   const aliases: Array<{ find: RegExp; replacement: string }> = [];
   const realAppNames: string[] = [];
+
+  // VENDORED first-party app packages (packages/app-*) come FIRST: Alice
+  // owns the companion outright (upstream deleted the whole app-* tree at
+  // the current eliza pin; see docs/upstream-integration-evidence/
+  // WP0-baseline-record.md S7 and the founder decision in its resolution).
+  // Their aliases are emitted before the eliza walk so a vendored copy
+  // always wins (first match), and their names join realAppNames so the
+  // stub-fallback never masks them.
+  const firstPartyCompanionRoot = path.join(
+    miladyRoot,
+    "packages/app-companion",
+  );
+  const vendoredPackagesRoot = path.dirname(firstPartyCompanionRoot);
+  if (fs.existsSync(vendoredPackagesRoot)) {
+    for (const entry of fs.readdirSync(vendoredPackagesRoot, {
+      withFileTypes: true,
+    })) {
+      if (!entry.isDirectory()) continue;
+      if (!entry.name.startsWith("app-")) continue;
+      const packageDir = path.join(vendoredPackagesRoot, entry.name);
+      const pkgJsonPath = path.join(packageDir, "package.json");
+      if (!fs.existsSync(pkgJsonPath)) continue;
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as {
+          name?: string;
+        };
+        if (!pkg.name) continue;
+        aliases.push(...buildElizaAppSourceAliases(pkg.name, packageDir));
+        realAppNames.push(entry.name.replace(/^app-/, ""));
+      } catch {
+        // Malformed package.json — skip; standard resolve error surfaces it.
+      }
+    }
+  }
+
+  const elizaPluginsRoot = path.join(miladyRoot, "eliza/plugins");
+  if (!fs.existsSync(elizaPluginsRoot)) {
+    return { aliases, realAppNames };
+  }
+
   for (const entry of fs.readdirSync(elizaPluginsRoot, {
     withFileTypes: true,
   })) {
     if (!entry.isDirectory()) continue;
     if (!entry.name.startsWith("app-")) continue;
+    // A vendored copy of the same app already emitted its aliases above;
+    // skip the eliza copy so the first-party version wins outright.
+    if (realAppNames.includes(entry.name.replace(/^app-/, ""))) continue;
     const packageDir = path.join(elizaPluginsRoot, entry.name);
     const pkgJsonPath = path.join(packageDir, "package.json");
     if (!fs.existsSync(pkgJsonPath)) continue;

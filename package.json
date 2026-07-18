@@ -44,7 +44,7 @@
     "eliza/packages/native-plugins/*",
     "eliza/packages/app-core/platforms/*",
     "eliza/packages/app-core/deploy/cloud-agent-template",
-    "eliza/plugins/app-companion",
+    "packages/app-companion",
     "eliza/plugins/app-contacts",
     "eliza/plugins/app-elizamaker",
     "eliza/plugins/app-lifeops",

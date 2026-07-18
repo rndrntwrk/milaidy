@@ -35,11 +35,11 @@
         "./node_modules/@elizaos/app-screenshare/*"
       ],
       "@elizaos/app-companion": [
-        "./eliza/apps/app-companion/src/index.ts",
+        "./packages/app-companion/src/index.ts",
         "./node_modules/@elizaos/app-companion"
       ],
       "@elizaos/app-companion/*": [
-        "./eliza/apps/app-companion/src/*",
+        "./packages/app-companion/src/*",
         "./node_modules/@elizaos/app-companion/*"
       ],
       "@elizaos/app-shopify": [

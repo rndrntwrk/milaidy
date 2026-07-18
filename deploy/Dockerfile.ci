@@ -73,14 +73,14 @@ RUN set -x; \
     # @elizaos/shared: DON'T replace — the npm version or resolved workspace symlink works.
     # Workspace package.json exports point to ./src/*.ts (tsx handles this).
     # Replacing with dist-only breaks resolution since exports don't match dist layout.
-    # @elizaos/app-companion: copy real package contents instead of relying on a workspace symlink
+    # @elizaos/app-companion: copy the first-party Alice package instead of relying on a workspace symlink
     # The runtime executes agent/src under tsx, and static imports like
     # @elizaos/app-companion/plugin must resolve through node_modules at runtime.
     rm -rf node_modules/@elizaos/app-companion; \
     mkdir -p node_modules/@elizaos/app-companion; \
-    cp eliza/apps/app-companion/package.json node_modules/@elizaos/app-companion/; \
-    cp -a eliza/apps/app-companion/src node_modules/@elizaos/app-companion/src 2>/dev/null || true; \
-    cp eliza/apps/app-companion/assets.json node_modules/@elizaos/app-companion/assets.json 2>/dev/null || true; \
+    cp packages/app-companion/package.json node_modules/@elizaos/app-companion/; \
+    cp -a packages/app-companion/src node_modules/@elizaos/app-companion/src 2>/dev/null || true; \
+    cp packages/app-companion/assets.json node_modules/@elizaos/app-companion/assets.json 2>/dev/null || true; \
     ls node_modules/@elizaos/app-companion/src/plugin.ts 2>/dev/null && echo "@elizaos/app-companion src OK" || echo "WARN: app-companion src missing"; \
     # @elizaos/app-lifeops: runtime statically imports /plugin, so ship real package contents
     rm -rf node_modules/@elizaos/app-lifeops; \
@@ -159,7 +159,7 @@ RUN CORE_DIR="node_modules/@elizaos/core"; \
 
 # Hoist missing deps from workspace packages to top-level node_modules
 # tsx resolves raw .ts source which imports packages not hoisted by bun
-RUN for pkg_dir in eliza/packages/core eliza/packages/shared eliza/packages/agent eliza/apps/app-companion eliza/apps/app-lifeops; do \
+RUN for pkg_dir in eliza/packages/core eliza/packages/shared eliza/packages/agent packages/app-companion eliza/apps/app-lifeops; do \
       if [ -d "$pkg_dir/node_modules" ]; then \
         for dep in $(ls "$pkg_dir/node_modules/" 2>/dev/null | grep -v '^\.'); do \
           if [ ! -e "node_modules/$dep" ] && [ -d "$pkg_dir/node_modules/$dep" ]; then \

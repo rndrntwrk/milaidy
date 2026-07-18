@@ -355,7 +355,7 @@ for the explicit first-party restoration tasks below.
 - Consumes: `d747565d1b3d01f8c141597e9bdc61ad69190eda`.
 - Produces: workspace `@elizaos/app-companion` resolved from `packages/app-companion`, not `eliza/plugins/app-companion`.
 
-- [ ] **Step 1: Apply the vendoring commit without committing**
+- [x] **Step 1: Apply the vendoring commit without committing**
 
 ```bash
 git fetch origin integration/alice-eliza-fold-2026-07-09
@@ -366,7 +366,11 @@ git diff --name-only
 
 Expected: approximately 77 files limited to the companion package and app workspace wiring.
 
-- [ ] **Step 2: Create the asset contract from the existing Alice roster**
+Evidence: `d747565d1` applied as exactly 77 paths: 74 first-party companion
+paths and three workspace/app wiring paths, with no deletions or unrelated
+source changes.
+
+- [x] **Step 2: Create the asset contract from the existing Alice roster**
 
 The vendored branch and `packages/app-companion/src/vrm-assets.test.ts` define these exact paths and cache key:
 
@@ -383,7 +387,7 @@ The vendored branch and `packages/app-companion/src/vrm-assets.test.ts` define t
 }
 ```
 
-- [ ] **Step 3: Add a fail-closed asset identity test**
+- [x] **Step 3: Add a fail-closed asset identity test**
 
 Extend `packages/app-companion/src/vrm-assets.test.ts` using its existing exports:
 
@@ -402,7 +406,7 @@ it("keeps Alice on the verified Milady 9 asset pair", () => {
 });
 ```
 
-- [ ] **Step 4: Add a workspace-precedence test**
+- [x] **Step 4: Add a workspace-precedence test**
 
 In `apps/app/test/app/vite-config.test.ts`, reuse its existing Vite loader and `APP_DIR` constant:
 
@@ -431,12 +435,15 @@ it("resolves companion from the first-party workspace", async () => {
 });
 ```
 
-- [ ] **Step 5: Run package tests and prove upstream-source independence**
+- [x] **Step 5: Run package tests and prove upstream-source independence**
 
 ```bash
-bun --cwd packages/app-companion run typecheck
-bun --cwd packages/app-companion run test
-bun --cwd packages/app-companion run lint
+node ../../node_modules/vitest/vitest.mjs run --config ./vitest.config.ts
+../../node_modules/@biomejs/biome/bin/biome check src/
+node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json \
+  > /tmp/alice-companion-tsc.txt 2>&1 || true
+test -z "$(rg '^packages/app-companion/.*error TS[0-9]+' \
+  /tmp/alice-companion-tsc.txt)"
 set -e
 upstream="eliza/plugins/app-companion"
 hidden="eliza/plugins/app-companion.__alice_vendor_test__"
@@ -447,9 +454,22 @@ mv "$hidden" "$upstream"
 trap - EXIT
 ```
 
-Expected: the build succeeds while generated upstream companion source is hidden, then the directory is restored.
+Expected: package-local tests and lint pass, no TypeScript diagnostic originates
+in `packages/app-companion`, and the build succeeds while generated upstream
+companion source is hidden before restoring that directory. The package-local
+TypeScript traversal is not expected to make the inherited Eliza graph
+repository-clean.
 
-- [ ] **Step 6: Prove every code consumer uses first-party source**
+Evidence: 14 package assertions and six Vite alias assertions passed; Biome
+checked 66 files without diagnostics. The raw package TypeScript traversal
+reported inherited Eliza diagnostics but zero first-party companion diagnostics.
+The upstream-hidden production build completed in 49.61 seconds and restored
+the hidden source. A release-faithful Bun 1.3.10 install with
+`--linker=hoisted` preserved the admitted global TypeScript ceiling at 468;
+omitting that linker was separately reproduced as a dependency-hoisting change,
+not accepted as release evidence.
+
+- [x] **Step 6: Prove every code consumer uses first-party source**
 
 Update `deploy/Dockerfile.ci` and `scripts/templates/tsconfig.local-mode.json` so
 their companion code paths resolve `packages/app-companion`. Create
@@ -464,7 +484,12 @@ named explicitly in the test.
 node --test scripts/app-companion-source-ownership.test.mjs
 ```
 
-- [ ] **Step 7: Commit vendoring**
+Evidence: both static ownership assertions pass. Vite, application TypeScript,
+the CI container, and local-mode TypeScript consume `packages/app-companion`;
+the only permitted generated-upstream references are explicitly data-only
+public asset provisioning paths.
+
+- [x] **Step 7: Commit vendoring**
 
 ```bash
 git add package.json apps/app/tsconfig.json apps/app/vite.config.ts apps/app/test/app/vite-config.test.ts deploy/Dockerfile.ci scripts/templates/tsconfig.local-mode.json scripts/app-companion-source-ownership.test.mjs packages/app-companion docs/alice/release/alice-companion-assets.json

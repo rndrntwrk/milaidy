@@ -1,0 +1,59 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node", "bun"],
+    "typeRoots": [
+      "./node_modules/@types",
+      "../../node_modules/@types",
+      "../../../node_modules/@types",
+      "../../../node_modules/.bun/node_modules/@types",
+      "../../../node_modules",
+      "../../../node_modules/.bun/node_modules"
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "paths": {
+      "drizzle-orm": ["./eliza/plugins/plugin-sql/node_modules/drizzle-orm"],
+      "drizzle-orm/*": [
+        "./eliza/plugins/plugin-sql/node_modules/drizzle-orm/*"
+      ],
+      "@elizaos/app-lifeops": ["./eliza/plugins/app-lifeops/src/index.ts"],
+      "@elizaos/app-task-coordinator": [
+        "./eliza/plugins/app-task-coordinator/src/index.ts"
+      ],
+      "@elizaos/app-steward": ["./eliza/plugins/app-steward/src/index.ts"],
+      "@elizaos/app-wallet": ["./eliza/plugins/app-wallet/src/index.ts"],
+      "@elizaos/app-core": ["./eliza/packages/app-core/src/index.ts"],
+      "@elizaos/ui": ["./eliza/packages/ui/src/index.ts"],
+      "@elizaos/ui/api/client-types-cloud": [
+        "./eliza/packages/ui/src/api/client-types-cloud.ts"
+      ],
+      "@elizaos/app-companion": ["./src/index.ts"],
+      "@elizaos/core": ["./eliza/packages/core/src/index.ts"],
+      "@elizaos/agent": ["./eliza/packages/agent/src/index.ts"],
+      "@elizaos/shared": ["./eliza/packages/shared/src/index.ts"],
+      "@elizaos/capacitor-appblocker": [
+        "./eliza/packages/native-plugins/appblocker/src/index.ts"
+      ],
+      "@elizaos/capacitor-mobile-signals": [
+        "./eliza/packages/native-plugins/mobile-signals/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.d.ts",
+    "../../packages/agent/src/external-modules.d.ts",
+    "../../packages/app-core/src/ambient-modules.d.ts"
+  ],
+  "exclude": ["src/**/*.stories.ts", "src/**/*.stories.tsx"]
+}

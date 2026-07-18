@@ -1,0 +1,16 @@
+{
+  "defaultAvatarIndex": 9,
+  "identity": "alice",
+  "requiredVrm": "apps/app/public/vrms/milady-9.vrm.gz",
+  "requiredSourceVrm": "apps/app/public_src/vrms/milady-9.vrm",
+  "requiredPreview": "/vrms/previews/milady-9.png?v=20260413-alice-capture",
+  "requiredBackground": "/vrms/backgrounds/milady-9.png?v=20260413-alice-capture",
+  "binaryAssetsCommittedHere": false,
+  "provisioningRule": "fail before build when either verified file is absent",
+  "integrity": {
+    "requiredVrmSha256": "ccbe2ea31713e33d08c1d0cd6be3aab6c90155ff6488ce2d9bc23e86d5d66ac2",
+    "requiredSourceVrmSha256": "b7384c24d7bd9890210c22b6cbed33083c5523facaa3b667f69efd12c7991675",
+    "requiredPreviewSha256": "47ddb7fcdcb0133e824eae6fd8ad6f70cd61fbcc4a046a1102daca64863345d8",
+    "requiredBackgroundSha256": "47ddb7fcdcb0133e824eae6fd8ad6f70cd61fbcc4a046a1102daca64863345d8"
+  }
+}

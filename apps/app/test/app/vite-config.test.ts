@@ -125,6 +125,30 @@ describe("app vite config", () => {
     );
   });
 
+  it("resolves companion from the first-party workspace", async () => {
+    const loaded = await loadConfigFromFile(
+      { command: "build", mode: "test" },
+      CONFIG_PATH,
+      APP_DIR,
+    );
+
+    expect(loaded?.config.resolve?.alias).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          replacement: path.join(
+            APP_DIR,
+            "..",
+            "..",
+            "packages",
+            "app-companion",
+            "src",
+            "index.ts",
+          ),
+        }),
+      ]),
+    );
+  });
+
   it("stubs sharp native modules in the browser bundle", async () => {
     const loaded = await loadConfigFromFile(
       { command: "build", mode: "test" },
