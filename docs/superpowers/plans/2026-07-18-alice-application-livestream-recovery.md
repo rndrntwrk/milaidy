@@ -297,7 +297,7 @@ git add -A
 git commit -m "feat(app): port reviewed secure storage support"
 ```
 
-- [ ] **Step 5: Admit stub hygiene and VoicePill scaffolding**
+- [x] **Step 5: Admit stub hygiene and VoicePill scaffolding**
 
 ```bash
 git cherry-pick -n a0d04422
