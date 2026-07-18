@@ -42,6 +42,7 @@ const appCoreTrustedLocalRequestRelativePath =
 const coreBasicCapabilitiesRelativePath =
   "packages/core/src/features/basic-capabilities/index.ts";
 const coreBuildRelativePath = "packages/core/build.ts";
+const googlePluginBuildRelativePath = "plugins/plugin-google/build.ts";
 const sharedGenerateKeywordsRelativePath =
   "packages/shared/scripts/generate-keywords.mjs";
 const appViteNativeStubRelativePath =
@@ -5470,6 +5471,52 @@ export function applyAliceCoreBuildBrowserExternalsMammothPatch({
   return "applied";
 }
 
+function patchAliceGooglePluginTypescriptBuildSource(source) {
+  const patchedCommand =
+    'execSync("bunx tsc --noCheck -p tsconfig.json", { stdio: "inherit" });';
+  if (source.includes(patchedCommand)) {
+    return source;
+  }
+
+  const upstreamCommand =
+    'execSync("bunx tsc -p tsconfig.json", { stdio: "inherit" });';
+  if (!source.includes(upstreamCommand)) {
+    throw new Error("plugin-google/build.ts TypeScript command anchor drifted");
+  }
+
+  // The pinned workspace contains two google-auth-library copies whose private
+  // fields fail declaration checking. Runtime JS still emits and imports cleanly.
+  return source.replace(upstreamCommand, patchedCommand);
+}
+
+export function applyAliceGooglePluginTypescriptBuildPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const filePath = path.join(elizaRoot, googlePluginBuildRelativePath);
+  if (!existsSync(filePath)) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-google build.ts absent; skipping TypeScript emit patch",
+    );
+    return "skipped";
+  }
+
+  const before = readFileSync(filePath, "utf8");
+  const after = patchAliceGooglePluginTypescriptBuildSource(before);
+  if (after === before) {
+    log(
+      "[alice-eliza-runtime-patches] plugin-google TypeScript emit patch already applied",
+    );
+    return "already-applied";
+  }
+
+  writeFileSync(filePath, after);
+  log(
+    "[alice-eliza-runtime-patches] patched plugin-google build to emit JavaScript without dependency type checking",
+  );
+  return "applied";
+}
+
 function patchAliceAppViteStubMammothSource(source) {
   const packageMarker = '"mammoth", // [milaidy:vite-stub-mammoth]';
   const loaderMarker = "// [milaidy:vite-stub-mammoth-loader]";
@@ -7291,6 +7338,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppCoreBrowserEntryPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsPatch({ elizaRoot, log }),
     applyAliceCoreBuildBrowserExternalsMammothPatch({ elizaRoot, log }),
+    applyAliceGooglePluginTypescriptBuildPatch({ elizaRoot, log }),
     applyAliceAppViteStubMammothPatch({ elizaRoot, log }),
     applyAlicePluginSqlSchemaPgliteErrorsReexportPatch({ elizaRoot, log }),
     applyAliceAppCoreAgentStatusAuthBridgePatch({ elizaRoot, log }),

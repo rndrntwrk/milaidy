@@ -14,16 +14,18 @@ const scriptPath = join(
 function createPluginFixture({
   buildScript = "echo build",
   fakeBunBody,
+  packageName = "@elizaos/plugin-cron",
   workspaceRoot = "plugins",
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), "alice-plugin-builder-"));
-  const packageDir = join(root, workspaceRoot, "plugin-cron", "typescript");
+  const packageSegment = packageName.split("/").at(-1);
+  const packageDir = join(root, workspaceRoot, packageSegment, "typescript");
   const fakeBin = join(root, "fake-bin");
   mkdirSync(packageDir, { recursive: true });
   mkdirSync(fakeBin);
 
   const packageJson = {
-    name: "@elizaos/plugin-cron",
+    name: packageName,
     version: "2.0.0-alpha.8",
     main: "dist/index.js",
   };
@@ -142,3 +144,28 @@ test("a successful build with fresh runtime output is accepted", () => {
     rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+for (const packageName of [
+  "@elizaos/app-lifeops",
+  "@elizaos/plugin-app-control",
+  "@elizaos/plugin-google",
+]) {
+  test(`Alice core runtime builds ${packageName} when its dist entry is absent`, () => {
+    const fixture = createPluginFixture({
+      packageName,
+      fakeBunBody: "mkdir -p dist\ntouch dist/index.js\nexit 0",
+      workspaceRoot: join("eliza", "plugins"),
+    });
+    try {
+      const result = runBuilder(fixture.root, fixture.fakeBin);
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.match(
+        result.stdout,
+        new RegExp(`building runtime plugin ${packageName}`),
+      );
+      assert.match(result.stdout, /built 1 Milaidy runtime workspace/);
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+}

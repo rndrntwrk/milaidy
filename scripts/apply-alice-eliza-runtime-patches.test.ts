@@ -34,6 +34,7 @@ import {
   applyAliceCoreBuildBrowserExternalsMammothPatch,
   applyAliceCoreBrowserValidationReexportPatch,
   applyAliceCoreBrowserMiladyRuntimeBindingsPatch,
+  applyAliceGooglePluginTypescriptBuildPatch,
   applyAlicePluginSqlSchemaPgliteErrorsReexportPatch,
   applyAliceAppPluginRegisterExportPatch,
   isAliceAppPluginRegisterExportPatched,
@@ -1871,6 +1872,49 @@ describe("Alice Eliza runtime patch contract", () => {
 
       expect(
         applyAliceCoreBuildBrowserExternalsMammothPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("patches plugin-google's pinned upstream build to emit JavaScript despite duplicate dependency types", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-google-plugin-build-"),
+    );
+    try {
+      const dir = path.join(tempDir, "plugins", "plugin-google");
+      mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "build.ts");
+      writeFileSync(
+        filePath,
+        [
+          'import { execSync } from "node:child_process";',
+          'import { rmSync } from "node:fs";',
+          "",
+          'console.log("Building Google plugin (TypeScript)...");',
+          'rmSync("dist", { recursive: true, force: true });',
+          'execSync("bunx tsc -p tsconfig.json", { stdio: "inherit" });',
+          'console.log("Build complete.");',
+          "",
+        ].join("\n"),
+      );
+
+      expect(
+        applyAliceGooglePluginTypescriptBuildPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      expect(readFileSync(filePath, "utf8")).toContain(
+        'execSync("bunx tsc --noCheck -p tsconfig.json",',
+      );
+      expect(
+        applyAliceGooglePluginTypescriptBuildPatch({
           elizaRoot: tempDir,
           log: () => undefined,
         }),

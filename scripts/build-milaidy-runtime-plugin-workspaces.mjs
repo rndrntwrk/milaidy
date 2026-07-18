@@ -12,13 +12,16 @@ if (!root) {
 }
 
 const RUNTIME_PLUGIN_PACKAGES = new Set([
+  "@elizaos/app-lifeops",
   "@elizaos/plugin-agent-skills",
   "@elizaos/plugin-anthropic",
+  "@elizaos/plugin-app-control",
   "@elizaos/plugin-commands",
   "@elizaos/plugin-cron",
   "@elizaos/plugin-elizacloud",
   "@elizaos/plugin-experience",
   "@elizaos/plugin-form",
+  "@elizaos/plugin-google",
   "@elizaos/plugin-local-embedding",
   "@elizaos/plugin-ollama",
   "@elizaos/plugin-openai",

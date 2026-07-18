@@ -65,6 +65,10 @@ const RUNTIME_WORKSPACE_SELECTIONS = [
   },
 ];
 
+const RELEASE_WORKSPACE_DEPENDENCIES = new Map([
+  ["@elizaos/app-lifeops", new Map([["@elizaos/agent", "workspace:*"]])],
+]);
+
 const SKIP_DIRS = new Set([
   ".git",
   ".next",
@@ -259,6 +263,30 @@ export function pinAliceReleaseRuntimeDeps(root, { log = console.log } = {}) {
     if (applyRuntimeWorkspaceSelection(rootEntry.pkg, rule)) {
       changes.push(`workspaces select ${rule.packageName}`);
       writeFileSync(rootEntry.path, `${JSON.stringify(rootEntry.pkg, null, rootEntry.indent)}\n`);
+    }
+  }
+
+  for (const entry of packageEntries) {
+    const workspaceDependencies = RELEASE_WORKSPACE_DEPENDENCIES.get(
+      entry.pkg.name,
+    );
+    if (!workspaceDependencies) continue;
+
+    let changed = false;
+    for (const [packageName, version] of workspaceDependencies) {
+      if (entry.pkg.dependencies?.[packageName] === version) continue;
+      entry.pkg.dependencies ??= {};
+      entry.pkg.dependencies[packageName] = version;
+      changes.push(
+        `${packageLabel(root, entry.path)}dependencies.${packageName} -> ${version}`,
+      );
+      changed = true;
+    }
+    if (changed) {
+      writeFileSync(
+        entry.path,
+        `${JSON.stringify(entry.pkg, null, entry.indent)}\n`,
+      );
     }
   }
 

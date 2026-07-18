@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -34,6 +41,19 @@ test("release runtime pins are exact and normalization is idempotent", () => {
     },
   };
   writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+  const lifeOpsDir = join(root, "eliza", "plugins", "app-lifeops");
+  mkdirSync(lifeOpsDir, { recursive: true });
+  writeFileSync(
+    join(lifeOpsDir, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@elizaos/app-lifeops",
+        dependencies: { "@elizaos/agent": "2.0.0-beta.1" },
+      },
+      null,
+      2,
+    )}\n`,
+  );
   writeFileSync(join(root, "bun.lock"), "{}\n");
 
   try {
@@ -54,6 +74,13 @@ test("release runtime pins are exact and normalization is idempotent", () => {
     assert.equal(normalized.workspaces.includes("!eliza/plugins/plugin-openrouter"), true);
     assert.equal(normalized.workspaces.includes("plugins/plugin-signal/typescript"), false);
     assert.equal(normalized.workspaces.includes("!plugins/plugin-signal/typescript"), true);
+    const normalizedLifeOps = JSON.parse(
+      readFileSync(join(lifeOpsDir, "package.json"), "utf8"),
+    );
+    assert.equal(
+      normalizedLifeOps.dependencies["@elizaos/agent"],
+      "workspace:*",
+    );
     assert.equal(existsSync(join(root, "bun.lock")), false);
 
     const second = pinAliceReleaseRuntimeDeps(root, { log: () => {} });
