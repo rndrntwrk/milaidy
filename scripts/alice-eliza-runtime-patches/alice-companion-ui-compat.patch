@@ -1,0 +1,1051 @@
+diff --git a/packages/ui/src/api/client-agent.ts b/packages/ui/src/api/client-agent.ts
+index ebde3abc6a..64e49ff9fb 100644
+--- a/packages/ui/src/api/client-agent.ts
++++ b/packages/ui/src/api/client-agent.ts
+@@ -36,6 +36,11 @@ import type {
+   AgentEventsResponse,
+   AgentSelfStatusSnapshot,
+   AgentStatus,
++  AliceOperatorActionStep,
++  AliceOperatorPlanResponse,
++  Arcade555GameActionResponse,
++  Arcade555GameStateResponse,
++  Arcade555GamesCatalogResponse,
+   CharacterData,
+   CharacterHistoryResponse,
+   CodingAgentScratchWorkspace,
+@@ -45,6 +50,7 @@ import type {
+   ConfigSchemaResponse,
+   CorePluginsResponse,
+   CreateTriggerRequest,
++  EmoteInfo,
+   ExperienceGraphResponse,
+   ExperienceListQuery,
+   ExperienceListResponse,
+@@ -52,6 +58,14 @@ import type {
+   ExperienceRecord,
+   ExperienceUpdateInput,
+   ExtensionStatus,
++  HyperscapeActionResponse,
++  HyperscapeAgentGoalResponse,
++  HyperscapeEmbeddedAgentControlAction,
++  HyperscapeEmbeddedAgentMutationResponse,
++  HyperscapeEmbeddedAgentsResponse,
++  HyperscapeJsonValue,
++  HyperscapeQuickActionsResponse,
++  HyperscapeScriptedRole,
+   LogsFilter,
+   LogsResponse,
+   PluginInfo,
+@@ -185,6 +199,31 @@ function logSettingsClient(
+ }
+
+ const SETTINGS_MUTATION_TIMEOUT_MS = 30_000;
++const ALICE_OPERATOR_EXECUTE_TIMEOUT_MS = 45_000;
++
++function getOrCreateArcade555SessionId(preferredSessionId?: string): string {
++  const explicit = preferredSessionId?.trim();
++  if (explicit) return explicit;
++
++  const fallback =
++    globalThis.crypto?.randomUUID?.() ??
++    `arcade555-${Date.now().toString(36)}-${Math.random()
++      .toString(36)
++      .slice(2, 10)}`;
++
++  if (typeof localStorage === "undefined") {
++    return fallback;
++  }
++
++  try {
++    const stored = localStorage.getItem("milady.arcade555.sessionId")?.trim();
++    if (stored) return stored;
++    localStorage.setItem("milady.arcade555.sessionId", fallback);
++  } catch {
++    // localStorage may be unavailable in private mode or test shims.
++  }
++  return fallback;
++}
+
+ // ---------------------------------------------------------------------------
+ // Bootstrap exchange types
+@@ -399,6 +438,56 @@ declare module "./client-base" {
+       mode: string,
+     ): Promise<{ ok: boolean; tradePermissionMode: string }>;
+     playEmote(emoteId: string): Promise<{ ok: boolean }>;
++    getEmotes(): Promise<{ emotes: EmoteInfo[] }>;
++    getArcade555GamesCatalog(input?: {
++      sessionId?: string;
++      includeBeta?: boolean;
++    }): Promise<Arcade555GamesCatalogResponse>;
++    playArcade555Game(input: {
++      gameId: string;
++      mode?: "standard" | "ranked" | "spectate" | "solo" | "agent";
++      sessionId?: string;
++    }): Promise<Arcade555GameActionResponse>;
++    switchArcade555Game(input: {
++      gameId: string;
++      mode?: "standard" | "ranked" | "spectate" | "solo" | "agent";
++      sessionId?: string;
++    }): Promise<Arcade555GameActionResponse>;
++    stopArcade555Game(input?: {
++      sessionId?: string;
++    }): Promise<Arcade555GameActionResponse>;
++    getArcade555GameState(input?: {
++      sessionId?: string;
++    }): Promise<Arcade555GameStateResponse>;
++    executeAliceOperatorPlan(input: {
++      steps: AliceOperatorActionStep[];
++      stopOnFailure?: boolean;
++    }): Promise<AliceOperatorPlanResponse>;
++    listHyperscapeEmbeddedAgents(): Promise<HyperscapeEmbeddedAgentsResponse>;
++    createHyperscapeEmbeddedAgent(input: {
++      characterId: string;
++      autoStart?: boolean;
++      scriptedRole?: HyperscapeScriptedRole;
++    }): Promise<HyperscapeEmbeddedAgentMutationResponse>;
++    controlHyperscapeEmbeddedAgent(
++      characterId: string,
++      action: HyperscapeEmbeddedAgentControlAction,
++    ): Promise<HyperscapeEmbeddedAgentMutationResponse>;
++    sendHyperscapeEmbeddedAgentCommand(
++      characterId: string,
++      command: string,
++      data?: { [key: string]: HyperscapeJsonValue },
++    ): Promise<HyperscapeActionResponse>;
++    sendHyperscapeAgentMessage(
++      agentId: string,
++      content: string,
++    ): Promise<HyperscapeActionResponse>;
++    getHyperscapeAgentGoal(
++      agentId: string,
++    ): Promise<HyperscapeAgentGoalResponse>;
++    getHyperscapeAgentQuickActions(
++      agentId: string,
++    ): Promise<HyperscapeQuickActionsResponse>;
+     runTerminalCommand(command: string): Promise<{ ok: boolean }>;
+     getOnboardingStatus(): Promise<{
+       complete: boolean;
+@@ -1021,6 +1110,177 @@ ElizaClient.prototype.playEmote = async function (this: ElizaClient, emoteId) {
+   });
+ };
+
++ElizaClient.prototype.getEmotes = async function (this: ElizaClient) {
++  return this.fetch("/api/emotes");
++};
++
++ElizaClient.prototype.getArcade555GamesCatalog = async function (
++  this: ElizaClient,
++  input?,
++) {
++  const sessionId = getOrCreateArcade555SessionId(input?.sessionId);
++  return this.fetch(
++    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
++    {
++      method: "POST",
++      body: JSON.stringify({
++        includeBeta: input?.includeBeta ?? true,
++      }),
++    },
++  );
++};
++
++ElizaClient.prototype.playArcade555Game = async function (
++  this: ElizaClient,
++  input,
++) {
++  const sessionId = getOrCreateArcade555SessionId(input.sessionId);
++  return this.fetch(
++    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/play`,
++    {
++      method: "POST",
++      body: JSON.stringify({
++        gameId: input.gameId,
++        mode: input.mode ?? "agent",
++      }),
++    },
++  );
++};
++
++ElizaClient.prototype.switchArcade555Game = async function (
++  this: ElizaClient,
++  input,
++) {
++  const sessionId = getOrCreateArcade555SessionId(input.sessionId);
++  return this.fetch(
++    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/switch`,
++    {
++      method: "POST",
++      body: JSON.stringify({
++        gameId: input.gameId,
++        mode: input.mode ?? "agent",
++      }),
++    },
++  );
++};
++
++ElizaClient.prototype.stopArcade555Game = async function (
++  this: ElizaClient,
++  input?,
++) {
++  const sessionId = getOrCreateArcade555SessionId(input?.sessionId);
++  return this.fetch(
++    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/stop`,
++    {
++      method: "POST",
++      body: JSON.stringify({}),
++    },
++  );
++};
++
++ElizaClient.prototype.getArcade555GameState = async function (
++  this: ElizaClient,
++  input?,
++) {
++  const sessionId = getOrCreateArcade555SessionId(input?.sessionId);
++  return this.fetch(
++    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/state`,
++  );
++};
++
++ElizaClient.prototype.executeAliceOperatorPlan = async function (
++  this: ElizaClient,
++  input,
++) {
++  return this.fetch(
++    "/api/alice/operator/execute",
++    {
++      method: "POST",
++      body: JSON.stringify({
++        steps: input.steps,
++        ...(input.stopOnFailure !== undefined
++          ? { stopOnFailure: input.stopOnFailure }
++          : {}),
++      }),
++    },
++    { timeoutMs: ALICE_OPERATOR_EXECUTE_TIMEOUT_MS },
++  );
++};
++
++ElizaClient.prototype.listHyperscapeEmbeddedAgents = async function (
++  this: ElizaClient,
++) {
++  return this.fetch("/api/apps/hyperscape/embedded-agents");
++};
++
++ElizaClient.prototype.createHyperscapeEmbeddedAgent = async function (
++  this: ElizaClient,
++  input,
++) {
++  return this.fetch("/api/apps/hyperscape/embedded-agents", {
++    method: "POST",
++    body: JSON.stringify(input),
++  });
++};
++
++ElizaClient.prototype.controlHyperscapeEmbeddedAgent = async function (
++  this: ElizaClient,
++  characterId,
++  action,
++) {
++  return this.fetch(
++    `/api/apps/hyperscape/embedded-agents/${encodeURIComponent(characterId)}/${action}`,
++    { method: "POST" },
++  );
++};
++
++ElizaClient.prototype.sendHyperscapeEmbeddedAgentCommand = async function (
++  this: ElizaClient,
++  characterId,
++  command,
++  data?,
++) {
++  return this.fetch(
++    `/api/apps/hyperscape/embedded-agents/${encodeURIComponent(characterId)}/command`,
++    {
++      method: "POST",
++      body: JSON.stringify({ command, data }),
++    },
++  );
++};
++
++ElizaClient.prototype.sendHyperscapeAgentMessage = async function (
++  this: ElizaClient,
++  agentId,
++  content,
++) {
++  return this.fetch(
++    `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/message`,
++    {
++      method: "POST",
++      body: JSON.stringify({ content }),
++    },
++  );
++};
++
++ElizaClient.prototype.getHyperscapeAgentGoal = async function (
++  this: ElizaClient,
++  agentId,
++) {
++  return this.fetch(
++    `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/goal`,
++  );
++};
++
++ElizaClient.prototype.getHyperscapeAgentQuickActions = async function (
++  this: ElizaClient,
++  agentId,
++) {
++  return this.fetch(
++    `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/quick-actions`,
++  );
++};
++
+ ElizaClient.prototype.runTerminalCommand = async function (
+   this: ElizaClient,
+   command,
+diff --git a/packages/ui/src/api/client-chat.ts b/packages/ui/src/api/client-chat.ts
+index 446d09ac92..ce80ee200c 100644
+--- a/packages/ui/src/api/client-chat.ts
++++ b/packages/ui/src/api/client-chat.ts
+@@ -42,6 +42,7 @@ import type {
+   MemoryRememberResponse,
+   MemorySearchResponse,
+   MemoryStatsResponse,
++  OperatorActionMessagePayload,
+   PostWorkbenchVfsPromoteToCloudRequest,
+   PromoteVfsToCloudContainerRequest,
+   PromoteVfsToCloudContainerResponse,
+@@ -233,6 +234,10 @@ declare module "./client-base" {
+       messageId: string,
+       options?: { inclusive?: boolean },
+     ): Promise<{ ok: boolean; deletedCount: number }>;
++    logConversationOperatorAction(
++      id: string,
++      payload: OperatorActionMessagePayload,
++    ): Promise<{ message: ConversationMessage }>;
+     sendConversationMessage(
+       id: string,
+       text: string,
+@@ -813,6 +818,28 @@ ElizaClient.prototype.truncateConversationMessages = async function (
+   );
+ };
+
++ElizaClient.prototype.logConversationOperatorAction = async function (
++  this: ElizaClient,
++  id,
++  payload,
++) {
++  const response = await this.fetch<{ message: ConversationMessage }>(
++    `/api/conversations/${encodeURIComponent(id)}/operator-action`,
++    {
++      method: "POST",
++      body: JSON.stringify(payload),
++    },
++  );
++  const message = response.message;
++  if (message.role !== "assistant") {
++    return { message };
++  }
++  const text = this.normalizeAssistantText(message.text);
++  return {
++    message: text === message.text ? message : { ...message, text },
++  };
++};
++
+ ElizaClient.prototype.sendConversationMessage = async function (
+   this: ElizaClient,
+   id,
+diff --git a/packages/ui/src/api/client-types-alice.ts b/packages/ui/src/api/client-types-alice.ts
+new file mode 100644
+index 0000000000..3038d24b20
+--- /dev/null
++++ b/packages/ui/src/api/client-types-alice.ts
+@@ -0,0 +1,229 @@
++export interface Arcade555CatalogGame {
++  id: string;
++  name?: string;
++  title?: string;
++  label?: string;
++  category?: string;
++  viewerUrl?: string | null;
++  [key: string]: unknown;
++}
++
++export interface Arcade555GamesCatalogResponse {
++  games: Arcade555CatalogGame[];
++  [key: string]: unknown;
++}
++
++export interface Arcade555GameActionResponse {
++  ok?: boolean;
++  started?: boolean;
++  stopped?: boolean;
++  switched?: boolean;
++  gameId?: string;
++  message?: string;
++  [key: string]: unknown;
++}
++
++export interface Arcade555GameStateResponse {
++  ok: boolean;
++  sessionId: string;
++  activeGameId: string | null;
++  activeGameLabel: string | null;
++  mode: string | null;
++  phase: string;
++  live: boolean;
++  destination: { id: string; name: string } | null;
++  [key: string]: unknown;
++}
++
++export type AliceOperatorActionName =
++  | "STREAM555_AUTH_WALLET_LOGIN"
++  | "STREAM555_AUTH_WALLET_PROVISION_LINKED"
++  | "STREAM555_GO_LIVE"
++  | "STREAM555_GO_LIVE_SEGMENTS"
++  | "STREAM555_STREAM_STATUS"
++  | "STREAM555_SCREEN_SHARE"
++  | "STREAM555_RADIO_CONTROL"
++  | "STREAM555_DESTINATIONS_APPLY"
++  | "STREAM555_SEGMENT_OVERRIDE"
++  | "STREAM555_END_LIVE"
++  | "STREAM555_AD_CREATE"
++  | "STREAM555_AD_TRIGGER"
++  | "STREAM555_AD_DISMISS"
++  | "STREAM555_EARNINGS_ESTIMATE"
++  | "STREAM555_PIP_ENABLE"
++  | "STREAM555_GUEST_INVITE"
++  | "FIVE55_GAMES_CATALOG"
++  | "FIVE55_GAMES_PLAY"
++  | "FIVE55_GAMES_SWITCH"
++  | "FIVE55_GAMES_STOP"
++  | "FIVE55_GAMES_GO_LIVE_PLAY";
++
++export interface AliceOperatorActionStep {
++  id?: string;
++  action: AliceOperatorActionName;
++  params?: Record<string, unknown>;
++}
++
++export interface AliceOperatorActionResult {
++  id: string;
++  action: AliceOperatorActionName;
++  success: boolean;
++  message: string;
++  status?: number;
++  code?: string;
++  data?: unknown;
++}
++
++export interface AliceOperatorPlanResponse {
++  ok: true;
++  allSucceeded: boolean;
++  results: AliceOperatorActionResult[];
++}
++
++export type EmoteCategory =
++  | "greeting"
++  | "emotion"
++  | "dance"
++  | "combat"
++  | "idle"
++  | "movement"
++  | "gesture"
++  | "other";
++
++export interface EmoteInfo {
++  id: string;
++  name: string;
++  description: string;
++  path: string;
++  duration: number;
++  loop: boolean;
++  category: EmoteCategory;
++}
++
++export type HyperscapeScriptedRole =
++  | "combat"
++  | "woodcutting"
++  | "fishing"
++  | "mining"
++  | "balanced";
++
++export type HyperscapeEmbeddedAgentControlAction =
++  | "start"
++  | "stop"
++  | "pause"
++  | "resume";
++
++export type HyperscapeJsonValue =
++  | string
++  | number
++  | boolean
++  | null
++  | HyperscapeJsonValue[]
++  | { [key: string]: HyperscapeJsonValue };
++
++export type HyperscapePosition =
++  | [number, number, number]
++  | {
++      x: number;
++      y: number;
++      z: number;
++    };
++
++export interface HyperscapeEmbeddedAgent {
++  agentId: string;
++  characterId: string;
++  accountId: string;
++  name: string;
++  scriptedRole: HyperscapeScriptedRole | null;
++  state: string;
++  entityId: string | null;
++  position: HyperscapePosition | null;
++  health: number | null;
++  maxHealth: number | null;
++  startedAt: number | null;
++  lastActivity: number | null;
++  error: string | null;
++}
++
++export interface HyperscapeEmbeddedAgentsResponse {
++  success: boolean;
++  agents: HyperscapeEmbeddedAgent[];
++  count: number;
++  error?: string;
++}
++
++export interface HyperscapeActionResponse {
++  success: boolean;
++  message?: string;
++  error?: string;
++}
++
++export interface HyperscapeEmbeddedAgentMutationResponse
++  extends HyperscapeActionResponse {
++  agent?: HyperscapeEmbeddedAgent | null;
++}
++
++export interface HyperscapeAvailableGoal {
++  id: string;
++  type: string;
++  description: string;
++  priority: number;
++}
++
++export interface HyperscapeGoalState {
++  type?: string;
++  description?: string;
++  progress?: number;
++  target?: number;
++  progressPercent?: number;
++  elapsedMs?: number;
++  startedAt?: number;
++  locked?: boolean;
++  lockedBy?: string;
++}
++
++export interface HyperscapeAgentGoalResponse {
++  success: boolean;
++  goal: HyperscapeGoalState | null;
++  availableGoals?: HyperscapeAvailableGoal[];
++  goalsPaused?: boolean;
++  message?: string;
++  error?: string;
++}
++
++export interface HyperscapeQuickCommand {
++  id: string;
++  label: string;
++  command: string;
++  icon: string;
++  available: boolean;
++  reason?: string;
++}
++
++export interface HyperscapeNearbyLocation {
++  id: string;
++  name: string;
++  type: string;
++  distance: number;
++}
++
++export interface HyperscapeInventoryItem {
++  id: string;
++  name: string;
++  slot: number;
++  quantity: number;
++  canEquip: boolean;
++  canUse: boolean;
++  canDrop: boolean;
++}
++
++export interface HyperscapeQuickActionsResponse {
++  success: boolean;
++  nearbyLocations: HyperscapeNearbyLocation[];
++  availableGoals: HyperscapeAvailableGoal[];
++  quickCommands: HyperscapeQuickCommand[];
++  inventory: HyperscapeInventoryItem[];
++  playerPosition: [number, number, number] | null;
++  message?: string;
++  error?: string;
++}
+diff --git a/packages/ui/src/api/client-types-chat.ts b/packages/ui/src/api/client-types-chat.ts
+index 56dccee854..4f3d9327ba 100644
+--- a/packages/ui/src/api/client-types-chat.ts
++++ b/packages/ui/src/api/client-types-chat.ts
+@@ -60,8 +60,29 @@ export interface UiSpecBlock {
+   raw?: string;
+ }
+
++export type OperatorActionKind = "stream" | "avatar" | "launch";
++
++/** A user-visible Alice operator action pill rendered in chat. */
++export interface ActionPillBlock {
++  type: "action-pill";
++  label: string;
++  kind: OperatorActionKind;
++  detail?: string;
++}
++
+ /** Union of all content block types. */
+-export type ContentBlock = TextBlock | ConfigFormBlock | UiSpecBlock;
++export type ContentBlock =
++  | TextBlock
++  | ConfigFormBlock
++  | UiSpecBlock
++  | ActionPillBlock;
++
++export interface OperatorActionMessagePayload {
++  label: string;
++  kind: OperatorActionKind;
++  detail?: string;
++  fallbackText?: string;
++}
+
+ /** An image attachment to send with a chat message. */
+ export interface ImageAttachment {
+diff --git a/packages/ui/src/api/client-types.ts b/packages/ui/src/api/client-types.ts
+index d1ca629bef..a489cb130d 100644
+--- a/packages/ui/src/api/client-types.ts
++++ b/packages/ui/src/api/client-types.ts
+@@ -3,6 +3,7 @@
+ // importing from this single path without changes.
+ // ---------------------------------------------------------------------------
+
++export * from "./client-types-alice";
+ export * from "./client-types-babylon";
+ export * from "./client-types-character";
+ export * from "./client-types-chat";
+diff --git a/packages/ui/src/components/chat/MessageContent.tsx b/packages/ui/src/components/chat/MessageContent.tsx
+index 0e393e792b..9d3b59e5be 100644
+--- a/packages/ui/src/components/chat/MessageContent.tsx
++++ b/packages/ui/src/components/chat/MessageContent.tsx
+@@ -7,7 +7,11 @@ import {
+   useState,
+ } from "react";
+ import { client } from "../../api/client";
+-import type { ConversationMessage } from "../../api/client-types-chat";
++import type {
++  ContentBlock,
++  ConversationMessage,
++  OperatorActionKind,
++} from "../../api/client-types-chat";
+ import type { PluginInfo } from "../../api/client-types-config";
+ import type { JsonSchemaObject } from "../../config/config-catalog";
+ import type { PatchOp, UiSpec } from "../../config/ui-spec";
+@@ -67,6 +71,140 @@ interface MessageContentProps {
+   analysisMode?: boolean;
+ }
+
++function ActivityGlyph() {
++  return (
++    <svg
++      viewBox="0 0 24 24"
++      fill="none"
++      stroke="currentColor"
++      strokeWidth="1.8"
++      strokeLinecap="round"
++      strokeLinejoin="round"
++      aria-hidden="true"
++      className="h-3.5 w-3.5"
++    >
++      <path d="M4 13h4l2-5 4 10 2-5h4" />
++    </svg>
++  );
++}
++
++function LaunchGlyph() {
++  return (
++    <svg
++      viewBox="0 0 24 24"
++      fill="none"
++      stroke="currentColor"
++      strokeWidth="1.8"
++      strokeLinecap="round"
++      strokeLinejoin="round"
++      aria-hidden="true"
++      className="h-3.5 w-3.5"
++    >
++      <path d="M5 12h6" />
++      <path d="m11 8 4 4-4 4" />
++      <path d="M4 19h16" />
++    </svg>
++  );
++}
++
++function StreamGlyph() {
++  return (
++    <svg
++      viewBox="0 0 24 24"
++      fill="none"
++      stroke="currentColor"
++      strokeWidth="1.8"
++      strokeLinecap="round"
++      strokeLinejoin="round"
++      aria-hidden="true"
++      className="h-3.5 w-3.5"
++    >
++      <rect x="4" y="7" width="11" height="10" rx="2" />
++      <path d="m15 10 5-3v10l-5-3" />
++    </svg>
++  );
++}
++
++function AvatarGlyph() {
++  return (
++    <svg
++      viewBox="0 0 24 24"
++      fill="none"
++      stroke="currentColor"
++      strokeWidth="1.8"
++      strokeLinecap="round"
++      strokeLinejoin="round"
++      aria-hidden="true"
++      className="h-3.5 w-3.5"
++    >
++      <path d="M12 3v4" />
++      <path d="m8.5 8.5 7 7" />
++      <path d="M6 14a6 6 0 0 0 12 0" />
++    </svg>
++  );
++}
++
++function resolveOperatorActionPresentation(kind: OperatorActionKind) {
++  if (kind === "avatar") {
++    return {
++      eyebrow: "Avatar Action",
++      AccentIcon: AvatarGlyph,
++      EyebrowIcon: ActivityGlyph,
++      accentClass:
++        "border-[rgba(236,201,75,0.18)] bg-[linear-gradient(135deg,rgba(255,193,7,0.14),rgba(255,255,255,0.02))] text-[#ffe7a2]",
++    };
++  }
++  if (kind === "launch") {
++    return {
++      eyebrow: "Launch",
++      AccentIcon: LaunchGlyph,
++      EyebrowIcon: LaunchGlyph,
++      accentClass:
++        "border-[rgba(125,211,252,0.18)] bg-[linear-gradient(135deg,rgba(56,189,248,0.14),rgba(255,255,255,0.02))] text-[#d5f2ff]",
++    };
++  }
++  return {
++    eyebrow: "Stream Action",
++    AccentIcon: StreamGlyph,
++    EyebrowIcon: StreamGlyph,
++    accentClass:
++      "border-[rgba(16,185,129,0.22)] bg-[linear-gradient(135deg,rgba(16,185,129,0.14),rgba(255,255,255,0.02))] text-[#d2fff1]",
++  };
++}
++
++function OperatorActionBlock({
++  label,
++  kind,
++  detail,
++}: {
++  label: string;
++  kind: OperatorActionKind;
++  detail?: string;
++}) {
++  const { eyebrow, AccentIcon, EyebrowIcon, accentClass } =
++    resolveOperatorActionPresentation(kind);
++
++  return (
++    <div className="my-0.5 flex flex-col items-start gap-1.5">
++      <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.24em] text-white/42">
++        <EyebrowIcon />
++        {eyebrow}
++      </div>
++      <div
++        className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-[13px] font-medium shadow-[0_12px_30px_rgba(0,0,0,0.24)] backdrop-blur-xl ${accentClass}`}
++      >
++        <span className="inline-flex h-5.5 w-5.5 items-center justify-center rounded-full border border-white/10 bg-black/24">
++          <AccentIcon />
++        </span>
++        <span className="truncate">{label}</span>
++      </div>
++      {detail ? (
++        <div className="text-[11px] text-white/54">{detail}</div>
++      ) : null}
++    </div>
++  );
++}
++
+ // ── Segment types ───────────────────────────────────────────────────
+
+ type Segment =
+@@ -1031,6 +1169,41 @@ function SensitiveRequestBlock({
+   );
+ }
+
++function renderMessageBlock(block: ContentBlock, key: string) {
++  switch (block.type) {
++    case "text":
++      return (
++        <div key={key} className="whitespace-pre-wrap">
++          {block.text}
++        </div>
++      );
++    case "config-form":
++      if (!isSafeNormalizedPluginId(normalizePluginId(block.pluginId))) {
++        return null;
++      }
++      return <InlinePluginConfig key={key} pluginId={block.pluginId} />;
++    case "ui-spec":
++      return (
++        <UiSpecBlock
++          key={key}
++          spec={block.spec as unknown as UiSpec}
++          raw={block.raw ?? ""}
++        />
++      );
++    case "action-pill":
++      return (
++        <OperatorActionBlock
++          key={key}
++          label={block.label}
++          kind={block.kind}
++          detail={block.detail}
++        />
++      );
++    default:
++      return null;
++  }
++}
++
+ // ── Main component ──────────────────────────────────────────────────
+
+ export function MessageContent({
+@@ -1045,16 +1218,18 @@ export function MessageContent({
+   const [localDownloadError, setLocalDownloadError] = useState<string | null>(
+     null,
+   );
++  const hasBlocks = Array.isArray(message.blocks) && message.blocks.length > 0;
+
+   // Parse segments — memoize to avoid re-parsing on every render
+   const segments = useMemo(() => {
++    if (hasBlocks) return null;
+     try {
+       return parseSegments(message.text, analysisMode);
+     } catch {
+       // If parsing fails, just show plain text
+       return [{ kind: "text" as const, text: message.text }];
+     }
+-  }, [message.text, analysisMode]);
++  }, [message.text, analysisMode, hasBlocks]);
+
+   const handleChoice = useCallback(
+     (value: string) => {
+@@ -1184,6 +1359,20 @@ export function MessageContent({
+     );
+   }
+
++  if (hasBlocks) {
++    return (
++      <div>
++        {message.blocks?.map((block, index) =>
++          renderMessageBlock(block, `${message.id}:block:${index}`),
++        )}
++      </div>
++    );
++  }
++
++  if (!segments) {
++    return null;
++  }
++
+   // Fast path: single plain-text segment (most messages)
+   if (segments.length === 1 && segments[0].kind === "text") {
+     return <div className="whitespace-pre-wrap">{segments[0].text}</div>;
+diff --git a/packages/ui/src/state/AppContext.tsx b/packages/ui/src/state/AppContext.tsx
+index 402773d2d9..3776e63334 100644
+--- a/packages/ui/src/state/AppContext.tsx
++++ b/packages/ui/src/state/AppContext.tsx
+@@ -1224,6 +1224,7 @@ function AppProviderInner({
+     sendChatText,
+     handleChatSend,
+     sendActionMessage,
++    logConversationOperatorAction,
+     handleChatStop,
+     handleChatRetry,
+     handleChatEdit,
+@@ -2155,6 +2156,7 @@ function AppProviderInner({
+       handleRenameConversation,
+       suggestConversationTitle,
+       sendActionMessage,
++      logConversationOperatorAction,
+       sendChatText,
+       loadTriggers,
+       ensureTriggersLoaded,
+@@ -2564,6 +2566,7 @@ function AppProviderInner({
+       handleRenameConversation,
+       suggestConversationTitle,
+       sendActionMessage,
++      logConversationOperatorAction,
+       sendChatText,
+       loadTriggers,
+       ensureTriggersLoaded,
+diff --git a/packages/ui/src/state/types.ts b/packages/ui/src/state/types.ts
+index 76831946e5..f2830e93c4 100644
+--- a/packages/ui/src/state/types.ts
++++ b/packages/ui/src/state/types.ts
+@@ -37,6 +37,7 @@ import type {
+   McpServerStatus,
+   MintResult,
+   OnboardingOptions,
++  OperatorActionMessagePayload,
+   PluginInfo,
+   RegistryPlugin,
+   RegistryStatus,
+@@ -781,6 +782,10 @@ export interface AppActions {
+   suggestConversationTitle: (id: string) => Promise<string | null>;
+   /** Send a programmatic message (e.g. from a UiSpec action) without touching chatInput. */
+   sendActionMessage: (text: string) => Promise<void>;
++  /** Persist an operator action pill into the active conversation. */
++  logConversationOperatorAction: (
++    payload: OperatorActionMessagePayload,
++  ) => Promise<boolean>;
+   /** Send a chat message with optional metadata (e.g. task creation intent). */
+   sendChatText: (
+     rawInput: string,
+diff --git a/packages/ui/src/state/useChatSend.ts b/packages/ui/src/state/useChatSend.ts
+index a9a519f7d7..3c534bf6fc 100644
+--- a/packages/ui/src/state/useChatSend.ts
++++ b/packages/ui/src/state/useChatSend.ts
+@@ -15,6 +15,7 @@ import {
+   type ConversationMode,
+   client,
+   type ImageAttachment,
++  type OperatorActionMessagePayload,
+ } from "../api";
+ import {
+   expandSavedCustomCommand,
+@@ -1181,6 +1182,98 @@ export function useChatSend(deps: UseChatSendDeps) {
+     ],
+   );
+
++  const logConversationOperatorAction = useCallback(
++    async (payload: OperatorActionMessagePayload): Promise<boolean> => {
++      let convId = activeConversationIdRef.current ?? activeConversationId;
++      if (!convId) {
++        try {
++          const { conversation: rawConversation } =
++            await client.createConversation();
++          if (!isConversationRecord(rawConversation)) {
++            throw new Error(
++              "Conversation creation returned an invalid payload.",
++            );
++          }
++          const conversation = rawConversation;
++          setConversations((prev) => [conversation, ...prev]);
++          setActiveConversationId(conversation.id);
++          activeConversationIdRef.current = conversation.id;
++          setConversationMessages([]);
++          convId = conversation.id;
++        } catch {
++          return false;
++        }
++      }
++
++      const appendLoggedAction = (message: ConversationMessage) => {
++        setConversationMessages((prev) => {
++          if (prev.some((entry) => entry.id === message.id)) return prev;
++          return [...prev, message];
++        });
++      };
++
++      const logForConversation = async (conversationId: string) => {
++        client.sendWsMessage({
++          type: "active-conversation",
++          conversationId,
++        });
++        const { message } = await client.logConversationOperatorAction(
++          conversationId,
++          payload,
++        );
++        appendLoggedAction(message);
++        return message;
++      };
++
++      try {
++        await logForConversation(convId);
++        void loadConversations();
++        return true;
++      } catch (err) {
++        const status = (err as { status?: number }).status;
++        if (status === 404) {
++          try {
++            const { conversation: rawConversation } =
++              await client.createConversation();
++            if (!isConversationRecord(rawConversation)) {
++              throw new Error(
++                "Conversation creation returned an invalid payload.",
++              );
++            }
++            const conversation = rawConversation;
++            setConversations((prev) => [conversation, ...prev]);
++            setActiveConversationId(conversation.id);
++            activeConversationIdRef.current = conversation.id;
++            setConversationMessages([]);
++            await logForConversation(conversation.id);
++            void loadConversations();
++            return true;
++          } catch {
++            return false;
++          }
++        }
++
++        setActionNotice(
++          `Action executed, but logging failed: ${
++            err instanceof Error ? err.message : "unknown error"
++          }`,
++          "info",
++          2600,
++        );
++        return false;
++      }
++    },
++    [
++      activeConversationId,
++      activeConversationIdRef,
++      loadConversations,
++      setActionNotice,
++      setActiveConversationId,
++      setConversationMessages,
++      setConversations,
++    ],
++  );
++
+   const handleChatStop = useCallback(() => {
+     interruptActiveChatPipeline();
+
+@@ -1353,6 +1446,7 @@ export function useChatSend(deps: UseChatSendDeps) {
+     sendChatText,
+     handleChatSend,
+     sendActionMessage,
++    logConversationOperatorAction,
+     handleChatStop,
+     handleChatRetry,
+     handleChatEdit,

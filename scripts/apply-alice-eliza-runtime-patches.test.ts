@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -44,7 +45,7 @@ import {
   applyAliceLifeOpsCalendarActionPatch,
   applyAliceLifeOpsNativeActivityTrackerPatch,
   applyAlicePgliteContainerLockPatch,
-  aliceCompanionOperatorPatchRelativePath,
+  aliceCompanionUiCompatPatchRelativePath,
   aliceElizaRuntimePatchRelativePath,
   isAliceAppCoreCodingAgentsFallbackPatched,
   isAliceAppCoreAgentStatusAuthBridgePatched,
@@ -73,6 +74,32 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(dirname, "..");
 
 describe("Alice Eliza runtime patch contract", () => {
+  it("retains UI compatibility without patching upstream companion", () => {
+    const patchPath = path.join(
+      repoRoot,
+      "scripts/alice-eliza-runtime-patches/alice-companion-ui-compat.patch",
+    );
+
+    expect(existsSync(patchPath)).toBe(true);
+    const patch = readFileSync(patchPath, "utf8");
+    expect(patch).toContain("packages/ui/src/api/client-types-alice.ts");
+    expect(patch).toContain(
+      "packages/ui/src/components/chat/MessageContent.tsx",
+    );
+    expect(patch).not.toContain("plugins/app-companion/");
+  });
+
+  it("removes the mixed operator patch", () => {
+    expect(
+      existsSync(
+        path.join(
+          repoRoot,
+          "scripts/alice-eliza-runtime-patches/alice-companion-operator.patch",
+        ),
+      ),
+    ).toBe(false);
+  });
+
   it("carries the server-only early API bind and startup contract", () => {
     const patch = readFileSync(
       path.join(repoRoot, aliceElizaRuntimePatchRelativePath),
@@ -101,7 +128,7 @@ describe("Alice Eliza runtime patch contract", () => {
 
   it("leaves client config auth gating to the dedicated startup patch", () => {
     const patch = readFileSync(
-      path.join(repoRoot, aliceCompanionOperatorPatchRelativePath),
+      path.join(repoRoot, aliceCompanionUiCompatPatchRelativePath),
       "utf8",
     );
 

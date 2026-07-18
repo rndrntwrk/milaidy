@@ -510,7 +510,7 @@ git commit -m "feat(alice): vendor companion as first-party source"
 - Consumes: first-party companion and nine required Eliza UI/client hunks.
 - Produces: `applyAliceCompanionUiCompatPatch({ rootDir, elizaRoot, log })`, which never patches `plugins/app-companion`.
 
-- [ ] **Step 1: Write failing ownership tests**
+- [x] **Step 1: Write failing ownership tests**
 
 ```ts
 it("retains UI compatibility without patching upstream companion", () => {
@@ -531,7 +531,7 @@ it("removes the mixed operator patch", () => {
 });
 ```
 
-- [ ] **Step 2: Run and observe the expected failure**
+- [x] **Step 2: Run and observe the expected failure**
 
 ```bash
 bunx vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
@@ -539,7 +539,11 @@ bunx vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
 
 Expected: UI-only patch absent and old mixed patch present.
 
-- [ ] **Step 3: Retain exactly these nine patch targets**
+Evidence: the focused suite failed exactly two new assertions: the UI-only
+patch did not exist and the mixed operator patch still existed; the other 38
+assertions passed.
+
+- [x] **Step 3: Retain exactly these nine patch targets**
 
 ```text
 packages/ui/src/api/client-agent.ts
@@ -569,7 +573,11 @@ rg '^diff --git' scripts/alice-eliza-runtime-patches/alice-companion-ui-compat.p
 
 Expected: exactly the nine paths above and no `plugins/app-companion/` target.
 
-- [ ] **Step 4: Rename the patch driver and preserve strong sentinels**
+Evidence: the extracted patch contains exactly nine `packages/ui` diff blocks,
+zero `plugins/app-companion` paths, and passes `git apply --check --reverse`
+against pinned Eliza `17930c97b97cedb8fe64124e327c023cd526cc8b`.
+
+- [x] **Step 4: Rename the patch driver and preserve strong sentinels**
 
 ```js
 export const aliceCompanionUiCompatPatchRelativePath =
@@ -598,7 +606,7 @@ export function isAliceCompanionUiCompatPatched(elizaRoot) {
 
 Rename the apply function and result-list call to `applyAliceCompanionUiCompatPatch`.
 
-- [ ] **Step 5: Prove strictness and idempotency**
+- [x] **Step 5: Prove strictness and idempotency**
 
 ```bash
 bunx vitest run scripts/apply-alice-eliza-runtime-patches.test.ts
@@ -613,7 +621,13 @@ fi
 
 Expected: tests pass; second application is already-applied; no generated upstream companion file changes.
 
-- [ ] **Step 6: Commit ownership split**
+Evidence: all 40 patch-contract assertions pass. The focused UI compatibility
+driver returned `already-applied` twice on a clean pinned Eliza worktree with
+zero changed paths. The full strict patch driver also passed twice in the
+hydrated release assembly; the upstream companion tree hash was identical
+before and after (`dc03be29394f4861a6baa9706fc94cac97c3d97ce5419e7a7a47a6831b99a1f6`).
+
+- [x] **Step 6: Commit ownership split**
 
 ```bash
 git add scripts/apply-alice-eliza-runtime-patches.mjs scripts/apply-alice-eliza-runtime-patches.test.ts scripts/alice-eliza-runtime-patches/alice-companion-ui-compat.patch

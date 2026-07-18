@@ -16,8 +16,8 @@ const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 
 export const aliceElizaRuntimePatchRelativePath =
   "scripts/alice-eliza-runtime-patches/app-core-server-only-api-bind.patch";
-export const aliceCompanionOperatorPatchRelativePath =
-  "scripts/alice-eliza-runtime-patches/alice-companion-operator.patch";
+export const aliceCompanionUiCompatPatchRelativePath =
+  "scripts/alice-eliza-runtime-patches/alice-companion-ui-compat.patch";
 
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
 const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
@@ -7133,72 +7133,23 @@ export function applyAliceUiAvatarDefaultMigrationPatch({
   return "applied";
 }
 
-export function isAliceCompanionOperatorPatchPatched(elizaRoot) {
+export function isAliceCompanionUiCompatPatched(elizaRoot) {
   const requiredFiles = [
     "packages/ui/src/api/client-types-alice.ts",
-    "plugins/app-companion/src/components/operator/useCompanionStageOperator.ts",
-    "plugins/app-companion/src/components/operator/CompanionGoLiveModal.tsx",
-    "plugins/app-companion/src/components/operator/CompanionStageOperatorOverlay.tsx",
-    "plugins/app-companion/src/utils/app-emote-runtime.ts",
+    "packages/ui/src/api/client-agent.ts",
+    "packages/ui/src/api/client-chat.ts",
+    "packages/ui/src/components/chat/MessageContent.tsx",
   ].map((relativePath) => path.join(elizaRoot, relativePath));
 
   if (requiredFiles.some((filePath) => !existsSync(filePath))) {
     return false;
   }
 
-  const companionViewPath = path.join(
-    elizaRoot,
-    "plugins/app-companion/src/components/companion/CompanionView.tsx",
-  );
-  const companionHeaderPath = path.join(
-    elizaRoot,
-    "plugins/app-companion/src/components/companion/CompanionHeader.tsx",
-  );
-  const companionAppViewPath = path.join(
-    elizaRoot,
-    "plugins/app-companion/src/components/companion/CompanionAppView.tsx",
-  );
-  const clientAgentPath = path.join(
-    elizaRoot,
-    "packages/ui/src/api/client-agent.ts",
-  );
-  const clientChatPath = path.join(
-    elizaRoot,
-    "packages/ui/src/api/client-chat.ts",
-  );
-  const messageContentPath = path.join(
-    elizaRoot,
-    "packages/ui/src/components/chat/MessageContent.tsx",
-  );
-
-  if (
-    [
-      companionViewPath,
-      companionHeaderPath,
-      companionAppViewPath,
-      clientAgentPath,
-      clientChatPath,
-      messageContentPath,
-    ].some((filePath) => !existsSync(filePath))
-  ) {
-    return false;
-  }
-
-  const companionViewSource = readFileSync(companionViewPath, "utf8");
-  const companionHeaderSource = readFileSync(companionHeaderPath, "utf8");
-  const companionAppViewSource = readFileSync(companionAppViewPath, "utf8");
-  const clientAgentSource = readFileSync(clientAgentPath, "utf8");
-  const clientChatSource = readFileSync(clientChatPath, "utf8");
-  const messageContentSource = readFileSync(messageContentPath, "utf8");
+  const clientAgentSource = readFileSync(requiredFiles[1], "utf8");
+  const clientChatSource = readFileSync(requiredFiles[2], "utf8");
+  const messageContentSource = readFileSync(requiredFiles[3], "utf8");
 
   return (
-    companionViewSource.includes("companion-header-go-live") &&
-    companionViewSource.includes("CompanionStageOperatorOverlay") &&
-    companionHeaderSource.includes("companionControlsExtras") &&
-    companionAppViewSource.includes(
-      'import { CompanionView } from "./CompanionView"',
-    ) &&
-    companionAppViewSource.includes("<CompanionView />") &&
     clientAgentSource.includes("executeAliceOperatorPlan") &&
     clientAgentSource.includes("getEmotes") &&
     clientChatSource.includes("logConversationOperatorAction") &&
@@ -7206,21 +7157,21 @@ export function isAliceCompanionOperatorPatchPatched(elizaRoot) {
   );
 }
 
-export function applyAliceCompanionOperatorPatch({
+export function applyAliceCompanionUiCompatPatch({
   rootDir,
   elizaRoot,
   log = console.log,
 } = {}) {
-  if (isAliceCompanionOperatorPatchPatched(elizaRoot)) {
+  if (isAliceCompanionUiCompatPatched(elizaRoot)) {
     log(
-      "[alice-eliza-runtime-patches] Alice companion operator already applied",
+      "[alice-eliza-runtime-patches] Alice companion UI compatibility already applied",
     );
     return "already-applied";
   }
 
-  const patchPath = path.join(rootDir, aliceCompanionOperatorPatchRelativePath);
+  const patchPath = path.join(rootDir, aliceCompanionUiCompatPatchRelativePath);
   if (!existsSync(patchPath)) {
-    throw new Error(`missing Alice companion operator patch: ${patchPath}`);
+    throw new Error(`missing Alice companion UI compatibility patch: ${patchPath}`);
   }
 
   const reverseCheck = runGitApply(
@@ -7229,7 +7180,7 @@ export function applyAliceCompanionOperatorPatch({
   );
   if (reverseCheck.status === 0) {
     log(
-      "[alice-eliza-runtime-patches] Alice companion operator already applied",
+      "[alice-eliza-runtime-patches] Alice companion UI compatibility already applied",
     );
     return "already-applied";
   }
@@ -7237,18 +7188,18 @@ export function applyAliceCompanionOperatorPatch({
   applyPatchWithGitFallback({
     patchPath,
     targetRoot: elizaRoot,
-    driftMessage: "Alice companion operator patch drifted",
+    driftMessage: "Alice companion UI compatibility patch drifted",
     log,
   });
 
-  if (!isAliceCompanionOperatorPatchPatched(elizaRoot)) {
+  if (!isAliceCompanionUiCompatPatched(elizaRoot)) {
     throw new Error(
-      "Alice companion operator patch applied but contract is absent",
+      "Alice companion UI compatibility patch applied but contract is absent",
     );
   }
 
   log(
-    "[alice-eliza-runtime-patches] restored Alice companion operator controls",
+    "[alice-eliza-runtime-patches] restored Alice companion UI compatibility",
   );
   return "applied";
 }
@@ -7389,7 +7340,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceUiVrmDefaultPatch({ elizaRoot, log }),
     applyAliceSharedKeywordAppleDoublePatch({ elizaRoot, log }),
     applyAliceUiAvatarDefaultMigrationPatch({ elizaRoot, log }),
-    applyAliceCompanionOperatorPatch({ rootDir, elizaRoot, log }),
+    applyAliceCompanionUiCompatPatch({ rootDir, elizaRoot, log }),
     applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
     applyAliceAppLifeOpsDirSubpathExportsPatch({ elizaRoot, log }),
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
