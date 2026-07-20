@@ -14,6 +14,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyAliceAppCoreBrowserEntryPatch,
+  applyAliceAgentSourceRootEntryPatch,
+  applyAliceConversationOperatorActionPatch,
+  applyAliceRuntimePluginStagingResolverPatch,
+  applyAliceUpstreamNodeDistEntriesPatch,
   isAliceAppCoreBrowserEntryPatched,
   applyAliceAppCoreAgentStatusAuthBridgePatch,
   applyAliceAppCoreCodingAgentsFallbackPatch,
@@ -46,6 +50,9 @@ import {
   isAliceTelegramSourcePackageJsonExportPatched,
   applyAliceKubeHealthReadinessPatch,
   applyAliceLifeOpsCalendarActionPatch,
+  applyAliceLifeOpsRoutePluginSpecifierPatch,
+  applyAliceLifeOpsAgentRuntimeFacadePatch,
+  applyAliceLifeOpsCloudFacadePatch,
   applyAliceLifeOpsNativeActivityTrackerPatch,
   applyAlicePgliteContainerLockPatch,
   aliceCompanionUiCompatPatchRelativePath,
@@ -56,8 +63,14 @@ import {
   isAliceAppCoreDashboardFallbackRoutesPatched,
   isAliceAppCoreUpstreamAuthBridgePatched,
   isAliceAuthRateLimitAfterValidSessionPatched,
+  isAliceAgentSourceRootEntryPatched,
+  isAliceConversationOperatorActionPatched,
+  isAliceRuntimePluginStagingResolverPatched,
+  isAliceUpstreamNodeDistEntryPatched,
   isAliceProviderFailureNonfatalPatched,
   isAliceLifeOpsCalendarActionPatched,
+  isAliceLifeOpsRoutePluginSpecifierPatched,
+  isAliceLifeOpsAgentRuntimeFacadePatched,
   isAliceBundledKnowledgeStartupDeferralPatched,
   isAliceKubeHealthReadinessPatched,
   isAlicePgliteContainerLockPatchPatched,
@@ -2901,6 +2914,471 @@ describe("app-core server/client boundary (browser-entry patch)", () => {
       ).toBe("applied");
       expect(
         applyAliceAppCoreBrowserEntryPatch({ elizaRoot, log: () => undefined }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("LifeOps server route registry patch", () => {
+  it("targets the dedicated server route export and is idempotent", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-lifeops-route-"));
+    try {
+      const registryDir = path.join(
+        tempDir,
+        "packages/app-core/src/registry/entries/apps",
+      );
+      mkdirSync(registryDir, { recursive: true });
+      const lifeOpsPath = path.join(registryDir, "lifeops.json");
+      writeFileSync(
+        lifeOpsPath,
+        `${JSON.stringify(
+          {
+            id: "lifeops",
+            launch: {
+              routePlugin: {
+                specifier: "@elizaos/app-lifeops",
+                exportName: "lifeopsPlugin",
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      expect(
+        applyAliceLifeOpsRoutePluginSpecifierPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = JSON.parse(readFileSync(lifeOpsPath, "utf8"));
+      expect(isAliceLifeOpsRoutePluginSpecifierPatched(patched)).toBe(true);
+      expect(patched.launch.routePlugin).toEqual({
+        specifier: "@elizaos/app-lifeops/routes/plugin",
+        exportName: "lifeopsPlugin",
+      });
+      expect(
+        applyAliceLifeOpsRoutePluginSpecifierPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("Eliza agent source root entry patch", () => {
+  it("self-heals the obsolete full Node bundle override", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-agent-entry-"));
+    try {
+      const agentDir = path.join(tempDir, "packages/agent");
+      mkdirSync(agentDir, { recursive: true });
+      const packageJsonPath = path.join(agentDir, "package.json");
+      writeFileSync(
+        packageJsonPath,
+        `${JSON.stringify(
+          {
+            name: "@elizaos/agent",
+            main: "src/index.ts",
+            exports: {
+              ".": {
+                node: "./dist/node/index.mjs",
+                import: "./src/index.ts",
+                default: "./src/index.ts",
+              },
+              "./package.json": "./package.json",
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      expect(
+        applyAliceAgentSourceRootEntryPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const patched = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+      expect(patched.main).toBe("src/index.ts");
+      expect(patched.exports["."]).toBe("./src/index.ts");
+      expect(isAliceAgentSourceRootEntryPatched(patched)).toBe(true);
+      expect(
+        applyAliceAgentSourceRootEntryPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("Eliza runtime plugin staging resolver patch", () => {
+  it("uses built root entries and removes dist-only Node conditions from source stages", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-plugin-staging-resolver-"),
+    );
+    try {
+      const runtimeDir = path.join(tempDir, "packages/agent/src/runtime");
+      mkdirSync(runtimeDir, { recursive: true });
+      const resolverPath = path.join(runtimeDir, "plugin-resolver.ts");
+      const pluginTypesPath = path.join(runtimeDir, "plugin-types.ts");
+      writeFileSync(
+        resolverPath,
+        `function rewriteDistExportTargetToSource(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(/^\\.(\\/dist\\/)/, "./src/").replace(/\\.js$/, ".ts");
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(rewriteDistExportTargetToSource);
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      rewriteDistExportTargetToSource(entry),
+    ]),
+  );
+}
+`,
+      );
+      writeFileSync(
+        pluginTypesPath,
+        `const fallbackCandidates = [
+    ...(exportSubpath === "."
+      ? [
+          fallback,
+          path.join(pkgRoot, "index"),
+`,
+      );
+
+      expect(
+        applyAliceRuntimePluginStagingResolverPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const resolverSource = readFileSync(resolverPath, "utf8");
+      const pluginTypesSource = readFileSync(pluginTypesPath, "utf8");
+      expect(
+        isAliceRuntimePluginStagingResolverPatched({
+          resolverSource,
+          pluginTypesSource,
+        }),
+      ).toBe(true);
+      expect(resolverSource).toContain(
+        'key === "node" && typeof entry === "string" && entry.startsWith("./dist/")',
+      );
+      expect(resolverSource).toContain('/\\.(?:[cm]?js)$/');
+      expect(pluginTypesSource).toContain(
+        'path.join(pkgRoot, "dist", "index.js")',
+      );
+      expect(pluginTypesSource).toContain(
+        'path.join(pkgRoot, "dist", "index.mjs")',
+      );
+      expect(
+        applyAliceRuntimePluginStagingResolverPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("Alice conversation operator-action patch", () => {
+  it("restores the route, transcript blocks, and activity-feed exclusion idempotently", () => {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "alice-operator-action-"),
+    );
+    try {
+      const agentApiDir = path.join(tempDir, "packages/agent/src/api");
+      const uiStateDir = path.join(tempDir, "packages/ui/src/state");
+      mkdirSync(agentApiDir, { recursive: true });
+      mkdirSync(uiStateDir, { recursive: true });
+
+      const routePath = path.join(agentApiDir, "conversation-routes.ts");
+      writeFileSync(
+        routePath,
+        `/**
+ *   POST   /api/conversations/:id/messages           – send message
+ *   POST   /api/conversations/:id/greeting            – get/store greeting
+ */
+
+async function getConversationWithRestore() {}
+
+type ConversationRouteMessageRecord = {
+  id: string;
+  role: "assistant" | "user";
+  text: string;
+  timestamp: number;
+  source?: string;
+};
+
+async function handleConversationRoutes() {
+          const normalizedSource =
+            typeof contentSource === "string" &&
+            contentSource.length > 0 &&
+            contentSource !== "client_chat"
+              ? contentSource
+              : undefined;
+          const actionName = undefined;
+          return {
+            id: m.id ?? "",
+            role: m.entityId === agentId ? "assistant" : "user",
+            text: "",
+            timestamp: m.createdAt ?? 0,
+            source: normalizedSource,
+          } satisfies ConversationRouteMessageRecord;
+
+  // ── POST /api/conversations/:id/messages ────────────────────────────
+  return true;
+}
+`,
+      );
+
+      const hydratePath = path.join(uiStateDir, "startup-phase-hydrate.ts");
+      writeFileSync(
+        hydratePath,
+        `if (msg.source && msg.source !== "client_chat" && msg.role === "user")
+  d.appendAutonomousEvent({ type: "agent_event" });
+`,
+      );
+
+      expect(
+        applyAliceConversationOperatorActionPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+
+      const routeSource = readFileSync(routePath, "utf8");
+      const hydrateSource = readFileSync(hydratePath, "utf8");
+      expect(
+        isAliceConversationOperatorActionPatched({
+          routeSource,
+          hydrateSource,
+        }),
+      ).toBe(true);
+      expect(routeSource).toContain(
+        '/^\\/api\\/conversations\\/[^/]+\\/operator-action$/.test(pathname)',
+      );
+      expect(routeSource).toContain(
+        "const persistedBlocks = sanitizePersistedBlocks(content.blocks);",
+      );
+      expect(routeSource).toContain(
+        "...(persistedBlocks ? { blocks: persistedBlocks } : {}),",
+      );
+      expect(hydrateSource).toContain(
+        'msg.source !== "operator_action"',
+      );
+
+      expect(
+        applyAliceConversationOperatorActionPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("LifeOps agent runtime facade patch", () => {
+  it("creates the focused facade, package export, and rewrites LifeOps imports", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-lifeops-agent-"));
+    try {
+      const agentDir = path.join(tempDir, "packages/agent");
+      const lifeOpsDir = path.join(tempDir, "plugins/app-lifeops/src/routes");
+      mkdirSync(path.join(agentDir, "src"), { recursive: true });
+      mkdirSync(lifeOpsDir, { recursive: true });
+      writeFileSync(
+        path.join(agentDir, "package.json"),
+        `${JSON.stringify(
+          {
+            name: "@elizaos/agent",
+            exports: { ".": "./src/index.ts" },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      const routePath = path.join(lifeOpsDir, "plugin.ts");
+      writeFileSync(
+        routePath,
+        'import { handleConnectorAccountRoutes } from "@elizaos/agent";\n',
+      );
+
+      expect(
+        applyAliceLifeOpsAgentRuntimeFacadePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+      const agentPackageJson = JSON.parse(
+        readFileSync(path.join(agentDir, "package.json"), "utf8"),
+      );
+      const facadeSource = readFileSync(
+        path.join(agentDir, "src/lifeops-runtime.ts"),
+        "utf8",
+      );
+      const lifeOpsSource = readFileSync(routePath, "utf8");
+      expect(
+        isAliceLifeOpsAgentRuntimeFacadePatched({
+          agentPackageJson,
+          facadeSource,
+          lifeOpsSources: [lifeOpsSource],
+        }),
+      ).toBe(true);
+      expect(lifeOpsSource).toContain(
+        'from "@elizaos/agent/lifeops-runtime"',
+      );
+      expect(
+        applyAliceLifeOpsAgentRuntimeFacadePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("LifeOps ElizaCloud facade patch", () => {
+  it("creates the cloud helper facade and rewrites LifeOps imports", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-lifeops-cloud-"));
+    try {
+      const cloudDir = path.join(tempDir, "plugins/plugin-elizacloud");
+      const lifeOpsDir = path.join(tempDir, "plugins/app-lifeops/src/routes");
+      mkdirSync(path.join(cloudDir, "src"), { recursive: true });
+      mkdirSync(lifeOpsDir, { recursive: true });
+      writeFileSync(
+        path.join(cloudDir, "package.json"),
+        `${JSON.stringify(
+          {
+            name: "@elizaos/plugin-elizacloud",
+            exports: {
+              ".": {
+                node: "./dist/index.js",
+                import: "./src/index.ts",
+                default: "./src/index.ts",
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      const routePath = path.join(lifeOpsDir, "cloud.ts");
+      writeFileSync(
+        routePath,
+        'import { resolveCloudApiKey } from "@elizaos/plugin-elizacloud";\n',
+      );
+
+      expect(
+        applyAliceLifeOpsCloudFacadePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+      expect(readFileSync(routePath, "utf8")).toContain(
+        'from "@elizaos/plugin-elizacloud/lifeops-cloud"',
+      );
+      const packageJson = JSON.parse(
+        readFileSync(path.join(cloudDir, "package.json"), "utf8"),
+      );
+      expect(packageJson.exports["./lifeops-cloud"].node).toBe(
+        "./dist/node/lifeops-cloud.mjs",
+      );
+      expect(packageJson.exports["."].node).toBeUndefined();
+      expect(packageJson.exports["."].import).toBe("./src/index.ts");
+      expect(
+        applyAliceLifeOpsCloudFacadePatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("already-applied");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("upstream Node runtime dist entry patch", () => {
+  it("adds Node-only dist entries while preserving each package source entry", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-node-dist-"));
+    try {
+      const targets = [
+        ["packages", "shared", "@elizaos/shared", "./src/index.ts"],
+        ["packages", "skills", "@elizaos/skills", "./src/index.ts"],
+        ["packages", "vault", "@elizaos/vault", "./src/index.ts"],
+        ["plugins", "plugin-browser", "@elizaos/plugin-browser", "./src/index.ts"],
+        ["plugins", "plugin-discord", "@elizaos/plugin-discord", "./index.ts"],
+      ];
+      for (const [rootName, packageDirName, packageName, sourceEntry] of targets) {
+        const packageDir = path.join(tempDir, rootName, packageDirName);
+        mkdirSync(packageDir, { recursive: true });
+        writeFileSync(
+          path.join(packageDir, "package.json"),
+          `${JSON.stringify(
+            {
+              name: packageName,
+              exports: {
+                ".": {
+                  types: sourceEntry,
+                  bun: sourceEntry,
+                  import: sourceEntry,
+                  default: sourceEntry,
+                },
+              },
+            },
+            null,
+            2,
+          )}\n`,
+        );
+      }
+
+      expect(
+        applyAliceUpstreamNodeDistEntriesPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
+      ).toBe("applied");
+      for (const [rootName, packageDirName, , sourceEntry] of targets) {
+        const packageJson = JSON.parse(
+          readFileSync(
+            path.join(tempDir, rootName, packageDirName, "package.json"),
+            "utf8",
+          ),
+        );
+        expect(isAliceUpstreamNodeDistEntryPatched(packageJson)).toBe(true);
+        expect(packageJson.exports["."].import).toBe(sourceEntry);
+      }
+      expect(
+        applyAliceUpstreamNodeDistEntriesPatch({
+          elizaRoot: tempDir,
+          log: () => undefined,
+        }),
       ).toBe("already-applied");
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

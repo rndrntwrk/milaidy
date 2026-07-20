@@ -34,6 +34,10 @@ const appCoreDashboardFallbackRoutesRelativePath =
   "packages/app-core/src/api/dashboard-fallback-routes.ts";
 const appCoreRuntimeErrorHandlersRelativePath =
   "packages/app-core/src/runtime/error-handlers.ts";
+const agentConversationRoutesRelativePath =
+  "packages/agent/src/api/conversation-routes.ts";
+const uiStartupPhaseHydrateRelativePath =
+  "packages/ui/src/state/startup-phase-hydrate.ts";
 const appCoreRuntimeDevServerRelativePath =
   "packages/app-core/src/runtime/dev-server.ts";
 const appCoreCliRunMainRelativePath = "packages/app-core/src/cli/run-main.ts";
@@ -71,6 +75,8 @@ const agentPluginCollectorRelativePath =
   "packages/agent/src/runtime/plugin-collector.ts";
 const agentPluginResolverRelativePath =
   "packages/agent/src/runtime/plugin-resolver.ts";
+const agentPluginTypesRelativePath =
+  "packages/agent/src/runtime/plugin-types.ts";
 const agentAppsRoutesRelativePath = "packages/agent/src/api/apps-routes.ts";
 const pluginSqlSchemaIndexRelativePath =
   "plugins/plugin-sql/src/schema/index.ts";
@@ -3066,6 +3072,77 @@ export function applyAliceUpstreamPackageSourceMainPatch({
   return "applied";
 }
 
+const aliceUpstreamNodeDistEntryTargets = [
+  ["packages/shared", "@elizaos/shared", "./src/index.ts"],
+  ["packages/skills", "@elizaos/skills", "./src/index.ts"],
+  ["packages/vault", "@elizaos/vault", "./src/index.ts"],
+  ["plugins/plugin-browser", "@elizaos/plugin-browser", "./src/index.ts"],
+  ["plugins/plugin-discord", "@elizaos/plugin-discord", "./index.ts"],
+];
+
+export function isAliceUpstreamNodeDistEntryPatched(packageJson) {
+  return packageJson?.exports?.["."]?.node === "./dist/index.js";
+}
+
+export function applyAliceUpstreamNodeDistEntriesPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  let patchedFiles = 0;
+  let inspectedFiles = 0;
+  for (const [
+    packageRelativePath,
+    packageName,
+    expectedImport,
+  ] of aliceUpstreamNodeDistEntryTargets) {
+    const packageJsonPath = path.join(
+      elizaRoot,
+      packageRelativePath,
+      "package.json",
+    );
+    if (!existsSync(packageJsonPath)) continue;
+    inspectedFiles += 1;
+    const sourceText = readFileSync(packageJsonPath, "utf8");
+    const packageJson = JSON.parse(sourceText);
+    if (isAliceUpstreamNodeDistEntryPatched(packageJson)) continue;
+    const rootExport = packageJson?.exports?.["."];
+    if (
+      packageJson?.name !== packageName ||
+      !rootExport ||
+      typeof rootExport !== "object" ||
+      rootExport.import !== expectedImport
+    ) {
+      throw new Error(`${packageName} root export anchor drifted`);
+    }
+    packageJson.exports["."] = {
+      node: "./dist/index.js",
+      ...rootExport,
+    };
+    const trailingNewline = sourceText.endsWith("\n") ? "\n" : "";
+    writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify(packageJson, null, 2)}${trailingNewline}`,
+    );
+    patchedFiles += 1;
+  }
+  if (inspectedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] upstream Node dist packages absent; skipping",
+    );
+    return "skipped";
+  }
+  if (patchedFiles === 0) {
+    log(
+      "[alice-eliza-runtime-patches] upstream Node dist entries already patched",
+    );
+    return "already-applied";
+  }
+  log(
+    `[alice-eliza-runtime-patches] routed ${patchedFiles} upstream package(s) through Node dist entries`,
+  );
+  return "applied";
+}
+
 // ── app-lifeops directory-style subpath exports ─────────────────────────
 // Upstream eliza's eliza/plugins/app-lifeops/package.json declares
 // only `"./*": "./dist/*.js"` for subpath exports. The Node subpath-exports
@@ -3089,6 +3166,799 @@ export function applyAliceUpstreamPackageSourceMainPatch({
 // main.tsx imports today. If a new dir-style subpath import is added to
 // alice or upstream-merged into milaidy, add it to this list.
 const aliceAppLifeOpsDirSubpathPaths = ["platform", "widgets"];
+
+const aliceAgentSourceRootEntry = "./src/index.ts";
+const aliceAgentObsoleteNodeBundleEntry = {
+  node: "./dist/node/index.mjs",
+  import: "./src/index.ts",
+  default: "./src/index.ts",
+};
+const aliceAgentLegacyNodeDistEntry = {
+  node: "./dist/index.js",
+  import: "./src/index.ts",
+  default: "./src/index.ts",
+};
+const aliceAgentNestedNodeDistEntry = {
+  node: "./dist/packages/agent/src/index.js",
+  import: "./src/index.ts",
+  default: "./src/index.ts",
+};
+const aliceAgentLegacyBundleDistEntry = {
+  node: "./dist/node/index.js",
+  import: "./src/index.ts",
+  default: "./src/index.ts",
+};
+
+export function isAliceAgentSourceRootEntryPatched(packageJson) {
+  return (
+    packageJson?.name === "@elizaos/agent" &&
+    packageJson?.exports?.["."] === aliceAgentSourceRootEntry
+  );
+}
+
+export function applyAliceAgentSourceRootEntryPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const packageJsonPath = path.join(elizaRoot, "packages/agent/package.json");
+  if (!existsSync(packageJsonPath)) {
+    log(
+      "[alice-eliza-runtime-patches] Eliza agent package absent; skipping source-root entry patch",
+    );
+    return "skipped";
+  }
+
+  const sourceText = readFileSync(packageJsonPath, "utf8");
+  const packageJson = JSON.parse(sourceText);
+  if (isAliceAgentSourceRootEntryPatched(packageJson)) {
+    log(
+      "[alice-eliza-runtime-patches] Eliza agent source-root entry already restored",
+    );
+    return "already-applied";
+  }
+  if (
+    packageJson?.name !== "@elizaos/agent" ||
+    (JSON.stringify(packageJson?.exports?.["."]) !==
+        JSON.stringify(aliceAgentObsoleteNodeBundleEntry) &&
+      JSON.stringify(packageJson?.exports?.["."]) !==
+        JSON.stringify(aliceAgentLegacyNodeDistEntry) &&
+      JSON.stringify(packageJson?.exports?.["."]) !==
+        JSON.stringify(aliceAgentNestedNodeDistEntry) &&
+      JSON.stringify(packageJson?.exports?.["."]) !==
+        JSON.stringify(aliceAgentLegacyBundleDistEntry))
+  ) {
+    throw new Error("Eliza agent root export anchor drifted");
+  }
+
+  packageJson.exports["."] = aliceAgentSourceRootEntry;
+  const trailingNewline = sourceText.endsWith("\n") ? "\n" : "";
+  writeFileSync(
+    packageJsonPath,
+    `${JSON.stringify(packageJson, null, 2)}${trailingNewline}`,
+  );
+  log(
+    "[alice-eliza-runtime-patches] restored Eliza agent root imports to source; focused server consumers use explicit dist subpaths",
+  );
+  return "applied";
+}
+
+export function isAliceRuntimePluginStagingResolverPatched({
+  resolverSource = "",
+  pluginTypesSource = "",
+} = {}) {
+  return (
+    resolverSource.includes(
+      'key === "node" && typeof entry === "string" && entry.startsWith("./dist/")',
+    ) &&
+    resolverSource.includes('/\\.(?:[cm]?js)$/') &&
+    pluginTypesSource.includes(
+      'path.join(pkgRoot, "dist", "index.js")',
+    ) &&
+    pluginTypesSource.includes(
+      'path.join(pkgRoot, "dist", "index.mjs")',
+    )
+  );
+}
+
+export function applyAliceRuntimePluginStagingResolverPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const resolverPath = path.join(elizaRoot, agentPluginResolverRelativePath);
+  const pluginTypesPath = path.join(elizaRoot, agentPluginTypesRelativePath);
+  if (!existsSync(resolverPath) || !existsSync(pluginTypesPath)) {
+    log(
+      "[alice-eliza-runtime-patches] agent plugin staging resolver source absent; skipping",
+    );
+    return "skipped";
+  }
+
+  const beforeResolver = readFileSync(resolverPath, "utf8");
+  const beforePluginTypes = readFileSync(pluginTypesPath, "utf8");
+  if (
+    isAliceRuntimePluginStagingResolverPatched({
+      resolverSource: beforeResolver,
+      pluginTypesSource: beforePluginTypes,
+    })
+  ) {
+    log(
+      "[alice-eliza-runtime-patches] agent plugin staging resolver already patched",
+    );
+    return "already-applied";
+  }
+
+  const rewriteAnchor = `  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      rewriteDistExportTargetToSource(entry),
+    ]),
+  );`;
+  const rewritePatch = `  return Object.fromEntries(
+    Object.entries(value)
+      .filter(
+        ([key, entry]) =>
+          !(key === "node" && typeof entry === "string" && entry.startsWith("./dist/")),
+      )
+      .map(([key, entry]) => [
+        key,
+        rewriteDistExportTargetToSource(entry),
+      ]),
+  );`;
+  if (!beforeResolver.includes(rewriteAnchor)) {
+    throw new Error("agent source-staged export rewrite anchor drifted");
+  }
+  let afterResolver = beforeResolver.replace(rewriteAnchor, rewritePatch);
+  const extensionAnchor = '.replace(/\\.js$/, ".ts")';
+  if (!afterResolver.includes(extensionAnchor)) {
+    throw new Error("agent source-staged extension rewrite anchor drifted");
+  }
+  afterResolver = afterResolver.replace(
+    extensionAnchor,
+    '.replace(/\\.(?:[cm]?js)$/, ".ts")',
+  );
+
+  const fallbackAnchor = `      ? [
+          fallback,
+          path.join(pkgRoot, "index"),`;
+  const fallbackPatch = `      ? [
+          fallback,
+          path.join(pkgRoot, "dist", "index.js"),
+          path.join(pkgRoot, "dist", "index.mjs"),
+          path.join(pkgRoot, "index"),`;
+  if (!beforePluginTypes.includes(fallbackAnchor)) {
+    throw new Error("agent built root fallback anchor drifted");
+  }
+  const afterPluginTypes = beforePluginTypes.replace(
+    fallbackAnchor,
+    fallbackPatch,
+  );
+
+  if (
+    !isAliceRuntimePluginStagingResolverPatched({
+      resolverSource: afterResolver,
+      pluginTypesSource: afterPluginTypes,
+    })
+  ) {
+    throw new Error("agent plugin staging resolver patch contract is absent");
+  }
+  writeFileSync(resolverPath, afterResolver);
+  writeFileSync(pluginTypesPath, afterPluginTypes);
+  log(
+    "[alice-eliza-runtime-patches] fixed built-plugin and source-staged dependency resolution",
+  );
+  return "applied";
+}
+
+const aliceOperatorActionBlockSource = `/**
+ * Operator-action pill block persisted with the user-turn memory so the SPA
+ * renders an action badge (Go Live, Change Avatar, Launch) for moderator
+ * actions that bypass the normal chat input.
+ */
+type OperatorActionBlock = {
+  type: "action-pill";
+  label: string;
+  kind: "stream" | "avatar" | "launch";
+  detail?: string;
+};
+
+/** Normalize persisted action blocks before they cross the API boundary. */
+function sanitizePersistedBlock(value: unknown): OperatorActionBlock | null {
+  if (!value || typeof value !== "object") return null;
+  const block = value as Record<string, unknown>;
+  if (block.type !== "action-pill") return null;
+  if (typeof block.label !== "string" || block.label.trim().length === 0) {
+    return null;
+  }
+  if (
+    block.kind !== "stream" &&
+    block.kind !== "avatar" &&
+    block.kind !== "launch"
+  ) {
+    return null;
+  }
+  const sanitized: OperatorActionBlock = {
+    type: "action-pill",
+    label: block.label.trim(),
+    kind: block.kind,
+  };
+  if (typeof block.detail === "string" && block.detail.trim().length > 0) {
+    sanitized.detail = block.detail.trim();
+  }
+  return sanitized;
+}
+
+function sanitizePersistedBlocks(
+  value: unknown,
+): OperatorActionBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const blocks = value
+    .map((entry) => sanitizePersistedBlock(entry))
+    .filter((entry): entry is OperatorActionBlock => entry !== null);
+  return blocks.length > 0 ? blocks : undefined;
+}
+`;
+
+const aliceOperatorActionRouteSource = `  // ── POST /api/conversations/:id/operator-action ────────────────────
+  // Persist the moderator action as a user turn and broadcast the same
+  // message over WS so the operator and livestream scene stay in sync.
+  if (
+    method === "POST" &&
+    /^\\/api\\/conversations\\/[^/]+\\/operator-action$/.test(pathname)
+  ) {
+    const convId = decodeURIComponent(pathname.split("/")[3]);
+    const conv = await getConversationWithRestore(state, convId);
+    if (!conv) {
+      error(res, "Conversation not found", 404);
+      return true;
+    }
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent is not running", 503);
+      return true;
+    }
+
+    const body = await readJsonBody<{
+      label?: string;
+      kind?: string;
+      detail?: string;
+      fallbackText?: string;
+    }>(req, res);
+    if (!body) return true;
+
+    const label = typeof body.label === "string" ? body.label.trim() : "";
+    if (!label) {
+      error(res, "label is required", 400);
+      return true;
+    }
+    if (
+      body.kind !== "stream" &&
+      body.kind !== "avatar" &&
+      body.kind !== "launch"
+    ) {
+      error(res, "kind must be 'stream', 'avatar', or 'launch'", 400);
+      return true;
+    }
+
+    try {
+      const userId = ensureAdminEntityId(state);
+      await ensureConversationRoom(state, conv);
+
+      const actionBlock: OperatorActionBlock = {
+        type: "action-pill",
+        label,
+        kind: body.kind,
+      };
+      if (typeof body.detail === "string" && body.detail.trim().length > 0) {
+        actionBlock.detail = body.detail.trim();
+      }
+      const fallbackText =
+        typeof body.fallbackText === "string" &&
+        body.fallbackText.trim().length > 0
+          ? body.fallbackText.trim()
+          : label;
+
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId: conv.roomId,
+        content: {
+          text: fallbackText,
+          blocks: [actionBlock],
+          source: "operator_action",
+          channelType: ChannelType.DM,
+        },
+      });
+      await runtime.createMemory(message, "messages");
+      conv.updatedAt = new Date().toISOString();
+
+      const responseMessage = {
+        id: message.id ?? (crypto.randomUUID() as UUID),
+        role: "user" as const,
+        text: fallbackText,
+        timestamp: message.createdAt ?? Date.now(),
+        blocks: [actionBlock],
+        source: "operator_action",
+      };
+      state.broadcastWs?.({
+        type: "proactive-message",
+        conversationId: conv.id,
+        message: responseMessage,
+      });
+      json(res, { message: responseMessage });
+    } catch (err) {
+      logger.warn(
+        \`[conversations] POST /operator-action failed: \${err instanceof Error ? err.message : String(err)}\`,
+      );
+      error(res, getErrorMessage(err), 500);
+    }
+    return true;
+  }
+
+`;
+
+export function isAliceConversationOperatorActionPatched({
+  routeSource = "",
+  hydrateSource = "",
+} = {}) {
+  return (
+    routeSource.includes("POST   /api/conversations/:id/operator-action") &&
+    routeSource.includes("type OperatorActionBlock =") &&
+    routeSource.includes("sanitizePersistedBlocks(content.blocks)") &&
+    routeSource.includes("blocks?: OperatorActionBlock[]") &&
+    routeSource.includes("/operator-action$/.test(pathname)") &&
+    routeSource.includes('source: "operator_action"') &&
+    hydrateSource.includes('msg.source !== "operator_action"')
+  );
+}
+
+export function applyAliceConversationOperatorActionPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const routePath = path.join(elizaRoot, agentConversationRoutesRelativePath);
+  const hydratePath = path.join(elizaRoot, uiStartupPhaseHydrateRelativePath);
+  if (!existsSync(routePath) || !existsSync(hydratePath)) {
+    log(
+      "[alice-eliza-runtime-patches] conversation route or UI hydrate source absent; skipping operator-action restoration",
+    );
+    return "skipped";
+  }
+
+  const beforeRoute = readFileSync(routePath, "utf8");
+  const beforeHydrate = readFileSync(hydratePath, "utf8");
+  if (
+    isAliceConversationOperatorActionPatched({
+      routeSource: beforeRoute,
+      hydrateSource: beforeHydrate,
+    })
+  ) {
+    log(
+      "[alice-eliza-runtime-patches] conversation operator-action contract already restored",
+    );
+    return "already-applied";
+  }
+
+  let routeSource = beforeRoute;
+  if (!routeSource.includes("POST   /api/conversations/:id/operator-action")) {
+    const docsAnchor =
+      " *   POST   /api/conversations/:id/messages           – send message\n";
+    if (!routeSource.includes(docsAnchor)) {
+      throw new Error("conversation operator-action docs anchor drifted");
+    }
+    routeSource = routeSource.replace(
+      docsAnchor,
+      `${docsAnchor} *   POST   /api/conversations/:id/operator-action    – log operator action pill\n`,
+    );
+  }
+
+  if (!routeSource.includes("type OperatorActionBlock =")) {
+    const helperAnchor = "async function getConversationWithRestore(";
+    if (!routeSource.includes(helperAnchor)) {
+      throw new Error("conversation operator-action helper anchor drifted");
+    }
+    routeSource = routeSource.replace(
+      helperAnchor,
+      `${aliceOperatorActionBlockSource}\n${helperAnchor}`,
+    );
+  }
+
+  if (!routeSource.includes("blocks?: OperatorActionBlock[]")) {
+    const recordAnchor = "  timestamp: number;\n  source?: string;";
+    if (!routeSource.includes(recordAnchor)) {
+      throw new Error("conversation operator-action record anchor drifted");
+    }
+    routeSource = routeSource.replace(
+      recordAnchor,
+      "  timestamp: number;\n  blocks?: OperatorActionBlock[];\n  source?: string;",
+    );
+  }
+
+  if (!routeSource.includes("sanitizePersistedBlocks(content.blocks)")) {
+    const serializerAnchor = "          const actionName =";
+    if (!routeSource.includes(serializerAnchor)) {
+      throw new Error("conversation operator-action serializer anchor drifted");
+    }
+    routeSource = routeSource.replace(
+      serializerAnchor,
+      "          const persistedBlocks = sanitizePersistedBlocks(content.blocks);\n          const actionName =",
+    );
+  }
+
+  if (!routeSource.includes("...(persistedBlocks ? { blocks: persistedBlocks } : {}),")) {
+    const responseAnchor =
+      "            timestamp: m.createdAt ?? 0,\n            source: normalizedSource,";
+    if (!routeSource.includes(responseAnchor)) {
+      throw new Error("conversation operator-action response anchor drifted");
+    }
+    routeSource = routeSource.replace(
+      responseAnchor,
+      "            timestamp: m.createdAt ?? 0,\n            ...(persistedBlocks ? { blocks: persistedBlocks } : {}),\n            source: normalizedSource,",
+    );
+  }
+
+  if (!routeSource.includes("/operator-action$/.test(pathname)")) {
+    const routeAnchor =
+      "  // ── POST /api/conversations/:id/messages ────────────────────────────\n";
+    if (!routeSource.includes(routeAnchor)) {
+      throw new Error("conversation operator-action route anchor drifted");
+    }
+    routeSource = routeSource.replace(
+      routeAnchor,
+      `${aliceOperatorActionRouteSource}${routeAnchor}`,
+    );
+  }
+
+  let hydrateSource = beforeHydrate;
+  if (!hydrateSource.includes('msg.source !== "operator_action"')) {
+    const hydrateAnchor =
+      'if (msg.source && msg.source !== "client_chat" && msg.role === "user")';
+    if (!hydrateSource.includes(hydrateAnchor)) {
+      throw new Error("conversation operator-action hydrate anchor drifted");
+    }
+    hydrateSource = hydrateSource.replace(
+      hydrateAnchor,
+      `if (
+        msg.source &&
+        msg.source !== "client_chat" &&
+        msg.source !== "operator_action" &&
+        msg.role === "user"
+      )`,
+    );
+  }
+
+  if (
+    !isAliceConversationOperatorActionPatched({ routeSource, hydrateSource })
+  ) {
+    throw new Error("conversation operator-action patch contract is absent");
+  }
+  writeFileSync(routePath, routeSource);
+  writeFileSync(hydratePath, hydrateSource);
+  log(
+    "[alice-eliza-runtime-patches] restored operator-action persistence, replay, and activity isolation",
+  );
+  return "applied";
+}
+
+const aliceLifeOpsAgentRuntimeSpecifier = "@elizaos/agent/lifeops-runtime";
+const aliceLifeOpsAgentRuntimeFacade = `export {
+  extractActionParamsViaLlm,
+} from "./actions/extract-params.ts";
+export { renderGroundedActionReply } from "./actions/grounded-action-reply.ts";
+export { handleConnectorAccountRoutes } from "./api/connector-account-routes.ts";
+export {
+  extractConversationMetadataFromRoom,
+  isPageScopedConversationMetadata,
+} from "./api/conversation-metadata.ts";
+export { checkRateLimit } from "./api/rate-limiter.ts";
+export type { RateLimitConfig } from "./api/rate-limiter.ts";
+export { loadElizaConfig, saveElizaConfig } from "./config/config.ts";
+export {
+  loadOwnerContactRoutingHints,
+  loadOwnerContactsConfig,
+  resolveOwnerContactWithFallback,
+} from "./config/owner-contacts.ts";
+export type { OwnerContactRoutingHint } from "./config/owner-contacts.ts";
+export { resolveOAuthDir, resolveStateDir } from "./config/paths.ts";
+export { createIntegrationTelemetrySpan } from "./diagnostics/integration-observability.ts";
+export { getAgentEventService } from "./runtime/agent-event-service.ts";
+export { resolveOwnerEntityId } from "./runtime/owner-entity.ts";
+export { hasOwnerAccess } from "./security/access.ts";
+export { registerEscalationChannel } from "./services/escalation.ts";
+export { resolveDefaultAgentWorkspaceDir } from "./shared/workspace-resolution.ts";
+export {
+  getTriggerLimit,
+  listTriggerTasks,
+  readTriggerConfig,
+  taskToTriggerSummary,
+  TRIGGER_TASK_NAME,
+  TRIGGER_TASK_TAGS,
+  triggersFeatureEnabled,
+} from "./triggers/runtime.ts";
+export {
+  buildTriggerConfig,
+  buildTriggerMetadata,
+  computeNextCronRunAtMs,
+  normalizeTriggerDraft,
+  parseCronExpression,
+} from "./triggers/scheduling.ts";
+export type { CloudProxyConfigLike } from "./types/config-like.ts";
+`;
+
+export function isAliceLifeOpsAgentRuntimeFacadePatched({
+  agentPackageJson,
+  facadeSource,
+  lifeOpsSources,
+}) {
+  return (
+    agentPackageJson?.exports?.["./lifeops-runtime"]?.node ===
+      "./dist/node/lifeops-runtime.mjs" &&
+    facadeSource === aliceLifeOpsAgentRuntimeFacade &&
+    lifeOpsSources.every(
+      (source) =>
+        !source.includes('from "@elizaos/agent"') &&
+        !source.includes("from '@elizaos/agent'") &&
+        !source.includes('from "@elizaos/agent/lifeops-runtime/lifeops-runtime"'),
+    )
+  );
+}
+
+export function applyAliceLifeOpsAgentRuntimeFacadePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const agentDir = path.join(elizaRoot, "packages/agent");
+  const lifeOpsSrcDir = path.join(elizaRoot, "plugins/app-lifeops/src");
+  const agentPackageJsonPath = path.join(agentDir, "package.json");
+  if (!existsSync(agentPackageJsonPath) || !existsSync(lifeOpsSrcDir)) {
+    log(
+      "[alice-eliza-runtime-patches] agent or LifeOps source absent; skipping runtime facade patch",
+    );
+    return "skipped";
+  }
+
+  const packageSourceText = readFileSync(agentPackageJsonPath, "utf8");
+  const agentPackageJson = JSON.parse(packageSourceText);
+  if (agentPackageJson?.name !== "@elizaos/agent") {
+    throw new Error("Eliza agent package anchor drifted");
+  }
+  const facadePath = path.join(agentDir, "src/lifeops-runtime.ts");
+  const sourceFiles = [];
+  const collectSourceFiles = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        collectSourceFiles(entryPath);
+      } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+        sourceFiles.push(entryPath);
+      }
+    }
+  };
+  collectSourceFiles(lifeOpsSrcDir);
+
+  const existingFacade = existsSync(facadePath)
+    ? readFileSync(facadePath, "utf8")
+    : "";
+  const lifeOpsSources = sourceFiles.map((sourcePath) =>
+    readFileSync(sourcePath, "utf8"),
+  );
+  if (
+    isAliceLifeOpsAgentRuntimeFacadePatched({
+      agentPackageJson,
+      facadeSource: existingFacade,
+      lifeOpsSources,
+    })
+  ) {
+    log(
+      "[alice-eliza-runtime-patches] LifeOps agent runtime facade already patched",
+    );
+    return "already-applied";
+  }
+  if (existingFacade && existingFacade !== aliceLifeOpsAgentRuntimeFacade) {
+    throw new Error("LifeOps agent runtime facade anchor drifted");
+  }
+
+  writeFileSync(facadePath, aliceLifeOpsAgentRuntimeFacade);
+  agentPackageJson.exports["./lifeops-runtime"] = {
+    node: "./dist/node/lifeops-runtime.mjs",
+    types: "./src/lifeops-runtime.ts",
+    bun: "./src/lifeops-runtime.ts",
+    import: "./src/lifeops-runtime.ts",
+    default: "./src/lifeops-runtime.ts",
+  };
+  const packageTrailingNewline = packageSourceText.endsWith("\n") ? "\n" : "";
+  writeFileSync(
+    agentPackageJsonPath,
+    `${JSON.stringify(agentPackageJson, null, 2)}${packageTrailingNewline}`,
+  );
+
+  let rewrittenFiles = 0;
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    const sourcePath = sourceFiles[index];
+    const source = lifeOpsSources[index];
+    const rewritten = source
+      .replaceAll('from "@elizaos/agent"', `from "${aliceLifeOpsAgentRuntimeSpecifier}"`)
+      .replaceAll("from '@elizaos/agent'", `from '${aliceLifeOpsAgentRuntimeSpecifier}'`);
+    if (rewritten !== source) {
+      writeFileSync(sourcePath, rewritten);
+      rewrittenFiles += 1;
+    }
+  }
+  if (rewrittenFiles === 0 && lifeOpsSources.some((source) => source.includes("@elizaos/agent"))) {
+    throw new Error("LifeOps agent import rewrite anchor drifted");
+  }
+  log(
+    `[alice-eliza-runtime-patches] routed ${rewrittenFiles} LifeOps source file(s) through the agent runtime facade`,
+  );
+  return "applied";
+}
+
+const aliceLifeOpsCloudSpecifier =
+  "@elizaos/plugin-elizacloud/lifeops-cloud";
+const aliceLifeOpsCloudFacade = `export {
+  normalizeCloudSiteUrl,
+  resolveCloudApiBaseUrl,
+} from "./cloud/base-url.ts";
+export { resolveCloudApiKey } from "./cloud/cloud-api-key.ts";
+export { validateCloudBaseUrl } from "./cloud/validate-url.ts";
+`;
+
+export function applyAliceLifeOpsCloudFacadePatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const cloudDir = path.join(elizaRoot, "plugins/plugin-elizacloud");
+  const lifeOpsSrcDir = path.join(elizaRoot, "plugins/app-lifeops/src");
+  const packageJsonPath = path.join(cloudDir, "package.json");
+  if (!existsSync(packageJsonPath) || !existsSync(lifeOpsSrcDir)) {
+    log(
+      "[alice-eliza-runtime-patches] ElizaCloud or LifeOps source absent; skipping cloud facade patch",
+    );
+    return "skipped";
+  }
+  const packageSourceText = readFileSync(packageJsonPath, "utf8");
+  const packageJson = JSON.parse(packageSourceText);
+  if (packageJson?.name !== "@elizaos/plugin-elizacloud") {
+    throw new Error("ElizaCloud package anchor drifted");
+  }
+  const facadePath = path.join(cloudDir, "src/lifeops-cloud.ts");
+  const existingFacade = existsSync(facadePath)
+    ? readFileSync(facadePath, "utf8")
+    : "";
+  if (existingFacade && existingFacade !== aliceLifeOpsCloudFacade) {
+    throw new Error("LifeOps cloud facade anchor drifted");
+  }
+
+  const sourceFiles = [];
+  const collectSourceFiles = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) collectSourceFiles(entryPath);
+      else if (entry.isFile() && entry.name.endsWith(".ts")) sourceFiles.push(entryPath);
+    }
+  };
+  collectSourceFiles(lifeOpsSrcDir);
+  const lifeOpsSources = sourceFiles.map((sourcePath) =>
+    readFileSync(sourcePath, "utf8"),
+  );
+  const exportPatched =
+    packageJson?.exports?.["./lifeops-cloud"]?.node ===
+    "./dist/node/lifeops-cloud.mjs";
+  const rootExport = packageJson?.exports?.["."];
+  const hasLegacyRootNodeEntry =
+    rootExport &&
+    typeof rootExport === "object" &&
+    rootExport.node === "./dist/index.js";
+  const importsPatched = lifeOpsSources.every(
+    (source) =>
+      !source.includes('from "@elizaos/plugin-elizacloud"') &&
+      !source.includes("from '@elizaos/plugin-elizacloud'"),
+  );
+  if (
+    existingFacade === aliceLifeOpsCloudFacade &&
+    exportPatched &&
+    !hasLegacyRootNodeEntry &&
+    importsPatched
+  ) {
+    log("[alice-eliza-runtime-patches] LifeOps cloud facade already patched");
+    return "already-applied";
+  }
+
+  writeFileSync(facadePath, aliceLifeOpsCloudFacade);
+  if (hasLegacyRootNodeEntry) {
+    delete packageJson.exports["."].node;
+  }
+  packageJson.exports["./lifeops-cloud"] = {
+    node: "./dist/node/lifeops-cloud.mjs",
+    types: "./src/lifeops-cloud.ts",
+    bun: "./src/lifeops-cloud.ts",
+    import: "./src/lifeops-cloud.ts",
+    default: "./src/lifeops-cloud.ts",
+  };
+  const trailingNewline = packageSourceText.endsWith("\n") ? "\n" : "";
+  writeFileSync(
+    packageJsonPath,
+    `${JSON.stringify(packageJson, null, 2)}${trailingNewline}`,
+  );
+  let rewrittenFiles = 0;
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    const source = lifeOpsSources[index];
+    const rewritten = source
+      .replaceAll(
+        'from "@elizaos/plugin-elizacloud"',
+        `from "${aliceLifeOpsCloudSpecifier}"`,
+      )
+      .replaceAll(
+        "from '@elizaos/plugin-elizacloud'",
+        `from '${aliceLifeOpsCloudSpecifier}'`,
+      );
+    if (rewritten !== source) {
+      writeFileSync(sourceFiles[index], rewritten);
+      rewrittenFiles += 1;
+    }
+  }
+  log(
+    `[alice-eliza-runtime-patches] routed ${rewrittenFiles} LifeOps source file(s) through the cloud facade`,
+  );
+  return "applied";
+}
+
+const aliceLifeOpsRoutePluginSpecifier =
+  "@elizaos/app-lifeops/routes/plugin";
+
+export function isAliceLifeOpsRoutePluginSpecifierPatched(registryEntry) {
+  return (
+    registryEntry?.id === "lifeops" &&
+    registryEntry?.launch?.routePlugin?.specifier ===
+      aliceLifeOpsRoutePluginSpecifier &&
+    registryEntry?.launch?.routePlugin?.exportName === "lifeopsPlugin"
+  );
+}
+
+export function applyAliceLifeOpsRoutePluginSpecifierPatch({
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const registryPath = path.join(
+    elizaRoot,
+    "packages/app-core/src/registry/entries/apps/lifeops.json",
+  );
+  if (!existsSync(registryPath)) {
+    log(
+      "[alice-eliza-runtime-patches] LifeOps registry entry absent; skipping server route specifier patch",
+    );
+    return "skipped";
+  }
+
+  const sourceText = readFileSync(registryPath, "utf8");
+  const registryEntry = JSON.parse(sourceText);
+  if (isAliceLifeOpsRoutePluginSpecifierPatched(registryEntry)) {
+    log(
+      "[alice-eliza-runtime-patches] LifeOps server route specifier already patched",
+    );
+    return "already-applied";
+  }
+
+  const routePlugin = registryEntry?.launch?.routePlugin;
+  if (
+    registryEntry?.id !== "lifeops" ||
+    !routePlugin ||
+    typeof routePlugin !== "object" ||
+    routePlugin.exportName !== "lifeopsPlugin"
+  ) {
+    throw new Error("LifeOps route plugin registry anchor drifted");
+  }
+
+  routePlugin.specifier = aliceLifeOpsRoutePluginSpecifier;
+  const trailingNewline = sourceText.endsWith("\n") ? "\n" : "";
+  writeFileSync(
+    registryPath,
+    `${JSON.stringify(registryEntry, null, 2)}${trailingNewline}`,
+  );
+  log(
+    `[alice-eliza-runtime-patches] routed LifeOps server plugin through ${aliceLifeOpsRoutePluginSpecifier}`,
+  );
+  return "applied";
+}
 
 function aliceAppLifeOpsDirSubpathEntry(srcRelative) {
   return {
@@ -7359,6 +8229,13 @@ export function applyAliceElizaRuntimePatches({
     applyAliceUiAvatarDefaultMigrationPatch({ elizaRoot, log }),
     applyAliceCompanionUiCompatPatch({ rootDir, elizaRoot, log }),
     applyAliceUpstreamPackageSourceMainPatch({ elizaRoot, log }),
+    applyAliceUpstreamNodeDistEntriesPatch({ elizaRoot, log }),
+    applyAliceAgentSourceRootEntryPatch({ elizaRoot, log }),
+    applyAliceRuntimePluginStagingResolverPatch({ elizaRoot, log }),
+    applyAliceConversationOperatorActionPatch({ elizaRoot, log }),
+    applyAliceLifeOpsAgentRuntimeFacadePatch({ elizaRoot, log }),
+    applyAliceLifeOpsCloudFacadePatch({ elizaRoot, log }),
+    applyAliceLifeOpsRoutePluginSpecifierPatch({ elizaRoot, log }),
     applyAliceAppLifeOpsDirSubpathExportsPatch({ elizaRoot, log }),
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
     applyAliceAppPluginRegisterExportPatch({ elizaRoot, log }),

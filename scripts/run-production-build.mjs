@@ -129,6 +129,11 @@ if (isLocalElizaDisabled()) {
     "scripts",
     "prune-cdn-local-assets.mjs",
   );
+  const copyRegistryAssetsScript = path.join(
+    repoRoot,
+    "scripts",
+    "copy-eliza-app-core-registry-assets.mjs",
+  );
   const bunForScripts = resolveBunForScripts();
 
   // Upstream: elizaOS patch scripts that prepare the workspace for build
@@ -147,6 +152,11 @@ if (isLocalElizaDisabled()) {
     ]),
     run(node, [pluginBuildScript], appDir),
   ]);
+
+  // The bundled server resolves registry entries relative to root dist/. Keep
+  // that runtime metadata beside entry.js so app route plugins (LifeOps,
+  // training, Vincent, and others) are discoverable after packaging.
+  await run(node, [copyRegistryAssetsScript]);
 
   // Upstream: post-tsdown patch for native browser package
   await run(node, [
