@@ -118,7 +118,7 @@ export const CompanionHeader = memo(function CompanionHeader(
 
   return (
     <header
-      className="companion-shell-header absolute inset-x-0 top-0 z-10 overflow-visible"
+      className="companion-shell-header absolute inset-x-0 top-0 z-30 overflow-visible"
       data-no-camera-drag="true"
       data-no-camera-zoom="true"
     >
