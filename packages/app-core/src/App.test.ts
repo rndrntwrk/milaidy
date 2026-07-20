@@ -33,8 +33,10 @@ vi.mock("@capacitor/keyboard", () => ({
 }));
 
 vi.mock("@miladyai/app-core/platform", () => ({
+  isBroadcastWindow: () => false,
   isIOS: false,
   isNative: false,
+  isUnknownBroadcastRoute: () => false,
 }));
 
 vi.mock("@miladyai/app-core/bridge", () => ({
@@ -43,6 +45,7 @@ vi.mock("@miladyai/app-core/bridge", () => ({
 
 vi.mock("./state", () => ({
   useApp: useAppMock,
+  usePtySessions: () => ({ ptySessions: [] }),
 }));
 
 vi.mock("./hooks", () => ({
@@ -191,6 +194,7 @@ import { App } from "./App";
 
 describe("App", () => {
   beforeEach(() => {
+    window.history.replaceState({}, "", "/");
     deferredChecklistRenderMock.mockReset();
     subscribeDesktopBridgeEventMock.mockReset().mockReturnValue(vi.fn());
     keyboardSetScrollMock.mockReset();
@@ -205,6 +209,44 @@ describe("App", () => {
     });
     useLifeOpsActivitySignalsMock.mockReset();
     useStreamPopoutNavigationMock.mockReset();
+  });
+
+  it("renders the public companion route while startup onboarding is incomplete", async () => {
+    window.history.replaceState({}, "", "/companion/");
+    useAppMock.mockImplementation(() => ({
+      startupError: null,
+      startupCoordinator: {
+        phase: "restoring-session",
+        retry: vi.fn(),
+      },
+      onboardingComplete: false,
+      retryStartup: vi.fn(),
+      tab: "companion",
+      setTab: vi.fn(),
+      setState: vi.fn(),
+      actionNotice: null,
+      activeOverlayApp: null,
+      uiTheme: "dark",
+      backendConnection: { state: "reconnecting" },
+      activeGameViewerUrl: null,
+      gameOverlayEnabled: false,
+      uiShellMode: "companion",
+      agentStatus: { state: "starting" },
+      unreadConversations: new Set(),
+      t: (key: string) => key,
+    }));
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(App));
+    });
+
+    expect(
+      renderer.root.findAllByProps({ "data-testid": "CompanionShell" }),
+    ).toHaveLength(1);
+    expect(
+      renderer.root.findAllByProps({ "data-testid": "StartupShell" }),
+    ).toHaveLength(0);
   });
 
   it("keeps hook order stable when startupError appears after the app has mounted", async () => {

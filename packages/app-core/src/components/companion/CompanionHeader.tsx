@@ -131,7 +131,14 @@ export const CompanionHeader = memo(function CompanionHeader(
           data-no-camera-drag="true"
           data-no-camera-zoom="true"
         >
-          <div className="flex w-full items-center gap-2">
+          <div
+            className={
+              isMobileViewport
+                ? "flex w-full flex-wrap items-center gap-2"
+                : "flex w-full items-center gap-2"
+            }
+            data-testid="companion-header-controls-row"
+          >
             {/* Left: mode selector pill */}
             <div
               className="flex shrink-0 items-center gap-2"
@@ -179,7 +186,14 @@ export const CompanionHeader = memo(function CompanionHeader(
             </div>
 
             {/* Center: voice + new chat */}
-            <div className="flex-1 min-w-0">
+            <div
+              className={
+                isMobileViewport
+                  ? "order-3 w-full flex-none pt-1"
+                  : "min-w-0 flex-1"
+              }
+              data-testid="companion-header-center-controls-slot"
+            >
               <div
                 className="flex items-center justify-center"
                 data-testid="companion-header-center-controls"
@@ -226,7 +240,12 @@ export const CompanionHeader = memo(function CompanionHeader(
 
             {/* Right: extras + language + theme */}
             <div
-              className="flex min-w-0 shrink-0 items-center justify-end gap-2 overflow-visible"
+              className={
+                isMobileViewport
+                  ? "order-2 ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2 overflow-visible"
+                  : "flex min-w-0 shrink-0 items-center justify-end gap-2 overflow-visible"
+              }
+              data-testid="companion-header-right-controls"
               data-no-camera-drag="true"
             >
               {rightExtras}

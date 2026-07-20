@@ -703,7 +703,8 @@ describe("CompanionView", () => {
 
   it("keeps the Alice stage launcher available on narrow screens with the header go live control", async () => {
     window.matchMedia = createMatchMedia(
-      (query) => query === "(max-width: 767px)",
+      (query) =>
+        query === "(max-width: 767px)" || query === "(max-width: 639px)",
     );
     mockUseApp.mockReturnValue(
       createContext({
@@ -729,6 +730,27 @@ describe("CompanionView", () => {
         "data-testid": "companion-stage-actions-launcher",
       }).length ?? 0,
     ).toBeGreaterThan(0);
+    expect(
+      String(
+        tree?.root.findByProps({
+          "data-testid": "companion-header-controls-row",
+        }).props.className,
+      ),
+    ).toContain("flex-wrap");
+    expect(
+      String(
+        tree?.root.findByProps({
+          "data-testid": "companion-header-center-controls-slot",
+        }).props.className,
+      ),
+    ).toContain("order-3");
+    expect(
+      String(
+        tree?.root.findByProps({
+          "data-testid": "companion-header-right-controls",
+        }).props.className,
+      ),
+    ).toContain("order-2");
   });
 
   it("routes the overlay companion app through the canonical Alice companion shell", async () => {

@@ -320,6 +320,13 @@ export function App() {
   } = useApp();
 
   const isPopout = useIsPopout();
+  // Keep the public companion entry surface aligned with the static server's
+  // public-route contract. Alice must render while first-run onboarding is
+  // incomplete so a fresh browser does not replace the stage with StartupShell.
+  const isPublicCompanionRoute = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return window.location.pathname.replace(/\/+$/, "") === "/companion";
+  }, []);
   const isBroadcast = useIsBroadcast();
   const isUnknownBroadcast = useIsUnknownBroadcastRoute();
   const companionShellVisible = activeOverlayApp !== null;
@@ -838,7 +845,7 @@ export function App() {
   // StartupCoordinator gate — the coordinator is the sole startup authority.
   // Non-ready phases are handled by StartupShell (which renders the appropriate
   // view for each coordinator phase: loading, pairing, onboarding, or error).
-  if (startupCoordinator.phase !== "ready") {
+  if (!isPublicCompanionRoute && startupCoordinator.phase !== "ready") {
     return (
       <BugReportProvider value={bugReport}>
         <StartupShell />

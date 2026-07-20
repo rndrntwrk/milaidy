@@ -21,6 +21,20 @@ describe("companion header", () => {
     expect(source).toContain("companion-shell-toggle");
   });
 
+  it("moves the center controls onto their own row on mobile", () => {
+    const headerPath = path.resolve(import.meta.dirname, "CompanionHeader.tsx");
+    const source = readFileSync(headerPath, "utf-8");
+
+    expect(source).toContain('data-testid="companion-header-controls-row"');
+    expect(source).toContain(
+      'data-testid="companion-header-center-controls-slot"',
+    );
+    expect(source).toContain('data-testid="companion-header-right-controls"');
+    expect(source).toContain("flex w-full flex-wrap items-center gap-2");
+    expect(source).toContain("order-3 w-full flex-none");
+    expect(source).toContain("order-2 ml-auto");
+  });
+
   it("Character tab exists in main navigation", () => {
     const navPath = path.resolve(
       import.meta.dirname,
