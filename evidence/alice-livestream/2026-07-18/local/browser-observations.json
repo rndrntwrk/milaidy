@@ -1,0 +1,27 @@
+{
+  "consoleErrorCount": 0,
+  "consoleErrors": [],
+  "failedRequests": [],
+  "errorStatusCounts": {},
+  "notes": [
+    "companion-root visible on fresh browser (public-route exemption holds)",
+    "screenshot desktop-1440x900-companion.png",
+    "Go Live control visible",
+    "bottom chat textbox visible",
+    "actions drawer opened; visible buttons=54",
+    "screenshot desktop-1440x900-actions.png",
+    "screenshot desktop-1440x640-golive.png",
+    "screenshot mobile-390x844-companion.png",
+    "screenshot mobile-390x844-actions.png",
+    "mobile Go Live button clickable (no intercepting element)",
+    "screenshot mobile-390x844-golive.png",
+    "60s observation window complete",
+    "VRM scene moving: 3 consecutive changing frames confirmed after 10s",
+    "re-captured desktop-1440x900-companion.png after full VRM load",
+    "Go Live clickable at 844x390 after header stacking fix",
+    "Go Live modal at 844x390: body scrolled to end, footer controls visible",
+    "mobile 390x844 Go Live still clickable on rebuilt bundle",
+    "desktop 1440x900 Go Live still clickable on rebuilt bundle"
+  ],
+  "failures": []
+}

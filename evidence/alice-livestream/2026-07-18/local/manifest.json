@@ -1,0 +1,60 @@
+{
+  "capturedAtUtc": "2026-07-20T20:37:11Z",
+  "release": "alice-livestream-recovery-2026-07-18",
+  "releaseSha": "da512ae81a3f0bbc13c7160a8c1cfa0375b427c4",
+  "elizaRuntimePin": "17930c97b97cedb8fe64124e327c023cd526cc8b",
+  "runtime": {
+    "base": "http://127.0.0.1:2138",
+    "healthReady": true,
+    "agent": "Alice",
+    "emoteCount": 41
+  },
+  "screenshots": {
+    "desktop-1440x900-companion.png": {
+      "sha256": "fc25bcc9768f298f2cb307064fafc186e6c1d3fac19c93b0cf78fb4c6f513a66",
+      "bytes": 641581
+    },
+    "desktop-1440x900-actions.png": {
+      "sha256": "f37b6b954f371f71776be8c1bf9ca0f3b5fbab9480f85e1a4c6821c6853cb5a2",
+      "bytes": 153104
+    },
+    "desktop-1440x640-golive.png": {
+      "sha256": "a3796f5b9bcd3109c2fc3b1d62d38cf1f0c58d3fbab00347f66e5ef43b4d19c0",
+      "bytes": 110518
+    },
+    "mobile-390x844-companion.png": {
+      "sha256": "82cba86a8ed2ce83ccd84f47cc7b662e197eaae216f7fd5d1914f89eed2c34a0",
+      "bytes": 240981
+    },
+    "mobile-390x844-actions.png": {
+      "sha256": "90d0f61d2ea9b3d6d4d61317e62f30a55ebb6ac44b3031db5abad9d72395b8f7",
+      "bytes": 92405
+    },
+    "mobile-390x844-golive.png": {
+      "sha256": "a0e7197f3e50f567ae4db0ccbe467d563bbb949351c662604cd869430d5c75e4",
+      "bytes": 70454
+    },
+    "landscape-844x390-golive-scrolled.png": {
+      "sha256": "c6ca917bfc2b76585f76b00a61f57a060cc1a786af49296a02fdbc5e51e72f49",
+      "bytes": 45941
+    },
+    "desktop-vrm-frame-a.png": {
+      "sha256": "7c38968639efb25b7025e58a6251a73fc306ce0d36b0205f2e22933394da5ef3",
+      "bytes": 321410
+    },
+    "desktop-vrm-frame-b.png": {
+      "sha256": "3ffe104e6d3469b99c040f7e9be5534e9b59e173c20c81316386f3e1cb1aa71f",
+      "bytes": 321464
+    },
+    "landscape-844x390-companion.png": {
+      "sha256": "87a83c940c3fd6a5e702e18b775c4cb916560ffe3d106e7defceb6b1ec1526d7",
+      "bytes": 182472
+    }
+  },
+  "consoleErrorCount": 0,
+  "storms401": [],
+  "storms429": [],
+  "accepted": true,
+  "failures": [],
+  "headerStackingFix": "CompanionHeader z-10 -> z-30 (above chat dock z-24); rebuilt bundle"
+}

@@ -74,13 +74,22 @@ close #207 against what shipped).
 - The disposable hydrated assemblies under `/private/tmp` are gone (pruned).
   This is by design: hydration is reproducible from any commit via the plan's
   Task 0/1 scripts and the release ledger.
-- `evidence/alice-livestream/2026-07-18/local/screenshots/` is EMPTY. The
-  probe screenshots described above were observed in session but not persisted
-  to the tracked evidence root. First action of the next working session:
-  re-hydrate from the new tip, re-run the probe, and persist the artifacts
-  under the evidence root before moving to Task 8.
+- `evidence/alice-livestream/2026-07-18/local/screenshots/` was empty at the
+  time this document was first written. RESOLVED 2026-07-20 later the same
+  day: a fresh assembly was hydrated from the tip (all steps exit 0 through
+  the production build), the packaged runtime passed every API gate (ready,
+  Alice, 41 emotes, no 401/429 storms in 60s, zero console errors), and the
+  full viewport matrix is captured and tracked with an accepted
+  `manifest.json`. The rerun also exposed and fixed one real landscape
+  defect: at 844x390 the masked floating chat layer (dock z-index 24)
+  covered the z-10 header and swallowed the Go Live tap; the header now
+  stacks at z-30 with a contract test locking the relationship.
 - The recovery worktree has no `node_modules`; test suites run inside
-  hydrated assemblies, not in this worktree.
+  hydrated assemblies, not in this worktree. Known harness gap: vitest 4
+  no longer runs explicit test files outside a config's `include` list, so
+  the package-level contract tests under `packages/app-core/src` need an
+  include-bearing config (the plan's enumerated Task 7 suites are
+  unaffected).
 
 ## 3. Remaining recovery tasks (8 through 15)
 
