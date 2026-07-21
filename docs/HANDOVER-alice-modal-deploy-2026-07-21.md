@@ -63,8 +63,10 @@ uninvoked without founder approval.
   - `scripts/awsless/modal/build-alice-artifact.sh` - reproducible artifact
     builder (see section 5).
   - `scripts/awsless/modal/test_alice_modal_contract.py` - static contract
-    tests, previously 5/5; rerun against the exact hydrated assembly before a
-    deploy.
+    tests, rerun 5/5 on 2026-07-21 with the macOS system Python. The dedicated
+    Python 3.13 Modal virtualenv currently fails before test discovery because
+    macOS rejects its Homebrew extension signatures; this is a local runner
+    fault, not an application test failure.
   - `docs/awsless/modal-alice-runbook-2026-06-27.md` - section 9 is the
     release-candidate gate (SPA-serving mechanism + fresh-key mandate).
   - **WORKING-TREE change (uncommitted):** `alice_runtime.py` has
@@ -101,8 +103,11 @@ It completed the strict patch chain, 25 Milaidy runtime workspace builds, all
 result contains `apps/app/dist/index.html`, `dist/entry.js`,
 `eliza/packages/agent/dist/node/lifeops-runtime.mjs`,
 `eliza/plugins/plugin-elizacloud/dist/node/lifeops-cloud.mjs`, and the
-generated agent Capacitor plugin. Treat this directory as disposable build
-evidence, not a deploy artifact or source of truth.
+generated agent Capacitor plugin. In this exact assembly,
+`bunx vitest run --pool=threads --no-file-parallelism
+scripts/apply-alice-eliza-runtime-patches.test.ts` passes 51/51. Treat this
+directory as disposable build evidence, not a deploy artifact or source of
+truth.
 
 ## 5. Full deploy sequence (once R2 entitlement and upload authorization exist)
 
