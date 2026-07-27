@@ -165,6 +165,11 @@ export default defineConfig({
       "../../packages/app-core/test/**/*.live.e2e.test.tsx",
       "../../packages/app-core/test/**/*.real.e2e.test.ts",
       "../../packages/app-core/test/**/*.real.e2e.test.tsx",
+      "node_modules/**",
+      "dist/**",
+      "test/**/*.e2e.*",
+      "test/ui-smoke/**",
+      "test/design-review/**",
     ],
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
@@ -213,15 +218,6 @@ export default defineConfig({
     },
     testTimeout: 30000,
     globals: true,
-    setupFiles: [path.join(here, "test", "setup.ts")],
-    include: ["test/**/*.test.{ts,tsx}"],
-    exclude: [
-      "node_modules/**",
-      "dist/**",
-      "test/**/*.e2e.*",
-      "test/ui-smoke/**",
-      "test/design-review/**",
-    ],
     server: {
       deps: {
         inline: ["@miladyai/app-core"],
