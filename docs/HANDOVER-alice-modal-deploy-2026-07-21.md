@@ -15,6 +15,21 @@ gate because its dependency resolution stalled locally.
 
 ## 2. The single blocker (resolve this first)
 
+> **SUPERSEDED 2026-07-27 — this section is stale and was stale within the hour it
+> was written.** The R2 entitlement blocker described below was resolved on
+> 2026-07-21 at 19:29 by `3c0e4574a` ("fix(alice): fetch Modal artifact from
+> private R2"), roughly 38 minutes after this document was committed
+> (`d32df0842`, 18:51). `alice_runtime.py` now reads the private bucket
+> `alice-xfer` via `ALICE_R2_API_TOKEN` and a pinned `wrangler@4.113.0`. Alice was
+> subsequently deployed and served live on Modal on 2026-07-22.
+>
+> **The current blocker is Modal provider billing** — the workspace is disabled by
+> the provider, per the 2026-07-23 preflight. That is a founder payment action.
+> Read `docs/HANDOVER-alice-resume-2026-07-27.md` instead of this section.
+>
+> The rest of this document (sections 1, 3+) is still useful history. Keep the
+> text below for the record; do not act on it.
+
 Uploading the release artifact to R2 is blocked by **account entitlement**, not
 by a missing bearer token. On 2026-07-21, the DNS, bucket, stream, and developer
 tokens all authenticated to account `036df6c823669b8fa2f66cf4c16eeb29`, while
@@ -67,12 +82,20 @@ uninvoked without founder approval.
     Python 3.13 Modal virtualenv currently fails before test discovery because
     macOS rejects its Homebrew extension signatures; this is a local runner
     fault, not an application test failure.
+    **UPDATE 2026-07-27:** the venv fault is gone and the suite is now 22 tests,
+    **22/22 passing** under `~/.venvs/modal` (pytest 9.1.1, Python 3.13.14),
+    0 skipped, 0 network I/O.
   - `docs/awsless/modal-alice-runbook-2026-06-27.md` - section 9 is the
     release-candidate gate (SPA-serving mechanism + fresh-key mandate).
-  - **WORKING-TREE change (uncommitted):** `alice_runtime.py` has
+  - ~~**WORKING-TREE change (uncommitted):** `alice_runtime.py` has
     `EXPECTED_SHA = "788cd34e..."`. THIS IS ORPHANED - it points at an artifact
     that was pruned (section 4). Do not commit it as-is; re-derive the sha from
-    a freshly built artifact and replace it.
+    a freshly built artifact and replace it.~~
+    **RESOLVED 2026-07-27.** This was done on 2026-07-23: `EXPECTED_SHA` is now
+    `e7bb0b0d94bf65428241facfa40c45506af6fc2a29f8f6cbc9335fcc32eae6fe` and the
+    orphaned `788cd34e...` is gone from the file. Every other `788cd34e...`
+    mention in this document is likewise historical. Note the *new* sha has its
+    own caveat - see `docs/HANDOVER-alice-resume-2026-07-27.md`.
 - **555stream sidecar:** `fix/alice-modal-livestream-2026-07-18` @ `633acf96`
   (remote `stream`). Capture hardening (auth, redaction, HTTP-only, filtergraph
   regression) + `CAPTURE_DEFAULT_TARGET_URL` fallback. The 43 capture, browser,

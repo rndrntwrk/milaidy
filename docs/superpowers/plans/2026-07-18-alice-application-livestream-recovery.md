@@ -8,6 +8,38 @@
 
 **Tech Stack:** Node.js 22.22.0, Bun 1.3.10, TypeScript, React, Vite, Vitest, Playwright, Milady, ElizaOS pinned at `17930c97b97cedb8fe64124e327c023cd526cc8b`, 555stream, Python 3, Modal, Chromium, FFmpeg, Twitch RTMPS.
 
+## Current status and blocker (2026-07-27)
+
+**The Cloudflare R2 blocker is RESOLVED — it was closed on 2026-07-21.** Any doc
+still saying the deploy is waiting on the founder enabling R2 on account
+`036df6c823669b8fa2f66cf4c16eeb29` is stale, including
+`docs/HANDOVER-alice-modal-deploy-2026-07-21.md` section 2, which was written
+roughly half an hour before the fix landed. `3c0e4574a` ("fix(alice): fetch Modal
+artifact from private R2") switched `alice_runtime.py` to the private bucket
+`alice-xfer` via `ALICE_R2_API_TOKEN` and a pinned `wrangler@4.113.0`.
+
+**Alice then went live.** On 2026-07-22 ~16:40 UTC `https://rndrntwrk--alice.modal.run`
+served `/api/plugins` → HTTP 200, `{"pluginCount":109}`, with
+`@rndrntwrk/plugin-555stream` `isActive: true, enabled: true`. **Task 11 was
+therefore executed** — a redeploy is a *restore*, not a first deploy.
+
+**The current blocker is Modal provider billing, and it is a founder action, not
+an engineering one.** The 2026-07-23 preflight
+(`555stream/evidence/awsless/2026-07-23/alice-livestream-preflight-2026-07-23.json`)
+records `providerStatus.modal`: "Workspace remains disabled by provider billing;
+no renderer is available." and `providerStatus.runpod`: "No active pods." Nothing
+in Tasks 10-12 can proceed until the Modal workspace is re-enabled. Keep RunPod at
+zero pods; it is not the fallback unless the founder explicitly approves one.
+
+Restart sequence once billing is restored, plus everything a resuming session
+needs: `docs/HANDOVER-alice-resume-2026-07-27.md`.
+
+Two path corrections for this document: all `desktop_dump/new/Work/555` paths
+below are stale and now live under `rndrntwrk/555`; and the companion package the
+plan calls `packages/app-companion` also has a sibling copy at
+`packages/app-core/src/components/operator/` — they are separate files that have
+diverged, so a change to one is not a change to the other.
+
 ## Global Constraints
 
 - Work from `release/alice-livestream-recovery-2026-07-18`, based on `deploy/alice-companion-render` at `e855a9bb16e9b19809e4ac0d8f93fb5effb672d0`.
@@ -1091,7 +1123,24 @@ git commit -m "test(alice): lock companion live workflow contracts"
 - Consumes: Tasks 1-6.
 - Produces: source/assets, build/test, and local runtime/UI acceptance.
 
-- [ ] **Step 1: Run release-source tests and build**
+> **Status 2026-07-27 — SUBSTANTIVELY DONE, one gate still open.** Steps 2-6 are
+> ticked below against committed evidence. Step 1 stays unticked on purpose: the
+> network-fresh dependency install it calls for was never proven (a seeded dep
+> tree was used), and it is now demonstrably blocked — `bun install
+> --frozen-lockfile` cannot run at all because `@rollup/plugin-node-resolve` is
+> declared by 13 workspaces but has no `packages` entry in `bun.lock`. See the
+> lockfile commit on this branch (`fix(deps): remove duplicate package keys from
+> bun.lock`), which closed the duplicate-key half of that defect and documents the
+> half that remains. Do not tick Step 1 until a real network install succeeds.
+
+- [ ] **Step 1: Run release-source tests and build** — STILL OPEN, see the status
+  note above. The focused suites this step names do pass: the nine companion
+  operator contracts were re-run 2026-07-27 in the hydrated release assembly
+  `.alice-tmp/alice-release-assembly.33bec-verify.DopMWS` (vitest 4.1.10,
+  `packages/app-companion/src/components/operator/CompanionGoLiveModal.test.tsx`
+  and `useCompanionStageOperator.test.tsx`) → **2 files, 9 tests, all passed**.
+  What is unproven is only the fresh `bun install` and the full production build
+  on top of it.
 
 ```bash
 mkdir -p evidence/alice-livestream/2026-07-18/local/screenshots
@@ -1108,7 +1157,9 @@ rg -c 'error TS[0-9]+' /tmp/alice-release-tsc.txt
 
 Expected: focused suites/build pass and TypeScript error count does not exceed Task 1. Do not call the repository type-clean if the baseline remains nonzero.
 
-- [ ] **Step 2: Start a faithful local or disposable-container runtime**
+- [x] **Step 2: Start a faithful local or disposable-container runtime** — packaged
+  runtime booted: 12/12 resolver plugins, health ready, 21 loaded / 0 failed,
+  323 actions, 41/41 emotes (`docs/HANDOVER-alice-continuity-2026-07-20.md` §2).
 
 ```bash
 ELIZA_DISABLE_LOCAL_EMBEDDINGS=1 bun run start
@@ -1116,7 +1167,9 @@ ELIZA_DISABLE_LOCAL_EMBEDDINGS=1 bun run start
 
 Expected: server-running marker and health response. If native embeddings terminate the laptop process before boot, use the existing built container with the same source and state paths; do not change unrelated plugin code.
 
-- [ ] **Step 3: Verify health, auth, and companion stage**
+- [x] **Step 3: Verify health, auth, and companion stage** — operator HTTP contract
+  green end-to-end, no token in saved logs
+  (`docs/HANDOVER-alice-continuity-2026-07-20.md` §2).
 
 ```bash
 curl --fail --silent --show-error http://127.0.0.1:3100/api/health
@@ -1126,7 +1179,13 @@ curl --fail --silent --show-error -H "Authorization: Bearer ${ALICE_API_TOKEN}" 
 
 Expected: 200 responses; saved logs contain no token.
 
-- [ ] **Step 4: Capture the required local viewports with Playwright**
+- [x] **Step 4: Capture the required local viewports with Playwright** — 10 PNGs
+  captured 2026-07-20 15:37-15:53 under
+  `evidence/alice-livestream/2026-07-18/local/screenshots/`, committed as
+  `3294f8e11`. Covers desktop 1440x900 companion/actions, 1440x640 go-live, two
+  VRM frames, mobile 390x844 companion/actions/go-live, landscape 844x390
+  companion and scrolled go-live. The landscape z-index defect this step exists to
+  catch was found and fixed (`8046b9b85`, CompanionHeader z-10 -> z-30).
 
 ```text
 1440x900 companion and expanded actions
@@ -1137,11 +1196,18 @@ Expected: 200 responses; saved logs contain no token.
 
 At every viewport assert Go Live, bottom chat textbox, Alice model identity/index 9, and non-empty action drawer. At short height, scroll body to its end and assert footer controls remain visible.
 
-- [ ] **Step 5: Fail on black screen, module error, or request storm**
+- [x] **Step 5: Fail on black screen, module error, or request storm** — manifest
+  records `"consoleErrorCount": 0`, `"storms401": []`, `"storms429": []`,
+  `"failures": []`.
 
 Observe 60 seconds after authentication and route navigation. Fail on uncaught `TypeError`/`SyntaxError`, missing ESM export, blank root, more than two repeated 401s for one route after auth, more than two repeated 429s for one polling route, or duplicate intervals after navigation.
 
-- [ ] **Step 6: Save the local manifest**
+- [x] **Step 6: Save the local manifest** —
+  `evidence/alice-livestream/2026-07-18/local/manifest.json`, committed as
+  `3294f8e11`: `"capturedAtUtc": "2026-07-20T20:37:11Z"`, `"releaseSha":
+  "da512ae81a3f0bbc13c7160a8c1cfa0375b427c4"`, `"healthReady": true`, `"agent":
+  "Alice"`, `"emoteCount": 41`, **`"accepted": true`**. Every PNG carries a sha256
+  and byte count; no tokens, cookies, or stream keys are present.
 
 Include release SHA, Eliza pin, command exit codes, baseline/release type counts, screenshot paths/hashes, console count, repeated 401/429 counts, and `accepted`. Exclude cookies, tokens, session URLs, and stream keys.
 
@@ -1160,7 +1226,18 @@ Include release SHA, Eliza pin, command exit codes, baseline/release type counts
 - Consumes: current dirty stream work plus `0d00fc75`, `04bffeb6`, `acfb6e4a`, `4e4b6cd1`.
 - Produces: authenticated single-scene capture, cold-start retry, surfaced FFmpeg failures, and valid audio filter graph.
 
-- [ ] **Step 1: Inspect and preserve the dirty source checkout**
+> **Status 2026-07-27 — DONE.** The sidecar worktree
+> `555/.worktrees/stream-alice-modal-livestream-2026-07-18` exists on branch
+> `fix/alice-modal-livestream-2026-07-18`, tip `633acf96`
+> (`CAPTURE_DEFAULT_TARGET_URL`) on top of `d7e78a67` (capture hardening), and all
+> four pinned media commits are verified present in it: `0d00fc75`, `04bffeb6`,
+> `acfb6e4a`, `4e4b6cd1`. 43 capture/browser/security tests were re-run green on
+> 2026-07-21. The "does NOT exist yet" line in
+> `docs/HANDOVER-alice-continuity-2026-07-20.md` is stale — disregard it.
+> Note the paths in the commands below still say `desktop_dump/new/Work/555`;
+> everything moved to `rndrntwrk/555` on 2026-07-27.
+
+- [x] **Step 1: Inspect and preserve the dirty source checkout**
 
 ```bash
 git -C "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/555stream" status --short --branch
@@ -1169,14 +1246,14 @@ git -C "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/555stream" diff -- s
 
 Expected: every hunk is understood. Do not overwrite or stash the source checkout.
 
-- [ ] **Step 2: Create the clean stream worktree**
+- [x] **Step 2: Create the clean stream worktree** — created 2026-07-20 15:30-16:03.
 
 ```bash
 git -C "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/555stream" fetch origin
 git -C "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/555stream" worktree add "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/.worktrees/stream-alice-modal-livestream-2026-07-18" -b fix/alice-modal-livestream-2026-07-18 origin/fix/alice-eliza-submodule-archive
 ```
 
-- [ ] **Step 3: Verify or admit the four media fixes**
+- [x] **Step 3: Verify or admit the four media fixes** — all four already ancestors; no cherry-pick occurred.
 
 ```bash
 for commit in 0d00fc75 04bffeb6 acfb6e4a 4e4b6cd1; do
@@ -1186,7 +1263,7 @@ done
 
 Expected: current remote branch already contains these commits through `4e4b6cd1`, so no duplicate cherry-pick occurs. If a future base lacks one, only that missing commit is admitted. No historical AWS capture-lane work enters.
 
-- [ ] **Step 4: Reapply reviewed dirty changes with `apply_patch`**
+- [x] **Step 4: Reapply reviewed dirty changes with `apply_patch`** — landed in `d7e78a67`.
 
 Retain this API contract, using the repository's existing constant-time token helper:
 
@@ -1203,7 +1280,7 @@ export function requireCaptureAuth(req, res, next) {
 
 The browser controller must build `` `${runtimeBaseUrl}/companion#token=${encodeURIComponent(token)}` ``, never append `?token=`, and reuse the one active scene.
 
-- [ ] **Step 5: Run capture tests**
+- [x] **Step 5: Run capture tests** — 43 capture/browser/security tests re-run green 2026-07-21.
 
 Use the package's declared test runner. Required assertions:
 
@@ -1216,7 +1293,7 @@ expect(ffmpegArgs.join(" ")).toContain("[1:a]");
 expect(ffmpegArgs.join(" ")).not.toContain("[1:a?]");
 ```
 
-- [ ] **Step 6: Commit stream changes**
+- [x] **Step 6: Commit stream changes** — `d7e78a67` then `633acf96` (`CAPTURE_DEFAULT_TARGET_URL`).
 
 ```bash
 git add services/capture-service/src/browser/controller.js services/capture-service/src/capture/ffmpegCapture.js services/capture-service/src/index.js services/capture-service/src/api/security.js services/capture-service/src/api/security.test.js
@@ -1237,7 +1314,33 @@ git commit -m "fix(capture): harden Alice Modal livestream delivery"
 - Consumes: accepted Milady and 555stream sources.
 - Produces: `alice-runtime` and singleton `alice-capture-service` direct release-candidate apps.
 
-- [ ] **Step 1: Write failing static launcher tests**
+> **Status 2026-07-27 — DONE, and re-verified today.** The launchers were
+> reconciled and runbook section 9 ("Release-candidate gate") was written in
+> `555/docs/awsless/modal-alice-runbook-2026-06-27.md`. The contract suite grew
+> from the 5 tests of 2026-07-21 to **22 tests** on 2026-07-23; until today its
+> green state was only *inferred* from a `.pyc` timestamp. It is now recorded:
+>
+> ```
+> $ cd 555 && ~/.venvs/modal/bin/python -m pytest \
+>     scripts/awsless/modal/test_alice_modal_contract.py -q
+> 22 passed in 0.26s
+> ```
+>
+> pytest 9.1.1, Python 3.13.14, `~/.venvs/modal`, **22 collected / 22 passed /
+> 0 skipped / 0 failed**, run twice on 2026-07-27 with identical results. The
+> suite is pure-static, confirmed by reading it before running: every assertion is
+> a substring/AST check over `alice_runtime.py`, `alice_capture_service.py` and
+> `build-alice-artifact.sh`, and the two `exec(ALICE_SOURCE_PATCH)` tests operate
+> inside `tempfile.TemporaryDirectory()`. **No test performs network I/O and none
+> contacts Modal or R2**, so nothing was skipped on those grounds. The one
+> conditionally-skippable test
+> (`test_runtime_emote_patch_accepts_exact_release_assembly_when_present`) did run,
+> because the release assembly is present locally.
+>
+> Carrier commits in the 555 root repo: `2abdc2503`, `0f63c32c5`, `4f45ed9af`,
+> `e83fa6545`, `3c0e4574a` (private-R2 fetch), `d53db03d8`.
+
+- [x] **Step 1: Write failing static launcher tests** — TDD red recorded as `2 failed, 1 passed`.
 
 ```python
 from pathlib import Path
@@ -1259,13 +1362,13 @@ def test_capture_is_singleton_and_uses_fragment_auth():
     assert "/companion?token=" not in source
 ```
 
-- [ ] **Step 2: Run the test to expose missing reconciliation**
+- [x] **Step 2: Run the test to expose missing reconciliation**
 
 ```bash
 python3 -m pytest scripts/awsless/modal/test_alice_modal_contract.py -q
 ```
 
-- [ ] **Step 3: Reconcile existing uncommitted launcher changes**
+- [x] **Step 3: Reconcile existing uncommitted launcher changes** — `min_containers=0`, `buffer_containers=0`, `scaledown_window=300`, `timeout=14400`, capture `max_containers=1`, fragment-token URL; all locked by the suite.
 
 The runtime function must use `min_containers=0` and a four-hour maximum timeout. Capture must additionally use `max_containers=1`. Construct the companion URL without logging it:
 
@@ -1273,7 +1376,7 @@ The runtime function must use `min_containers=0` and a four-hour maximum timeout
 companion_url = f"{runtime_base_url.rstrip('/')}/companion#token={quote(token, safe='')}"
 ```
 
-- [ ] **Step 4: Run syntax and contract tests**
+- [x] **Step 4: Run syntax and contract tests** — 5/5 on 2026-07-21, **22/22 on 2026-07-27** (see the status note above).
 
 ```bash
 python3 -m py_compile scripts/awsless/modal/alice_runtime.py scripts/awsless/modal/alice_capture_service.py
@@ -1282,7 +1385,7 @@ python3 -m pytest scripts/awsless/modal/test_alice_modal_contract.py -q
 
 Expected: both exit 0.
 
-- [ ] **Step 5: Record exact deploy/stop commands in the runbook**
+- [x] **Step 5: Record exact deploy/stop commands in the runbook** — `555/docs/awsless/modal-alice-runbook-2026-06-27.md`, section 0 (the four commands) and section 9 (release-candidate gate).
 
 ```bash
 ~/.venvs/modal/bin/modal deploy scripts/awsless/modal/alice_runtime.py
@@ -1294,7 +1397,7 @@ Expected: both exit 0.
 
 The runbook must name `https://rndrntwrk--alice.modal.run` and `https://rndrntwrk--capture.modal.run`, require auth, fragment token delivery, `min_containers=0`, revision evidence, and immediate teardown.
 
-- [ ] **Step 6: Commit operations files in their owning repository**
+- [x] **Step 6: Commit operations files in their owning repository** — committed in the 555 root repo, not milaidy.
 
 ```bash
 git add scripts/awsless/modal/alice_runtime.py scripts/awsless/modal/alice_capture_service.py scripts/awsless/modal/test_alice_modal_contract.py docs/awsless/modal-alice-runbook-2026-06-27.md
