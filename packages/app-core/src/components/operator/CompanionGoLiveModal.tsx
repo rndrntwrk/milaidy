@@ -346,6 +346,8 @@ export function CompanionGoLiveModal({
     followUp?: { label: string; detail: string };
   } | null>(null);
   const noticeRef = useRef<HTMLDivElement | null>(null);
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
+  const refreshedOnOpenRef = useRef(false);
   const channelSelectionTitleId = useId();
   const modeSelectionTitleId = useId();
   const reviewTitleId = useId();
@@ -422,6 +424,41 @@ export function CompanionGoLiveModal({
       "555stream is not running in this runtime. Refresh status after staging finishes loading, then reconnect setup.",
   });
 
+  const refreshRuntimeStatus = useCallback(() => {
+    if (refreshInFlightRef.current) return refreshInFlightRef.current;
+
+    const refresh = Promise.all([
+      loadPlugins(),
+      operator.stream.refreshStatus(),
+      operator.stream.refreshDestinations(),
+      operator.arcade.refreshState(),
+    ]).then(() => undefined);
+    refreshInFlightRef.current = refresh;
+    void refresh.then(
+      () => {
+        if (refreshInFlightRef.current === refresh) {
+          refreshInFlightRef.current = null;
+        }
+      },
+      () => {
+        if (refreshInFlightRef.current === refresh) {
+          refreshInFlightRef.current = null;
+        }
+      },
+    );
+    return refresh;
+  }, [loadPlugins, operator.arcade, operator.stream]);
+
+  useEffect(() => {
+    if (!open) {
+      refreshedOnOpenRef.current = false;
+      return;
+    }
+    if (refreshedOnOpenRef.current) return;
+    refreshedOnOpenRef.current = true;
+    void refreshRuntimeStatus().catch(() => {});
+  }, [open, refreshRuntimeStatus]);
+
   useEffect(() => {
     if (!open) return;
     setInlineNotice(null);
@@ -443,15 +480,6 @@ export function CompanionGoLiveModal({
       node.scrollIntoView({ block: "nearest" });
     });
   }, [inlineNotice]);
-
-  const refreshRuntimeStatus = useCallback(async () => {
-    await Promise.all([
-      loadPlugins(),
-      operator.stream.refreshStatus(),
-      operator.stream.refreshDestinations(),
-      operator.arcade.refreshState(),
-    ]);
-  }, [loadPlugins, operator.arcade, operator.stream]);
 
   const executeSetupAction = useCallback(
     async (

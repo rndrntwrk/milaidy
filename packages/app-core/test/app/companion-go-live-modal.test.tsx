@@ -157,6 +157,91 @@ describe("CompanionGoLiveModal", () => {
     });
   });
 
+  it("refreshes read-only runtime state once per open cycle and deduplicates concurrent refreshes", async () => {
+    let resolveRefresh!: () => void;
+    let released = false;
+    const pendingRefresh = new Promise<void>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const readOnlyRefresh = vi.fn(() =>
+      released ? Promise.resolve() : pendingRefresh,
+    );
+    const loadPlugins = readOnlyRefresh;
+    const operator = createOperator({
+      stream: {
+        refreshStatus: readOnlyRefresh,
+        refreshDestinations: readOnlyRefresh,
+      },
+      arcade: {
+        refreshState: readOnlyRefresh,
+        runtimeAvailable: true,
+        selectedGameId: "game-1",
+        selectedGameLabel: "Super Alice Kart",
+      },
+    });
+    // The "Refresh status" control only renders inside the `setup-required`
+    // step, so the dedup half of this test needs a plugin fixture that keeps
+    // the modal there. A blocked fixture has no auth credential, which makes
+    // `buildStream555SetupSummary().setupRequired` true.
+    mockUseApp.mockReturnValue({
+      handlePluginConfigSave: vi.fn(async () => {}),
+      loadPlugins,
+      pluginSaving: new Set<string>(),
+      plugins: [createBlockedPlugin()],
+      walletAddresses: { evmAddress: "0x123" },
+      t,
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    const props = {
+      onOpenChange: vi.fn(),
+      preferredMode: "camera" as const,
+      onPreferredModeChange: vi.fn(),
+      operator,
+    };
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(CompanionGoLiveModal, { ...props, open: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(readOnlyRefresh).toHaveBeenCalledTimes(4);
+
+    await act(async () => {
+      findButtonByText(tree!.root, "Refresh status").props.onClick();
+      await Promise.resolve();
+    });
+    expect(readOnlyRefresh).toHaveBeenCalledTimes(4);
+
+    released = true;
+    await act(async () => {
+      resolveRefresh();
+      // A macrotask drains the whole in-flight promise chain (Promise.all, the
+      // void-returning tail, then the handler that clears the in-flight ref).
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Close and reopen in separate commits so the open effect actually tears
+    // down and re-runs, the way a real close/reopen cycle does.
+    await act(async () => {
+      tree!.update(
+        React.createElement(CompanionGoLiveModal, { ...props, open: false }),
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tree!.update(
+        React.createElement(CompanionGoLiveModal, { ...props, open: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(readOnlyRefresh).toHaveBeenCalledTimes(8);
+  });
+
   it("marks the active step and exposes checkbox semantics for channel selection", async () => {
     let tree: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
