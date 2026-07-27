@@ -244,9 +244,22 @@ because the release assembly is present locally.
 `packages/app-companion/src/components/operator/CompanionGoLiveModal.test.tsx` and
 `useCompanionStageOperator.test.tsx` → 2 files, 9 tests, all passed.
 
+**555stream sidecar — verified on disk.** `git -C
+555/.worktrees/stream-alice-modal-livestream-2026-07-18` reports branch
+`fix/alice-modal-livestream-2026-07-18`, tip `633acf96` over `d7e78a67`, and
+`merge-base --is-ancestor` confirms all four pinned media commits (`0d00fc75`,
+`04bffeb6`, `acfb6e4a`, `4e4b6cd1`) are ancestors.
+
 **Campaign plan Tasks 7, 8, 9 ticked** with evidence pointers, and the plan's
 status/blocker section rewritten. One checkbox deliberately left open — Task 7
 Step 1, see below.
+
+Provenance note, so later readers can weigh these: **re-run first-hand today** are
+the 22 Modal contract tests, the 9 companion operator contracts, the sidecar
+branch/ancestry check, and the Go Live modal baseline and post-change runs.
+**Cited from the 07-27 forensics reconstruction, not reproduced today** are the
+43 capture-service tests, the 07-22 live `pluginCount` 109 observation, and the
+packaged-runtime plugin/emote counts.
 
 ---
 

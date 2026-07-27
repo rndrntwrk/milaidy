@@ -1226,13 +1226,21 @@ Include release SHA, Eliza pin, command exit codes, baseline/release type counts
 - Consumes: current dirty stream work plus `0d00fc75`, `04bffeb6`, `acfb6e4a`, `4e4b6cd1`.
 - Produces: authenticated single-scene capture, cold-start retry, surfaced FFmpeg failures, and valid audio filter graph.
 
-> **Status 2026-07-27 — DONE.** The sidecar worktree
-> `555/.worktrees/stream-alice-modal-livestream-2026-07-18` exists on branch
-> `fix/alice-modal-livestream-2026-07-18`, tip `633acf96`
-> (`CAPTURE_DEFAULT_TARGET_URL`) on top of `d7e78a67` (capture hardening), and all
-> four pinned media commits are verified present in it: `0d00fc75`, `04bffeb6`,
-> `acfb6e4a`, `4e4b6cd1`. 43 capture/browser/security tests were re-run green on
-> 2026-07-21. The "does NOT exist yet" line in
+> **Status 2026-07-27 — DONE. Verified on disk today, not taken from a doc.**
+> `git -C 555/.worktrees/stream-alice-modal-livestream-2026-07-18` reports branch
+> `fix/alice-modal-livestream-2026-07-18` with tip `633acf96`
+> ("feat(capture): default the capture target to CAPTURE_DEFAULT_TARGET_URL") over
+> `d7e78a67` ("fix(capture): harden Alice Modal livestream delivery"), and
+> `merge-base --is-ancestor` confirms **all four** pinned media commits are
+> ancestors: `0d00fc75`, `04bffeb6`, `acfb6e4a`, `4e4b6cd1`. That is Steps 1-4 and
+> 6 satisfied by direct observation.
+>
+> Step 5's "43 capture/browser/security tests green on 2026-07-21" is **recorded in
+> the 2026-07-27 forensics, not re-run today** — treat it as a citation, not as a
+> fresh result. (Re-run today and independently confirmed: the 22 Modal contract
+> tests and the 9 companion operator contracts. Those two numbers are first-hand.)
+>
+> The "does NOT exist yet" line in
 > `docs/HANDOVER-alice-continuity-2026-07-20.md` is stale — disregard it.
 > Note the paths in the commands below still say `desktop_dump/new/Work/555`;
 > everything moved to `rndrntwrk/555` on 2026-07-27.
@@ -1280,7 +1288,7 @@ export function requireCaptureAuth(req, res, next) {
 
 The browser controller must build `` `${runtimeBaseUrl}/companion#token=${encodeURIComponent(token)}` ``, never append `?token=`, and reuse the one active scene.
 
-- [x] **Step 5: Run capture tests** — 43 capture/browser/security tests re-run green 2026-07-21.
+- [x] **Step 5: Run capture tests** — 43 capture/browser/security tests green 2026-07-21 (recorded in the 07-27 forensics; not re-run on 07-27).
 
 Use the package's declared test runner. Required assertions:
 
