@@ -99,8 +99,17 @@ const optionalAppExternal = /^@elizaos\/app-/;
 // of them — always external; rolldown can't bundle the .node binary.
 const nodeRsExternal = /^@node-rs\//;
 const napiRsExternal = /^@napi-rs\//;
+// @elizaos/vault is a runtime-loaded workspace service (secrets manager),
+// declared as a dependency of app-core and resolved from node_modules at
+// runtime. Unlike @elizaos/core / @elizaos/shared (intentionally inlined
+// into the node bundle), rolldown cannot cleanly bundle it, so it was being
+// implicitly externalized with an UNRESOLVED_IMPORT warning. List it
+// explicitly so the externalization is intentional and the warning goes
+// away. Ported from upstream milady 546e8d77e.
+const vaultExternal = "@elizaos/vault";
 const allExternals = [
   ...nativeExternals,
+  vaultExternal,
   pluginExternal,
   optionalAppExternal,
   nodeRsExternal,

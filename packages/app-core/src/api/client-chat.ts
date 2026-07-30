@@ -235,6 +235,10 @@ declare module "./client-base" {
       completed: boolean;
       noResponseReason?: "ignored";
       usage?: ChatTokenUsage;
+      // Optional failure discriminator surfaced by newer upstream stream
+      // responses; consumed string-guarded by the pill renderer (main.tsx
+      // PillRoot). Absent from older backends at the current eliza pin.
+      failureKind?: string;
     }>;
     requestGreeting(
       id: string,
