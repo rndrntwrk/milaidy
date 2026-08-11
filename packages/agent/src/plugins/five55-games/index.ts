@@ -22,6 +22,14 @@ import {
   resolveAgentBearer,
 } from "../five55-shared/agent-auth.js";
 import { ensureGamesAgentSessionId } from "./agent-client.js";
+import {
+  AliceGameplayMemoryPersistence,
+  type AliceGameplayMemoryRuntime,
+} from "./alice-gameplay-memory-persistence.js";
+import { AliceReactionBridge } from "./alice-reaction-bridge.js";
+import { loadDrive555LocalArtifacts } from "./drive555-local-artifacts.js";
+import { Drive555RehearsalSupervisor } from "./drive555-rehearsal-supervisor.js";
+import { assertLoopbackRehearsalBase } from "./local-rehearsal-base.js";
 
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 const DIALECT_ENV = "FIVE55_GAMES_API_DIALECT";
@@ -31,10 +39,39 @@ const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 const CF_CONNECT_TIMEOUT_MS_ENV = "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS";
 const CF_CONNECT_POLL_MS_ENV = "FIVE55_GAMES_CF_CONNECT_POLL_MS";
 const CF_RECOVERY_ATTEMPTS_ENV = "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS";
+const DRIVE555_REHEARSE_LOCAL_ENV = "FIVE55_GAMES_DRIVE555_REHEARSE_LOCAL";
+const DRIVE555_LOCAL_SDK_ROOT_ENV = "FIVE55_GAMES_LOCAL_SDK_ROOT";
+const DRIVE555_LOCAL_SDK_ENTRY_ENV = "FIVE55_GAMES_LOCAL_SDK_ENTRY";
+const DRIVE555_LOCAL_ARCADE_ROOT_ENV = "FIVE55_GAMES_LOCAL_ARCADE_ROOT";
 
 const DEFAULT_CF_CONNECT_TIMEOUT_MS = 45_000;
 const DEFAULT_CF_CONNECT_POLL_MS = 5_000;
 const DEFAULT_CF_RECOVERY_ATTEMPTS = 1;
+
+const DRIVE555_RACING_LINE_POLICY = {
+  reactionWindowMs: 190,
+  riskTolerance: 0.4,
+  recenterBias: 0.8,
+  hazardAvoidanceBias: 0.84,
+} as const;
+
+const DRIVE555_RECOVERY_POLICY = {
+  schemaVersion: "555drive.recovery.v1",
+  stallWindowMs: 4_000,
+  maximumPositionRange: 10,
+  maximumAttempts: 1,
+  action: "restart",
+  progressDeadlineMs: 5_000,
+  minimumForwardDelta: 1_000,
+} as const;
+
+interface AliceStreamControlPort {
+  broadcastEvent(
+    topic: "emote",
+    payload: { emoteId: string; path: string; duration: number; loop: boolean },
+    sessionId: string,
+  ): Promise<{ ok: boolean; sent: boolean }>;
+}
 
 type GamesDialect = "agent-v1";
 type GameSessionMode = "standard" | "ranked" | "spectate" | "solo" | "agent";
@@ -43,6 +80,44 @@ type AgentBearerSource = string | (() => Promise<string>);
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
   return value ? value : undefined;
+}
+
+function requireLocalEnv(key: string): string {
+  const value = trimEnv(key);
+  if (!value) throw new Error(`${key} is required for local 555Drive rehearsal`);
+  return value;
+}
+
+function assertLocalDrive555RehearsalEnabled(): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("555Drive rehearsal is local-only and cannot run in production");
+  }
+  if (trimEnv(DRIVE555_REHEARSE_LOCAL_ENV)?.toLowerCase() !== "true") {
+    throw new Error(
+      `${DRIVE555_REHEARSE_LOCAL_ENV}=true is required for explicit local 555Drive rehearsal`,
+    );
+  }
+}
+
+function resolveAliceStreamControl(runtime: IAgentRuntime): AliceStreamControlPort {
+  const service = runtime.getService("stream555");
+  if (!isAliceStreamControlPort(service)) {
+    throw new Error("StreamControlService is required for Alice VRM reaction delivery");
+  }
+  return service;
+}
+
+function isAliceStreamControlPort(value: unknown): value is AliceStreamControlPort {
+  return typeof asRecord(value)?.broadcastEvent === "function";
+}
+
+function isAliceGameplayMemoryRuntime(value: unknown): value is AliceGameplayMemoryRuntime {
+  const candidate = asRecord(value);
+  return (
+    candidate !== undefined &&
+    typeof candidate.agentId === "string" &&
+    typeof candidate.createMemory === "function"
+  );
 }
 
 function readPositiveIntEnv(key: string, fallback: number): number {
@@ -650,6 +725,133 @@ const stopAction: Action = {
   ],
 };
 
+const drive555RehearseAction: Action = {
+  name: "FIVE55_GAMES_DRIVE555_REHEARSE",
+  similes: [
+    "REHEARSE_ALICE_555DRIVE",
+    "TEST_ALICE_555DRIVE_LOCAL",
+    "ALICE_DRIVE555_REHEARSAL",
+  ],
+  description:
+    "Runs one local-only, evidence-gated Alice 555Drive rehearsal without creating or restarting a live composition.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_GAMES_DRIVE555_REHEARSE",
+      );
+      assertFive55Capability(CAPABILITY_POLICY, "games.play");
+      assertFive55Capability(CAPABILITY_POLICY, "stream.control");
+      assertLocalDrive555RehearsalEnabled();
+
+      const sessionId = readParam(options as HandlerOptions | undefined, "sessionId")?.trim();
+      const gameRunId = readParam(options as HandlerOptions | undefined, "gameRunId")?.trim();
+      if (!sessionId || !gameRunId) {
+        throw new Error("sessionId and gameRunId are required for 555Drive rehearsal");
+      }
+      if (!message.roomId) {
+        throw new Error("Alice room context is required to persist gameplay reflection");
+      }
+
+      const dialect = resolveGamesDialect();
+      const base = resolveGamesBase(dialect);
+      assertLoopbackRehearsalBase(base);
+      const token = await resolveAgentBearer(base);
+      const artifacts = await loadDrive555LocalArtifacts({
+        mode: "local",
+        sdk: {
+          allowedRoot: requireLocalEnv(DRIVE555_LOCAL_SDK_ROOT_ENV),
+          entryPath: requireLocalEnv(DRIVE555_LOCAL_SDK_ENTRY_ENV),
+        },
+        arcade: {
+          allowedRoot: requireLocalEnv(DRIVE555_LOCAL_ARCADE_ROOT_ENV),
+        },
+      });
+      const policyId = "alice.555drive.racing-line";
+      const policyVersion = 1;
+      const policyDigest = artifacts.sdk.sha256GameplayCanonical({
+        policyId,
+        policyVersion,
+        snapshot: DRIVE555_RACING_LINE_POLICY,
+        recoveryPolicy: DRIVE555_RECOVERY_POLICY,
+      });
+      if (!isAliceGameplayMemoryRuntime(runtime)) {
+        throw new Error("Alice runtime memory persistence is required for gameplay rehearsal");
+      }
+      const alicePersistence = new AliceGameplayMemoryPersistence(
+        runtime,
+        message.roomId,
+      );
+      const reactionBridge = new AliceReactionBridge({
+        persistence: alicePersistence,
+        streamControl: resolveAliceStreamControl(runtime),
+      });
+      const supervisor = new Drive555RehearsalSupervisor({
+        client: new artifacts.sdk.GameplayApiClient({ apiUrl: base, token }),
+        gameplay: {
+          adapter: artifacts.adapter,
+          controller: artifacts.controller,
+        },
+        policy: {
+          policyId,
+          policyVersion,
+          policyDigest,
+          strategyFamily: "racing_line",
+          snapshot: { ...DRIVE555_RACING_LINE_POLICY },
+          recoveryPolicy: { ...DRIVE555_RECOVERY_POLICY },
+        },
+        expectedArtifacts: artifacts.expectedArtifacts,
+        controllerArtifact: artifacts.controllerArtifact,
+        sha256GameplayCanonical: artifacts.sdk.sha256GameplayCanonical,
+        persistence: alicePersistence,
+        reactions: reactionBridge,
+      });
+      const result = await supervisor.run({
+        sessionId,
+        gameRunId,
+        goal:
+          readParam(options as HandlerOptions | undefined, "goal")?.trim() ||
+          "drive the verified racing line safely",
+      });
+      return {
+        success: true,
+        text: JSON.stringify({
+          ok: true,
+          module: "five55.games",
+          action: "FIVE55_GAMES_DRIVE555_REHEARSE",
+          message: "Alice 555Drive local rehearsal completed with reflected native evidence",
+          data: result,
+        }),
+      };
+    } catch (err) {
+      return exceptionAction("five55.games", "FIVE55_GAMES_DRIVE555_REHEARSE", err);
+    }
+  },
+  parameters: [
+    {
+      name: "sessionId",
+      description: "Existing trusted gameplay session id; no session or composition is created.",
+      required: true,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "gameRunId",
+      description: "Existing 555Drive run id whose frozen authority/evidence binding will be verified.",
+      required: true,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "goal",
+      description: "Optional Alice gameplay goal for the one-decision local rehearsal.",
+      required: false,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
 const goLivePlayAction: Action = {
   name: "FIVE55_GAMES_GO_LIVE_PLAY",
   similes: [
@@ -805,6 +1007,7 @@ export function createFive55GamesPlugin(): Plugin {
       playAction,
       switchAction,
       stopAction,
+      drive555RehearseAction,
       goLivePlayAction,
     ],
   };
