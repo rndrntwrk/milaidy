@@ -18,7 +18,7 @@ const H = {
 
 const TASK3 = {
   adapterManifestDigest: "8ccc180da4b040803dedbf13d1ba68bb0fdf62ff2ac3f09204ab1faab72f7362",
-  controllerDigest: "cd856e6ac4d346e1edf5d68f45aa6c07ec0b84a3db001a2f0ad85979f375dda1",
+  controllerDigest: "30c6037daf09286f7d2c3171257b8786514c77c537be47a0845461575183b22e",
   initialFixtureDigest: "8c71295c3791e7ad062981fc852463beb241d2e3a40a885ff2ce18ab4a896bd5",
 };
 
@@ -640,7 +640,7 @@ function makeDependencies(options: {
       entrypoint: "racing-line.js",
       files: [{
         path: "racing-line.js",
-        sha256: "2be4f90ebb63fd7e55978f63681de019d00f851e11e56309e504795df7c34506",
+        sha256: "583add96f83945c3ee56d18cbc760dec6cca5647ee70548305e6c0dc577c316a",
       }],
       artifactDigest: TASK3.controllerDigest,
     },

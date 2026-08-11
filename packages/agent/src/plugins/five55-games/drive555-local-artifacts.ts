@@ -18,12 +18,20 @@ const TASK9_SDK_BUNDLE_SHA256 =
   "1505489aac82a268d76a39d1b7a1b372750763f9d8a758dc7ad3ea927ffa8b5e";
 const TASK3_ADAPTER_MANIFEST_DIGEST =
   "8ccc180da4b040803dedbf13d1ba68bb0fdf62ff2ac3f09204ab1faab72f7362";
-const TASK3_CONTROLLER_ARTIFACT_DIGEST =
-  "cd856e6ac4d346e1edf5d68f45aa6c07ec0b84a3db001a2f0ad85979f375dda1";
 const TASK3_INITIAL_FIXTURE_DIGEST =
   "8c71295c3791e7ad062981fc852463beb241d2e3a40a885ff2ce18ab4a896bd5";
+export const DRIVE555_APPROVED_CONTROLLER_TRUST_PINS = Object.freeze({
+  artifactDigest:
+    "30c6037daf09286f7d2c3171257b8786514c77c537be47a0845461575183b22e",
+  manifestSha256:
+    "53780dacb0632bb53a7b953ca76714499bf2bb8d9b7a1e1379dae08fe495e3b8",
+  runtimeSha256:
+    "583add96f83945c3ee56d18cbc760dec6cca5647ee70548305e6c0dc577c316a",
+});
+const TASK3_CONTROLLER_ARTIFACT_DIGEST =
+  DRIVE555_APPROVED_CONTROLLER_TRUST_PINS.artifactDigest;
 const TASK3_RACING_LINE_SHA256 =
-  "2be4f90ebb63fd7e55978f63681de019d00f851e11e56309e504795df7c34506";
+  DRIVE555_APPROVED_CONTROLLER_TRUST_PINS.runtimeSha256;
 /**
  * Task 8 native trust pins approved at native HEAD 85457b2.  These are not
  * caller configuration: a local rehearsal may select local artifact paths,
@@ -32,9 +40,19 @@ const TASK3_RACING_LINE_SHA256 =
 const TASK9_NATIVE_BRIDGE_SHA256 =
   "00c4b608bd2de966e4da6f3904b555639be9ab8261af679f9c5c2c7aa648af49";
 /**
- * Canonical SHA-256 of sorted `{ path, sha256 }` entries for this exact set:
- * agent-bridge.js, code/game.js, code/vehicle.js, and index.html.
+ * Canonical source-anchor encoding is
+ * sha256(JSON.stringify(Object.fromEntries(sorted full repo-relative path -> file sha256 map))).
  */
+export const DRIVE555_NATIVE_SOURCE_ANCHOR_FILE_SHA256_BY_REPO_PATH_V1 = Object.freeze({
+  "apps/web/public/games/555drive/agent-bridge.js":
+    "00c4b608bd2de966e4da6f3904b555639be9ab8261af679f9c5c2c7aa648af49",
+  "apps/web/public/games/555drive/code/game.js":
+    "8105e964ff6e318c12499bcc44b3d4f07dcfc68fcec1a3f22be03ac629b519f3",
+  "apps/web/public/games/555drive/code/vehicle.js":
+    "f0fd83407546a7bac05566d8b2b3eb355107bedae6402187bd0a71168a207767",
+  "apps/web/public/games/555drive/index.html":
+    "536dbb9bed90162d3d9d52b9c66eb0d4b765f6e6736277ded55541d113ea4c10",
+});
 export const DRIVE555_NATIVE_SOURCE_ANCHOR_SET_V1 = Object.freeze([
   "agent-bridge.js",
   "code/game.js",
@@ -58,7 +76,7 @@ const ARCADE_ADAPTER_CLOSURE: Readonly<Record<string, string>> = {
 };
 
 const CONTROLLER_MANIFEST_SHA256 =
-  "f66c6c674bcca1cd5a0e50b5ed1577d905f13dc77dec5cb8d7209255e0023a39";
+  DRIVE555_APPROVED_CONTROLLER_TRUST_PINS.manifestSha256;
 
 export interface Drive555LocalArtifactConfig {
   /** Must be supplied by a local-only action configuration; no default path exists. */
