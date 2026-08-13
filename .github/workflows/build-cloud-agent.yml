@@ -183,6 +183,11 @@ jobs:
           cd eliza/plugins/plugin-commands
           bun run build
 
+      - name: Build @elizaos/plugin-sql
+        run: |
+          cd eliza/plugins/plugin-sql
+          bun run build
+
       - name: Build @elizaos/plugin-app-control
         run: |
           cd eliza/plugins/plugin-app-control

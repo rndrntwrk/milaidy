@@ -447,6 +447,42 @@ test("cloud image retains the official agent orchestrator statically imported by
   );
 });
 
+test("cloud image retains the official SQL runtime statically imported by Alice", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+
+  const build = workflow.indexOf(
+    "cd eliza/plugins/plugin-sql\n          bun run build",
+  );
+  const runtimeBuild = workflow.indexOf("- name: Build runtime (tsdown)");
+  assert.ok(build >= 0, "official SQL plugin must be built");
+  assert.ok(
+    runtimeBuild > build,
+    "SQL runtime output must exist before Alice's bundle is assembled",
+  );
+  assert.match(
+    dockerfile,
+    /cp eliza\/plugins\/plugin-sql\/package\.json node_modules\/@elizaos\/plugin-sql\/[\s\S]*?cp -a eliza\/plugins\/plugin-sql\/src\/dist node_modules\/@elizaos\/plugin-sql\/src\/dist/,
+    "the runtime image must copy the exact official SQL Node build",
+  );
+  assert.match(
+    dockerfile,
+    /requiredLockedPackages[\s\S]*?'@elizaos\/plugin-sql'/,
+    "image assembly must fail closed if the SQL runtime is absent",
+  );
+  assert.match(
+    dockerfile,
+    /import\('@elizaos\/plugin-sql'\)/,
+    "image assembly must evaluate Alice's static SQL import",
+  );
+});
+
 test("cloud image retains the official auth dependency required by the orchestrator", () => {
   const dockerfile = fs.readFileSync(
     path.join(repoRoot, "deploy/Dockerfile.ci"),

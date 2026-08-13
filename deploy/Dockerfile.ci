@@ -82,6 +82,14 @@ RUN set -x; \
     cp eliza/plugins/plugin-commands/package.json node_modules/@elizaos/plugin-commands/; \
     cp -a eliza/plugins/plugin-commands/dist node_modules/@elizaos/plugin-commands/dist; \
     ls node_modules/@elizaos/plugin-commands/dist/index.js 2>/dev/null && echo "@elizaos/plugin-commands dist OK" || echo "WARN: commands dist missing"; \
+    # @elizaos/plugin-sql: the current official package exports its Node build
+    # from src/dist, which is ignored source output unless CI builds and copies
+    # it into the materialized runtime package explicitly.
+    rm -rf node_modules/@elizaos/plugin-sql; \
+    mkdir -p node_modules/@elizaos/plugin-sql/src; \
+    cp eliza/plugins/plugin-sql/package.json node_modules/@elizaos/plugin-sql/; \
+    cp -a eliza/plugins/plugin-sql/src/dist node_modules/@elizaos/plugin-sql/src/dist; \
+    ls node_modules/@elizaos/plugin-sql/src/dist/node/index.node.js 2>/dev/null && echo "@elizaos/plugin-sql dist OK" || echo "WARN: SQL dist missing"; \
     # @elizaos/plugin-app-control: Alice's agent bundle imports this official
     # runtime plugin even when the reduced image install does not hoist it.
     rm -rf node_modules/@elizaos/plugin-app-control; \
@@ -288,6 +296,7 @@ const requiredLockedPackages = [
   '@elizaos/plugin-agent-skills',
   '@elizaos/plugin-anthropic',
   '@elizaos/plugin-commands',
+  '@elizaos/plugin-sql',
   '@elizaos/plugin-app-control',
   '@elizaos/plugin-app-manager',
   '@elizaos/plugin-local-embedding',
@@ -641,7 +650,7 @@ __AISDK_FIX__
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
-  -e "await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands')])"
+  -e "await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-sql')])"
 
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \
