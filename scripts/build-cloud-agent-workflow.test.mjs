@@ -166,6 +166,27 @@ test("cloud agent image does not copy removed Eliza apps", () => {
     1,
     "image version patch must remain valid JavaScript",
   );
+
+  const elizaPackage = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "eliza/package.json"), "utf8"),
+  );
+  const requiredBun = elizaPackage.packageManager?.match(/^bun@(.+)$/)?.[1];
+  assert.ok(requiredBun, "pinned Eliza must declare a Bun version");
+  assert.match(
+    dockerfile,
+    new RegExp(`FROM oven/bun:\\$\\{BUN_VERSION\\} AS bun-runtime`),
+    "image build must source Bun from an exact versioned image",
+  );
+  assert.match(
+    dockerfile,
+    /RUN bun install --ignore-scripts --frozen-lockfile/,
+    "image build must materialize runtime packages from the committed lock",
+  );
+  assert.doesNotMatch(
+    dockerfile,
+    /requiredLockedPackages[\s\S]*?['"]jsonrepair['"]/,
+    "image checks must not retain the removed pre-beta.7 Anthropic dependency",
+  );
 });
 
 test("cloud agent builds pinned Eliza UI assets before Alice web", () => {
@@ -200,5 +221,26 @@ test("cloud agent builds pinned Eliza app-core assets before Alice web", () => {
   assert.ok(
     aliceWebBuild > elizaAppCoreBuild,
     "Alice web build must run after pinned Eliza app-core assets exist",
+  );
+});
+
+test("cloud agent builds official Eliza runtime plugins used by Alice", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const agentSkillsBuild = workflow.indexOf(
+    "cd eliza/plugins/plugin-agent-skills\n          bun run build",
+  );
+  const anthropicBuild = workflow.indexOf(
+    "cd eliza/plugins/plugin-anthropic\n          bun run build",
+  );
+  const dockerBuild = workflow.indexOf("- name: Build and push Docker image");
+
+  assert.ok(agentSkillsBuild >= 0, "official agent-skills plugin must be built");
+  assert.ok(anthropicBuild >= 0, "official Anthropic plugin must be built");
+  assert.ok(
+    dockerBuild > agentSkillsBuild && dockerBuild > anthropicBuild,
+    "official runtime plugins must be built before image assembly",
   );
 });

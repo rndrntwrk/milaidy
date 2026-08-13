@@ -153,6 +153,16 @@ jobs:
           cd eliza/packages/app-core
           bun run build
 
+      - name: Build @elizaos/plugin-agent-skills
+        run: |
+          cd eliza/plugins/plugin-agent-skills
+          bun run build
+
+      - name: Build @elizaos/plugin-anthropic
+        run: |
+          cd eliza/plugins/plugin-anthropic
+          bun run build
+
       # ── 6. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
         run: |
