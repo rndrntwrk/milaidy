@@ -124,7 +124,7 @@ async function readPackageName(packageDir: string): Promise<string | null> {
   }
 }
 
-async function resolveWorkspacePackageDir(
+export async function resolveWorkspacePackageDir(
   packageName: string,
 ): Promise<string | null> {
   const dirName = packageNameToDirName(packageName);

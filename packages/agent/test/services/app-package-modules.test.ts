@@ -13,6 +13,7 @@ vi.mock("../../src/services/registry-client.js", () => registryClientMocks);
 import {
   importAppPlugin,
   importAppRouteModule,
+  resolveWorkspacePackageDir,
 } from "../../src/services/app-package-modules";
 
 function writeFile(filePath: string, content: string): void {
@@ -38,6 +39,23 @@ describe("app-package-modules", () => {
     for (const tempDir of tempDirs.splice(0)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it("exports workspace resolution for latest official app-manager compatibility", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "app-workspace-resolve-"));
+    tempDirs.push(tempDir);
+    const repoRoot = path.join(tempDir, "workspace");
+    const packageDir = path.join(repoRoot, "plugins", "plugin-compatible-app");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    process.chdir(repoRoot);
+    writeFile(
+      path.join(packageDir, "package.json"),
+      JSON.stringify({ name: "@elizaos/plugin-compatible-app" }),
+    );
+
+    await expect(
+      resolveWorkspacePackageDir("@elizaos/plugin-compatible-app"),
+    ).resolves.toBe(fs.realpathSync(packageDir));
   });
 
   it("falls back to the built app plugin when the local source entry cannot load", async () => {
