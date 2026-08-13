@@ -80,6 +80,20 @@ test("cloud agent build keeps the checked-out Eliza workspace available", () => 
   );
 });
 
+test("Alice root has no exact workspace paths removed by latest Eliza", () => {
+  const rootPackage = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+  );
+  const missing = rootPackage.workspaces.filter(
+    (workspace) =>
+      !workspace.startsWith("!") &&
+      !workspace.includes("*") &&
+      !fs.existsSync(path.join(repoRoot, workspace, "package.json")),
+  );
+
+  assert.deepEqual(missing, [], `missing exact workspaces: ${missing.join(", ")}`);
+});
+
 test("cloud agent build uses the Node major required by pinned Eliza", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

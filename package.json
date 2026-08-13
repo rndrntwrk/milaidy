@@ -50,7 +50,6 @@
     "eliza/packages/cloud/sdk",
     "eliza/packages/cloud/shared",
     "eliza/packages/cloud/services/*",
-    "eliza/packages/cloud/docs-redirect",
     "eliza/packages/cloud/test-mocks",
     "eliza/packages/cloud/e2e",
     "eliza/packages/native/*",
