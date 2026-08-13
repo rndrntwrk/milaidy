@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
+import { createServer } from "node:http";
 import { describe, expect, it } from "bun:test";
+import { StreamControlService } from "../../../../plugin-555stream/src/services/StreamControlService.js";
+import { loadDrive555LocalArtifacts } from "./drive555-local-artifacts.js";
 import {
   Drive555RehearsalSupervisor,
   type Drive555RehearsalDependencies,
@@ -144,7 +147,7 @@ function rawObservation(overrides: Record<string, unknown> = {}) {
     relaySequence: 10,
     sourceObservationSequence: 41,
     observedAtAuthorityMs: 10_000,
-    rawState: { playerZ: 2_000 },
+    rawState: drive555RawState(2_000, 1),
     appliedControls: { accelerate: 0, brake: 0, steer: 0 },
     ...overrides,
   };
@@ -163,6 +166,21 @@ function rawObservation(overrides: Record<string, unknown> = {}) {
     raw.rawEnvelopeDigest = sha256GameplayCanonical(envelope);
   }
   return raw;
+}
+
+function drive555RawState(playerZ: number, frame: number) {
+  return {
+    lifecycle: "playing",
+    frame,
+    trackSeed: 1331,
+    player: { x: 0, z: playerZ, velocityX: 0, velocityZ: 0 },
+    checkpoint: 0,
+    remainingTimeMs: 60_000,
+    score: 0,
+    collisionSequence: 0,
+    lastCollision: null,
+    hazards: [],
+  };
 }
 
 type ReceiptStage = "accepted" | "enqueued" | "injected" | "reflected";
@@ -186,6 +204,10 @@ function makeDependencies(options: {
   controlReceiptOverrides?: Partial<Record<ReceiptStage, ControlReceiptOverride>>;
   releaseReceiptOverrides?: Partial<Record<ReceiptStage, ReleaseReceiptOverride>>;
   badPolicyDigest?: boolean;
+  gameplay?: Drive555RehearsalDependencies["gameplay"];
+  controllerArtifact?: Drive555RehearsalDependencies["controllerArtifact"];
+  sha256GameplayCanonical?: Drive555RehearsalDependencies["sha256GameplayCanonical"];
+  ads?: NonNullable<Drive555RehearsalDependencies["ads"]>;
 } = {}): {
   dependencies: Drive555RehearsalDependencies;
   calls: string[];
@@ -407,7 +429,7 @@ function makeDependencies(options: {
           const reflectedRaw = rawObservation({
             relaySequence: 14,
             sourceObservationSequence: 42,
-            rawState: { playerZ: 2_025 },
+            rawState: drive555RawState(2_025, 2),
             fence: 7,
             controlOwnerType: "agent",
             appliedControls: reflectedControls,
@@ -494,7 +516,7 @@ function makeDependencies(options: {
           const neutralRaw = rawObservation({
             relaySequence: 19,
             sourceObservationSequence: 43,
-            rawState: { playerZ: 2_025 },
+            rawState: drive555RawState(2_025, 3),
             fence: 7,
             controlOwnerType: "agent",
             appliedControls: neutralControls,
@@ -565,7 +587,7 @@ function makeDependencies(options: {
         }];
       },
     },
-    gameplay: {
+    gameplay: options.gameplay ?? {
       adapter: {
         normalizeObservation(raw, _binding, _runtime, evidence) {
           calls.push("normalize");
@@ -574,7 +596,10 @@ function makeDependencies(options: {
             ...raw,
             gameState: {
               lifecycle: "playing",
-              player: { x: 0, z: Number(raw.rawState.playerZ) },
+              player: {
+                x: Number((raw.rawState as { player: { x: number } }).player.x),
+                z: Number((raw.rawState as { player: { z: number } }).player.z),
+              },
               hazards: [],
             },
           };
@@ -632,7 +657,7 @@ function makeDependencies(options: {
       sourceAnchorDigest: H.e,
       initialFixtureDigest: TASK3.initialFixtureDigest,
     },
-    controllerArtifact: {
+    controllerArtifact: options.controllerArtifact ?? {
       schemaVersion: "gameplay-controller-artifact.v1",
       packageName: "@rndrntwrk/plugin-555arcade",
       controllerId: "racing_line",
@@ -644,7 +669,8 @@ function makeDependencies(options: {
       }],
       artifactDigest: TASK3.controllerDigest,
     },
-    sha256GameplayCanonical,
+    sha256GameplayCanonical:
+      options.sha256GameplayCanonical ?? sha256GameplayCanonical,
     persistence: {
       async persistControlReflection(value) {
         calls.push(`reflect:${value.decisionId}:${value.rawObservationDigest}`);
@@ -658,7 +684,7 @@ function makeDependencies(options: {
         calls.push(`react:${sessionId}:${value.reactionKind}:${value.rawObservationDigest}`);
       },
     },
-    ads: {
+    ads: options.ads ?? {
       async triggerAdBreak(adId, options, sessionId) {
         calls.push(`ad:${sessionId}:${adId}:${options.duration}`);
         return { graphicId: "graphic-1", layout: "squeeze-back", duration: options.duration };
@@ -675,7 +701,161 @@ function makeDependencies(options: {
   return { dependencies, calls, sentControls, releases, evidence };
 }
 
+const productSdkRoot = process.env.ALICE_PRODUCT_SDK_ROOT?.trim();
+const productSdkEntry = process.env.ALICE_PRODUCT_SDK_ENTRY?.trim();
+const productArcadeRoot = process.env.ALICE_PRODUCT_ARCADE_ROOT?.trim();
+const productArtifactInputsPresent = Boolean(
+  productSdkRoot && productSdkEntry && productArcadeRoot,
+);
+
 describe("Drive555RehearsalSupervisor", () => {
+  it.skipIf(!productArtifactInputsPresent)(
+    "runs the Alice product loop with pinned Arcade bytes and the real Stream Ads service",
+    async () => {
+      const requests: Array<{
+        method: string;
+        url: string;
+        authorization: string | undefined;
+        body: unknown;
+      }> = [];
+      const server = createServer((request, response) => {
+        const chunks: Buffer[] = [];
+        request.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        request.on("end", () => {
+          const bodyText = Buffer.concat(chunks).toString("utf8");
+          requests.push({
+            method: request.method ?? "",
+            url: request.url ?? "",
+            authorization: request.headers.authorization,
+            body: bodyText ? JSON.parse(bodyText) : undefined,
+          });
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(
+            JSON.stringify({
+              success: true,
+              graphic: {
+                id: "graphic-product-1",
+                content: { layout: "squeeze-back", duration: 12_000 },
+              },
+            }),
+          );
+        });
+      });
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => resolve());
+      });
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("local Stream Ads server did not expose a TCP address");
+      }
+
+      const envKeys = [
+        "STREAM555_BASE_URL",
+        "STREAM555_PUBLIC_BASE_URL",
+        "STREAM555_INTERNAL_BASE_URL",
+        "STREAM555_AGENT_API_KEY",
+        "STREAM555_AGENT_TOKEN",
+        "STREAM_API_BEARER_TOKEN",
+      ] as const;
+      const priorEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
+      let streamControl: StreamControlService | undefined;
+      try {
+        process.env.STREAM555_BASE_URL = `http://127.0.0.1:${address.port}`;
+        delete process.env.STREAM555_PUBLIC_BASE_URL;
+        delete process.env.STREAM555_INTERNAL_BASE_URL;
+        delete process.env.STREAM555_AGENT_API_KEY;
+        process.env.STREAM555_AGENT_TOKEN = "product-rehearsal-token";
+        delete process.env.STREAM_API_BEARER_TOKEN;
+
+        const artifacts = await loadDrive555LocalArtifacts({
+          mode: "local",
+          sdk: {
+            allowedRoot: productSdkRoot!,
+            entryPath: productSdkEntry!,
+          },
+          arcade: { allowedRoot: productArcadeRoot! },
+        });
+        streamControl = new StreamControlService();
+        await streamControl.initialize({ agentId: "alice" } as never);
+
+        const fixture = makeDependencies({
+          gameplay: {
+            adapter: artifacts.adapter,
+            controller: artifacts.controller,
+          },
+          controllerArtifact: artifacts.controllerArtifact,
+          sha256GameplayCanonical: artifacts.sdk.sha256GameplayCanonical,
+          ads: streamControl,
+        });
+        const snapshot = {
+          reactionWindowMs: 190,
+          riskTolerance: 0.4,
+          recenterBias: 0.8,
+          hazardAvoidanceBias: 0.84,
+        };
+        fixture.dependencies.policy = {
+          policyId: "alice.555drive.racing-line",
+          policyVersion: 1,
+          strategyFamily: "racing-line",
+          snapshot,
+          recoveryPolicy: { action: "stop" },
+          policyDigest: artifacts.sdk.sha256GameplayCanonical({
+            policyId: "alice.555drive.racing-line",
+            policyVersion: 1,
+            snapshot,
+            recoveryPolicy: { action: "stop" },
+          }),
+        };
+
+        const result = await new Drive555RehearsalSupervisor(
+          fixture.dependencies,
+        ).run({
+          sessionId: "session-1",
+          gameRunId: "run-1",
+          goal: "drive the verified racing line and deliver the sponsor break",
+          ad: { adId: "sponsor-product-1", duration: 12_000 },
+        });
+
+        expect(result.decisionId).toMatch(/^[a-f0-9]{64}$/);
+        expect(result.ad).toEqual({
+          graphicId: "graphic-product-1",
+          layout: "squeeze-back",
+          duration: 12_000,
+        });
+        expect(fixture.calls).toContain("control:reflected");
+        expect(fixture.calls.some((entry) => entry.startsWith("reflect:"))).toBe(
+          true,
+        );
+        expect(fixture.calls.some((entry) => entry.startsWith("mastery:"))).toBe(
+          true,
+        );
+        expect(fixture.calls.some((entry) => entry.startsWith("react:"))).toBe(
+          true,
+        );
+        expect(fixture.calls).toContain("release:reflected");
+        expect(requests).toEqual([
+          {
+            method: "POST",
+            url: "/api/agent/v1/sessions/session-1/ads/sponsor-product-1/trigger",
+            authorization: "Bearer product-rehearsal-token",
+            body: { duration: 12_000 },
+          },
+        ]);
+      } finally {
+        await streamControl?.stop();
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        });
+        for (const key of envKeys) {
+          const value = priorEnv.get(key);
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+    },
+  );
+
   it("requires native receipt and matching authoritative raw reflection before Alice persists and reacts", async () => {
     const fixture = makeDependencies();
     const result = await new Drive555RehearsalSupervisor(fixture.dependencies).run({
