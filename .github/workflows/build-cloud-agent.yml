@@ -124,10 +124,9 @@ jobs:
             const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
             // Scan for eliza packages that exist on disk with a package.json
-            const dirs = [
-              ...fs.readdirSync("eliza/packages").map(d => "eliza/packages/" + d),
-              ...fs.readdirSync("eliza/apps").map(d => "eliza/apps/" + d),
-            ];
+            const dirs = ["eliza/packages", "eliza/apps"]
+              .filter(root => fs.existsSync(root))
+              .flatMap(root => fs.readdirSync(root).map(d => root + "/" + d));
             const restored = [];
             for (const d of dirs) {
               const p = d + "/package.json";

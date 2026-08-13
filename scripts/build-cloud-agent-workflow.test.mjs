@@ -51,3 +51,22 @@ test("cloud agent build uses the Node major required by pinned Eliza", () => {
     `cloud agent build must use Node ${requiredMajor} required by pinned Eliza`,
   );
 });
+
+test("cloud agent workspace restore tolerates the current Eliza layout", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const elizaApps = path.join(repoRoot, "eliza/apps");
+
+  assert.equal(
+    fs.existsSync(elizaApps),
+    false,
+    "the pinned official Eliza checkout should exercise its apps-free layout",
+  );
+  assert.doesNotMatch(
+    workflow,
+    /fs\.readdirSync\("eliza\/apps"\)/,
+    "workspace restore must not unconditionally scan removed eliza/apps",
+  );
+});
