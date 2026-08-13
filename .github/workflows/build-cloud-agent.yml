@@ -116,7 +116,10 @@ jobs:
 
       # ── 4. Install dependencies ─────────────────────────────────────────────
       - name: Install dependencies
-        run: bun install --ignore-scripts --frozen-lockfile
+        run: |
+          bun install --ignore-scripts --frozen-lockfile
+          cd eliza
+          bun install --ignore-scripts --frozen-lockfile
 
       # ── 5. Build Capacitor plugins ──────────────────────────────────────────
       - name: Build Capacitor plugins

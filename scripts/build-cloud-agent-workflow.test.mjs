@@ -82,6 +82,11 @@ test("cloud agent frozen install accepts the current Eliza layout", () => {
     /bun install --ignore-scripts --frozen-lockfile/,
     "cloud build must install the committed lock without manifest mutation",
   );
+  assert.match(
+    workflow,
+    /cd eliza\n\s+bun install --ignore-scripts --frozen-lockfile/,
+    "cloud build must materialize the pinned Eliza workspace from its own lock",
+  );
   assert.doesNotMatch(
     workflow,
     /bun run postinstall/,
