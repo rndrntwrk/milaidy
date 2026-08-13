@@ -1,5 +1,5 @@
 import { useApp } from "@miladyai/app-core/state";
-import { useLifeOpsActivitySignals } from "@elizaos/app-lifeops/hooks/useLifeOpsActivitySignals";
+import { useLifeOpsActivitySignals } from "@miladyai/app-core/hooks";
 
 export function LifeOpsActivitySignalsEffect(): null {
   const { startupCoordinator, agentStatus, backendConnection } = useApp();

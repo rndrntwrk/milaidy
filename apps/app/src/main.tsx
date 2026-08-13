@@ -22,15 +22,15 @@ import { Capacitor } from "@capacitor/core";
 import { Keyboard, KeyboardResize } from "@capacitor/keyboard";
 import { Preferences } from "@capacitor/preferences";
 import {
-  initializeCapacitorBridge,
   subscribeDesktopBridgeEvent,
-  initializeStorageBridge,
   isElectrobunRuntime,
-} from "@elizaos/ui";
+} from "@elizaos/ui/bridge";
+import { initializeCapacitorBridge } from "@elizaos/ui/bridge/capacitor-bridge";
+import { initializeStorageBridge } from "@elizaos/ui/bridge/storage-bridge";
 import { ErrorBoundary } from "@miladyai/ui";
 import { client } from "@miladyai/app-core/api";
 import type { BrandingConfig } from "@miladyai/app-core/config";
-import { MILADY_DEFAULT_THEME } from "@elizaos/shared";
+import { ELIZA_DEFAULT_THEME } from "@elizaos/ui/themes";
 import {
   type AppBootConfig,
   getBootConfig,
@@ -40,8 +40,8 @@ import {
   ANDROID_LOCAL_AGENT_API_BASE,
   MOBILE_RUNTIME_MODE_STORAGE_KEY,
   normalizeMobileRuntimeMode,
-} from "@elizaos/ui/onboarding/mobile-runtime-mode";
-import { preSeedAndroidLocalRuntimeIfFresh } from "@elizaos/ui/onboarding/pre-seed-local-runtime";
+} from "@elizaos/ui/first-run/mobile-runtime-mode";
+import { preSeedAndroidLocalRuntimeIfFresh } from "@elizaos/ui/first-run/pre-seed-local-runtime";
 import {
   AGENT_READY_EVENT,
   APP_PAUSE_EVENT,
@@ -67,7 +67,7 @@ import {
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
 } from "@miladyai/app-core/platform";
-import { AppWindowRenderer } from "@elizaos/app-core";
+import { AppWindowRenderer } from "@elizaos/ui/components/apps/AppWindowRenderer";
 import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
 import type { ShareTargetPayload } from "@miladyai/app-core/platform";
 import {
@@ -138,7 +138,7 @@ import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";
 import "@elizaos/app-wallet/register";
 import "@elizaos/app-workflow-builder/register";
-import { shouldUseCloudOnlyBranding } from "@elizaos/ui";
+import { shouldUseCloudOnlyBranding } from "@elizaos/ui/config";
 import {
   APP_BRANDING_BASE,
   APP_CONFIG,
@@ -153,7 +153,7 @@ import {
   type IosRuntimeConfig,
   type IosRuntimeMode,
   resolveIosRuntimeConfig,
-} from "@elizaos/ui";
+} from "@elizaos/ui/platform/ios-runtime";
 
 // CharacterEditor lives in alice's local @miladyai/app-core (the 2009-line
 // version is alice-specific; upstream eliza moved this component to
@@ -225,7 +225,7 @@ function getInjectedAppApiBase(): string | undefined {
 
 const APP_BRANDING: Partial<BrandingConfig> = {
   ...APP_BRANDING_BASE,
-  theme: MILADY_DEFAULT_THEME,
+  theme: ELIZA_DEFAULT_THEME,
   // ── alice: milady-ai branding (preserved from MILADY_BRANDING) ──
   // Upstream has been migrating org refs from milady-ai/* → elizaOS/*; alice
   // keeps the milady-ai naming for the consumer-facing brand surface. If/when
@@ -311,7 +311,7 @@ installDesktopPermissionsClientPatch(client);
 window.__ELIZA_APP_CHARACTER_EDITOR__ = CharacterEditor;
 getAppWindow()[BRANDED_WINDOW_KEYS.characterEditor] = CharacterEditor;
 
-import { getStylePresets } from "@elizaos/shared/onboarding-presets";
+import { getStylePresets } from "@elizaos/shared";
 
 // Derive VRM roster from STYLE_PRESETS so character names stay in one place.
 const APP_STYLE_PRESETS = getStylePresets();

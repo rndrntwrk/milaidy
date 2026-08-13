@@ -125,6 +125,50 @@ describe("app vite config", () => {
     );
   });
 
+  it("aliases current official Eliza native plugins from their source layout", async () => {
+    const loaded = await loadConfigFromFile(
+      { command: "build", mode: "test" },
+      CONFIG_PATH,
+      APP_DIR,
+    );
+    const aliases = loaded?.config.resolve?.alias;
+    const elizaPlugins = path.resolve(APP_DIR, "../../eliza/plugins");
+
+    for (const plugin of ["agent", "desktop", "llama"]) {
+      expect(aliases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            find: new RegExp(`^@elizaos/capacitor-${plugin}$`),
+            replacement: path.join(
+              elizaPlugins,
+              `plugin-native-${plugin}`,
+              "src",
+              "index.ts",
+            ),
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("stubs the optional Clawville registration when latest Eliza omits it", async () => {
+    const loaded = await loadConfigFromFile(
+      { command: "build", mode: "test" },
+      CONFIG_PATH,
+      APP_DIR,
+    );
+    const aliases = loaded?.config.resolve?.alias;
+
+    expect(aliases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          find: /^@clawville\/app-clawville(?:\/.*)?$/,
+          replacement: path.join(APP_DIR, "src", "optional-eliza-app-stub.tsx"),
+        }),
+      ]),
+    );
+  });
+
   it("stubs sharp native modules in the browser bundle", async () => {
     const loaded = await loadConfigFromFile(
       { command: "build", mode: "test" },
@@ -132,7 +176,10 @@ describe("app vite config", () => {
       APP_DIR,
     );
 
-    const plugin = findPlugin(loaded?.config.plugins ?? [], "native-module-stub");
+    const plugin = findPlugin(
+      loaded?.config.plugins ?? [],
+      "native-module-stub",
+    );
     expect(plugin?.resolveId?.("sharp")).toBe("\0native-stub:sharp");
     expect(plugin?.resolveId?.("@img/sharp-wasm32")).toBe(
       "\0native-stub:@img/sharp-wasm32",

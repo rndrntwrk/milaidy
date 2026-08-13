@@ -8,7 +8,10 @@ import {
 } from "../src/character-catalog";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const APP_CORE_SRC_DIR = path.resolve(TEST_DIR, "../../../packages/app-core/src");
+const APP_CORE_SRC_DIR = path.resolve(
+  TEST_DIR,
+  "../../../packages/app-core/src",
+);
 const AGENT_SRC_DIR = path.resolve(TEST_DIR, "../../../packages/agent/src");
 
 function readSource(relativePath: string): string {
@@ -54,7 +57,10 @@ function resolveSourcePath(fromFile: string, specifier: string): string {
   return found;
 }
 
-function collectExports(entryFile: string, visited = new Set<string>()): Set<string> {
+function collectExports(
+  entryFile: string,
+  visited = new Set<string>(),
+): Set<string> {
   const absoluteEntry = path.resolve(entryFile);
   if (visited.has(absoluteEntry)) return new Set();
   visited.add(absoluteEntry);
@@ -66,9 +72,14 @@ function collectExports(entryFile: string, visited = new Set<string>()): Set<str
   )) {
     exports.add(match[1]);
   }
-  for (const match of source.matchAll(/export\s+\{([\s\S]*?)\}\s+from\s+["']([^"']+)["']/g)) {
+  for (const match of source.matchAll(
+    /export\s+\{([\s\S]*?)\}\s+from\s+["']([^"']+)["']/g,
+  )) {
     const sourceFile = resolveSourcePath(absoluteEntry, match[2]);
-    if (match[1].includes("type ") && !match[1].replace(/\btype\s+/g, "").trim()) {
+    if (
+      match[1].includes("type ") &&
+      !match[1].replace(/\btype\s+/g, "").trim()
+    ) {
       continue;
     }
     for (const raw of match[1].split(",")) {
@@ -84,7 +95,9 @@ function collectExports(entryFile: string, visited = new Set<string>()): Set<str
       exports.add(name);
     }
   }
-  for (const match of source.matchAll(/export\s+\*\s+from\s+["']([^"']+)["']/g)) {
+  for (const match of source.matchAll(
+    /export\s+\*\s+from\s+["']([^"']+)["']/g,
+  )) {
     const sourceFile = resolveSourcePath(absoluteEntry, match[1]);
     for (const name of collectExports(sourceFile, visited)) {
       exports.add(name);
@@ -123,7 +136,9 @@ describe("renderer boot guard", () => {
 
     expect(source).toContain("__MILADY_REACT_ROOT__?: Root");
     expect(source).toContain("__MILADY_APP_BOOT_PROMISE__?: Promise<void>");
-    expect(source).toContain("window.__MILADY_REACT_ROOT__ ?? createRoot(rootEl)");
+    expect(source).toContain(
+      "window.__MILADY_REACT_ROOT__ ?? createRoot(rootEl)",
+    );
     expect(source).toContain("if (window.__MILADY_APP_BOOT_PROMISE__)");
   });
 
@@ -152,16 +167,19 @@ describe("renderer boot guard", () => {
     expect(source).not.toMatch(
       /import\s*{[^}]*\buseApp\b[^}]*}\s*from "@elizaos\/app-core"/,
     );
+    expect(source).toContain(
+      'import { AppWindowRenderer } from "@elizaos/ui/components/apps/AppWindowRenderer"',
+    );
   });
 
-  it("keeps upstream mobile runtime helpers on the UI onboarding subpaths", () => {
+  it("keeps upstream mobile runtime helpers on the UI first-run subpaths", () => {
     const source = readSource("../src/main.tsx");
 
     expect(source).toMatch(
-      /MOBILE_RUNTIME_MODE_STORAGE_KEY[\s\S]*normalizeMobileRuntimeMode[\s\S]*from "@elizaos\/ui\/onboarding\/mobile-runtime-mode"/,
+      /MOBILE_RUNTIME_MODE_STORAGE_KEY[\s\S]*normalizeMobileRuntimeMode[\s\S]*from "@elizaos\/ui\/first-run\/mobile-runtime-mode"/,
     );
     expect(source).toContain(
-      'import { preSeedAndroidLocalRuntimeIfFresh } from "@elizaos/ui/onboarding/pre-seed-local-runtime"',
+      'import { preSeedAndroidLocalRuntimeIfFresh } from "@elizaos/ui/first-run/pre-seed-local-runtime"',
     );
     expect(source).not.toMatch(
       /MOBILE_RUNTIME_MODE_STORAGE_KEY[\s\S]*from "@miladyai\/app-core\/config"/,
@@ -169,6 +187,16 @@ describe("renderer boot guard", () => {
     expect(source).not.toMatch(
       /preSeedAndroidLocalRuntimeIfFresh[\s\S]*from "@miladyai\/app-core\/config"/,
     );
+  });
+
+  it("uses the current official Eliza theme export", () => {
+    const source = readSource("../src/main.tsx");
+
+    expect(source).toContain(
+      'import { ELIZA_DEFAULT_THEME } from "@elizaos/ui/themes"',
+    );
+    expect(source).toContain("theme: ELIZA_DEFAULT_THEME");
+    expect(source).not.toContain("MILADY_DEFAULT_THEME");
   });
 
   it("exports the direct launch connection helper from the milaidy platform barrel", () => {
@@ -211,9 +239,7 @@ describe("renderer boot guard", () => {
       "utf-8",
     );
 
-    expect(events).toContain(
-      "export const MOBILE_RUNTIME_MODE_CHANGED_EVENT",
-    );
+    expect(events).toContain("export const MOBILE_RUNTIME_MODE_CHANGED_EVENT");
     expect(events).toMatch(
       /ElizaDocumentEventName[\s\S]*typeof MOBILE_RUNTIME_MODE_CHANGED_EVENT/,
     );
@@ -225,9 +251,7 @@ describe("renderer boot guard", () => {
       "../src/lifeops/LifeOpsActivitySignalsEffect.tsx",
     );
 
-    expect(source).toContain(
-      'from "./lifeops/LifeOpsActivitySignalsEffect"',
-    );
+    expect(source).toContain('from "./lifeops/LifeOpsActivitySignalsEffect"');
     expect(source).not.toContain(
       'from "@elizaos/app-lifeops/components/LifeOpsActivitySignalsEffect"',
     );

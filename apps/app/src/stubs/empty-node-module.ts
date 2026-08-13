@@ -13,6 +13,11 @@ export const isTypedArray = () => false;
 export const pipeline = () => {};
 export const finished = () => {};
 
+// @elizaos/agent browser boundary used by current app-core's native runtime
+// connectors. Registration is server/native-only; browser builds retain the
+// import contract without installing a runtime factory.
+export const registerJsRuntimeFactory = () => {};
+
 // stream/web — re-export the global Web Streams if available
 export const ReadableStream =
   typeof globalThis !== "undefined" ? globalThis.ReadableStream : class {};

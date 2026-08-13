@@ -104,12 +104,12 @@ function buildWorkspaceExportAliases(
   return aliases;
 }
 
-// Walk eliza/packages/native-plugins/ and produce Vite aliases for every
-// `@elizaos/capacitor-<name>` package found. Each maps to that package's
-// `src/index.ts` directly, bypassing the package's `main` field (which
-// points at `./dist/plugin.cjs.js`, a file that is NOT built before the
-// SPA vite step). main.tsx imports like `@elizaos/capacitor-agent` and
-// `@elizaos/capacitor-desktop` resolve via these aliases.
+// Walk both native-plugin layouts used by official Eliza and produce Vite
+// aliases for every `@elizaos/capacitor-*` package found. Current Eliza keeps
+// these packages at `plugins/plugin-native-*`; older compatible checkouts used
+// `packages/native-plugins/*`. Each alias maps to `src/index.ts` directly,
+// bypassing the package's unbuilt `dist/plugin.cjs.js` entry during the SPA
+// build.
 //
 // Adapted from upstream milady-ai/milady's apps/app/vite.config.ts:
 //   - the `Alias` type isn't imported in alice's config (it's just an
@@ -122,25 +122,47 @@ function resolveNativePluginAliasEntries(): Array<{
   find: RegExp;
   replacement: string;
 }> {
-  const nativePluginsRoot = path.join(
-    miladyRoot,
-    "eliza/packages/native-plugins",
-  );
-  if (!fs.existsSync(nativePluginsRoot)) return [];
+  const aliasesByPackage = new Map<string, string>();
+  const roots = [
+    path.join(miladyRoot, "eliza/packages/native-plugins"),
+    path.join(miladyRoot, "eliza/plugins"),
+  ];
 
-  return fs
-    .readdirSync(nativePluginsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter(
-      (name) =>
-        fs.existsSync(path.join(nativePluginsRoot, name, "package.json")) &&
-        fs.existsSync(path.join(nativePluginsRoot, name, "src/index.ts")),
-    )
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => ({
-      find: new RegExp(`^@elizaos/capacitor-${escapeRegExp(name)}$`),
-      replacement: path.join(nativePluginsRoot, `${name}/src/index.ts`),
+  for (const nativePluginsRoot of roots) {
+    if (!fs.existsSync(nativePluginsRoot)) continue;
+    for (const entry of fs
+      .readdirSync(nativePluginsRoot, { withFileTypes: true })
+      .filter((candidate) => candidate.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name))) {
+      if (
+        nativePluginsRoot.endsWith(`${path.sep}plugins`) &&
+        !entry.name.startsWith("plugin-native-")
+      ) {
+        continue;
+      }
+      const packageDir = path.join(nativePluginsRoot, entry.name);
+      const packageJsonPath = path.join(packageDir, "package.json");
+      const sourceEntry = path.join(packageDir, "src/index.ts");
+      if (!fs.existsSync(packageJsonPath) || !fs.existsSync(sourceEntry)) {
+        continue;
+      }
+      try {
+        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
+          name?: string;
+        };
+        if (!pkg.name?.startsWith("@elizaos/capacitor-")) continue;
+        aliasesByPackage.set(pkg.name, sourceEntry);
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return [...aliasesByPackage.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([packageName, replacement]) => ({
+      find: new RegExp(`^${escapeRegExp(packageName)}$`),
+      replacement,
     }));
 }
 
@@ -1376,6 +1398,14 @@ function nativeModuleStubPlugin(): Plugin {
         ].join("\n");
       }
 
+      if (modName === "mammoth") {
+        return [
+          "async function extractRawText() { throw new Error('mammoth invoked in browser bundle'); }",
+          "export { extractRawText };",
+          "export default { extractRawText };",
+        ].join("\n");
+      }
+
       // Generic fallback for other native modules
       return "export default {};\n";
     },
@@ -1795,7 +1825,7 @@ export default defineConfig({
               )
             : buildWorkspaceExportAliases("@elizaos/app-core", appCorePkgPath)),
           // @elizaos/capacitor-<name> — dynamic walk of
-          // eliza/packages/native-plugins/ for src/index.ts entries.
+          // the current and legacy official Eliza native-plugin layouts.
           ...resolveNativePluginAliasEntries(),
         ];
 
@@ -1829,6 +1859,14 @@ export default defineConfig({
               path.dirname(clawvillePkgPath),
             ),
           );
+        } else {
+          // Clawville is optional and is not present in current official
+          // Eliza. Keep its registration side effect inert instead of leaving
+          // an unresolved production import.
+          generatedAliases.push({
+            find: /^@clawville\/app-clawville(?:\/.*)?$/,
+            replacement: path.join(here, "src/optional-eliza-app-stub.tsx"),
+          });
         }
 
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");

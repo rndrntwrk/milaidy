@@ -3,12 +3,9 @@
 //
 // Upstream milady-ai/milady's apps/app/src/app-config.ts imports
 // `resolveAppBranding` from `@elizaos/app-core` — that import path is
-// stale for current eliza (commit 5a6f5f3370 moved branding into
-// @elizaos/ui via the Wave A refactor; @elizaos/app-core no longer
-// exports it). Alice uses the canonical post-refactor path
-// `@elizaos/ui/config/app-config`, matching what
-// eliza/packages/app/src/app-config.ts itself does.
-import { resolveAppBranding } from "@elizaos/ui/config/app-config";
+// stale for current eliza. Latest official Eliza exposes the branding
+// resolver from the public UI config barrel.
+import { resolveAppBranding } from "@elizaos/ui/config";
 
 import appConfig from "../app.config";
 

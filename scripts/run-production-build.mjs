@@ -16,9 +16,8 @@
  *     VITE_ASSET_BASE_URL so the vite build emits CDN-anchored asset
  *     paths; prune-cdn-local-assets.mjs prunes the local copies after
  *     the CDN upload step.
- *   - write-build-info preferentially runs through bun when bun is on
- *     PATH; falls back to `node --import tsx` so the script also works
- *     from a pure-node host.
+ *   - The pinned Bun runtime is required for clean-checkout Eliza package
+ *     builds and write-build-info, keeping deployment builds reproducible.
  *   - resolveNodeExec() handles the case where this script is invoked
  *     via `bun run`, where process.execPath is bun, not node — needed
  *     because tsdown + vite CLIs require real node.
@@ -38,6 +37,7 @@ const repoRoot = path.resolve(
   "..",
 );
 const appDir = path.join(repoRoot, "apps", "app");
+const requiredBunVersion = "1.3.13";
 
 // ── alice: real Node binary even when started via `bun run` ────────────────
 function resolveNodeExec() {
@@ -60,10 +60,14 @@ function resolveNodeExec() {
 
 function resolveBunForScripts() {
   if (process.versions.bun) {
-    return process.execPath;
+    return process.versions.bun === requiredBunVersion
+      ? process.execPath
+      : null;
   }
   const probe = spawnSync("bun", ["--version"], { encoding: "utf8" });
-  return probe.status === 0 ? "bun" : null;
+  return probe.status === 0 && probe.stdout?.trim() === requiredBunVersion
+    ? "bun"
+    : null;
 }
 
 const node = resolveNodeExec();
@@ -129,10 +133,38 @@ if (isLocalElizaDisabled()) {
   );
   const bunForScripts = resolveBunForScripts();
 
+  if (!bunForScripts) {
+    throw new Error(
+      `Bun ${requiredBunVersion} is required for the local Eliza production build.`,
+    );
+  }
+
   // Upstream: elizaOS patch scripts that prepare the workspace for build
   await run(node, ["scripts/ensure-elizaos-optional-app-stubs.mjs"]);
   await run(node, ["scripts/patch-elizaos-package-styles.mjs"]);
   await run(node, ["scripts/patch-elizaos-plugin-browser-bridge-package.mjs"]);
+
+  // Current official Eliza exports UI and app-core browser entrypoints from
+  // dist/. A clean Alice checkout must build those pinned workspace packages
+  // before Vite resolves their exports; relying on ignored artifacts makes the
+  // production build checkout-dependent.
+  await Promise.all([
+    run(
+      bunForScripts,
+      ["run", "build"],
+      path.join(repoRoot, "eliza", "packages", "shared"),
+    ),
+    run(
+      bunForScripts,
+      ["run", "build"],
+      path.join(repoRoot, "eliza", "packages", "ui"),
+    ),
+    run(
+      bunForScripts,
+      ["run", "build"],
+      path.join(repoRoot, "eliza", "packages", "app-core"),
+    ),
+  ]);
 
   // Alice + upstream: tsdown ∥ Capacitor plugin-build (parallel)
   await Promise.all([
@@ -147,17 +179,15 @@ if (isLocalElizaDisabled()) {
   ]);
 
   // Upstream: post-tsdown patch for native browser package
-  await run(node, ["scripts/patch-elizaos-app-core-native-browser-package.mjs"]);
+  await run(node, [
+    "scripts/patch-elizaos-app-core-native-browser-package.mjs",
+  ]);
 
   // Vite SPA build
   await run(node, [viteCli, "build"], appDir);
 
   // Alice: write-build-info — prefer bun if available
-  if (bunForScripts) {
-    await run(bunForScripts, [writeBuildInfoScript], repoRoot);
-  } else {
-    await run(node, ["--import", "tsx", writeBuildInfoScript], repoRoot);
-  }
+  await run(bunForScripts, [writeBuildInfoScript], repoRoot);
 
   // Alice: CDN asset pruning (only when MILADY_ASSET_BASE_URL is set)
   if (appAssetBaseUrl) {
