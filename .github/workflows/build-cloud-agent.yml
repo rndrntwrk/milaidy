@@ -6,7 +6,7 @@
 #   - Push to cloud/main or cloud/staging branch
 #   - Manual dispatch with version override
 #
-# Published to: ghcr.io/milady-ai/agent
+# Published to: ghcr.io/<repository-owner>/milaidy-agent
 #   Tags (production): :cloud-v{version}         and :cloud-latest
 #   Tags (staging):    :cloud-staging-v{version} and :cloud-staging-latest
 #
@@ -44,7 +44,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: milady-ai/agent
+  IMAGE_NAME: ${{ github.repository_owner }}/milaidy-agent
   SOURCE_REF: ${{ github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main') }}
   CLOUD_DEPLOY_WEBHOOK_URL: http://89.167.63.246:9876/deploy
 

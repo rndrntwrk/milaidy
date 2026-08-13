@@ -9,6 +9,24 @@ const repoRoot = path.resolve(
   "..",
 );
 
+test("cloud agent image publishes under the repository owner", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+
+  assert.match(
+    workflow,
+    /IMAGE_NAME: \$\{\{ github\.repository_owner \}\}\/milaidy-agent/,
+    "GHCR image ownership must follow the repository owner",
+  );
+  assert.doesNotMatch(
+    workflow,
+    /IMAGE_NAME:\s*milady-ai\//,
+    "the RNDRNTWRK workflow must not publish to an unrelated GHCR namespace",
+  );
+});
+
 test("cloud agent build keeps the checked-out Eliza workspace available", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
