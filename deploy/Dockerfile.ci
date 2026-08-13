@@ -167,19 +167,13 @@ RUN for pkg_dir in eliza/packages/core eliza/packages/shared eliza/packages/agen
       fi; \
     done
 
-# Two-phase fix for missing workspace plugins and their deps:
-#
-# Phase 1: Hoist packages from node_modules/.bun/ to node_modules/.
+# Hoist packages from node_modules/.bun/ to node_modules/.
 # bun resolves packages and stores them in .bun/ but when workspace:* entries
 # have empty plugin dirs, the hoisting symlinks are never created. Copy them.
-#
-# Phase 2: Tarball-install packages NOT in .bun/ at all (published to npm with
-# workspace:* in their own deps, so npm install fails for them too).
 RUN node - <<'__HOIST__'
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const https = require('https');
 
 // isAccessible: follows symlinks, returns false for broken symlinks
 function isAccessible(p) { return fs.existsSync(p); }
@@ -233,45 +227,20 @@ if (fs.existsSync(bunDir)) {
 }
 console.log('Phase 1: hoisted ' + hoisted + ' packages from .bun/');
 
-// --- Phase 2: Tarball-install packages not in .bun/ ---
-// These plugins publish to npm with workspace:* deps so npm install fails.
-// We only need the package itself; @elizaos/core and other @elizaos/* are
-// already in the image from the main bun install.
-function installTarball(name, cb) {
-  const pkgDir = 'node_modules/' + name;
-  if (fs.existsSync(pkgDir + '/package.json')) {
-    console.log('Phase 2: already present: ' + name);
-    return cb && cb();
-  }
-  const url = execSync('npm view ' + name + ' dist.tarball 2>/dev/null', {encoding:'utf8'}).trim();
-  if (!url) { console.log('Phase 2 WARN: no tarball for ' + name); return cb && cb(); }
-  const tmp = '/tmp/tb_' + name.replace(/[^a-z0-9]/gi,'_');
-  https.get(url, res => {
-    const chunks = [];
-    res.on('data', c => chunks.push(c));
-    res.on('end', () => {
-      try {
-        fs.mkdirSync(tmp, {recursive:true});
-        fs.writeFileSync(tmp + '.tgz', Buffer.concat(chunks));
-        execSync('tar xz -C ' + tmp + ' -f ' + tmp + '.tgz');
-        const scope = name.startsWith('@') ? name.split('/')[0] : null;
-        if (scope) fs.mkdirSync('node_modules/' + scope, {recursive:true});
-        execSync('rm -rf ' + pkgDir);
-        execSync('mv ' + tmp + '/package ' + pkgDir);
-        const v = JSON.parse(fs.readFileSync(pkgDir + '/package.json','utf8')).version;
-        console.log('Phase 2: installed ' + name + '@' + v);
-      } catch(e) { console.error('Phase 2 WARN ' + name + ': ' + e.message); }
-      cb && cb();
-    });
-  }).on('error', e => { console.error('Phase 2 WARN ' + name + ': ' + e.message); cb && cb(); });
-}
-const phase2 = [
+const requiredLockedPackages = [
   '@elizaos/plugin-agent-skills',
   '@elizaos/plugin-anthropic',
   '@elizaos/plugin-local-embedding',
   'jsonrepair',
 ];
-(function next(i) { if (i >= phase2.length) return; installTarball(phase2[i], () => next(i+1)); })(0);
+for (const name of requiredLockedPackages) {
+  const packageJson = path.join('node_modules', name, 'package.json');
+  if (!fs.existsSync(packageJson)) {
+    throw new Error('locked runtime package missing after hoist: ' + name);
+  }
+  const version = JSON.parse(fs.readFileSync(packageJson, 'utf8')).version;
+  console.log('locked runtime package present: ' + name + '@' + version);
+}
 __HOIST__
 
 # Patch plugin-agent-skills getCatalogStats crash (alpha.11 vs alpha.66 interface mismatch)

@@ -156,6 +156,16 @@ test("cloud agent image does not copy removed Eliza apps", () => {
     /\bcp(?: -a)? eliza\/apps\//,
     "image assembly must not require packages removed from official Eliza",
   );
+  assert.doesNotMatch(
+    dockerfile,
+    /npm view .*dist\.tarball|https\.get\(/,
+    "image assembly must never replace locked packages with registry-latest tarballs",
+  );
+  assert.equal(
+    dockerfile.match(/const v = '\$\{VERSION_CLEAN\}';/g)?.length,
+    1,
+    "image version patch must remain valid JavaScript",
+  );
 });
 
 test("cloud agent builds pinned Eliza UI assets before Alice web", () => {
