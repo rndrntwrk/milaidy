@@ -143,6 +143,11 @@ test("cloud agent frozen install accepts the current Eliza layout", () => {
     /cd eliza\/packages\/core\n\s+bun run build/,
     "cloud build must invoke the current Eliza core build script",
   );
+  assert.match(
+    workflow,
+    /echo '!deploy\/cloud-agent-template' >> \.dockerignore/,
+    "Docker context must retain the explicitly declared cloud-agent-template workspace",
+  );
 });
 
 test("cloud agent image does not copy removed Eliza apps", () => {

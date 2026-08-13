@@ -245,6 +245,8 @@ jobs:
           # Whitelist runtime-required app packages (agent imports these at boot)
           echo '!eliza/apps/app-companion' >> .dockerignore
           echo '!eliza/apps/app-lifeops' >> .dockerignore
+          echo '!deploy/cloud-agent-template' >> .dockerignore
+          echo '!deploy/cloud-agent-template/**' >> .dockerignore
 
       # ── 10. Set up Docker Buildx ────────────────────────────────
       - name: Set up Docker Buildx
