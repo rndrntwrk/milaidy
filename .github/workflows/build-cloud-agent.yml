@@ -69,10 +69,10 @@ jobs:
           submodules: false
 
       # ── 2. Set up Node + Bun ────────────────────────────────────────────────
-      - name: Setup Node.js 22
+      - name: Setup Node.js 24
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -113,12 +113,9 @@ jobs:
           ls eliza/package.json && echo "eliza submodule OK" || echo "WARN: eliza submodule missing"
           # Init other submodules (skip local upstreams to avoid nested plugin submodules)
           MILADY_SKIP_LOCAL_UPSTREAMS=1 node scripts/init-submodules.mjs || echo "Some submodules failed, continuing"
-          # Disable workspace entries for missing plugin submodules
-          MILADY_SKIP_LOCAL_UPSTREAMS=1 node scripts/disable-local-eliza-workspace.mjs || echo "Disable script failed, continuing"
 
-      # The disable script removes all eliza/* workspace entries and rewrites
-      # workspace:* overrides, but the vite build needs app-core, ui, shared,
-      # agent, and app packages that exist on disk. Re-add them.
+      # Keep the pinned Eliza checkout available. Re-add every package that
+      # exists in that exact submodule to the root workspace before install.
       - name: Restore build-critical workspaces
         run: |
           node -e '
