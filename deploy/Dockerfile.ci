@@ -74,6 +74,14 @@ RUN set -x; \
     cp eliza/plugins/plugin-agent-orchestrator/package.json node_modules/@elizaos/plugin-agent-orchestrator/; \
     cp -a eliza/plugins/plugin-agent-orchestrator/dist node_modules/@elizaos/plugin-agent-orchestrator/dist; \
     ls node_modules/@elizaos/plugin-agent-orchestrator/dist/node/index.node.js 2>/dev/null && echo "@elizaos/plugin-agent-orchestrator dist OK" || echo "WARN: agent-orchestrator dist missing"; \
+    # @elizaos/plugin-commands: Alice's compiled entry imports the official
+    # catalog directly, so retain the exact pinned build instead of the guarded
+    # optional fallback used for distributions where the package is absent.
+    rm -rf node_modules/@elizaos/plugin-commands; \
+    mkdir -p node_modules/@elizaos/plugin-commands; \
+    cp eliza/plugins/plugin-commands/package.json node_modules/@elizaos/plugin-commands/; \
+    cp -a eliza/plugins/plugin-commands/dist node_modules/@elizaos/plugin-commands/dist; \
+    ls node_modules/@elizaos/plugin-commands/dist/index.js 2>/dev/null && echo "@elizaos/plugin-commands dist OK" || echo "WARN: commands dist missing"; \
     # @elizaos/plugin-app-control: Alice's agent bundle imports this official
     # runtime plugin even when the reduced image install does not hoist it.
     rm -rf node_modules/@elizaos/plugin-app-control; \
@@ -279,6 +287,7 @@ const requiredLockedPackages = [
   '@elizaos/plugin-agent-orchestrator',
   '@elizaos/plugin-agent-skills',
   '@elizaos/plugin-anthropic',
+  '@elizaos/plugin-commands',
   '@elizaos/plugin-app-control',
   '@elizaos/plugin-app-manager',
   '@elizaos/plugin-local-embedding',
@@ -632,7 +641,7 @@ __AISDK_FIX__
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
-  -e "await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator')])"
+  -e "await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands')])"
 
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \
