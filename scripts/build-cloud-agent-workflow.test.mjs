@@ -157,3 +157,18 @@ test("cloud agent image does not copy removed Eliza apps", () => {
     "image assembly must not require packages removed from official Eliza",
   );
 });
+
+test("cloud agent builds pinned Eliza UI assets before Alice web", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const elizaUiBuild = workflow.indexOf("cd eliza/packages/ui\n          bun run build");
+  const aliceWebBuild = workflow.indexOf("cd apps/app\n          bun run build:web");
+
+  assert.ok(elizaUiBuild >= 0, "cloud build must materialize @elizaos/ui dist assets");
+  assert.ok(
+    aliceWebBuild > elizaUiBuild,
+    "Alice web build must run after pinned Eliza UI assets exist",
+  );
+});

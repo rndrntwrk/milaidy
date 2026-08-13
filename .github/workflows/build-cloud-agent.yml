@@ -143,6 +143,11 @@ jobs:
           cd eliza/packages/shared
           bun run build
 
+      - name: Build @elizaos/ui
+        run: |
+          cd eliza/packages/ui
+          bun run build
+
       # ── 6. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
         run: |
