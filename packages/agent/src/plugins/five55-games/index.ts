@@ -71,6 +71,11 @@ interface AliceStreamControlPort {
     payload: { emoteId: string; path: string; duration: number; loop: boolean },
     sessionId: string,
   ): Promise<{ ok: boolean; sent: boolean }>;
+  triggerAdBreak(
+    adId: string,
+    options: { duration: number },
+    sessionId: string,
+  ): Promise<{ graphicId: string; layout: string; duration: number }>;
 }
 
 type GamesDialect = "agent-v1";
@@ -108,7 +113,11 @@ function resolveAliceStreamControl(runtime: IAgentRuntime): AliceStreamControlPo
 }
 
 function isAliceStreamControlPort(value: unknown): value is AliceStreamControlPort {
-  return typeof asRecord(value)?.broadcastEvent === "function";
+  const service = asRecord(value);
+  return (
+    typeof service?.broadcastEvent === "function" &&
+    typeof service?.triggerAdBreak === "function"
+  );
 }
 
 function isAliceGameplayMemoryRuntime(value: unknown): value is AliceGameplayMemoryRuntime {
@@ -749,8 +758,15 @@ const drive555RehearseAction: Action = {
 
       const sessionId = readParam(options as HandlerOptions | undefined, "sessionId")?.trim();
       const gameRunId = readParam(options as HandlerOptions | undefined, "gameRunId")?.trim();
+      const adId = readParam(options as HandlerOptions | undefined, "adId")?.trim();
+      const adDuration = Number(
+        readParam(options as HandlerOptions | undefined, "adDurationMs")?.trim(),
+      );
       if (!sessionId || !gameRunId) {
         throw new Error("sessionId and gameRunId are required for 555Drive rehearsal");
+      }
+      if (!adId || !Number.isSafeInteger(adDuration) || adDuration <= 0) {
+        throw new Error("adId and a positive adDurationMs are required for the product rehearsal");
       }
       if (!message.roomId) {
         throw new Error("Alice room context is required to persist gameplay reflection");
@@ -785,9 +801,10 @@ const drive555RehearseAction: Action = {
         runtime,
         message.roomId,
       );
+      const streamControl = resolveAliceStreamControl(runtime);
       const reactionBridge = new AliceReactionBridge({
         persistence: alicePersistence,
-        streamControl: resolveAliceStreamControl(runtime),
+        streamControl,
       });
       const supervisor = new Drive555RehearsalSupervisor({
         client: new artifacts.sdk.GameplayApiClient({ apiUrl: base, token }),
@@ -808,6 +825,7 @@ const drive555RehearseAction: Action = {
         sha256GameplayCanonical: artifacts.sdk.sha256GameplayCanonical,
         persistence: alicePersistence,
         reactions: reactionBridge,
+        ads: streamControl,
       });
       const result = await supervisor.run({
         sessionId,
@@ -815,6 +833,7 @@ const drive555RehearseAction: Action = {
         goal:
           readParam(options as HandlerOptions | undefined, "goal")?.trim() ||
           "drive the verified racing line safely",
+        ad: { adId, duration: adDuration },
       });
       return {
         success: true,
@@ -847,6 +866,18 @@ const drive555RehearseAction: Action = {
       name: "goal",
       description: "Optional Alice gameplay goal for the one-decision local rehearsal.",
       required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "adId",
+      description: "Existing Stream555 ad inventory identifier to trigger after reflected movement.",
+      required: true,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "adDurationMs",
+      description: "Positive ad duration in milliseconds.",
+      required: true,
       schema: { type: "string" as const },
     },
   ],

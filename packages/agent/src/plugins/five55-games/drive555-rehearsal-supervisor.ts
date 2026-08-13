@@ -139,6 +139,14 @@ export interface AliceReactionPort {
   ): Promise<void>;
 }
 
+export interface AliceAdsPort {
+  triggerAdBreak(
+    adId: string,
+    options: { duration: number },
+    sessionId: string,
+  ): Promise<{ graphicId: string; layout: string; duration: number }>;
+}
+
 export interface GameplayRehearsalProfile {
   gameId: string;
   reactionKindFor(
@@ -166,6 +174,7 @@ export interface GameplayRehearsalDependencies {
   sha256GameplayCanonical(value: unknown): string;
   persistence: AliceGameplayPersistencePort;
   reactions?: AliceReactionPort;
+  ads?: AliceAdsPort;
   createId?: () => string;
   nowMs?: () => number;
   observationTimeoutMs?: number;
@@ -177,12 +186,14 @@ export interface GameplayRehearsalRequest {
   sessionId: string;
   gameRunId: string;
   goal: string;
+  ad?: { adId: string; duration: number };
 }
 
 export interface GameplayRehearsalResult {
   gameRunId: string;
   decisionId: string;
   reflectedObservationSequence: number;
+  ad?: { graphicId: string; layout: string; duration: number };
 }
 
 const DEFAULT_OBSERVATION_TIMEOUT_MS = 5_000;
@@ -1431,10 +1442,32 @@ export class GameplayRehearsalSupervisor {
           reactionKind: this.profile.reactionKindFor(baseline, reflected),
         });
       }
+      let ad: GameplayRehearsalResult["ad"];
+      if (request.ad) {
+        if (!this.dependencies.ads) {
+          throw new RehearsalFailure(
+            "rehearsal-failed",
+            "Stream555 Ads service is required for an ad-bound rehearsal",
+          );
+        }
+        assertNonEmpty(request.ad.adId, "adId");
+        if (!isPositiveSafeInteger(request.ad.duration)) {
+          throw new RehearsalFailure(
+            "rehearsal-failed",
+            "ad duration must be a positive safe integer",
+          );
+        }
+        ad = await this.dependencies.ads.triggerAdBreak(
+          request.ad.adId,
+          { duration: request.ad.duration },
+          request.sessionId,
+        );
+      }
       result = {
         gameRunId: intent.gameRunId,
         decisionId: intent.decisionId,
         reflectedObservationSequence: proof.receipt.reflectedObservationSequence ?? proof.raw.sourceObservationSequence,
+        ...(ad ? { ad } : {}),
       };
     } catch (error) {
       primaryError = error;

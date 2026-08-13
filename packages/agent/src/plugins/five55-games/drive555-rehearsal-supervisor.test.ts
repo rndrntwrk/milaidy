@@ -658,6 +658,12 @@ function makeDependencies(options: {
         calls.push(`react:${sessionId}:${value.reactionKind}:${value.rawObservationDigest}`);
       },
     },
+    ads: {
+      async triggerAdBreak(adId, options, sessionId) {
+        calls.push(`ad:${sessionId}:${adId}:${options.duration}`);
+        return { graphicId: "graphic-1", layout: "squeeze-back", duration: options.duration };
+      },
+    },
     createId: (() => {
       let value = 0;
       return () => `id-${++value}`;
@@ -676,6 +682,7 @@ describe("Drive555RehearsalSupervisor", () => {
       sessionId: "session-1",
       gameRunId: "run-1",
       goal: "keep Alice on the racing line",
+      ad: { adId: "sponsor-1", duration: 12_000 },
     });
 
     expect(fixture.calls.slice(0, 9)).toEqual([
@@ -697,6 +704,7 @@ describe("Drive555RehearsalSupervisor", () => {
     expect(fixture.calls).toContain(`reflect:decision-1:${fixture.evidence.reflectedRawEnvelopeDigest}`);
     expect(fixture.calls).toContain(`mastery:decision-1:${fixture.evidence.reflectedRawEnvelopeDigest}`);
     expect(fixture.calls).toContain(`react:session-1:progress:${fixture.evidence.reflectedRawEnvelopeDigest}`);
+    expect(fixture.calls).toContain("ad:session-1:sponsor-1:12000");
     expect(fixture.calls.indexOf(`reflect:decision-1:${fixture.evidence.reflectedRawEnvelopeDigest}`)).toBeLessThan(
       fixture.calls.indexOf(`mastery:decision-1:${fixture.evidence.reflectedRawEnvelopeDigest}`),
     );
@@ -718,6 +726,7 @@ describe("Drive555RehearsalSupervisor", () => {
       gameRunId: "run-1",
       decisionId: "decision-1",
       reflectedObservationSequence: 42,
+      ad: { graphicId: "graphic-1", layout: "squeeze-back", duration: 12_000 },
     });
   });
 
