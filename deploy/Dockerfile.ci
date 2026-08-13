@@ -59,6 +59,13 @@ RUN set -x; \
     cp -a packages/app-core/src node_modules/@elizaos/app-core/src 2>/dev/null || true; \
     cp -a packages/app-core/dist node_modules/@elizaos/app-core/dist 2>/dev/null || true; \
     ls node_modules/@elizaos/app-core/src/index.ts 2>/dev/null && echo "@elizaos/app-core Milady alias OK" || echo "WARN: app-core Milady alias missing"; \
+    # @elizaos/auth: the official orchestrator imports this leaf package at
+    # module evaluation time, so preserve the exact pinned compiled package.
+    rm -rf node_modules/@elizaos/auth; \
+    mkdir -p node_modules/@elizaos/auth; \
+    cp eliza/packages/auth/package.json node_modules/@elizaos/auth/; \
+    cp -a eliza/packages/auth/dist node_modules/@elizaos/auth/dist; \
+    ls node_modules/@elizaos/auth/dist/index.js 2>/dev/null && echo "@elizaos/auth dist OK" || echo "WARN: auth dist missing"; \
     # @elizaos/plugin-agent-orchestrator: Alice's compiled entry imports its
     # completion relay directly, so the official pinned Node bundle is part of
     # the cloud runtime rather than an optional desktop-only package.
@@ -268,6 +275,7 @@ if (fs.existsSync(bunDir)) {
 console.log('Phase 1: hoisted ' + hoisted + ' packages from .bun/');
 
 const requiredLockedPackages = [
+  '@elizaos/auth',
   '@elizaos/plugin-agent-orchestrator',
   '@elizaos/plugin-agent-skills',
   '@elizaos/plugin-anthropic',

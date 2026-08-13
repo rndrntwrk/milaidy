@@ -441,6 +441,24 @@ test("cloud image retains the official agent orchestrator statically imported by
   );
 });
 
+test("cloud image retains the official auth dependency required by the orchestrator", () => {
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+
+  assert.match(
+    dockerfile,
+    /cp eliza\/packages\/auth\/package\.json node_modules\/@elizaos\/auth\/[\s\S]*?cp -a eliza\/packages\/auth\/dist node_modules\/@elizaos\/auth\/dist/,
+    "the runtime image must copy the exact built official auth package",
+  );
+  assert.match(
+    dockerfile,
+    /requiredLockedPackages[\s\S]*?'@elizaos\/auth'/,
+    "image assembly must fail closed if the orchestrator's auth dependency is absent",
+  );
+});
+
 test("cloud image overlays the latest app-manager host services and imports the package", () => {
   const dockerfile = fs.readFileSync(
     path.join(repoRoot, "deploy/Dockerfile.ci"),
