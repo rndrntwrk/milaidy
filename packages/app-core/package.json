@@ -150,7 +150,7 @@
   },
   "devDependencies": {
     "@elizaos/plugin-agent-skills": "workspace:*",
-    "@elizaos/plugin-plugin-manager": "workspace:*",
+    "@elizaos/plugin-plugin-manager": "2.0.0-alpha.8",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.0.0",
