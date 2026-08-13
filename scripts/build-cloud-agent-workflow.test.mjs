@@ -148,6 +148,16 @@ test("cloud agent frozen install accepts the current Eliza layout", () => {
     /echo '!deploy\/cloud-agent-template' >> \.dockerignore/,
     "Docker context must retain the explicitly declared cloud-agent-template workspace",
   );
+  assert.match(
+    workflow,
+    /echo '!apps\/homepage' >> \.dockerignore/,
+    "Docker context must retain the apps wildcard workspace that exists in this checkout",
+  );
+  assert.match(
+    workflow,
+    /echo '!eliza\/packages\/examples' >> \.dockerignore/,
+    "Docker context must retain pinned Eliza example workspaces for frozen resolution",
+  );
 });
 
 test("cloud agent image does not copy removed Eliza apps", () => {
