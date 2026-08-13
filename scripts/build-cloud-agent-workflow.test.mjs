@@ -15,19 +15,22 @@ test("cloud agent build keeps the checked-out Eliza workspace available", () => 
     "utf8",
   );
   const initStart = workflow.indexOf("- name: Init submodules");
-  const restoreStart = workflow.indexOf(
-    "- name: Restore build-critical workspaces",
-  );
+  const installStart = workflow.indexOf("- name: Install dependencies");
 
   assert.ok(initStart >= 0, "Init submodules step must exist");
   assert.ok(
-    restoreStart > initStart,
-    "workspace restore must follow submodule initialization",
+    installStart > initStart,
+    "immutable dependency install must follow submodule initialization",
   );
   assert.doesNotMatch(
-    workflow.slice(initStart, restoreStart),
+    workflow.slice(initStart, installStart),
     /disable-local-eliza-workspace\.mjs/,
     "the init step must not remove Eliza before workspace restoration",
+  );
+  assert.doesNotMatch(
+    workflow.slice(initStart, installStart),
+    /Restore build-critical workspaces|fs\.writeFileSync\("package\.json"/,
+    "CI must not rewrite the committed workspace graph before frozen install",
   );
 });
 
@@ -52,7 +55,7 @@ test("cloud agent build uses the Node major required by pinned Eliza", () => {
   );
 });
 
-test("cloud agent workspace restore tolerates the current Eliza layout", () => {
+test("cloud agent frozen install accepts the current Eliza layout", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -64,9 +67,9 @@ test("cloud agent workspace restore tolerates the current Eliza layout", () => {
     false,
     "the pinned official Eliza checkout should exercise its apps-free layout",
   );
-  assert.doesNotMatch(
+  assert.match(
     workflow,
-    /fs\.readdirSync\("eliza\/apps"\)/,
-    "workspace restore must not unconditionally scan removed eliza/apps",
+    /bun install --ignore-scripts --frozen-lockfile/,
+    "cloud build must install the committed lock without manifest mutation",
   );
 });
