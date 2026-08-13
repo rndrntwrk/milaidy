@@ -182,3 +182,23 @@ test("cloud agent builds pinned Eliza UI assets before Alice web", () => {
     "Alice web build must run after pinned Eliza UI assets exist",
   );
 });
+
+test("cloud agent builds pinned Eliza app-core assets before Alice web", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const elizaAppCoreBuild = workflow.indexOf(
+    "cd eliza/packages/app-core\n          bun run build",
+  );
+  const aliceWebBuild = workflow.indexOf("cd apps/app\n          bun run build:web");
+
+  assert.ok(
+    elizaAppCoreBuild >= 0,
+    "cloud build must materialize @elizaos/app-core dist assets",
+  );
+  assert.ok(
+    aliceWebBuild > elizaAppCoreBuild,
+    "Alice web build must run after pinned Eliza app-core assets exist",
+  );
+});
