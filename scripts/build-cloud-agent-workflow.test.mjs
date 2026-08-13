@@ -305,3 +305,34 @@ test("cloud agent builds official Eliza runtime plugins used by Alice", () => {
     "official runtime plugins must be built before image assembly",
   );
 });
+
+test("cloud image retains the latest Eliza auth runtime closure", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const pruner = fs.readFileSync(
+    path.join(repoRoot, "scripts/cloud-image-prune-deps.mjs"),
+    "utf8",
+  );
+
+  const sharedBuild = workflow.indexOf(
+    "cd eliza/packages/shared\n          bun run build",
+  );
+  const vaultBuild = workflow.indexOf(
+    "cd eliza/packages/vault\n          bun run build",
+  );
+  const authBuild = workflow.indexOf(
+    "cd eliza/packages/auth\n          bun run build",
+  );
+  const dockerBuild = workflow.indexOf("- name: Build and push Docker image");
+
+  assert.ok(sharedBuild >= 0, "official shared package must be built");
+  assert.ok(vaultBuild > sharedBuild, "vault must be built after shared");
+  assert.ok(authBuild > vaultBuild, "auth must be built after its vault dependency");
+  assert.ok(dockerBuild > authBuild, "auth must exist before image assembly");
+  assert.match(pruner, /"eliza\/packages\/auth"/);
+  assert.match(pruner, /"eliza\/packages\/vault"/);
+  assert.match(pruner, /"@elizaos\/auth"/);
+  assert.match(pruner, /"@elizaos\/vault"/);
+});

@@ -3,8 +3,10 @@ import fs from "node:fs";
 const KEEP = [
   "eliza/packages/agent",
   "eliza/packages/app-core",
+  "eliza/packages/auth",
   "eliza/packages/shared",
   "eliza/packages/ui",
+  "eliza/packages/vault",
   "eliza/packages/app-core/platforms/electrobun",
   "eliza/packages/app-core/deploy/cloud-agent-template",
   "packages/app",
@@ -12,8 +14,10 @@ const KEEP = [
 const ALLOW = new Set([
   "@elizaos/agent",
   "@elizaos/app-core",
+  "@elizaos/auth",
   "@elizaos/shared",
   "@elizaos/ui",
+  "@elizaos/vault",
 ]);
 const PRUNE_FIELDS = [
   "dependencies",
@@ -133,8 +137,10 @@ writeJson("package.json", root);
   "packages/app/package.json",
   "eliza/packages/agent/package.json",
   "eliza/packages/app-core/package.json",
+  "eliza/packages/auth/package.json",
   "eliza/packages/shared/package.json",
   "eliza/packages/ui/package.json",
+  "eliza/packages/vault/package.json",
   "eliza/packages/app-core/platforms/electrobun/package.json",
   "eliza/packages/app-core/deploy/cloud-agent-template/package.json",
 ].forEach(prune);
