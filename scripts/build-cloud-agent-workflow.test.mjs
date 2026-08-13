@@ -400,3 +400,26 @@ test("cloud image retains the official Eliza plugins statically imported by Alic
     "the image must verify wallet's actual runtime entrypoints",
   );
 });
+
+test("cloud image overlays the latest app-manager host services and imports the package", () => {
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+
+  assert.match(
+    dockerfile,
+    /cp eliza\/packages\/agent\/src\/services\/app-manager-agents-list-guard\.ts node_modules\/@elizaos\/agent\/src\/services\//,
+    "latest official app-manager agents-list guard must be present in Alice's agent compatibility package",
+  );
+  assert.match(
+    dockerfile,
+    /cp eliza\/packages\/agent\/src\/services\/overlay-app-presence\.ts node_modules\/@elizaos\/agent\/src\/services\//,
+    "latest official overlay presence service must be present in Alice's agent compatibility package",
+  );
+  assert.match(
+    dockerfile,
+    /await import\('@elizaos\/plugin-app-manager'\)/,
+    "the completed image dependency graph must import official plugin-app-manager during the build",
+  );
+});

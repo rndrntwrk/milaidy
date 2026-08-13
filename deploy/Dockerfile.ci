@@ -44,6 +44,11 @@ RUN set -x; \
     cp packages/agent/package.json node_modules/@elizaos/agent/; \
     cp -a packages/agent/src node_modules/@elizaos/agent/src 2>/dev/null || true; \
     cp -a packages/agent/dist node_modules/@elizaos/agent/dist 2>/dev/null || true; \
+    # Latest official app-manager imports these pure host services. Alice keeps
+    # its agent implementation authoritative while overlaying the two missing
+    # compatibility modules from the exact pinned Eliza source.
+    cp eliza/packages/agent/src/services/app-manager-agents-list-guard.ts node_modules/@elizaos/agent/src/services/; \
+    cp eliza/packages/agent/src/services/overlay-app-presence.ts node_modules/@elizaos/agent/src/services/; \
     ls node_modules/@elizaos/agent/src/api/config-env.ts 2>/dev/null && echo "@elizaos/agent Milady alias OK" || echo "WARN: agent Milady alias missing"; \
     # @elizaos/app-core: runtime compatibility alias for Milady's app-core.
     # The server dynamically imports @elizaos/app-core for runtime hooks; the
@@ -606,6 +611,11 @@ if (fs.existsSync(bunDir)) {
   }
 }
 __AISDK_FIX__
+
+# Fail during image assembly—not after a multi-minute pull—if latest official
+# app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
+RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
+  -e "await import('@elizaos/plugin-app-manager')"
 
 # Remove unbuilt orchestrator (desktop-only, crashes tsx if dist/ missing)
 RUN rm -rf \
