@@ -27,6 +27,34 @@ test("cloud agent image publishes under the repository owner", () => {
   );
 });
 
+test("staging smokes the exact published image and always tears it down", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+
+  assert.match(
+    workflow,
+    /id: cloud-image[\s\S]*?uses: docker\/build-push-action@v7/,
+    "the published image step must expose its immutable digest",
+  );
+  assert.match(
+    workflow,
+    /Smoke exact staging image[\s\S]*?build_environment == 'staging'[\s\S]*?steps\.cloud-image\.outputs\.digest/,
+    "only staging may smoke the exact digest returned by the publisher",
+  );
+  assert.match(
+    workflow,
+    /org\.opencontainers\.image\.revision[\s\S]*?EXPECTED_REVISION/,
+    "the smoke must bind the image revision label to the workflow SHA",
+  );
+  assert.match(
+    workflow,
+    /Cleanup staging smoke container[\s\S]*?always\(\)[\s\S]*?docker rm -f/,
+    "the disposable staging container must be removed even after failure",
+  );
+});
+
 test("cloud agent build keeps the checked-out Eliza workspace available", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

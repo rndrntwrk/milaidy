@@ -267,6 +267,7 @@ jobs:
 
       # ── 12. Build and push Docker image ────────────────────────────────────
       - name: Build and push Docker image
+        id: cloud-image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -289,6 +290,65 @@ jobs:
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
             REVISION=${{ github.sha }}
           provenance: false
+
+      - name: Smoke exact staging image
+        if: success() && steps.version.outputs.build_environment == 'staging' && (github.event_name == 'push' || inputs.push_image != false)
+        timeout-minutes: 10
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.cloud-image.outputs.digest }}
+          EXPECTED_REVISION: ${{ github.sha }}
+          SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          test -n "${{ steps.cloud-image.outputs.digest }}"
+          docker pull --platform linux/amd64 "$IMAGE"
+
+          actual_revision="$(docker image inspect "$IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+          if [ "$actual_revision" != "$EXPECTED_REVISION" ]; then
+            echo "Image revision mismatch: expected $EXPECTED_REVISION, got $actual_revision" >&2
+            exit 1
+          fi
+
+          docker run -d \
+            --platform linux/amd64 \
+            --name "$SMOKE_CONTAINER" \
+            --env MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
+            "$IMAGE"
+
+          for attempt in $(seq 1 72); do
+            health="$(docker inspect "$SMOKE_CONTAINER" --format '{{ if .State.Health }}{{ .State.Health.Status }}{{ else }}missing{{ end }}')"
+            state="$(docker inspect "$SMOKE_CONTAINER" --format '{{ .State.Status }}')"
+
+            if [ "$health" = "healthy" ]; then
+              code="$(docker exec "$SMOKE_CONTAINER" sh -lc 'port="${PORT:-${APP_PORT:-${ELIZA_PORT:-2138}}}"; curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}/api/health"')"
+              test "$code" = "200" -o "$code" = "401"
+              echo "Staging image healthy: image=$IMAGE revision=$actual_revision http=$code"
+              exit 0
+            fi
+
+            if [ "$state" != "running" ] || [ "$health" = "unhealthy" ]; then
+              docker logs "$SMOKE_CONTAINER" >&2 || true
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          docker logs "$SMOKE_CONTAINER" >&2 || true
+          echo "Staging image did not become healthy before the smoke deadline" >&2
+          exit 1
+
+      - name: Cleanup staging smoke container
+        if: always() && steps.version.outputs.build_environment == 'staging'
+        env:
+          SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+        run: docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
 
       # ── 13. Trigger production deploy webhook ──────────────────────────────
       - name: Trigger cloud fleet deploy webhook
