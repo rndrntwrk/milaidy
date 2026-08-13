@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # elizaOS Agent — CI Docker Image
 # Pre-built artifacts come from GHA (bun install + tsdown + vite build done before docker)
-ARG NODE_VERSION=22
+ARG NODE_VERSION=24
 ARG BUN_VERSION=1.3.10
 ARG ESBUILD_VERSION=0.28.0
 ARG APP_ENTRYPOINT=app.mjs
@@ -73,21 +73,7 @@ RUN set -x; \
     # @elizaos/shared: DON'T replace — the npm version or resolved workspace symlink works.
     # Workspace package.json exports point to ./src/*.ts (tsx handles this).
     # Replacing with dist-only breaks resolution since exports don't match dist layout.
-    # @elizaos/app-companion: copy real package contents instead of relying on a workspace symlink
-    # The runtime executes agent/src under tsx, and static imports like
-    # @elizaos/app-companion/plugin must resolve through node_modules at runtime.
-    rm -rf node_modules/@elizaos/app-companion; \
-    mkdir -p node_modules/@elizaos/app-companion; \
-    cp eliza/apps/app-companion/package.json node_modules/@elizaos/app-companion/; \
-    cp -a eliza/apps/app-companion/src node_modules/@elizaos/app-companion/src 2>/dev/null || true; \
-    cp eliza/apps/app-companion/assets.json node_modules/@elizaos/app-companion/assets.json 2>/dev/null || true; \
-    ls node_modules/@elizaos/app-companion/src/plugin.ts 2>/dev/null && echo "@elizaos/app-companion src OK" || echo "WARN: app-companion src missing"; \
-    # @elizaos/app-lifeops: runtime statically imports /plugin, so ship real package contents
-    rm -rf node_modules/@elizaos/app-lifeops; \
-    mkdir -p node_modules/@elizaos/app-lifeops; \
-    cp eliza/apps/app-lifeops/package.json node_modules/@elizaos/app-lifeops/; \
-    cp -a eliza/apps/app-lifeops/src node_modules/@elizaos/app-lifeops/src 2>/dev/null || true; \
-    ls node_modules/@elizaos/app-lifeops/src/plugin.ts 2>/dev/null && echo "@elizaos/app-lifeops src OK" || echo "WARN: app-lifeops src missing"
+    true
 # Link any remaining missing workspace app packages to node_modules
 RUN for app_dir in eliza/apps/app-coding eliza/apps/app-shopify; do \
       if [ -d "$app_dir" ]; then \

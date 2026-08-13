@@ -118,51 +118,6 @@ jobs:
       - name: Install dependencies
         run: bun install --ignore-scripts --frozen-lockfile
 
-      - name: Hoist missing runtime deps
-        run: |
-          # tsx resolves @elizaos/core src/ at runtime, hitting imports that aren't
-          # hoisted by bun workspace install (workspace entries get disabled for CI).
-          # Check which deps are missing and install them individually via tarball.
-          node <<'NODE'
-          const fs = require("fs");
-          const path = require("path");
-          const { execSync } = require("child_process");
-          const pkgPaths = [
-            "eliza/packages/core/package.json",
-            "eliza/packages/agent/package.json",
-          ];
-          const missing = new Set();
-          for (const p of pkgPaths) {
-            if (!fs.existsSync(p)) continue;
-            const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
-            for (const dep of Object.keys(pkg.dependencies || {})) {
-              if (!fs.existsSync("node_modules/" + dep)) missing.add(dep);
-            }
-          }
-          if (missing.size === 0) { console.log("All deps present"); process.exit(0); }
-          console.log(`Installing ${missing.size} missing deps: ${[...missing].join(", ")}`);
-          for (const dep of missing) {
-            try {
-              const url = execSync(`npm view ${dep} dist.tarball 2>/dev/null`, {encoding: "utf8"}).trim();
-              if (!url) { console.log(`  skip ${dep} (no tarball)`); continue; }
-              const dir = `/tmp/pkg-${dep.replace(/[\/\/@]/g, "_")}`;
-              fs.mkdirSync(dir, {recursive: true});
-              execSync(`curl -sL "${url}" | tar xz -C "${dir}"`, {stdio: "inherit"});
-              const target = path.join("node_modules", dep);
-              fs.mkdirSync(path.dirname(target), {recursive: true});
-              fs.renameSync(path.join(dir, "package"), target);
-              console.log(`  + ${dep}`);
-            } catch (e) { console.log(`  WARN: ${dep}: ${e.message}`); }
-          }
-          NODE
-
-      - name: Run postinstall patches
-        run: bun run postinstall
-        env:
-          SKIP_AVATAR_CLONE: "1"
-          MILADY_NO_VISION_DEPS: "1"
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
-
       # ── 5. Build Capacitor plugins ──────────────────────────────────────────
       - name: Build Capacitor plugins
         run: |
@@ -258,29 +213,6 @@ jobs:
             echo "${OCI_DESCRIPTION}"
             echo "EOF"
           } >> "$GITHUB_ENV"
-
-      # ── 7b. Ensure tailwindcss is resolvable from inside the eliza submodule
-      - name: Inject tailwindcss into eliza/packages/app-core/node_modules
-        run: |
-          # @tailwindcss/vite resolves 'tailwindcss' starting from the CSS file path inside
-          # the eliza submodule (eliza/packages/app-core/src/styles/styles.css).
-          # Bun workspaces don't hoist it to root node_modules; npm install fails with
-          # EOVERRIDE due to app-core's package.json overrides. Use tarball extraction instead.
-          mkdir -p eliza/packages/app-core/node_modules
-          if [ ! -d "eliza/packages/app-core/node_modules/tailwindcss" ]; then
-            echo "Fetching tailwindcss tarball..."
-            TAILWIND_URL=$(npm view tailwindcss dist.tarball 2>/dev/null)
-            if [ -n "$TAILWIND_URL" ]; then
-              mkdir -p /tmp/tw_extract
-              curl -sL "$TAILWIND_URL" | tar xz -C /tmp/tw_extract
-              mv /tmp/tw_extract/package eliza/packages/app-core/node_modules/tailwindcss
-              echo "+ tailwindcss $(cat eliza/packages/app-core/node_modules/tailwindcss/package.json | node -e 'process.stdin.resume();let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).version))')"
-            else
-              echo "WARN: could not resolve tailwindcss tarball URL"
-            fi
-          else
-            echo "tailwindcss already present in app-core/node_modules"
-          fi
 
       # ── 8. Build UI (vite) ──────────────────────────────────────────────────
       - name: Build UI (vite)

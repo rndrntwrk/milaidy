@@ -53,6 +53,16 @@ test("cloud agent build uses the Node major required by pinned Eliza", () => {
     new RegExp(`node-version: ["']${requiredMajor}["']`),
     `cloud agent build must use Node ${requiredMajor} required by pinned Eliza`,
   );
+
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  assert.match(
+    dockerfile,
+    new RegExp(`^ARG NODE_VERSION=${requiredMajor}$`, "m"),
+    `cloud runtime image must use Node ${requiredMajor} required by pinned Eliza`,
+  );
 });
 
 test("cloud agent frozen install accepts the current Eliza layout", () => {
@@ -71,5 +81,28 @@ test("cloud agent frozen install accepts the current Eliza layout", () => {
     workflow,
     /bun install --ignore-scripts --frozen-lockfile/,
     "cloud build must install the committed lock without manifest mutation",
+  );
+  assert.doesNotMatch(
+    workflow,
+    /bun run postinstall/,
+    "cloud build must not apply legacy patches to the pinned official Eliza tree",
+  );
+  assert.doesNotMatch(
+    workflow,
+    /npm view .*dist\.tarball/,
+    "cloud build must not replace locked dependencies with registry-latest tarballs",
+  );
+});
+
+test("cloud agent image does not copy removed Eliza apps", () => {
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(
+    dockerfile,
+    /\bcp(?: -a)? eliza\/apps\//,
+    "image assembly must not require packages removed from official Eliza",
   );
 });
