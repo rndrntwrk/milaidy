@@ -18,7 +18,7 @@ export interface LocalArtifactPin {
 // pins reject node:module/createRequire rather than trying to prove arbitrary
 // resolver aliases with a lightweight scanner.
 const APPROVED_TASK9_SDK_COMPILER_BUNDLE_SHA256 =
-  "1505489aac82a268d76a39d1b7a1b372750763f9d8a758dc7ad3ea927ffa8b5e";
+  "43b988cc59b31936c7410a7e04c155cc35563d925e2e7d65b8222754811dfd94";
 
 function isSha256(value: string): boolean {
   return /^[a-f0-9]{64}$/.test(value);
@@ -35,9 +35,11 @@ async function hashFile(filePath: string): Promise<string> {
 }
 
 function assertApprovedTask9SdkCompilerHelper(source: string): void {
-  const moduleImport = 'import{createRequire}from"node:module";';
-  const resolverDeclaration = "var __require=createRequire(import.meta.url);";
-  if (!source.startsWith(moduleImport) || source.indexOf(resolverDeclaration) < moduleImport.length) {
+  const moduleImport = /^import\s*\{\s*createRequire\s*\}\s*from\s*["']node:module["'];/;
+  const resolverDeclaration = /var\s+__require\s*=\s*(?:\/\*\s*@__PURE__\s*\*\/\s*)?createRequire\(import\.meta\.url\);/;
+  const moduleMatch = moduleImport.exec(source);
+  const resolverMatch = resolverDeclaration.exec(source);
+  if (!moduleMatch || !resolverMatch || resolverMatch.index < moduleMatch[0].length) {
     throw new Error("approved Task9 SDK bundle does not have the reviewed compiler-helper shape");
   }
   const createRequireUses = source.match(/\bcreateRequire\b/g) ?? [];
