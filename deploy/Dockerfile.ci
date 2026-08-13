@@ -54,6 +54,13 @@ RUN set -x; \
     cp -a packages/app-core/src node_modules/@elizaos/app-core/src 2>/dev/null || true; \
     cp -a packages/app-core/dist node_modules/@elizaos/app-core/dist 2>/dev/null || true; \
     ls node_modules/@elizaos/app-core/src/index.ts 2>/dev/null && echo "@elizaos/app-core Milady alias OK" || echo "WARN: app-core Milady alias missing"; \
+    # @elizaos/plugin-app-control: Alice's agent bundle imports this official
+    # runtime plugin even when the reduced image install does not hoist it.
+    rm -rf node_modules/@elizaos/plugin-app-control; \
+    mkdir -p node_modules/@elizaos/plugin-app-control; \
+    cp eliza/plugins/plugin-app-control/package.json node_modules/@elizaos/plugin-app-control/; \
+    cp -a eliza/plugins/plugin-app-control/dist node_modules/@elizaos/plugin-app-control/dist; \
+    ls node_modules/@elizaos/plugin-app-control/dist/index.js 2>/dev/null && echo "@elizaos/plugin-app-control dist OK" || echo "WARN: app-control dist missing"; \
     # @elizaos/vault: app-core/agent source imports must resolve under tsx.
     rm -rf node_modules/@elizaos/vault; \
     mkdir -p node_modules/@elizaos/vault; \
@@ -234,6 +241,7 @@ console.log('Phase 1: hoisted ' + hoisted + ' packages from .bun/');
 const requiredLockedPackages = [
   '@elizaos/plugin-agent-skills',
   '@elizaos/plugin-anthropic',
+  '@elizaos/plugin-app-control',
   '@elizaos/plugin-local-embedding',
 ];
 for (const name of requiredLockedPackages) {

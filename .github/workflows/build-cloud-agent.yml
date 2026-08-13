@@ -173,6 +173,11 @@ jobs:
           cd eliza/plugins/plugin-anthropic
           bun run build
 
+      - name: Build @elizaos/plugin-app-control
+        run: |
+          cd eliza/plugins/plugin-app-control
+          bun run build
+
       # ── 6. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
         run: |

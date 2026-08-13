@@ -350,3 +350,35 @@ test("cloud image retains the latest Eliza auth runtime closure", () => {
   assert.match(pruner, /"@elizaos\/auth"/);
   assert.match(pruner, /"@elizaos\/vault"/);
 });
+
+test("cloud image retains the app-control runtime required by Alice", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+
+  const appControlBuild = workflow.indexOf(
+    "cd eliza/plugins/plugin-app-control\n          bun run build",
+  );
+  const runtimeBuild = workflow.indexOf("- name: Build runtime (tsdown)");
+  assert.ok(appControlBuild >= 0, "official app-control plugin must be built");
+  assert.ok(
+    runtimeBuild > appControlBuild,
+    "app-control must exist before Alice's runtime bundle is assembled",
+  );
+
+  assert.match(
+    dockerfile,
+    /cp eliza\/plugins\/plugin-app-control\/package\.json node_modules\/@elizaos\/plugin-app-control\/[\s\S]*?cp -a eliza\/plugins\/plugin-app-control\/dist node_modules\/@elizaos\/plugin-app-control\/dist/,
+    "the runtime image must copy the exact built app-control package",
+  );
+  assert.match(
+    dockerfile,
+    /requiredLockedPackages[\s\S]*?'@elizaos\/plugin-app-control'/,
+    "image assembly must fail closed if app-control is absent",
+  );
+});
