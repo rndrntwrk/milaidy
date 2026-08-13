@@ -29,6 +29,7 @@ import { CORE_PLUGINS } from "./core-plugins.js";
 
 const PI_AI_PLUGIN_PACKAGE = "@elizaos/plugin-pi-ai";
 const STREAM555_PLUGIN_PACKAGE = "@rndrntwrk/plugin-555stream";
+const FIVE55_GAMES_PLUGIN_PACKAGE = "@miladyai/agent/plugins/five55-games";
 
 type ConfigEnvRecord = Record<string, unknown> & {
   vars?: Record<string, unknown>;
@@ -173,6 +174,7 @@ export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   "x-streaming": "@elizaos/plugin-x-streaming",
   "stream555-canonical": "@rndrntwrk/plugin-555stream",
   "555stream": "@rndrntwrk/plugin-555stream",
+  "five55-games": FIVE55_GAMES_PLUGIN_PACKAGE,
   // Steward wallet plugin — short ID used by auto-enable
   "stwd-eliza-plugin": "@stwd/eliza-plugin",
 };
@@ -323,6 +325,11 @@ export function collectPluginNames(
   ) {
     pluginsToLoad.add(STREAM555_PLUGIN_PACKAGE);
     track(STREAM555_PLUGIN_PACKAGE, "env: STREAM555_BASE_URL + stream auth");
+    pluginsToLoad.add(FIVE55_GAMES_PLUGIN_PACKAGE);
+    track(
+      FIVE55_GAMES_PLUGIN_PACKAGE,
+      "env: STREAM555_BASE_URL + stream auth",
+    );
   }
 
   // Connector plugins — load when connector has config entries

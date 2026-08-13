@@ -20,12 +20,8 @@ const expectedCorePlugins = [
   "@elizaos/plugin-local-embedding",
   "@elizaos/plugin-form",
   "@elizaos/plugin-agent-orchestrator",
-  "@elizaos/plugin-cron",
-  "@elizaos/plugin-shell",
   "@elizaos/plugin-agent-skills",
   "@elizaos/plugin-commands",
-  "@elizaos/plugin-plugin-manager",
-  "@elizaos/plugin-personality",
 ];
 
 describe("native feature bootstrap wiring", () => {
@@ -102,16 +98,14 @@ describe("native feature bootstrap wiring", () => {
     expect(elizaSource).toContain('"@elizaos/plugin-openai": pluginOpenai');
   });
 
-  it("guards plugin-personality bootstrap behind a runtime require", () => {
+  it("does not bootstrap the legacy personality alpha against Eliza beta.7", () => {
     expect(elizaSource).not.toContain(
       'import * as pluginPersonality from "@elizaos/plugin-personality";',
     );
-    expect(elizaSource).toContain(
+    expect(elizaSource).not.toContain(
       'pluginPersonality = require("@elizaos/plugin-personality");',
     );
-    expect(elizaSource).toContain(
-      '"@elizaos/plugin-personality": pluginPersonality',
-    );
+    expect(elizaSource).not.toContain('"@elizaos/plugin-personality"');
   });
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
     const waitBlock =

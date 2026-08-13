@@ -64,11 +64,7 @@ import {
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
-import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
-import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
-import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
-import * as pluginTrust from "@elizaos/plugin-trust";
 import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
 import {
   isMiladySettingsDebugEnabled,
@@ -191,16 +187,6 @@ try {
 } catch {
   pluginOpenai = null;
 }
-// Keep plugin-personality behind a guarded runtime require too. Some published
-// alpha builds resolve through package.json but do not ship the runtime entry,
-// which breaks live startup smokes before the API server is ready.
-let pluginPersonality: unknown = null;
-try {
-  pluginPersonality = require("@elizaos/plugin-personality");
-} catch {
-  pluginPersonality = null;
-}
-
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
   getSandboxManager: () => SandboxManager | null;
@@ -287,14 +273,11 @@ export const STATIC_ELIZA_PLUGINS: Record<
 > = {
   "@elizaos/plugin-sql": pluginSql,
   "@elizaos/plugin-local-embedding": pluginLocalEmbedding,
-  "@elizaos/plugin-secrets-manager": pluginSecretsManager,
   "@elizaos/plugin-form": pluginForm,
   ...(pluginAgentOrchestrator
     ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
     : {}),
   ...(pluginCron ? { "@elizaos/plugin-cron": pluginCron } : {}),
-  "@elizaos/plugin-shell": pluginShell,
-  "@elizaos/plugin-plugin-manager": pluginPluginManager,
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
   ...(pluginCommands ? { "@elizaos/plugin-commands": pluginCommands } : {}),
   ...(pluginOpenai ? { "@elizaos/plugin-openai": pluginOpenai } : {}),
@@ -302,12 +285,8 @@ export const STATIC_ELIZA_PLUGINS: Record<
   // Bun parses static imports eagerly, so keep the cloud plugin behind a
   // deferred loader until it is actually enabled.
   "@elizaos/plugin-elizacloud": () => import("@elizaos/plugin-elizacloud"),
-  "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-discord-local": discordLocalPlugin,
-  ...(pluginPersonality
-    ? { "@elizaos/plugin-personality": pluginPersonality }
-    : {}),
   ...(pluginExperience
     ? { "@elizaos/plugin-experience": pluginExperience }
     : {}),

@@ -19,16 +19,15 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-local-embedding", // local embeddings — required for memory
   "@elizaos/plugin-form", // form handling for guided user journeys
   "@elizaos/plugin-agent-orchestrator", // task-agent orchestration (PTY, coordinator, workspace provisioning)
-  "@elizaos/plugin-cron", // scheduled jobs and automation
-  "@elizaos/plugin-shell", // shell command execution
   "@elizaos/plugin-agent-skills", // skill execution and marketplace runtime
   "@elizaos/plugin-commands", // slash command handling (skills auto-register as /commands)
-  "@elizaos/plugin-plugin-manager", // dynamic plugin management for registry/plugin installs
   // Native runtime features live inside the runtime now:
   // knowledge, relationships/relationships, trajectories.
   // "@elizaos/plugin-secrets-manager", // secrets management — load early, other plugins depend on it
   // "@elizaos/plugin-trust", // trust scoring and policy signals
-  "@elizaos/plugin-personality", // personality coherence
+  // Legacy alpha cron/shell/plugin-manager/personality packages are excluded:
+  // latest Eliza beta.7 removed their source workspaces and their published
+  // Bun entrypoints or core imports are not ABI-compatible with beta.7.
   // "@elizaos/plugin-experience", // learning from interactions
 ];
 

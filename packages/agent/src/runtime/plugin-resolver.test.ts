@@ -140,26 +140,10 @@ async function findLatestStagedImportRoot(
   return path.join(stagingBaseDir, dirs[dirs.length - 1], "root");
 }
 
-describe("personality plugin wiring", () => {
-  it("exposes the expected runtime capabilities from the static plugin map", () => {
-    const personalityModule = STATIC_ELIZA_PLUGINS[
-      "@elizaos/plugin-personality"
-    ] as Parameters<typeof findRuntimePluginExport>[0];
-
-    const plugin = findRuntimePluginExport(personalityModule);
-
-    expect(plugin).toMatchObject({
-      name: "@elizaos/plugin-personality",
-      description: expect.any(String),
-    });
-    expect(plugin?.actions?.map((action) => action.name)).toContain(
-      "MODIFY_CHARACTER",
-    );
-    expect(plugin?.providers?.map((provider) => provider.name)).toContain(
-      "userPersonalityPreferences",
-    );
-    expect(plugin?.evaluators?.map((evaluator) => evaluator.name)).toContain(
-      "CHARACTER_EVOLUTION",
+describe("latest Eliza runtime compatibility", () => {
+  it("does not expose the incompatible legacy personality alpha", () => {
+    expect(STATIC_ELIZA_PLUGINS).not.toHaveProperty(
+      "@elizaos/plugin-personality",
     );
   });
 });
