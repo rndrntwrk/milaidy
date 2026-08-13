@@ -92,6 +92,16 @@ test("cloud agent frozen install accepts the current Eliza layout", () => {
     /npm view .*dist\.tarball/,
     "cloud build must not replace locked dependencies with registry-latest tarballs",
   );
+  assert.doesNotMatch(
+    workflow,
+    /eliza\/packages\/schemas|build had errors/,
+    "cloud build must use current package scripts and fail closed on build errors",
+  );
+  assert.match(
+    workflow,
+    /cd eliza\/packages\/core\n\s+bun run build/,
+    "cloud build must invoke the current Eliza core build script",
+  );
 });
 
 test("cloud agent image does not copy removed Eliza apps", () => {

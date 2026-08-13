@@ -126,26 +126,19 @@ jobs:
       # ── 5.5. Build @elizaos/core + agent (needed for tsx runtime) ───────
       - name: Build @elizaos/core
         run: |
-          export PATH="$GITHUB_WORKSPACE/eliza/node_modules/.bin:$GITHUB_WORKSPACE/eliza/packages/schemas/node_modules/.bin:$PATH"
-          # Proto generation
-          cd eliza/packages/schemas
-          buf dep update && buf generate
-          # i18n keyword generation (needs @elizaos/shared scripts)
-          cd ../core
-          node ../shared/scripts/generate-keywords.mjs --target ts 2>/dev/null || echo "keyword gen skipped"
-          # Build core
-          bun run build.ts 2>&1 || echo "core build had errors"
-          ls dist/node/index.node.js && echo "core dist OK" || echo "WARN: core dist missing"
+          cd eliza/packages/core
+          bun run build
+          test -f dist/node/index.node.js
 
       - name: Build @elizaos/agent
         run: |
           cd eliza/packages/agent
-          bun run build:docker-dist 2>&1 || bun run build 2>&1 || echo "agent build had errors"
+          bun run build:docker-dist
 
       - name: Build @elizaos/shared
         run: |
           cd eliza/packages/shared
-          bun run build 2>&1 || echo "shared build had errors"
+          bun run build
 
       # ── 6. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
