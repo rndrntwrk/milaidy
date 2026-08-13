@@ -59,6 +59,14 @@ RUN set -x; \
     cp -a packages/app-core/src node_modules/@elizaos/app-core/src 2>/dev/null || true; \
     cp -a packages/app-core/dist node_modules/@elizaos/app-core/dist 2>/dev/null || true; \
     ls node_modules/@elizaos/app-core/src/index.ts 2>/dev/null && echo "@elizaos/app-core Milady alias OK" || echo "WARN: app-core Milady alias missing"; \
+    # @elizaos/plugin-agent-orchestrator: Alice's compiled entry imports its
+    # completion relay directly, so the official pinned Node bundle is part of
+    # the cloud runtime rather than an optional desktop-only package.
+    rm -rf node_modules/@elizaos/plugin-agent-orchestrator; \
+    mkdir -p node_modules/@elizaos/plugin-agent-orchestrator; \
+    cp eliza/plugins/plugin-agent-orchestrator/package.json node_modules/@elizaos/plugin-agent-orchestrator/; \
+    cp -a eliza/plugins/plugin-agent-orchestrator/dist node_modules/@elizaos/plugin-agent-orchestrator/dist; \
+    ls node_modules/@elizaos/plugin-agent-orchestrator/dist/node/index.node.js 2>/dev/null && echo "@elizaos/plugin-agent-orchestrator dist OK" || echo "WARN: agent-orchestrator dist missing"; \
     # @elizaos/plugin-app-control: Alice's agent bundle imports this official
     # runtime plugin even when the reduced image install does not hoist it.
     rm -rf node_modules/@elizaos/plugin-app-control; \
@@ -260,6 +268,7 @@ if (fs.existsSync(bunDir)) {
 console.log('Phase 1: hoisted ' + hoisted + ' packages from .bun/');
 
 const requiredLockedPackages = [
+  '@elizaos/plugin-agent-orchestrator',
   '@elizaos/plugin-agent-skills',
   '@elizaos/plugin-anthropic',
   '@elizaos/plugin-app-control',
@@ -615,15 +624,7 @@ __AISDK_FIX__
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
-  -e "await import('@elizaos/plugin-app-manager')"
-
-# Remove unbuilt orchestrator (desktop-only, crashes tsx if dist/ missing)
-RUN rm -rf \
-  node_modules/@elizaos/plugin-agent-orchestrator \
-  node_modules/.bun/@elizaos+plugin-agent-orchestrator@* \
-  eliza/packages/agent/node_modules/@elizaos/plugin-agent-orchestrator \
-  plugins/plugin-agent-orchestrator \
-  2>/dev/null || true
+  -e "await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator')])"
 
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \

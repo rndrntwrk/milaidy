@@ -163,6 +163,11 @@ jobs:
           cd eliza/packages/app-core
           bun run build
 
+      - name: Build @elizaos/plugin-agent-orchestrator
+        run: |
+          cd eliza/plugins/plugin-agent-orchestrator
+          bun run build
+
       - name: Build @elizaos/plugin-agent-skills
         run: |
           cd eliza/plugins/plugin-agent-skills

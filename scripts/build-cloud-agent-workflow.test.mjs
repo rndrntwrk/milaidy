@@ -401,6 +401,46 @@ test("cloud image retains the official Eliza plugins statically imported by Alic
   );
 });
 
+test("cloud image retains the official agent orchestrator statically imported by Alice", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  const build = workflow.indexOf(
+    "cd eliza/plugins/plugin-agent-orchestrator\n          bun run build",
+  );
+  const runtimeBuild = workflow.indexOf("- name: Build runtime (tsdown)");
+  assert.ok(build >= 0, "official agent orchestrator must be built");
+  assert.ok(
+    runtimeBuild > build,
+    "agent orchestrator must exist before Alice's runtime bundle is assembled",
+  );
+  assert.match(
+    dockerfile,
+    /cp eliza\/plugins\/plugin-agent-orchestrator\/package\.json node_modules\/@elizaos\/plugin-agent-orchestrator\/[\s\S]*?cp -a eliza\/plugins\/plugin-agent-orchestrator\/dist node_modules\/@elizaos\/plugin-agent-orchestrator\/dist/,
+    "the runtime image must copy the exact built agent orchestrator",
+  );
+  assert.match(
+    dockerfile,
+    /requiredLockedPackages[\s\S]*?'@elizaos\/plugin-agent-orchestrator'/,
+    "image assembly must fail closed if the orchestrator is absent",
+  );
+  assert.doesNotMatch(
+    dockerfile,
+    /Remove unbuilt orchestrator[\s\S]*?rm -rf[\s\S]*?node_modules\/@elizaos\/plugin-agent-orchestrator/,
+    "the cloud image must not delete Alice's static orchestrator import",
+  );
+  assert.match(
+    dockerfile,
+    /import\('@elizaos\/plugin-agent-orchestrator'\)/,
+    "image assembly must evaluate the pinned orchestrator dependency graph",
+  );
+});
+
 test("cloud image overlays the latest app-manager host services and imports the package", () => {
   const dockerfile = fs.readFileSync(
     path.join(repoRoot, "deploy/Dockerfile.ci"),
@@ -419,7 +459,7 @@ test("cloud image overlays the latest app-manager host services and imports the 
   );
   assert.match(
     dockerfile,
-    /await import\('@elizaos\/plugin-app-manager'\)/,
+    /import\('@elizaos\/plugin-app-manager'\)/,
     "the completed image dependency graph must import official plugin-app-manager during the build",
   );
 });
