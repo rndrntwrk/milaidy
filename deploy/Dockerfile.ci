@@ -2,7 +2,7 @@
 # elizaOS Agent — CI Docker Image
 # Pre-built artifacts come from GHA (bun install + tsdown + vite build done before docker)
 ARG NODE_VERSION=24
-ARG BUN_VERSION=1.3.10
+ARG BUN_VERSION=1.3.14
 ARG ESBUILD_VERSION=0.28.0
 ARG APP_ENTRYPOINT=app.mjs
 ARG APP_CMD_START=""

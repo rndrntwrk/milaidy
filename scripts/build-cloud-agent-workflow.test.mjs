@@ -65,6 +65,42 @@ test("cloud agent build uses the Node major required by pinned Eliza", () => {
   );
 });
 
+test("cloud agent build uses the Bun version required by pinned Eliza", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const rootPackage = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+  );
+  const elizaPackage = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "eliza/package.json"), "utf8"),
+  );
+  const requiredVersion = elizaPackage.packageManager?.match(/^bun@(.+)$/)?.[1];
+
+  assert.ok(requiredVersion, "pinned Eliza must declare its Bun version");
+  assert.equal(
+    rootPackage.packageManager,
+    `bun@${requiredVersion}`,
+    "Alice and pinned Eliza must use one Bun version",
+  );
+  assert.match(
+    workflow,
+    new RegExp(`bun-version: ["']${requiredVersion.replaceAll(".", "\\.")}["']`),
+    `cloud build must use Bun ${requiredVersion} required by pinned Eliza`,
+  );
+
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  assert.match(
+    dockerfile,
+    new RegExp(`^ARG BUN_VERSION=${requiredVersion.replaceAll(".", "\\.")}$`, "m"),
+    `cloud runtime image must use Bun ${requiredVersion} required by pinned Eliza`,
+  );
+});
+
 test("cloud agent frozen install accepts the current Eliza layout", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

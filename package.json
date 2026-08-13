@@ -12,7 +12,7 @@
     "url": "https://github.com/milady-ai/milady.git"
   },
   "license": "MIT",
-  "packageManager": "bun@1.3.13",
+  "packageManager": "bun@1.3.14",
   "files": [
     "apps/app/dist",
     "scripts/rt.mjs",
