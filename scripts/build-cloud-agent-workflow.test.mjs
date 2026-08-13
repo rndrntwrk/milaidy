@@ -351,7 +351,7 @@ test("cloud image retains the latest Eliza auth runtime closure", () => {
   assert.match(pruner, /"@elizaos\/vault"/);
 });
 
-test("cloud image retains the app-control runtime required by Alice", () => {
+test("cloud image retains the official Eliza plugins statically imported by Alice", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -361,24 +361,42 @@ test("cloud image retains the app-control runtime required by Alice", () => {
     "utf8",
   );
 
-  const appControlBuild = workflow.indexOf(
-    "cd eliza/plugins/plugin-app-control\n          bun run build",
-  );
   const runtimeBuild = workflow.indexOf("- name: Build runtime (tsdown)");
-  assert.ok(appControlBuild >= 0, "official app-control plugin must be built");
-  assert.ok(
-    runtimeBuild > appControlBuild,
-    "app-control must exist before Alice's runtime bundle is assembled",
+  for (const plugin of [
+    "plugin-app-control",
+    "plugin-app-manager",
+    "plugin-scheduling",
+    "plugin-wallet",
+  ]) {
+    const build = workflow.indexOf(
+      `cd eliza/plugins/${plugin}\n          bun run build`,
+    );
+    assert.ok(build >= 0, `official ${plugin} must be built`);
+    assert.ok(
+      runtimeBuild > build,
+      `${plugin} must exist before Alice's runtime bundle is assembled`,
+    );
+    assert.match(
+      dockerfile,
+      new RegExp(
+        `cp eliza/plugins/${plugin}/package\\.json node_modules/@elizaos/${plugin}/[\\s\\S]*?cp -a eliza/plugins/${plugin}/dist node_modules/@elizaos/${plugin}/dist`,
+      ),
+      `the runtime image must copy the exact built ${plugin} package`,
+    );
+    assert.match(
+      dockerfile,
+      new RegExp(`requiredLockedPackages[\\s\\S]*?'@elizaos/${plugin}'`),
+      `image assembly must fail closed if ${plugin} is absent`,
+    );
+  }
+  assert.match(
+    workflow,
+    /Build @elizaos\/plugin-wallet[\s\S]*?bun run build \|\| \{[\s\S]*?test -f dist\/index\.mjs[\s\S]*?test -f dist\/diagnostic\.js[\s\S]*?bun run build:views/,
+    "wallet's known declaration-only failure may be tolerated only after exact runtime outputs are verified",
   );
-
   assert.match(
     dockerfile,
-    /cp eliza\/plugins\/plugin-app-control\/package\.json node_modules\/@elizaos\/plugin-app-control\/[\s\S]*?cp -a eliza\/plugins\/plugin-app-control\/dist node_modules\/@elizaos\/plugin-app-control\/dist/,
-    "the runtime image must copy the exact built app-control package",
-  );
-  assert.match(
-    dockerfile,
-    /requiredLockedPackages[\s\S]*?'@elizaos\/plugin-app-control'/,
-    "image assembly must fail closed if app-control is absent",
+    /node_modules\/@elizaos\/plugin-wallet\/dist\/index\.mjs node_modules\/@elizaos\/plugin-wallet\/dist\/diagnostic\.js/,
+    "the image must verify wallet's actual runtime entrypoints",
   );
 });

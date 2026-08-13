@@ -61,6 +61,22 @@ RUN set -x; \
     cp eliza/plugins/plugin-app-control/package.json node_modules/@elizaos/plugin-app-control/; \
     cp -a eliza/plugins/plugin-app-control/dist node_modules/@elizaos/plugin-app-control/dist; \
     ls node_modules/@elizaos/plugin-app-control/dist/index.js 2>/dev/null && echo "@elizaos/plugin-app-control dist OK" || echo "WARN: app-control dist missing"; \
+    # The remaining official plugins are also static imports in Alice's entry.
+    rm -rf node_modules/@elizaos/plugin-app-manager; \
+    mkdir -p node_modules/@elizaos/plugin-app-manager; \
+    cp eliza/plugins/plugin-app-manager/package.json node_modules/@elizaos/plugin-app-manager/; \
+    cp -a eliza/plugins/plugin-app-manager/dist node_modules/@elizaos/plugin-app-manager/dist; \
+    ls node_modules/@elizaos/plugin-app-manager/dist/index.js 2>/dev/null && echo "@elizaos/plugin-app-manager dist OK" || echo "WARN: app-manager dist missing"; \
+    rm -rf node_modules/@elizaos/plugin-scheduling; \
+    mkdir -p node_modules/@elizaos/plugin-scheduling; \
+    cp eliza/plugins/plugin-scheduling/package.json node_modules/@elizaos/plugin-scheduling/; \
+    cp -a eliza/plugins/plugin-scheduling/dist node_modules/@elizaos/plugin-scheduling/dist; \
+    ls node_modules/@elizaos/plugin-scheduling/dist/index.js 2>/dev/null && echo "@elizaos/plugin-scheduling dist OK" || echo "WARN: scheduling dist missing"; \
+    rm -rf node_modules/@elizaos/plugin-wallet; \
+    mkdir -p node_modules/@elizaos/plugin-wallet; \
+    cp eliza/plugins/plugin-wallet/package.json node_modules/@elizaos/plugin-wallet/; \
+    cp -a eliza/plugins/plugin-wallet/dist node_modules/@elizaos/plugin-wallet/dist; \
+    ls node_modules/@elizaos/plugin-wallet/dist/index.mjs node_modules/@elizaos/plugin-wallet/dist/diagnostic.js 2>/dev/null && echo "@elizaos/plugin-wallet dist OK" || echo "WARN: wallet dist missing"; \
     # @elizaos/vault: app-core/agent source imports must resolve under tsx.
     rm -rf node_modules/@elizaos/vault; \
     mkdir -p node_modules/@elizaos/vault; \
@@ -242,7 +258,10 @@ const requiredLockedPackages = [
   '@elizaos/plugin-agent-skills',
   '@elizaos/plugin-anthropic',
   '@elizaos/plugin-app-control',
+  '@elizaos/plugin-app-manager',
   '@elizaos/plugin-local-embedding',
+  '@elizaos/plugin-scheduling',
+  '@elizaos/plugin-wallet',
 ];
 for (const name of requiredLockedPackages) {
   const packageJson = path.join('node_modules', name, 'package.json');
