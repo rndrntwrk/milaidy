@@ -201,6 +201,18 @@ jobs:
           bun run build
           test -f dist/node/index.node.js
 
+      - name: Build @elizaos/cloud-sdk
+        run: |
+          cd eliza/packages/cloud/sdk
+          bun run build
+          test -f dist/index.js
+
+      - name: Build @elizaos/plugin-elizacloud
+        run: |
+          cd eliza/plugins/plugin-elizacloud
+          bun run build
+          test -f dist/utils/config.js
+
       - name: Build @elizaos/plugin-agent-orchestrator
         run: |
           cd eliza/plugins/plugin-agent-orchestrator

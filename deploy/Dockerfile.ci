@@ -100,6 +100,22 @@ RUN set -x; \
     cp eliza/plugins/plugin-openai/package.json node_modules/@elizaos/plugin-openai/; \
     cp -a eliza/plugins/plugin-openai/dist node_modules/@elizaos/plugin-openai/dist; \
     ls node_modules/@elizaos/plugin-openai/dist/node/index.node.js 2>/dev/null && echo "@elizaos/plugin-openai runtime OK" || echo "WARN: OpenAI runtime missing"; \
+    # plugin-elizacloud imports the exact pinned Cloud SDK from its compiled
+    # Node entry. Keep that leaf package physical at the image boundary too.
+    rm -rf node_modules/@elizaos/cloud-sdk; \
+    mkdir -p node_modules/@elizaos/cloud-sdk; \
+    cp eliza/packages/cloud/sdk/package.json node_modules/@elizaos/cloud-sdk/; \
+    cp -a eliza/packages/cloud/sdk/dist node_modules/@elizaos/cloud-sdk/dist; \
+    ls node_modules/@elizaos/cloud-sdk/dist/index.js 2>/dev/null && echo "@elizaos/cloud-sdk dist OK" || echo "WARN: Cloud SDK dist missing"; \
+    # Latest official Alice imports the Eliza Cloud endpoint-config subpath at
+    # module evaluation time even when a different provider owns inference.
+    # Materialize the exact pinned build so that import cannot fall back to an
+    # absent workspace dist directory in the production image.
+    rm -rf node_modules/@elizaos/plugin-elizacloud; \
+    mkdir -p node_modules/@elizaos/plugin-elizacloud; \
+    cp eliza/plugins/plugin-elizacloud/package.json node_modules/@elizaos/plugin-elizacloud/; \
+    cp -a eliza/plugins/plugin-elizacloud/dist node_modules/@elizaos/plugin-elizacloud/dist; \
+    ls node_modules/@elizaos/plugin-elizacloud/dist/utils/config.js 2>/dev/null && echo "@elizaos/plugin-elizacloud endpoint config OK" || echo "WARN: Eliza Cloud endpoint config missing"; \
     # @elizaos/plugin-agent-orchestrator: Alice's compiled entry imports its
     # completion relay directly, so the official pinned Node bundle is part of
     # the cloud runtime rather than an optional desktop-only package.
@@ -332,6 +348,8 @@ const requiredLockedPackages = [
   '@elizaos/plugin-anthropic',
   '@elizaos/plugin-local-inference',
   '@elizaos/plugin-openai',
+  '@elizaos/plugin-elizacloud',
+  '@elizaos/cloud-sdk',
   '@elizaos/plugin-commands',
   '@elizaos/plugin-sql',
   '@elizaos/plugin-app-control',
@@ -687,7 +705,7 @@ __AISDK_FIX__
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
-  -e "const fs = await import('node:fs'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
+  -e "const fs = await import('node:fs'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await import('@elizaos/plugin-elizacloud/endpoint-config'); await import('@elizaos/plugin-elizacloud'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
 
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \

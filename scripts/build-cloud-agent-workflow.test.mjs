@@ -632,6 +632,12 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
   const openAiBuild = workflow.indexOf(
     "cd eliza/plugins/plugin-openai\n          bun run build",
   );
+  const elizaCloudBuild = workflow.indexOf(
+    "cd eliza/plugins/plugin-elizacloud\n          bun run build",
+  );
+  const cloudSdkBuild = workflow.indexOf(
+    "cd eliza/packages/cloud/sdk\n          bun run build",
+  );
   const agentSkillsBuild = workflow.indexOf(
     "cd eliza/plugins/plugin-agent-skills\n          bun run build",
   );
@@ -650,13 +656,24 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
     openAiBuild >= 0 && runtimeBuild > openAiBuild,
     "OpenAI-compatible provider output must exist before Alice is bundled",
   );
+  assert.ok(
+    cloudSdkBuild >= 0 && elizaCloudBuild > cloudSdkBuild,
+    "Cloud SDK output must exist before plugin-elizacloud is built",
+  );
+  assert.ok(
+    runtimeBuild > elizaCloudBuild,
+    "Eliza Cloud output must exist before Alice is bundled",
+  );
   assert.match(workflow, /test -f dist\/runtime\/index\.js/);
   assert.match(workflow, /test -f dist\/node\/index\.node\.js/);
+  assert.match(workflow, /test -f dist\/utils\/config\.js/);
 
   for (const packageName of [
     "skills",
     "plugin-local-inference",
     "plugin-openai",
+    "plugin-elizacloud",
+    "cloud-sdk",
   ]) {
     assert.match(
       dockerfile,
@@ -682,7 +699,15 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
   );
   assert.match(
     dockerfile,
-    /import\('@elizaos\/skills'\)[\s\S]*?import\('@elizaos\/plugin-local-inference\/runtime'\)[\s\S]*?import\('@elizaos\/plugin-openai'\)/,
+    /cp -a eliza\/plugins\/plugin-elizacloud\/dist node_modules\/@elizaos\/plugin-elizacloud\/dist/,
+  );
+  assert.match(
+    dockerfile,
+    /cp -a eliza\/packages\/cloud\/sdk\/dist node_modules\/@elizaos\/cloud-sdk\/dist/,
+  );
+  assert.match(
+    dockerfile,
+    /import\('@elizaos\/skills'\)[\s\S]*?import\('@elizaos\/plugin-local-inference\/runtime'\)[\s\S]*?import\('@elizaos\/plugin-openai'\)[\s\S]*?import\('@elizaos\/plugin-elizacloud\/endpoint-config'\)[\s\S]*?import\('@elizaos\/plugin-elizacloud'\)/,
     "image assembly must evaluate the exact autonomous inference closure",
   );
   assert.match(
