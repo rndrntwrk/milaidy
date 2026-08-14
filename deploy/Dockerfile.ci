@@ -340,6 +340,47 @@ if (fs.existsSync(bunDir)) {
 }
 console.log('Phase 1: hoisted ' + hoisted + ' packages from .bun/');
 
+// Phase 1's broad fallback is intentionally permissive, but filesystem order
+// must never decide the version of a package that the root runtime imports.
+// Re-materialize those packages from the exact version selected by bun.lock.
+const rootLock = fs.readFileSync('bun.lock', 'utf8');
+function rootLockedVersion(name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = rootLock.match(new RegExp(
+    '^    "' + escaped + '": \\["' + escaped + '@([^"+]+)(?:\\+[^" ]+)?"',
+    'm',
+  ));
+  if (!match) throw new Error('root locked package missing from bun.lock: ' + name);
+  return match[1];
+}
+function materializeRootLockedPackage(name) {
+  const version = rootLockedVersion(name);
+  const candidates = [];
+  for (const entry of fs.readdirSync(bunDir).sort()) {
+    const src = path.join(bunDir, entry, 'node_modules', name);
+    const packageJson = path.join(src, 'package.json');
+    if (!fs.existsSync(packageJson)) continue;
+    const candidateVersion = JSON.parse(fs.readFileSync(packageJson, 'utf8')).version;
+    if (candidateVersion === version) candidates.push(src);
+  }
+  if (candidates.length === 0) {
+    throw new Error('root locked package bytes missing from .bun: ' + name + '@' + version);
+  }
+  const dst = path.join('node_modules', name);
+  fs.rmSync(dst, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  fs.cpSync(candidates[0], dst, { recursive: true });
+  const installedVersion = JSON.parse(
+    fs.readFileSync(path.join(dst, 'package.json'), 'utf8'),
+  ).version;
+  if (installedVersion !== version) {
+    throw new Error('root locked package version mismatch: ' + name);
+  }
+  console.log('root locked package materialized: ' + name + '@' + version);
+}
+materializeRootLockedPackage('viem');
+materializeRootLockedPackage('@scure/bip39');
+
 const requiredLockedPackages = [
   '@elizaos/auth',
   '@elizaos/skills',
@@ -357,6 +398,8 @@ const requiredLockedPackages = [
   '@elizaos/plugin-local-embedding',
   '@elizaos/plugin-scheduling',
   '@elizaos/plugin-wallet',
+  'viem',
+  '@scure/bip39',
 ];
 for (const name of requiredLockedPackages) {
   const packageJson = path.join('node_modules', name, 'package.json');
@@ -705,7 +748,7 @@ __AISDK_FIX__
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
-  -e "const fs = await import('node:fs'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await import('@elizaos/plugin-elizacloud/endpoint-config'); await import('@elizaos/plugin-elizacloud'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
+  -e "const fs = await import('node:fs'); await import('@scure/bip39/wordlists/portuguese'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await import('@elizaos/plugin-elizacloud/endpoint-config'); await import('@elizaos/plugin-elizacloud'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
 
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \

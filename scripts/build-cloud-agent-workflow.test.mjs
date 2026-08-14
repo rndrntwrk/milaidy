@@ -683,6 +683,16 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
   }
   assert.match(
     dockerfile,
+    /materializeRootLockedPackage\('@scure\/bip39'\)/,
+    "image assembly must replace arbitrary transitive hoists with the root-lock-selected BIP39 package",
+  );
+  assert.match(
+    dockerfile,
+    /requiredLockedPackages[\s\S]*?'@scure\/bip39'/,
+    "image assembly must fail closed if the root-lock-selected BIP39 package is absent",
+  );
+  assert.match(
+    dockerfile,
     /cp -a eliza\/packages\/skills\/dist node_modules\/@elizaos\/skills\/dist/,
   );
   assert.match(
@@ -707,7 +717,7 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
   );
   assert.match(
     dockerfile,
-    /import\('@elizaos\/skills'\)[\s\S]*?import\('@elizaos\/plugin-local-inference\/runtime'\)[\s\S]*?import\('@elizaos\/plugin-openai'\)[\s\S]*?import\('@elizaos\/plugin-elizacloud\/endpoint-config'\)[\s\S]*?import\('@elizaos\/plugin-elizacloud'\)/,
+    /import\('@scure\/bip39\/wordlists\/portuguese'\)[\s\S]*?import\('@elizaos\/skills'\)[\s\S]*?import\('@elizaos\/plugin-local-inference\/runtime'\)[\s\S]*?import\('@elizaos\/plugin-openai'\)[\s\S]*?import\('@elizaos\/plugin-elizacloud\/endpoint-config'\)[\s\S]*?import\('@elizaos\/plugin-elizacloud'\)/,
     "image assembly must evaluate the exact autonomous inference closure",
   );
   assert.match(
