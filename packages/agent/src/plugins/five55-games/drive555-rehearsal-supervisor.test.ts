@@ -476,7 +476,7 @@ function makeDependencies(options: {
             ...receiptBase,
             receiptId: "injected-1",
             state: "injected",
-            relaySequence: 12,
+            relaySequence: 11,
             stageSequence: 3,
             ...options.controlReceiptOverrides?.injected,
           });
@@ -485,7 +485,7 @@ function makeDependencies(options: {
             ...receiptBase,
             receiptId: "reflected-1",
             state: "reflected",
-            relaySequence: 13,
+            relaySequence: 11,
             stageSequence: 4,
             reflectedObservationSequence: 42,
             appliedControls: reflectedControls,
@@ -507,7 +507,7 @@ function makeDependencies(options: {
           observationSequence: 41,
           sourceId: "source-1",
           state: "accepted" as const,
-          relaySequence: 10,
+          relaySequence: 0,
           stageSequence: 1,
           ...options.controlReceiptOverrides?.accepted,
         }];
@@ -546,7 +546,7 @@ function makeDependencies(options: {
             receiptId: "release-enqueued-1",
             state: "enqueued",
             relaySequence: 16,
-            stageSequence: 6,
+            stageSequence: 2,
             ...options.releaseReceiptOverrides?.enqueued,
           });
           calls.push("release:injected");
@@ -554,8 +554,8 @@ function makeDependencies(options: {
             ...releaseReceiptBase,
             receiptId: "release-injected-1",
             state: "injected",
-            relaySequence: 17,
-            stageSequence: 7,
+            relaySequence: 16,
+            stageSequence: 3,
             ...options.releaseReceiptOverrides?.injected,
           });
           calls.push("release:reflected");
@@ -563,8 +563,8 @@ function makeDependencies(options: {
             ...releaseReceiptBase,
             receiptId: "release-reflected-1",
             state: "reflected",
-            relaySequence: 18,
-            stageSequence: 8,
+            relaySequence: 16,
+            stageSequence: 4,
             reflectedObservationSequence: 43,
             neutralAppliedControlsDigest: neutralControlsDigest,
             neutralSnapshotDigest: H.e,
@@ -586,8 +586,8 @@ function makeDependencies(options: {
           neutralMappedControlsDigest: request.neutralMappedControlsDigest,
           sourceId: "source-1",
           state: "accepted" as const,
-          relaySequence: 15,
-          stageSequence: 5,
+          relaySequence: 0,
+          stageSequence: 1,
           ...options.releaseReceiptOverrides?.accepted,
         }];
       },
@@ -1030,11 +1030,8 @@ describe("Drive555RehearsalSupervisor", () => {
     expect(fixture.calls).toContain("close:rehearsal-failed");
   });
 
-  it("accepts the frozen zero-relay admission receipt while requiring later relay stages to increase", async () => {
-    const fixture = makeDependencies({
-      controlReceiptOverrides: { accepted: { relaySequence: 0 } },
-      releaseReceiptOverrides: { accepted: { relaySequence: 0 } },
-    });
+  it("accepts the real receipt relay contract while requiring ordered stage delivery", async () => {
+    const fixture = makeDependencies();
 
     const result = await new Drive555RehearsalSupervisor(fixture.dependencies).run({
       sessionId: "session-1",
@@ -1066,9 +1063,9 @@ describe("Drive555RehearsalSupervisor", () => {
     expect(fixture.calls).toContain("release");
   });
 
-  it("rejects control proof when relay receipt ordering is not strictly increasing", async () => {
+  it("rejects control proof when the injected receipt changes the enqueued relay binding", async () => {
     const fixture = makeDependencies({
-      controlReceiptOverrides: { injected: { relaySequence: 11 } },
+      controlReceiptOverrides: { injected: { relaySequence: 12 } },
     });
 
     await expect(
@@ -1077,15 +1074,15 @@ describe("Drive555RehearsalSupervisor", () => {
         gameRunId: "run-1",
         goal: "keep Alice on the racing line",
       }),
-    ).rejects.toThrow("control receipt relay stages are not strictly ordered");
+    ).rejects.toThrow("control receipt relay binding changes between durable stages");
 
     expect(fixture.calls.some((call) => call.startsWith("reflect:"))).toBe(false);
     expect(fixture.calls).toContain("release");
   });
 
-  it("rejects successful work when neutral-release receipt relay ordering is not strictly increasing", async () => {
+  it("rejects successful work when neutral release changes the enqueued relay binding", async () => {
     const fixture = makeDependencies({
-      releaseReceiptOverrides: { enqueued: { relaySequence: 15 } },
+      releaseReceiptOverrides: { injected: { relaySequence: 17 } },
     });
 
     await expect(
@@ -1094,7 +1091,7 @@ describe("Drive555RehearsalSupervisor", () => {
         gameRunId: "run-1",
         goal: "keep Alice on the racing line",
       }),
-    ).rejects.toThrow("neutral release receipt relay stages are not strictly ordered");
+    ).rejects.toThrow("neutral release receipt relay binding changes between durable stages");
 
     expect(fixture.calls).toContain("release");
     expect(fixture.calls).toContain("close:rehearsal-failed");

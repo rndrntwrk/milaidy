@@ -718,10 +718,18 @@ class EvidenceInbox {
               "control receipt stages are not strictly ordered",
             );
           }
-          if (completeStages[index - 1]!.relaySequence >= completeStages[index]!.relaySequence) {
+        }
+        if (completeStages[0]!.relaySequence !== 0 || !isPositiveSafeInteger(completeStages[1]!.relaySequence)) {
+          throw new RehearsalFailure(
+            "rehearsal-failed",
+            "control receipt relay admission is malformed",
+          );
+        }
+        for (const receipt of completeStages.slice(2)) {
+          if (receipt.relaySequence !== completeStages[1]!.relaySequence) {
             throw new RehearsalFailure(
               "rehearsal-failed",
-              "control receipt relay stages are not strictly ordered",
+              "control receipt relay binding changes between durable stages",
             );
           }
         }
@@ -814,10 +822,18 @@ class EvidenceInbox {
               "neutral release receipt stages are not strictly ordered",
             );
           }
-          if (completeStages[index - 1]!.relaySequence >= completeStages[index]!.relaySequence) {
+        }
+        if (completeStages[0]!.relaySequence !== 0 || !isPositiveSafeInteger(completeStages[1]!.relaySequence)) {
+          throw new RehearsalFailure(
+            "rehearsal-failed",
+            "neutral release receipt relay admission is malformed",
+          );
+        }
+        for (const receipt of completeStages.slice(2)) {
+          if (receipt.relaySequence !== completeStages[1]!.relaySequence) {
             throw new RehearsalFailure(
               "rehearsal-failed",
-              "neutral release receipt relay stages are not strictly ordered",
+              "neutral release receipt relay binding changes between durable stages",
             );
           }
         }
