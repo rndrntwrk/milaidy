@@ -273,6 +273,8 @@ jobs:
           npx tsdown
           echo '{"type":"module"}' > dist/package.json
           node --import tsx eliza/packages/app-core/scripts/write-build-info.ts 2>/dev/null || true
+        env:
+          MILADY_ELIZA_APP_CORE_ROOT: packages/app-core
 
       # ── 7. Determine version ────────────────────────────────────────────────
       - name: Determine version
@@ -341,6 +343,7 @@ jobs:
           bun run build:web
         env:
           NODE_ENV: production
+          MILADY_ELIZA_APP_CORE_ROOT: packages/app-core
 
       # ── 9. Docker ignore (context root must have .dockerignore; source: deploy/)
       - name: Set up CI dockerignore
@@ -451,7 +454,36 @@ jobs:
                   console.error(JSON.stringify({ emoteStatus: emoteResponse.status, emoteBody }));
                   process.exit(3);
                 }
-                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, emoteStatus: emoteResponse.status }));
+                const broadcastResponse = await fetch(`http://127.0.0.1:${port}/broadcast/alice-cam`);
+                const broadcastHtml = await broadcastResponse.text();
+                if (
+                  broadcastResponse.status !== 200 ||
+                  !broadcastHtml.includes(`<base href="/" />`)
+                ) {
+                  console.error(JSON.stringify({ broadcastStatus: broadcastResponse.status, hasRootBase: broadcastHtml.includes(`<base href="/" />`) }));
+                  process.exit(4);
+                }
+                const scriptMatch = broadcastHtml.match(/<script[^>]+src="([^"]+\.js)"/);
+                if (!scriptMatch) {
+                  console.error("Broadcast shell has no JavaScript entry");
+                  process.exit(5);
+                }
+                const bundleResponse = await fetch(new URL(scriptMatch[1], `http://127.0.0.1:${port}/`));
+                const bundle = await bundleResponse.text();
+                const requiredMarkers = [
+                  "data-broadcast-shell",
+                  "__agentShowControl",
+                  "playEmote",
+                  "eliza:app-emote-applied",
+                ];
+                if (
+                  bundleResponse.status !== 200 ||
+                  requiredMarkers.some((marker) => !bundle.includes(marker))
+                ) {
+                  console.error(JSON.stringify({ bundleStatus: bundleResponse.status, missingMarkers: requiredMarkers.filter((marker) => !bundle.includes(marker)) }));
+                  process.exit(6);
+                }
+                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, emoteStatus: emoteResponse.status, broadcastStatus: broadcastResponse.status, bundleStatus: bundleResponse.status }));
               ')"; then
                 echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision health=$readiness"
                 exit 0

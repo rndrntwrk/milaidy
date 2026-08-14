@@ -151,6 +151,44 @@ describe("app vite config", () => {
     }
   });
 
+  it("uses Alice app-core when the cloud build pins its source root", async () => {
+    const previous = process.env.MILADY_ELIZA_APP_CORE_ROOT;
+    process.env.MILADY_ELIZA_APP_CORE_ROOT = "packages/app-core";
+
+    try {
+      const loaded = await loadConfigFromFile(
+        { command: "build", mode: "cloud-alice-app-core" },
+        CONFIG_PATH,
+        APP_DIR,
+      );
+      const aliases = (loaded?.config.resolve?.alias ?? []) as Array<{
+        find?: RegExp | string;
+        replacement?: string;
+      }>;
+      const appCoreAlias = aliases.find(
+        (entry) => String(entry.find) === String(/^@elizaos\/app-core$/),
+      );
+
+      expect(appCoreAlias?.replacement).toBe(
+        path.resolve(APP_DIR, "../../packages/app-core/src/index.ts"),
+      );
+      const nativeEntrypointAlias = aliases.find(
+        (entry) =>
+          String(entry.find) ===
+          String(/^@elizaos\/app-core\/platform\/native-plugin-entrypoints$/),
+      );
+      expect(nativeEntrypointAlias?.replacement).toBe(
+        path.resolve(APP_DIR, "src/stubs/cloud-native-plugin-entrypoints.ts"),
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.MILADY_ELIZA_APP_CORE_ROOT;
+      } else {
+        process.env.MILADY_ELIZA_APP_CORE_ROOT = previous;
+      }
+    }
+  });
+
   it("stubs the optional Clawville registration when latest Eliza omits it", async () => {
     const loaded = await loadConfigFromFile(
       { command: "build", mode: "test" },

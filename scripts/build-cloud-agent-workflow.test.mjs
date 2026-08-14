@@ -149,6 +149,50 @@ test("staging and manual no-rollout builds smoke the exact image and always tear
   );
 });
 
+test("cloud builds bind both server and browser bundles to Alice app-core", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const runtimeBuild = workflow.match(
+    /- name: Build runtime \(tsdown\)[\s\S]*?- name: Determine version/,
+  )?.[0];
+  const browserBuild = workflow.match(
+    /- name: Build UI \(vite\)[\s\S]*?- name: Set up CI dockerignore/,
+  )?.[0];
+
+  assert.ok(runtimeBuild, "the server runtime build step must exist");
+  assert.ok(browserBuild, "the browser build step must exist");
+  assert.match(
+    runtimeBuild,
+    /MILADY_ELIZA_APP_CORE_ROOT:\s*packages\/app-core/,
+    "the server bundle must use Alice's app-core rather than the hydrated upstream checkout",
+  );
+  assert.match(
+    browserBuild,
+    /MILADY_ELIZA_APP_CORE_ROOT:\s*packages\/app-core/,
+    "the browser bundle must use Alice's app-core rather than the hydrated upstream checkout",
+  );
+});
+
+test("candidate image smoke proves the public broadcast shell and VRM control bundle", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const smokeStep = workflow.match(
+    /- name: Smoke exact candidate image[\s\S]*?- name: Cleanup candidate smoke container/,
+  )?.[0];
+
+  assert.ok(smokeStep, "candidate image smoke step must exist");
+  assert.match(smokeStep, /\/broadcast\/alice-cam/);
+  assert.match(smokeStep, /<base href=["']\/["']/);
+  assert.match(smokeStep, /data-broadcast-shell/);
+  assert.match(smokeStep, /__agentShowControl/);
+  assert.match(smokeStep, /playEmote/);
+  assert.match(smokeStep, /eliza:app-emote-applied/);
+});
+
 test("cloud agent build keeps the checked-out Eliza workspace available", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

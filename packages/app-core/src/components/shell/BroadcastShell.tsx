@@ -22,14 +22,13 @@
  *
  * Capture-service handshake:
  * The 555stream capture-service worker (worker.js:2161) waits for
- * `window.__agentShowControl` to be defined as the "React mounted"
- * signal — that contract was originally defined for the legacy
- * services/agent-show standalone page bundled inside control-plane.
- * BroadcastShell sets a stub global on mount to satisfy that detector,
- * then waits for `useCompanionSceneStatus().avatarReady` to flip true
- * before adding the `.avatar-ready` class on `document.documentElement`,
- * which is the second signal the worker waits for (worker.js:2174)
- * before considering the capture ready and starting the FFmpeg push.
+ * `window.__agentShowControl` to expose a `playEmote` function — that
+ * contract was originally defined for the legacy services/agent-show page.
+ * BroadcastShell routes that control through the app emote event and waits
+ * for VrmStage's applied acknowledgement, then separately waits for
+ * `useCompanionSceneStatus().avatarReady` before adding `.avatar-ready` to
+ * `document.documentElement`. The capture worker requires both signals
+ * before considering the companion ready and starting the FFmpeg push.
  *
  * Without this handshake the capture worker times out at 20s and falls
  * back to its own DOM-injected agent-show standalone page (the bundled
@@ -42,36 +41,36 @@
 
 import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { memo, useEffect } from "react";
+import { getBroadcastMode } from "../../platform/init";
 import { CompanionSceneHost } from "../companion/CompanionSceneHost";
 import { useCompanionSceneStatus } from "../companion/companion-scene-status-context";
 import { LiveKitBroadcastPublisher } from "../companion/LiveKitBroadcastPublisher";
-import { getBroadcastMode } from "../../platform/init";
 import { SceneOverlayDataBridge } from "../companion/scene-overlay-bridge";
+import {
+  type BroadcastEmoteControl,
+  createBroadcastEmoteControl,
+} from "./broadcast-emote-control";
 
 declare global {
   interface Window {
-    /**
-     * Stub object the 555stream capture-service worker waits for to
-     * confirm the React app has mounted. The original
-     * services/agent-show standalone page exposes a richer control
-     * surface here; in broadcast mode we only need the property to
-     * exist so the worker stops timing out.
-     */
-    __agentShowControl?: Record<string, unknown>;
+    /** Real capture control installed by BroadcastShell. */
+    __agentShowControl?: Record<string, unknown> &
+      Partial<BroadcastEmoteControl>;
   }
 }
 
 function CaptureHandshake() {
   const { avatarReady } = useCompanionSceneStatus();
 
-  // Signal "React mounted" as soon as BroadcastShell mounts. The capture
-  // worker uses the existence of this global as the primary readiness
-  // gate; the value contents are not currently inspected.
+  // Signal "React mounted" and expose a real VRM control as soon as the
+  // shell mounts. The control resolves only after VrmStage reports that the
+  // active VrmEngine started the requested emote.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!window.__agentShowControl) {
-      window.__agentShowControl = { source: "broadcast-shell" };
-    }
+    window.__agentShowControl = {
+      ...(window.__agentShowControl ?? {}),
+      ...createBroadcastEmoteControl(window),
+    };
     return () => {
       // Intentionally NOT clearing __agentShowControl on unmount — once
       // the capture worker has read it the contract is fulfilled and a

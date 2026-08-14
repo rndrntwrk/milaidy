@@ -1784,8 +1784,38 @@ export default defineConfig({
           miladyRoot,
           "eliza/packages/app-core/package.json",
         );
+        const explicitAppCoreRoot =
+          process.env.MILADY_ELIZA_APP_CORE_ROOT?.trim();
+        if (
+          explicitAppCoreRoot &&
+          explicitAppCoreRoot !== "packages/app-core"
+        ) {
+          throw new Error(
+            "MILADY_ELIZA_APP_CORE_ROOT must be the pinned repo-local packages/app-core",
+          );
+        }
+        const browserAppCorePkgPath = explicitAppCoreRoot
+          ? appCorePkgPath
+          : elizaAppCorePkgPath;
 
         const generatedAliases = [
+          // Latest official Eliza imports this mobile-only side-effect entry
+          // from main.tsx. Alice's cloud build deliberately selects its own
+          // app-core, whose agent fork does not implement the new native JS
+          // runtime registry. The branch is unreachable on web, but Rollup
+          // must still resolve it; use an explicit cloud-only no-op rather
+          // than pulling an incompatible mobile runtime into production.
+          ...(explicitAppCoreRoot
+            ? [
+                {
+                  find: /^@elizaos\/app-core\/platform\/native-plugin-entrypoints$/,
+                  replacement: path.resolve(
+                    here,
+                    "src/stubs/cloud-native-plugin-entrypoints.ts",
+                  ),
+                },
+              ]
+            : []),
           ...buildWorkspaceExportAliases("@miladyai/app-core", appCorePkgPath),
           ...buildWorkspaceExportAliases("@miladyai/agent", agentPkgPath),
           ...buildWorkspaceExportAliases("@miladyai/shared", sharedPkgPath),
@@ -1811,17 +1841,15 @@ export default defineConfig({
           // Alice's `@elizaos/app-core` IS the `@miladyai/app-core` fork: the
           // deploy Dockerfile repoints node_modules/@elizaos/app-core at
           // packages/app-core for the runtime. The SPA bundle must resolve the
-          // same way. In local mode (an `eliza/` checkout is present) keep the
-          // upstream alias; in packages mode (production deploy, no `eliza/`
-          // checkout) alias `@elizaos/app-core` to the milaidy fork instead of
-          // letting it fall through to the upstream npm package — which bundles
-          // a stale BroadcastShell missing the `window.__agentShowControl` /
-          // `.avatar-ready` capture handshake (milaidy PR #82), so the
-          // capture-service times out at 20s and renders the fallback avatar.
-          ...(fs.existsSync(elizaAppCorePkgPath)
+          // same way. Local development may use the hydrated upstream checkout,
+          // but the cloud workflow explicitly pins `packages/app-core` through
+          // MILADY_ELIZA_APP_CORE_ROOT. Without that explicit selection the
+          // production bundle silently picks upstream merely because the Eliza
+          // gitlink is hydrated, dropping Alice's capture and VRM handshake.
+          ...(fs.existsSync(browserAppCorePkgPath)
             ? buildWorkspaceExportAliases(
                 "@elizaos/app-core",
-                elizaAppCorePkgPath,
+                browserAppCorePkgPath,
               )
             : buildWorkspaceExportAliases("@elizaos/app-core", appCorePkgPath)),
           // @elizaos/capacitor-<name> — dynamic walk of
