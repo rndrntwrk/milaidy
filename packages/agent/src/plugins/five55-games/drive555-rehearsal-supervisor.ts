@@ -149,6 +149,7 @@ export interface AliceAdsPort {
 
 export interface GameplayRehearsalProfile {
   gameId: string;
+  initialControlDelayMs: number;
   reactionKindFor(
     baseline: NormalizedGameplayObservationPort,
     reflected: NormalizedGameplayObservationPort,
@@ -177,6 +178,7 @@ export interface GameplayRehearsalDependencies {
   ads?: AliceAdsPort;
   createId?: () => string;
   nowMs?: () => number;
+  delay?: (ms: number, signal: AbortSignal) => Promise<void>;
   observationTimeoutMs?: number;
 }
 
@@ -197,6 +199,22 @@ export interface GameplayRehearsalResult {
 }
 
 const DEFAULT_OBSERVATION_TIMEOUT_MS = 5_000;
+
+async function defaultDelay(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw new DOMException("rehearsal aborted", "AbortError");
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", onAbort);
+      reject(new DOMException("rehearsal aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 class RehearsalFailure extends Error {
   constructor(
@@ -1179,6 +1197,7 @@ function errorReason(error: unknown): string {
 export class GameplayRehearsalSupervisor {
   private readonly createId: () => string;
   private readonly nowMs: () => number;
+  private readonly delay: (ms: number, signal: AbortSignal) => Promise<void>;
   private readonly observationTimeoutMs: number;
 
   constructor(
@@ -1187,6 +1206,7 @@ export class GameplayRehearsalSupervisor {
   ) {
     this.createId = dependencies.createId ?? randomUUID;
     this.nowMs = dependencies.nowMs ?? (() => performance.now());
+    this.delay = dependencies.delay ?? defaultDelay;
     this.observationTimeoutMs = dependencies.observationTimeoutMs ?? DEFAULT_OBSERVATION_TIMEOUT_MS;
   }
 
@@ -1196,6 +1216,9 @@ export class GameplayRehearsalSupervisor {
     assertNonEmpty(request.goal, "goal");
     if (!Number.isFinite(this.observationTimeoutMs) || this.observationTimeoutMs <= 0) {
       throw new RehearsalFailure("rehearsal-failed", "observationTimeoutMs must be positive");
+    }
+    if (!Number.isSafeInteger(this.profile.initialControlDelayMs) || this.profile.initialControlDelayMs < 0) {
+      throw new RehearsalFailure("rehearsal-failed", "initialControlDelayMs must be a non-negative integer");
     }
 
     const abort = new AbortController();
@@ -1211,6 +1234,7 @@ export class GameplayRehearsalSupervisor {
     let renewalTimer: ReturnType<typeof setInterval> | undefined;
     let primaryError: unknown;
     let result: GameplayRehearsalResult | undefined;
+    let initialStartApplied = false;
 
     const handlers: GameplayEvidenceHandlersPort = {
       onRawObservation: (value) => serializedEvidence.enqueue(() => inbox.addRaw(value)),
@@ -1300,11 +1324,16 @@ export class GameplayRehearsalSupervisor {
           start.resultDigest,
           this.observationTimeoutMs,
         );
+        initialStartApplied = true;
       } else if (!acceptedControlState(state.state)) {
         throw new RehearsalFailure(
           "rehearsal-failed",
           `gameplay state ${state.state} cannot enter a rehearsal control loop`,
         );
+      }
+
+      if (initialStartApplied && this.profile.initialControlDelayMs > 0) {
+        await this.delay(this.profile.initialControlDelayMs, abort.signal);
       }
 
       // Reserve a release-usable directive ID before any lease becomes active.
@@ -1686,6 +1715,10 @@ function drive555ForwardPosition(value: NormalizedGameplayObservationPort): numb
 
 const DRIVE555_REHEARSAL_PROFILE: GameplayRehearsalProfile = {
   gameId: "555drive",
+  // The certified native fixture starts with a four-second countdown. Wait
+  // outside the lease before admitting the first control so its reflected
+  // frame can produce real movement instead of being neutralized at countdown.
+  initialControlDelayMs: 4_500,
   reactionKindFor(baseline, reflected) {
     const before = drive555ForwardPosition(baseline);
     const after = drive555ForwardPosition(reflected);

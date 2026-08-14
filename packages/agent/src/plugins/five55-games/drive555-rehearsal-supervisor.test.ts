@@ -700,6 +700,10 @@ function makeDependencies(options: {
       return () => `id-${++value}`;
     })(),
     nowMs: () => 77,
+    delay: async (ms, signal) => {
+      expect(signal.aborted).toBe(false);
+      calls.push(`delay:${ms}`);
+    },
     observationTimeoutMs: 1_000,
   };
 
@@ -870,12 +874,13 @@ describe("Drive555RehearsalSupervisor", () => {
       ad: { adId: "sponsor-1", duration: 12_000 },
     });
 
-    expect(fixture.calls.slice(0, 9)).toEqual([
+    expect(fixture.calls.slice(0, 10)).toEqual([
       "subscribe",
       "capabilities",
       "state",
       "initial-start",
       "lifecycle:initial_start",
+      "delay:4500",
       "lease",
       "evidence-window",
       "normalize",
