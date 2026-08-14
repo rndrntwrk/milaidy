@@ -38,6 +38,7 @@ export const CHAT_AVATAR_FACE_FRAME_EVENT =
 export const LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT =
   "eliza:lifeops-google-connector-refresh" as const;
 export const APP_EMOTE_EVENT = "eliza:app-emote" as const;
+export const APP_EMOTE_APPLIED_EVENT = "eliza:app-emote-applied" as const;
 /** After `/api/cloud/status` — chat voice reloads config so cloud-backed TTS mode matches the server snapshot. */
 export const ELIZA_CLOUD_STATUS_UPDATED_EVENT =
   "eliza:cloud-status-updated" as const;
@@ -125,6 +126,7 @@ export type ElizaWindowEventName =
   | typeof CHAT_AVATAR_FACE_FRAME_EVENT
   | typeof LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT
   | typeof APP_EMOTE_EVENT
+  | typeof APP_EMOTE_APPLIED_EVENT
   | typeof ELIZA_CLOUD_STATUS_UPDATED_EVENT
   | typeof LIFEOPS_GITHUB_CALLBACK_EVENT
   | typeof VRM_TELEPORT_COMPLETE_EVENT
@@ -155,6 +157,13 @@ export function dispatchWindowEvent(
 /** Dispatch a normalized app-wide emote event on `window`. */
 export function dispatchAppEmoteEvent(detail: AppEmoteEventDetail): void {
   dispatchWindowEvent(APP_EMOTE_EVENT, detail);
+}
+
+/** Report that the active VRM engine actually started the requested emote. */
+export function dispatchAppEmoteAppliedEvent(
+  detail: AppEmoteEventDetail,
+): void {
+  dispatchWindowEvent(APP_EMOTE_APPLIED_EVENT, detail);
 }
 
 export function dispatchChatAvatarFaceFrameEvent(

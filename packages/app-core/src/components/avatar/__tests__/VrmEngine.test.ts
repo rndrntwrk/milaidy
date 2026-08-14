@@ -223,9 +223,9 @@ vi.mock("three", () => {
     updateProjectionMatrix = mockCameraInstance.updateProjectionMatrix;
   }
 
-  class MockClock {
-    start = vi.fn();
-    stop = vi.fn();
+  class MockTimer {
+    reset = vi.fn();
+    update = vi.fn();
     getDelta = vi.fn(() => 0.016);
   }
 
@@ -328,7 +328,7 @@ vi.mock("three", () => {
     Scene: MockScene,
     Group: MockGroup,
     PerspectiveCamera: MockPerspectiveCamera,
-    Clock: MockClock,
+    Timer: MockTimer,
     AnimationMixer: MockAnimationMixer,
     DirectionalLight: MockDirectionalLight,
     AmbientLight: MockAmbientLight,
@@ -338,6 +338,7 @@ vi.mock("three", () => {
     Spherical: MockSpherical,
     LoopRepeat,
     LoopOnce,
+    PCFShadowMap: 1,
     PCFSoftShadowMap: 2,
     NoToneMapping: 0,
     SRGBColorSpace: "srgb",
@@ -929,10 +930,10 @@ describe("VrmEngine", () => {
       const canvas = createMockCanvas();
       engine.setup(canvas, vi.fn());
       await waitForEngineReady(engine);
-      // No VRM loaded — playEmote should resolve silently
-      await expect(
-        engine.playEmote("/mock/emote.glb", 2, false),
-      ).resolves.toBeUndefined();
+      // No VRM loaded — the caller must not mistake a no-op for playback.
+      await expect(engine.playEmote("/mock/emote.glb", 2, false)).resolves.toBe(
+        false,
+      );
     });
 
     it("stopEmote() does not throw when no emote is playing", async () => {
@@ -1196,7 +1197,7 @@ describe("VrmEngine", () => {
       engineAny.emoteAction = currentEmoteAction;
       engineAny.loadEmoteClipCached = vi.fn().mockResolvedValue({});
 
-      await engine.playEmote("/mock/emote.glb", 2, false);
+      const started = await engine.playEmote("/mock/emote.glb", 2, false);
 
       // Previous emote and idle should both be faded out
       expect(currentEmoteAction.fadeOut).toHaveBeenCalledWith(0.4);
@@ -1205,6 +1206,7 @@ describe("VrmEngine", () => {
       // New emote should be faded in (not crossFadeFrom)
       expect(nextEmoteAction.fadeIn).toHaveBeenCalledWith(0.4);
       expect(engineAny.emoteAction).toBe(nextEmoteAction);
+      expect(started).toBe(true);
     });
 
     it("stopEmote restores the speech lane when Alice is still speaking", () => {

@@ -2019,10 +2019,10 @@ export class VrmEngine {
     path: string,
     duration: number,
     loop: boolean,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const vrm = this.vrm;
     const mixer = this.mixer;
-    if (!vrm || !mixer) return;
+    if (!vrm || !mixer) return false;
     // Don't start emotes while the teleport dissolve is still running or
     // within a short cooldown afterwards — the idle animation needs time
     // to settle into a stable pose before we can cross-fade from it.
@@ -2031,15 +2031,15 @@ export class VrmEngine {
       this.teleportProgress < 1.0 ||
       this.elapsedTime - this.teleportCompleteTime < POST_TELEPORT_COOLDOWN
     ) {
-      return;
+      return false;
     }
     this.clearPendingEmoteCompletion();
     this.emoteRequestId++;
     const requestId = this.emoteRequestId;
     const currentEmote = this.emoteAction;
     const clip = await this.loadEmoteClipCached(path, vrm);
-    if (!clip || this.vrm !== vrm || this.mixer !== mixer) return;
-    if (this.emoteRequestId !== requestId) return;
+    if (!clip || this.vrm !== vrm || this.mixer !== mixer) return false;
+    if (this.emoteRequestId !== requestId) return false;
     const action = mixer.clipAction(clip);
     action.setLoop(
       loop ? THREE.LoopRepeat : THREE.LoopOnce,
@@ -2072,6 +2072,7 @@ export class VrmEngine {
         Number.isFinite(duration) && duration > 0 ? duration : clip.duration;
       this.watchOneShotEmoteCompletion(mixer, action, requestId, clipDuration);
     }
+    return true;
   }
   stopEmote(): void {
     this.clearPendingEmoteCompletion();

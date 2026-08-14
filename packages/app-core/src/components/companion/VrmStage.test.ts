@@ -15,6 +15,7 @@ vi.mock("@miladyai/app-core/hooks", () => ({
 
 vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: (path: string) => path,
+  resolveRootPublicAssetUrl: (path: string) => path,
 }));
 
 vi.mock("../character/AvatarLoader", () => ({
@@ -169,5 +170,103 @@ describe("VrmStage", () => {
     const previewImages = renderer?.root.findAllByType("img") ?? [];
     expect(previewImages).toHaveLength(1);
     expect(previewImages[0]?.props.src).toBe(fallbackPreviewUrl);
+  });
+
+  it("acknowledges an emote only after the real VrmEngine starts it", async () => {
+    const detail = {
+      emoteId: "dance-happy",
+      path: "/animations/emotes/dance-happy.glb",
+      duration: 3,
+      loop: false,
+    };
+    const playEmote = vi.fn().mockResolvedValue(true);
+    const acknowledgements: unknown[] = [];
+    const onApplied = (event: Event) => {
+      acknowledgements.push((event as CustomEvent).detail);
+    };
+    window.addEventListener("eliza:app-emote-applied", onApplied);
+
+    try {
+      await act(async () => {
+        renderer = TestRenderer.create(
+          renderStage({
+            vrmPath: "/vrms/eliza-1.vrm.gz",
+            fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
+          }),
+        );
+      });
+      await act(async () => {
+        const onEngineReady = testState.viewerProps?.onEngineReady as
+          | ((engine: {
+              playEmote: typeof playEmote;
+              setCameraAnimation: ReturnType<typeof vi.fn>;
+              setPointerParallaxEnabled: ReturnType<typeof vi.fn>;
+            }) => void)
+          | undefined;
+        onEngineReady?.({
+          playEmote,
+          setCameraAnimation: vi.fn(),
+          setPointerParallaxEnabled: vi.fn(),
+        });
+        window.dispatchEvent(new CustomEvent("eliza:app-emote", { detail }));
+        await Promise.resolve();
+      });
+
+      expect(playEmote).toHaveBeenCalledWith(
+        "/animations/emotes/dance-happy.glb",
+        3,
+        false,
+      );
+      expect(acknowledgements).toEqual([detail]);
+    } finally {
+      window.removeEventListener("eliza:app-emote-applied", onApplied);
+    }
+  });
+
+  it("does not acknowledge an emote that the VrmEngine cannot start", async () => {
+    const playEmote = vi.fn().mockResolvedValue(false);
+    const onApplied = vi.fn();
+    window.addEventListener("eliza:app-emote-applied", onApplied);
+
+    try {
+      await act(async () => {
+        renderer = TestRenderer.create(
+          renderStage({
+            vrmPath: "/vrms/eliza-1.vrm.gz",
+            fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
+          }),
+        );
+      });
+      await act(async () => {
+        const onEngineReady = testState.viewerProps?.onEngineReady as
+          | ((engine: {
+              playEmote: typeof playEmote;
+              setCameraAnimation: ReturnType<typeof vi.fn>;
+              setPointerParallaxEnabled: ReturnType<typeof vi.fn>;
+            }) => void)
+          | undefined;
+        onEngineReady?.({
+          playEmote,
+          setCameraAnimation: vi.fn(),
+          setPointerParallaxEnabled: vi.fn(),
+        });
+        window.dispatchEvent(
+          new CustomEvent("eliza:app-emote", {
+            detail: {
+              emoteId: "jump",
+              path: "/animations/emotes/jump.glb",
+              duration: 2,
+              loop: false,
+            },
+          }),
+        );
+        await Promise.resolve();
+      });
+
+      expect(playEmote).toHaveBeenCalledTimes(1);
+      expect(onApplied).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("eliza:app-emote-applied", onApplied);
+    }
   });
 });

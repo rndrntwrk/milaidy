@@ -1,6 +1,7 @@
 import {
   APP_EMOTE_EVENT,
   type AppEmoteEventDetail,
+  dispatchAppEmoteAppliedEvent,
   STOP_EMOTE_EVENT,
 } from "@miladyai/app-core/events";
 import { useRenderGuard } from "@miladyai/app-core/hooks";
@@ -235,7 +236,11 @@ export const VrmStage = memo(function VrmStage({
           ? detail.duration
           : 3;
       const isLoop = detail.loop === true;
-      void engine.playEmote(resolvedPath, duration, isLoop);
+      void engine.playEmote(resolvedPath, duration, isLoop).then((started) => {
+        if (started) {
+          dispatchAppEmoteAppliedEvent(detail);
+        }
+      });
     };
     window.addEventListener(APP_EMOTE_EVENT, handler);
     return () => window.removeEventListener(APP_EMOTE_EVENT, handler);
