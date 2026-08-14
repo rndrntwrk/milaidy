@@ -64,6 +64,27 @@ test("cloud builds hydrate the tracked Eliza commit from the official repository
   assert.doesNotMatch(workflow, /eliza submodule init failed, continuing/);
 });
 
+test("cloud builds port Alice's operator bridge before compiling the official agent", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const portBridge = workflow.indexOf("- name: Port Alice operator bridge");
+  const buildAgent = workflow.indexOf("- name: Build @elizaos/agent");
+  const buildRuntime = workflow.indexOf("- name: Build runtime (tsdown)");
+
+  assert.ok(portBridge >= 0, "the operator bridge port step must exist");
+  assert.match(
+    workflow.slice(portBridge, buildAgent),
+    /node scripts\/port-alice-operator-bridge\.mjs/,
+    "the port step must use the checked-in fail-closed bridge tool",
+  );
+  assert.ok(
+    buildAgent > portBridge && buildRuntime > portBridge,
+    "the official agent and root runtime must compile only after the bridge is ported",
+  );
+});
+
 test("staging and manual no-rollout builds smoke the exact image and always tear it down", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
