@@ -132,6 +132,9 @@ jobs:
       - name: Port Alice operator bridge
         run: node scripts/port-alice-operator-bridge.mjs
 
+      - name: Port Alice product plugins
+        run: node scripts/port-alice-product-plugins.mjs
+
       - name: Install dependencies
         run: |
           bun install --ignore-scripts --frozen-lockfile

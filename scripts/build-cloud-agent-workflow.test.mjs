@@ -85,6 +85,37 @@ test("cloud builds port Alice's operator bridge before compiling the official ag
   );
 });
 
+test("cloud builds port and materialize Alice product plugins before runtime compilation", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  const productPort = workflow.indexOf("- name: Port Alice product plugins");
+  const buildAgent = workflow.indexOf("- name: Build @elizaos/agent");
+  const buildRuntime = workflow.indexOf("- name: Build runtime (tsdown)");
+
+  assert.ok(productPort >= 0, "the product plugin port step must exist");
+  assert.match(
+    workflow.slice(productPort, buildAgent),
+    /node scripts\/port-alice-product-plugins\.mjs/,
+  );
+  assert.ok(buildAgent > productPort && buildRuntime > productPort);
+  assert.match(
+    dockerfile,
+    /node_modules\/@rndrntwrk\/plugin-555stream[\s\S]*packages\/plugin-555stream\/src/,
+    "the canonical Stream and Ads plugin must be a physical runtime package",
+  );
+  assert.match(
+    dockerfile,
+    /node_modules\/@miladyai\/agent[\s\S]*packages\/agent\/src/,
+    "the Arcade subpath must resolve through a physical Alice agent package",
+  );
+});
+
 test("staging and manual no-rollout builds smoke the exact image and always tear it down", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

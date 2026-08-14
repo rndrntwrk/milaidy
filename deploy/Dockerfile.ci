@@ -50,6 +50,19 @@ RUN set -x; \
     cp eliza/packages/agent/src/services/app-manager-agents-list-guard.ts node_modules/@elizaos/agent/src/services/; \
     cp eliza/packages/agent/src/services/overlay-app-presence.ts node_modules/@elizaos/agent/src/services/; \
     ls node_modules/@elizaos/agent/src/api/config-env.ts 2>/dev/null && echo "@elizaos/agent Milady alias OK" || echo "WARN: agent Milady alias missing"; \
+    # Product plugin resolution is dynamic. Materialize both Alice package
+    # identities so Arcade and canonical Stream/Ads never depend on workspace
+    # symlinks surviving the image boundary.
+    rm -rf node_modules/@miladyai/agent; \
+    mkdir -p node_modules/@miladyai/agent; \
+    cp packages/agent/package.json node_modules/@miladyai/agent/; \
+    cp -a packages/agent/src node_modules/@miladyai/agent/src; \
+    cp -a packages/agent/dist node_modules/@miladyai/agent/dist 2>/dev/null || true; \
+    rm -rf node_modules/@rndrntwrk/plugin-555stream; \
+    mkdir -p node_modules/@rndrntwrk/plugin-555stream; \
+    cp packages/plugin-555stream/package.json node_modules/@rndrntwrk/plugin-555stream/; \
+    cp -a packages/plugin-555stream/src node_modules/@rndrntwrk/plugin-555stream/src; \
+    ls node_modules/@miladyai/agent/src/plugins/five55-games/index.ts node_modules/@rndrntwrk/plugin-555stream/src/index.ts >/dev/null; \
     # @elizaos/app-core: runtime compatibility alias for Milady's app-core.
     # The server dynamically imports @elizaos/app-core for runtime hooks; the
     # alias must be a real copied directory, not a symlink into eliza/packages.
