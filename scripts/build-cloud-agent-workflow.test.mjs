@@ -501,6 +501,7 @@ test("cloud image retains the official Eliza plugins statically imported by Alic
 
   const runtimeBuild = workflow.indexOf("- name: Build runtime (tsdown)");
   for (const plugin of [
+    "plugin-form",
     "plugin-commands",
     "plugin-app-control",
     "plugin-app-manager",
@@ -542,6 +543,11 @@ test("cloud image retains the official Eliza plugins statically imported by Alic
     dockerfile,
     /import\('@elizaos\/plugin-commands'\)/,
     "image assembly must evaluate Alice's static official commands import",
+  );
+  assert.match(
+    dockerfile,
+    /import\('@elizaos\/plugin-form'\)/,
+    "image assembly must evaluate Alice's static official form import",
   );
 });
 

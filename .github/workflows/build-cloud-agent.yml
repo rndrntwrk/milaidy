@@ -223,6 +223,12 @@ jobs:
           cd eliza/plugins/plugin-agent-skills
           bun run build
 
+      - name: Build @elizaos/plugin-form
+        run: |
+          cd eliza/plugins/plugin-form
+          bun run build
+          test -f dist/index.js
+
       - name: Build @elizaos/plugin-anthropic
         run: |
           cd eliza/plugins/plugin-anthropic

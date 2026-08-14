@@ -124,6 +124,14 @@ RUN set -x; \
     cp eliza/plugins/plugin-agent-orchestrator/package.json node_modules/@elizaos/plugin-agent-orchestrator/; \
     cp -a eliza/plugins/plugin-agent-orchestrator/dist node_modules/@elizaos/plugin-agent-orchestrator/dist; \
     ls node_modules/@elizaos/plugin-agent-orchestrator/dist/node/index.node.js 2>/dev/null && echo "@elizaos/plugin-agent-orchestrator dist OK" || echo "WARN: agent-orchestrator dist missing"; \
+    # @elizaos/plugin-form is a static import in Alice's runtime entry. The
+    # official workspace package exports only compiled dist bytes, so replace
+    # the workspace symlink with the exact build before the image is pruned.
+    rm -rf node_modules/@elizaos/plugin-form; \
+    mkdir -p node_modules/@elizaos/plugin-form; \
+    cp eliza/plugins/plugin-form/package.json node_modules/@elizaos/plugin-form/; \
+    cp -a eliza/plugins/plugin-form/dist node_modules/@elizaos/plugin-form/dist; \
+    ls node_modules/@elizaos/plugin-form/dist/index.js 2>/dev/null && echo "@elizaos/plugin-form dist OK" || echo "WARN: form dist missing"; \
     # @elizaos/plugin-commands: Alice's compiled entry imports the official
     # catalog directly, so retain the exact pinned build instead of the guarded
     # optional fallback used for distributions where the package is absent.
@@ -386,6 +394,7 @@ const requiredLockedPackages = [
   '@elizaos/skills',
   '@elizaos/plugin-agent-orchestrator',
   '@elizaos/plugin-agent-skills',
+  '@elizaos/plugin-form',
   '@elizaos/plugin-anthropic',
   '@elizaos/plugin-local-inference',
   '@elizaos/plugin-openai',
@@ -748,7 +757,7 @@ __AISDK_FIX__
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
-  -e "const fs = await import('node:fs'); await import('@scure/bip39/wordlists/portuguese'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await import('@elizaos/plugin-elizacloud/endpoint-config'); await import('@elizaos/plugin-elizacloud'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
+  -e "const fs = await import('node:fs'); await import('@scure/bip39/wordlists/portuguese'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await import('@elizaos/plugin-elizacloud/endpoint-config'); await import('@elizaos/plugin-elizacloud'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-form'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
 
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \
