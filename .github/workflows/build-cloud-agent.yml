@@ -423,6 +423,7 @@ jobs:
             --platform linux/amd64 \
             --name "$SMOKE_CONTAINER" \
             --env MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
+            --env ELIZA_AUTH_DISABLED=1 \
             --env OPENAI_API_KEY=alice-cloud-smoke-provider-sentinel \
             --env ELIZA_VAULT_PASSPHRASE=alice-cloud-smoke-vault-passphrase \
             "$IMAGE"
@@ -440,7 +441,17 @@ jobs:
                   console.error(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond }));
                   process.exit(2);
                 }
-                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond }));
+                const emoteResponse = await fetch(`http://127.0.0.1:${port}/api/emotes`);
+                const emoteBody = await emoteResponse.json();
+                if (
+                  emoteResponse.status !== 200 ||
+                  !Array.isArray(emoteBody.emotes) ||
+                  !emoteBody.emotes.some((emote) => emote?.id === "dance-happy")
+                ) {
+                  console.error(JSON.stringify({ emoteStatus: emoteResponse.status, emoteBody }));
+                  process.exit(3);
+                }
+                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, emoteStatus: emoteResponse.status }));
               ')"; then
                 echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision health=$readiness"
                 exit 0

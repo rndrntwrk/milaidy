@@ -142,6 +142,11 @@ test("staging and manual no-rollout builds smoke the exact image and always tear
     /Cleanup candidate smoke container[\s\S]*?always\(\)[\s\S]*?build_environment == 'staging'[\s\S]*?github\.event_name == 'workflow_dispatch'[\s\S]*?inputs\.skip_rollout == true[\s\S]*?docker rm -f/,
     "the disposable candidate container must be removed even after failure",
   );
+  assert.match(
+    workflow,
+    /--env ELIZA_AUTH_DISABLED=1[\s\S]*?fetch\(`http:\/\/127\.0\.0\.1:\$\{port\}\/api\/emotes`\)[\s\S]*?dance-happy/,
+    "the exact image smoke must reject a runtime missing Alice's VRM emote route",
+  );
 });
 
 test("cloud agent build keeps the checked-out Eliza workspace available", () => {

@@ -12,8 +12,11 @@ test("ports the Alice operator route into the official agent idempotently", asyn
   const root = await mkdtemp(path.join(os.tmpdir(), "alice-operator-port-"));
   try {
     const aliceApi = path.join(root, "packages/agent/src/api");
+    const aliceEmotes = path.join(root, "packages/agent/src/emotes");
     const officialApi = path.join(root, "eliza/packages/agent/src/api");
+    const officialEmotes = path.join(root, "eliza/packages/agent/src/emotes");
     await mkdir(aliceApi, { recursive: true });
+    await mkdir(aliceEmotes, { recursive: true });
     await mkdir(officialApi, { recursive: true });
 
     await writeFile(
@@ -27,6 +30,15 @@ test("ports the Alice operator route into the official agent idempotently", asyn
         "export async function handleAliceOperatorRoutes() { return true; }",
         "",
       ].join("\n"),
+    );
+    await writeFile(
+      path.join(aliceApi, "alice-emote-routes.ts"),
+      'import { EMOTE_CATALOG } from "../emotes/catalog.js";\n' +
+        "export async function handleAliceEmoteRoutes() { return EMOTE_CATALOG.length > 0; }\n",
+    );
+    await writeFile(
+      path.join(aliceEmotes, "catalog.ts"),
+      'export const EMOTE_CATALOG = [{ id: "dance-happy" }];\n',
     );
 
     const avatarImport =
@@ -48,6 +60,15 @@ test("ports the Alice operator route into the official agent idempotently", asyn
     assert.match(firstRoute, /"STREAM555_BOOTSTRAP_SESSION"/);
     assert.match(firstRoute, /"STREAM555_AD_LIST"/);
     assert.match(firstRoute, /"STREAM555_ADS_STATUS"/);
+    assert.match(firstServer, /handleAliceEmoteRoutes/);
+    assert.match(
+      await readFile(path.join(officialApi, "alice-emote-routes.ts"), "utf8"),
+      /\.\.\/emotes\/catalog\.ts/,
+    );
+    assert.match(
+      await readFile(path.join(officialEmotes, "catalog.ts"), "utf8"),
+      /dance-happy/,
+    );
     assert.match(firstRoute, /"STREAM555_GO_LIVE"/);
     assert.match(firstRoute, /"FIVE55_GAMES_CATALOG"/);
     assert.equal((firstServer.match(/handleAliceOperatorRoutes/g) ?? []).length, 2);
@@ -68,8 +89,10 @@ test("ports into the exact pinned official Eliza server shape", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "alice-operator-pinned-eliza-"));
   try {
     const aliceApi = path.join(root, "packages/agent/src/api");
+    const aliceEmotes = path.join(root, "packages/agent/src/emotes");
     const officialApi = path.join(root, "eliza/packages/agent/src/api");
     await mkdir(aliceApi, { recursive: true });
+    await mkdir(aliceEmotes, { recursive: true });
     await mkdir(officialApi, { recursive: true });
     await Promise.all([
       readFile(path.join(repoRoot, "packages/agent/src/api/alice-operator-routes.ts")).then(
@@ -77,6 +100,12 @@ test("ports into the exact pinned official Eliza server shape", async () => {
       ),
       readFile(path.join(repoRoot, "eliza/packages/agent/src/api/server.ts")).then(
         (contents) => writeFile(path.join(officialApi, "server.ts"), contents),
+      ),
+      readFile(path.join(repoRoot, "packages/agent/src/api/alice-emote-routes.ts")).then(
+        (contents) => writeFile(path.join(aliceApi, "alice-emote-routes.ts"), contents),
+      ),
+      readFile(path.join(repoRoot, "packages/agent/src/emotes/catalog.ts")).then(
+        (contents) => writeFile(path.join(aliceEmotes, "catalog.ts"), contents),
       ),
     ]);
 
@@ -90,6 +119,11 @@ test("ports into the exact pinned official Eliza server shape", async () => {
     );
     assert.match(route, /"STREAM555_AD_LIST"/);
     assert.match(route, /"STREAM555_ADS_STATUS"/);
+    assert.match(server, /handleAliceEmoteRoutes/);
+    assert.match(
+      await readFile(path.join(root, "eliza/packages/agent/src/api/alice-emote-routes.ts"), "utf8"),
+      /broadcastEvent/,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
