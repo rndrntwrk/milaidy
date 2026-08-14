@@ -269,10 +269,15 @@ function makeDependencies(options: {
         expect(request.gameRunId).toBe("run-1");
         expect(request.bindingId).toBe("binding-1");
         expect(request.requestDigest).toBe(digestWithout(request, "requestDigest"));
+        const nativeRequestDigest = sha256GameplayCanonical({
+          transitionId: request.transitionId,
+          command: "start",
+        });
+        expect(nativeRequestDigest).not.toBe(request.requestDigest);
         const lifecycleResult = withSelfDigest({
           status: "applied" as const,
           transitionId: request.transitionId,
-          requestDigest: request.requestDigest,
+          requestDigest: nativeRequestDigest,
           command: "start" as const,
           lifecycleRevision: 1,
           runtimeRevision: 1,

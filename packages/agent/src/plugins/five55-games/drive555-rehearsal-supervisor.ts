@@ -1053,6 +1053,10 @@ function validateInitialGameStartResult(
   capabilities: GameplayCapabilitiesPort,
   sha256GameplayCanonical: GameplayRehearsalDependencies["sha256GameplayCanonical"],
 ): void {
+  const nativeRequestDigest = sha256GameplayCanonical({
+    transitionId: request.transitionId,
+    command: "start",
+  });
   if (
     result.protocolVersion !== "gameplay.v1" ||
     result.transitionId !== request.transitionId ||
@@ -1065,7 +1069,8 @@ function validateInitialGameStartResult(
     result.lifecycleResult.status !== "applied" ||
     result.lifecycleResult.command !== "start" ||
     result.lifecycleResult.transitionId !== request.transitionId ||
-    result.lifecycleResult.requestDigest !== request.requestDigest ||
+    result.lifecycleResult.requestDigest !== nativeRequestDigest ||
+    result.lifecycleResult.requestDigest === request.requestDigest ||
     result.lifecycleResult.runBinding.externalGameRunId !== request.gameRunId ||
     !isPositiveSafeInteger(result.sourceObservationSequence) ||
     !isDigest(result.sourceObservationDigest) ||
