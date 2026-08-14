@@ -405,6 +405,7 @@ jobs:
             --platform linux/amd64 \
             --name "$SMOKE_CONTAINER" \
             --env MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
+            --env OPENAI_API_KEY=alice-cloud-smoke-provider-sentinel \
             "$IMAGE"
 
           for attempt in $(seq 1 72); do

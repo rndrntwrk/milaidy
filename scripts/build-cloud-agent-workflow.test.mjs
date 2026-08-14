@@ -639,3 +639,25 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
     "candidate smoke must reject an HTTP-only container whose agent never became ready",
   );
 });
+
+test("candidate image smoke exercises a provider-configured runtime boot", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const smokeStep = workflow.match(
+    /- name: Smoke exact candidate image[\s\S]*?- name: Cleanup candidate smoke container/,
+  )?.[0];
+
+  assert.ok(smokeStep, "candidate image smoke step must exist");
+  assert.match(
+    smokeStep,
+    /--env OPENAI_API_KEY=alice-cloud-smoke-provider-sentinel/,
+    "a fresh smoke container needs a non-secret provider signal so official Eliza boots the runtime instead of awaiting onboarding",
+  );
+  assert.doesNotMatch(
+    smokeStep,
+    /secrets\.[A-Z0-9_]+/,
+    "candidate image smoke must not depend on a production provider credential",
+  );
+});
