@@ -560,3 +560,82 @@ test("cloud image overlays the latest app-manager host services and imports the 
     "the completed image dependency graph must import official plugin-app-manager during the build",
   );
 });
+
+test("cloud image materializes Alice's current Eliza inference and skills runtime closure", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+
+  const skillsBuild = workflow.indexOf(
+    "cd eliza/packages/skills\n          bun run build",
+  );
+  const localInferenceBuild = workflow.indexOf(
+    "cd eliza/plugins/plugin-local-inference\n          bun run build",
+  );
+  const openAiBuild = workflow.indexOf(
+    "cd eliza/plugins/plugin-openai\n          bun run build",
+  );
+  const agentSkillsBuild = workflow.indexOf(
+    "cd eliza/plugins/plugin-agent-skills\n          bun run build",
+  );
+  const runtimeBuild = workflow.indexOf("- name: Build runtime (tsdown)");
+
+  assert.ok(skillsBuild >= 0, "official bundled skills must be built");
+  assert.ok(
+    agentSkillsBuild > skillsBuild,
+    "bundled skills must exist before plugin-agent-skills is built",
+  );
+  assert.ok(
+    localInferenceBuild >= 0 && runtimeBuild > localInferenceBuild,
+    "local-inference runtime output must exist before Alice is bundled",
+  );
+  assert.ok(
+    openAiBuild >= 0 && runtimeBuild > openAiBuild,
+    "OpenAI-compatible provider output must exist before Alice is bundled",
+  );
+  assert.match(workflow, /test -f dist\/runtime\/index\.js/);
+  assert.match(workflow, /test -f dist\/node\/index\.node\.js/);
+
+  for (const packageName of [
+    "skills",
+    "plugin-local-inference",
+    "plugin-openai",
+  ]) {
+    assert.match(
+      dockerfile,
+      new RegExp(`requiredLockedPackages[\\s\\S]*?'@elizaos/${packageName}'`),
+      `image assembly must fail closed if @elizaos/${packageName} is absent`,
+    );
+  }
+  assert.match(
+    dockerfile,
+    /cp -a eliza\/packages\/skills\/dist node_modules\/@elizaos\/skills\/dist/,
+  );
+  assert.match(
+    dockerfile,
+    /cp -a eliza\/packages\/skills\/skills node_modules\/@elizaos\/skills\/skills/,
+  );
+  assert.match(
+    dockerfile,
+    /cp -a eliza\/plugins\/plugin-local-inference\/dist node_modules\/@elizaos\/plugin-local-inference\/dist/,
+  );
+  assert.match(
+    dockerfile,
+    /cp -a eliza\/plugins\/plugin-openai\/dist node_modules\/@elizaos\/plugin-openai\/dist/,
+  );
+  assert.match(
+    dockerfile,
+    /import\('@elizaos\/skills'\)[\s\S]*?import\('@elizaos\/plugin-local-inference\/runtime'\)[\s\S]*?import\('@elizaos\/plugin-openai'\)/,
+    "image assembly must evaluate the exact autonomous inference closure",
+  );
+  assert.match(
+    workflow,
+    /health\.agentState !== "running"/,
+    "candidate smoke must reject an HTTP-only container whose agent never became ready",
+  );
+});

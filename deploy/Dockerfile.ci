@@ -66,6 +66,27 @@ RUN set -x; \
     cp eliza/packages/auth/package.json node_modules/@elizaos/auth/; \
     cp -a eliza/packages/auth/dist node_modules/@elizaos/auth/dist; \
     ls node_modules/@elizaos/auth/dist/index.js 2>/dev/null && echo "@elizaos/auth dist OK" || echo "WARN: auth dist missing"; \
+    # @elizaos/skills: agent-skills resolves both the compiled loader and the
+    # bundled skill corpus from this exact pinned Eliza package.
+    rm -rf node_modules/@elizaos/skills; \
+    mkdir -p node_modules/@elizaos/skills; \
+    cp eliza/packages/skills/package.json node_modules/@elizaos/skills/; \
+    cp -a eliza/packages/skills/dist node_modules/@elizaos/skills/dist; \
+    cp -a eliza/packages/skills/skills node_modules/@elizaos/skills/skills; \
+    ls node_modules/@elizaos/skills/dist/index.js node_modules/@elizaos/skills/skills/elizaos/SKILL.md 2>/dev/null && echo "@elizaos/skills runtime OK" || echo "WARN: skills runtime missing"; \
+    # These two providers are dynamically loaded by the current official
+    # runtime. Materialize their compiled exports so the production image does
+    # not depend on ignored workspace build output.
+    rm -rf node_modules/@elizaos/plugin-local-inference; \
+    mkdir -p node_modules/@elizaos/plugin-local-inference; \
+    cp eliza/plugins/plugin-local-inference/package.json node_modules/@elizaos/plugin-local-inference/; \
+    cp -a eliza/plugins/plugin-local-inference/dist node_modules/@elizaos/plugin-local-inference/dist; \
+    ls node_modules/@elizaos/plugin-local-inference/dist/runtime/index.js 2>/dev/null && echo "@elizaos/plugin-local-inference runtime OK" || echo "WARN: local-inference runtime missing"; \
+    rm -rf node_modules/@elizaos/plugin-openai; \
+    mkdir -p node_modules/@elizaos/plugin-openai; \
+    cp eliza/plugins/plugin-openai/package.json node_modules/@elizaos/plugin-openai/; \
+    cp -a eliza/plugins/plugin-openai/dist node_modules/@elizaos/plugin-openai/dist; \
+    ls node_modules/@elizaos/plugin-openai/dist/node/index.node.js 2>/dev/null && echo "@elizaos/plugin-openai runtime OK" || echo "WARN: OpenAI runtime missing"; \
     # @elizaos/plugin-agent-orchestrator: Alice's compiled entry imports its
     # completion relay directly, so the official pinned Node bundle is part of
     # the cloud runtime rather than an optional desktop-only package.
@@ -292,9 +313,12 @@ console.log('Phase 1: hoisted ' + hoisted + ' packages from .bun/');
 
 const requiredLockedPackages = [
   '@elizaos/auth',
+  '@elizaos/skills',
   '@elizaos/plugin-agent-orchestrator',
   '@elizaos/plugin-agent-skills',
   '@elizaos/plugin-anthropic',
+  '@elizaos/plugin-local-inference',
+  '@elizaos/plugin-openai',
   '@elizaos/plugin-commands',
   '@elizaos/plugin-sql',
   '@elizaos/plugin-app-control',
@@ -650,7 +674,7 @@ __AISDK_FIX__
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
-  -e "await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-sql')])"
+  -e "const fs = await import('node:fs'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
 
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \

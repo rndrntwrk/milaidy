@@ -157,6 +157,12 @@ jobs:
           cd eliza/packages/shared
           bun run build
 
+      - name: Build @elizaos/skills
+        run: |
+          cd eliza/packages/skills
+          bun run build
+          test -f dist/index.js
+
       - name: Build @elizaos/vault
         run: |
           cd eliza/packages/vault
@@ -176,6 +182,18 @@ jobs:
         run: |
           cd eliza/packages/app-core
           bun run build
+
+      - name: Build @elizaos/plugin-local-inference
+        run: |
+          cd eliza/plugins/plugin-local-inference
+          bun run build
+          test -f dist/runtime/index.js
+
+      - name: Build @elizaos/plugin-openai
+        run: |
+          cd eliza/plugins/plugin-openai
+          bun run build
+          test -f dist/node/index.node.js
 
       - name: Build @elizaos/plugin-agent-orchestrator
         run: |
@@ -394,10 +412,19 @@ jobs:
             state="$(docker inspect "$SMOKE_CONTAINER" --format '{{ .State.Status }}')"
 
             if [ "$health" = "healthy" ]; then
-              code="$(docker exec "$SMOKE_CONTAINER" sh -lc 'port="${PORT:-${APP_PORT:-${ELIZA_PORT:-2138}}}"; curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}/api/health"')"
-              test "$code" = "200" -o "$code" = "401"
-              echo "Candidate image healthy: image=$IMAGE revision=$actual_revision http=$code"
-              exit 0
+              if readiness="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
+                const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
+                const response = await fetch(`http://127.0.0.1:${port}/api/health`);
+                const health = await response.json();
+                if (response.status !== 200 || health.agentState !== "running") {
+                  console.error(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond }));
+                  process.exit(2);
+                }
+                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond }));
+              ')"; then
+                echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision health=$readiness"
+                exit 0
+              fi
             fi
 
             if [ "$state" != "running" ] || [ "$health" = "unhealthy" ]; then
