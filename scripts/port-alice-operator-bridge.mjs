@@ -10,7 +10,11 @@ const ROUTE_HELPER_IMPORT = 'from "./route-helpers";';
 const OFFICIAL_ROUTE_HELPER_IMPORT = 'from "./route-helpers.ts";';
 const ALLOWLIST_ANCHOR =
   "export const ALICE_OPERATOR_ALLOWED_ACTIONS = new Set([\n";
-const BOOTSTRAP_ACTION = '  "STREAM555_BOOTSTRAP_SESSION",\n';
+const REQUIRED_OPERATOR_ACTIONS = [
+  '  "STREAM555_BOOTSTRAP_SESSION",\n',
+  '  "STREAM555_AD_LIST",\n',
+  '  "STREAM555_ADS_STATUS",\n',
+];
 const OPERATOR_IMPORT =
   'import { handleAliceOperatorRoutes } from "./alice-operator-routes.ts";\n';
 const STANDALONE_AVATAR_IMPORT =
@@ -80,8 +84,15 @@ export async function portAliceOperatorBridge(root = process.cwd()) {
     "Alice operator handler",
   );
   route = route.replace(ROUTE_HELPER_IMPORT, OFFICIAL_ROUTE_HELPER_IMPORT);
-  if (!route.includes(BOOTSTRAP_ACTION)) {
-    route = insertAfter(route, ALLOWLIST_ANCHOR, BOOTSTRAP_ACTION, "Alice operator allowlist");
+  for (const requiredAction of REQUIRED_OPERATOR_ACTIONS) {
+    if (!route.includes(requiredAction)) {
+      route = insertAfter(
+        route,
+        ALLOWLIST_ANCHOR,
+        requiredAction,
+        "Alice operator allowlist",
+      );
+    }
   }
 
   let server = await readFile(officialServerPath, "utf8");

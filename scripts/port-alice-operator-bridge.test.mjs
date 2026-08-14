@@ -46,6 +46,8 @@ test("ports the Alice operator route into the official agent idempotently", asyn
 
     assert.match(firstRoute, /from "\.\/route-helpers\.ts"/);
     assert.match(firstRoute, /"STREAM555_BOOTSTRAP_SESSION"/);
+    assert.match(firstRoute, /"STREAM555_AD_LIST"/);
+    assert.match(firstRoute, /"STREAM555_ADS_STATUS"/);
     assert.match(firstRoute, /"STREAM555_GO_LIVE"/);
     assert.match(firstRoute, /"FIVE55_GAMES_CATALOG"/);
     assert.equal((firstServer.match(/handleAliceOperatorRoutes/g) ?? []).length, 2);
@@ -82,6 +84,12 @@ test("ports into the exact pinned official Eliza server shape", async () => {
     const server = await readFile(path.join(officialApi, "server.ts"), "utf8");
     assert.equal((server.match(/handleAliceOperatorRoutes/g) ?? []).length, 2);
     assert.match(server, /runtime: state\.runtime/);
+    const route = await readFile(
+      path.join(officialApi, "alice-operator-routes.ts"),
+      "utf8",
+    );
+    assert.match(route, /"STREAM555_AD_LIST"/);
+    assert.match(route, /"STREAM555_ADS_STATUS"/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
