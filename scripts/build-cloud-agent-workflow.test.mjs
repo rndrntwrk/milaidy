@@ -27,7 +27,44 @@ test("cloud agent image publishes under the repository owner", () => {
   );
 });
 
-test("staging smokes the exact published image and always tears it down", () => {
+test("manual cloud builds checkout the exact requested Alice revision", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+
+  assert.match(workflow, /source_sha:\n\s+description: "Exact Alice commit to build"/);
+  assert.match(workflow, /SOURCE_REF: \$\{\{ inputs\.source_sha \|\|/);
+  assert.match(workflow, /id: source_revision[\s\S]*?git rev-parse HEAD/);
+  assert.match(
+    workflow,
+    /REVISION=\$\{\{ steps\.source_revision\.outputs\.sha \}\}/,
+  );
+  assert.match(
+    workflow,
+    /EXPECTED_REVISION: \$\{\{ steps\.source_revision\.outputs\.sha \}\}/,
+  );
+});
+
+test("cloud builds hydrate the tracked Eliza commit from the official repository", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+
+  assert.match(workflow, /eliza_sha="\$\(git ls-tree HEAD eliza \| awk '\{print \$3\}'\)"/);
+  assert.match(
+    workflow,
+    /git clone --no-checkout --filter=blob:none https:\/\/github\.com\/elizaOS\/eliza\.git eliza/,
+  );
+  assert.match(workflow, /git -C eliza fetch --depth=1 origin "\$eliza_sha"/);
+  assert.match(workflow, /git -C eliza checkout --detach "\$eliza_sha"/);
+  assert.match(workflow, /test "\$\(git -C eliza rev-parse HEAD\)" = "\$eliza_sha"/);
+  assert.doesNotMatch(workflow, /MILADY_ELIZA_BRANCH/);
+  assert.doesNotMatch(workflow, /eliza submodule init failed, continuing/);
+});
+
+test("staging and manual no-rollout builds smoke the exact image and always tear it down", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -40,8 +77,8 @@ test("staging smokes the exact published image and always tears it down", () => 
   );
   assert.match(
     workflow,
-    /Smoke exact staging image[\s\S]*?build_environment == 'staging'[\s\S]*?steps\.cloud-image\.outputs\.digest/,
-    "only staging may smoke the exact digest returned by the publisher",
+    /Smoke exact candidate image[\s\S]*?build_environment == 'staging'[\s\S]*?github\.event_name == 'workflow_dispatch'[\s\S]*?inputs\.skip_rollout == true[\s\S]*?steps\.cloud-image\.outputs\.digest/,
+    "staging and manual no-rollout builds must smoke the exact digest returned by the publisher",
   );
   assert.match(
     workflow,
@@ -50,8 +87,8 @@ test("staging smokes the exact published image and always tears it down", () => 
   );
   assert.match(
     workflow,
-    /Cleanup staging smoke container[\s\S]*?always\(\)[\s\S]*?docker rm -f/,
-    "the disposable staging container must be removed even after failure",
+    /Cleanup candidate smoke container[\s\S]*?always\(\)[\s\S]*?build_environment == 'staging'[\s\S]*?github\.event_name == 'workflow_dispatch'[\s\S]*?inputs\.skip_rollout == true[\s\S]*?docker rm -f/,
+    "the disposable candidate container must be removed even after failure",
   );
 });
 

@@ -27,6 +27,10 @@ on:
         description: "Cloud version tag (e.g. 2.0.3). Defaults to auto-increment."
         required: false
         type: string
+      source_sha:
+        description: "Exact Alice commit to build"
+        required: false
+        type: string
       push_image:
         description: "Push image to GHCR"
         required: false
@@ -39,13 +43,13 @@ on:
         default: false
 
 concurrency:
-  group: build-cloud-agent-${{ github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main') }}
+  group: build-cloud-agent-${{ inputs.source_sha || (github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main')) }}
   cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/milaidy-agent
-  SOURCE_REF: ${{ github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main') }}
+  SOURCE_REF: ${{ inputs.source_sha || (github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main')) }}
   CLOUD_DEPLOY_WEBHOOK_URL: http://89.167.63.246:9876/deploy
 
 permissions:
@@ -67,6 +71,10 @@ jobs:
           ref: ${{ env.SOURCE_REF }}
           fetch-depth: 0
           submodules: false
+
+      - name: Resolve checked-out source revision
+        id: source_revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # ── 2. Set up Node + Bun ────────────────────────────────────────────────
       - name: Setup Node.js 24
@@ -91,9 +99,15 @@ jobs:
       # ── 3.5. Init submodules + patch workspace for CI ──────────────
       - name: Init submodules
         run: |
-          # Init eliza submodule first (needed for workspace resolution)
-          # Full clone (not shallow) because eliza commit may not be in shallow history
-          git submodule update --init eliza || echo "eliza submodule init failed, continuing"
+          # The parent gitlink is the release authority. Hydrate that exact
+          # commit from the official repository rather than either floating
+          # develop branch or the lagging RNDRNTWRK fork.
+          eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
+          test "${#eliza_sha}" -eq 40
+          git clone --no-checkout --filter=blob:none https://github.com/elizaOS/eliza.git eliza
+          git -C eliza fetch --depth=1 origin "$eliza_sha"
+          git -C eliza checkout --detach "$eliza_sha"
+          test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
           # Apply cloud runtime patches to eliza submodule
           if [ -f cloud/patches/cloud-runtime-patches.patch ]; then
             echo "Applying cloud runtime patches to eliza submodule..."
@@ -342,15 +356,15 @@ jobs:
             OCI_LICENSES=${{ env.OCI_LICENSES }}
             VERSION=${{ steps.version.outputs.version }}
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
-            REVISION=${{ github.sha }}
+            REVISION=${{ steps.source_revision.outputs.sha }}
           provenance: false
 
-      - name: Smoke exact staging image
-        if: success() && steps.version.outputs.build_environment == 'staging' && (github.event_name == 'push' || inputs.push_image != false)
+      - name: Smoke exact candidate image
+        if: success() && (steps.version.outputs.build_environment == 'staging' || (github.event_name == 'workflow_dispatch' && inputs.skip_rollout == true)) && (github.event_name == 'push' || inputs.push_image != false)
         timeout-minutes: 10
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.cloud-image.outputs.digest }}
-          EXPECTED_REVISION: ${{ github.sha }}
+          EXPECTED_REVISION: ${{ steps.source_revision.outputs.sha }}
           SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
@@ -382,7 +396,7 @@ jobs:
             if [ "$health" = "healthy" ]; then
               code="$(docker exec "$SMOKE_CONTAINER" sh -lc 'port="${PORT:-${APP_PORT:-${ELIZA_PORT:-2138}}}"; curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}/api/health"')"
               test "$code" = "200" -o "$code" = "401"
-              echo "Staging image healthy: image=$IMAGE revision=$actual_revision http=$code"
+              echo "Candidate image healthy: image=$IMAGE revision=$actual_revision http=$code"
               exit 0
             fi
 
@@ -395,11 +409,11 @@ jobs:
           done
 
           docker logs "$SMOKE_CONTAINER" >&2 || true
-          echo "Staging image did not become healthy before the smoke deadline" >&2
+          echo "Candidate image did not become healthy before the smoke deadline" >&2
           exit 1
 
-      - name: Cleanup staging smoke container
-        if: always() && steps.version.outputs.build_environment == 'staging'
+      - name: Cleanup candidate smoke container
+        if: always() && (steps.version.outputs.build_environment == 'staging' || (github.event_name == 'workflow_dispatch' && inputs.skip_rollout == true))
         env:
           SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
         run: docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
@@ -411,8 +425,8 @@ jobs:
           WEBHOOK_SECRET: ${{ secrets.CLOUD_DEPLOY_WEBHOOK_SECRET }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
           IMAGE_TAG: ${{ steps.version.outputs.version }}
-          GIT_SHA: ${{ github.sha }}
-          GIT_REF: ${{ github.ref_name }}
+          GIT_SHA: ${{ steps.source_revision.outputs.sha }}
+          GIT_REF: ${{ env.SOURCE_REF }}
           DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           if [ -z "$WEBHOOK_SECRET" ]; then
