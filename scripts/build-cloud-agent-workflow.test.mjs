@@ -655,6 +655,11 @@ test("candidate image smoke exercises a provider-configured runtime boot", () =>
     /--env OPENAI_API_KEY=alice-cloud-smoke-provider-sentinel/,
     "a fresh smoke container needs a non-secret provider signal so official Eliza boots the runtime instead of awaiting onboarding",
   );
+  assert.match(
+    smokeStep,
+    /--env ELIZA_VAULT_PASSPHRASE=alice-cloud-smoke-vault-passphrase/,
+    "a headless smoke container needs a non-secret vault passphrase so runtime initialization reaches readiness",
+  );
   assert.doesNotMatch(
     smokeStep,
     /secrets\.[A-Z0-9_]+/,

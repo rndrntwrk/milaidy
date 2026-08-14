@@ -406,6 +406,7 @@ jobs:
             --name "$SMOKE_CONTAINER" \
             --env MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
             --env OPENAI_API_KEY=alice-cloud-smoke-provider-sentinel \
+            --env ELIZA_VAULT_PASSPHRASE=alice-cloud-smoke-vault-passphrase \
             "$IMAGE"
 
           for attempt in $(seq 1 72); do
