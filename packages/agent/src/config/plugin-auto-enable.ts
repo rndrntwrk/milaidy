@@ -104,7 +104,9 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
   // crashes with 'Action spec not found: BRIDGE' during startup.
   // Gate behind ENABLE_EVM_PLUGIN=1 until the spec registration is fixed.
   ENABLE_EVM_PLUGIN: "@elizaos/plugin-evm",
-  SOLANA_PRIVATE_KEY: "@elizaos/plugin-solana",
+  // Wallet custody alone must not select the legacy Solana plugin. It is not
+  // compatible with every core release and may request optional services
+  // during startup. See resolveSolanaAutoEnableReason() for explicit opt-in.
   LASTFM_API_KEY: "@elizaos/plugin-music-library",
   GENIUS_API_KEY: "@elizaos/plugin-music-library",
   THEAUDIODB_API_KEY: "@elizaos/plugin-music-library",
@@ -157,6 +159,8 @@ const FEATURE_PLUGINS: Record<string, string> = {
 
 const EVM_PLUGIN_PACKAGE = "@elizaos/plugin-evm";
 const EVM_PLUGIN_SHORT_ID = "evm";
+const SOLANA_PLUGIN_PACKAGE = "@elizaos/plugin-solana";
+const SOLANA_PLUGIN_SHORT_ID = "solana";
 
 const STEWARD_ELIZA_PLUGIN_PACKAGE = "@stwd/eliza-plugin";
 const STEWARD_ELIZA_PLUGIN_SHORT_ID = "stwd-eliza-plugin";
@@ -176,6 +180,16 @@ function resolveEvmAutoEnableReason(
     return "cloud-provisioned Steward wallet";
   }
 
+  return null;
+}
+
+function resolveSolanaAutoEnableReason(env: NodeJS.ProcessEnv): string | null {
+  if (
+    env.ENABLE_SOLANA_PLUGIN === "1" &&
+    env.SOLANA_PRIVATE_KEY?.trim()
+  ) {
+    return "explicit Solana plugin opt-in";
+  }
   return null;
 }
 
@@ -478,6 +492,20 @@ export function applyPluginAutoEnable(
       EVM_PLUGIN_SHORT_ID,
       changes,
       evmAutoEnableReason,
+    );
+  }
+
+  const solanaAutoEnableReason = resolveSolanaAutoEnableReason(env);
+  if (
+    solanaAutoEnableReason &&
+    pluginsConfig.entries[SOLANA_PLUGIN_SHORT_ID]?.enabled !== false
+  ) {
+    addToAllowlist(
+      pluginsConfig.allow,
+      SOLANA_PLUGIN_PACKAGE,
+      SOLANA_PLUGIN_SHORT_ID,
+      changes,
+      solanaAutoEnableReason,
     );
   }
 
