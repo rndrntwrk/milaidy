@@ -1,0 +1,533 @@
+name: Milaidy Graphify evidence (ephemeral)
+
+on:
+  pull_request:
+    branches:
+      - graphify/base-4dfb59cd-20260820
+
+permissions:
+  contents: read
+
+concurrency:
+  group: graphify-milaidy-4dfb59cd
+  cancel-in-progress: false
+
+jobs:
+  graphify:
+    name: Frozen-source Graphify and qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SOURCE_SHA: 4dfb59cd2a8abdb1ba0771bbda7b18a9792d829c
+      SOURCE_TREE: 690b1a073e5c890cf52ee5f06f46702b7315c6c8
+      GRAPHIFY_VERSION: 0.9.46
+      GRAPHIFY_WHEEL_SHA256: 35d854d66884c623a8e25ca059b54744ade91ae17ffc0f79fd39e108a1666b5d
+      GRAPHIFY_QUERY_LOG_DISABLE: '1'
+      GRAPHIFY_MAX_WORKERS: '1'
+      GRAPHIFY_MAX_GRAPH_SIZE: '250000'
+      PYTHONHASHSEED: '0'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      NO_COLOR: '1'
+      TZ: UTC
+      CI: 'true'
+
+    steps:
+      - name: Check out frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+          lfs: false
+          submodules: false
+
+      - name: Prove source freeze and inventory complete repository
+        id: inventory
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/milaidy-evidence"
+          corpus="$RUNNER_TEMP/milaidy-graph-corpus"
+          mkdir -p "$evidence/logs" "$evidence/queries" "$evidence/qualification" "$corpus"
+          status=0
+          actual_sha="$(git rev-parse HEAD 2>/dev/null)" || status=$?
+          actual_tree="$(git rev-parse HEAD^{tree} 2>/dev/null)" || status=$?
+          test "$actual_sha" = "$SOURCE_SHA" || status=1
+          test "$actual_tree" = "$SOURCE_TREE" || status=1
+          {
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "source_sha=$actual_sha"
+            echo "source_tree=$actual_tree"
+            echo "source_commit_date=$(git show -s --format=%cI HEAD 2>/dev/null || true)"
+            echo "workflow_event_sha=$GITHUB_SHA"
+            echo "workflow_ref=$GITHUB_REF"
+            echo "runner_os=$RUNNER_OS"
+            echo "runner_arch=$RUNNER_ARCH"
+          } | tee "$evidence/logs/source-freeze.log"
+          git status --short --branch | tee "$evidence/logs/initial-git-status.log"
+          git submodule status --recursive > "$evidence/logs/submodules.log" 2>&1 || true
+          git lfs ls-files > "$evidence/logs/git-lfs-files.log" 2>&1 || true
+          export EVIDENCE_DIR="$evidence" CORPUS_DIR="$corpus"
+          python3 - <<'PY' > "$evidence/logs/corpus-selection.log" 2>&1 || status=$?
+          import csv
+          import hashlib
+          import json
+          import os
+          import shutil
+          import subprocess
+          from collections import Counter, defaultdict
+          from pathlib import Path
+
+          evidence = Path(os.environ['EVIDENCE_DIR'])
+          corpus = Path(os.environ['CORPUS_DIR'])
+          raw = subprocess.check_output(['git', 'ls-files', '-z'])
+          paths = [Path(p.decode('utf-8')) for p in raw.split(b'\0') if p]
+
+          code_exts = {
+              '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts',
+              '.py', '.rs', '.go', '.java', '.kt', '.kts', '.swift', '.c',
+              '.cc', '.cpp', '.h', '.hpp', '.sh', '.bash', '.zsh', '.ps1',
+              '.sql', '.proto', '.graphql', '.gql', '.vue', '.svelte', '.astro'
+          }
+          config_names = {
+              'package.json', 'tsconfig.json', 'biome.json', 'vitest.config.ts',
+              'vitest.unit.config.ts', 'vitest.e2e.config.ts', 'vitest.live.config.ts',
+              'tsdown.config.ts', 'tsdown.electrobun.config.ts', 'plugins.json',
+              'Dockerfile', 'Dockerfile.ci', 'docker-compose.yml', 'docker-compose.yaml'
+          }
+          excluded_prefixes = (
+              '.git/', '.claude/', '.devin/', 'artifacts/', 'homebrew/', 'packaging/',
+              'patches/', 'node_modules/', 'dist/', 'build/', 'coverage/', '.cache/'
+          )
+          asset_fragments = (
+              '/avatars/', '/models/', '/fixtures/media/', '/screenshots/', '/snapshots/',
+              '/generated/', '/vendor/', '/third_party/', '/third-party/'
+          )
+          max_source_bytes = 2_000_000
+          rows = []
+          partitions = defaultdict(lambda: {'files': 0, 'bytes': 0, 'selected_files': 0, 'selected_bytes': 0})
+
+          for path in paths:
+              posix = path.as_posix()
+              try:
+                  stat = path.stat()
+                  size = stat.st_size
+              except FileNotFoundError:
+                  size = 0
+              data_sha = ''
+              if path.is_file() and size <= 10_000_000:
+                  try:
+                      h = hashlib.sha256()
+                      with path.open('rb') as stream:
+                          for block in iter(lambda: stream.read(1024 * 1024), b''):
+                              h.update(block)
+                      data_sha = h.hexdigest()
+                  except OSError:
+                      data_sha = ''
+              top = posix.split('/', 1)[0]
+              partition = top if '/' in posix else '[root]'
+              partitions[partition]['files'] += 1
+              partitions[partition]['bytes'] += size
+
+              selected = True
+              reason = 'selected_runtime_source'
+              if posix.startswith(excluded_prefixes):
+                  selected = False
+                  reason = 'excluded_nonruntime_or_generated_partition'
+              elif any(fragment in f'/{posix}/' for fragment in asset_fragments):
+                  selected = False
+                  reason = 'excluded_asset_or_generated_subtree'
+              elif size > max_source_bytes:
+                  selected = False
+                  reason = 'excluded_oversize_file'
+              elif path.suffix.lower() not in code_exts and path.name not in config_names:
+                  selected = False
+                  reason = 'registered_noncode_or_unsupported_file'
+
+              if selected and path.is_file():
+                  target = corpus / path
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(path, target)
+                  partitions[partition]['selected_files'] += 1
+                  partitions[partition]['selected_bytes'] += size
+
+              rows.append({
+                  'path': posix,
+                  'bytes': size,
+                  'extension': path.suffix.lower() or '[none]',
+                  'sha256': data_sha,
+                  'partition': partition,
+                  'selected_for_native_graph': 'yes' if selected else 'no',
+                  'accounting_reason': reason,
+              })
+
+          with (evidence / 'SOURCE_COVERAGE.csv').open('w', encoding='utf-8', newline='') as stream:
+              writer = csv.DictWriter(stream, fieldnames=[
+                  'path', 'bytes', 'extension', 'sha256', 'partition',
+                  'selected_for_native_graph', 'accounting_reason'
+              ])
+              writer.writeheader()
+              writer.writerows(rows)
+
+          partition_rows = []
+          for name, item in sorted(partitions.items()):
+              partition_rows.append({'partition': name, **item})
+          with (evidence / 'PARTITION_REGISTER.csv').open('w', encoding='utf-8', newline='') as stream:
+              writer = csv.DictWriter(stream, fieldnames=['partition', 'files', 'bytes', 'selected_files', 'selected_bytes'])
+              writer.writeheader()
+              writer.writerows(partition_rows)
+
+          selection = {
+              'tracked_file_count': len(rows),
+              'tracked_bytes': sum(row['bytes'] for row in rows),
+              'selected_file_count': sum(row['selected_for_native_graph'] == 'yes' for row in rows),
+              'selected_bytes': sum(row['bytes'] for row in rows if row['selected_for_native_graph'] == 'yes'),
+              'extensions': dict(sorted(Counter(row['extension'] for row in rows).items())),
+              'partitions': partition_rows,
+              'policy': {
+                  'mode': 'complete tracked-path census plus bounded runtime-source corpus',
+                  'excluded_prefixes': list(excluded_prefixes),
+                  'asset_fragments': list(asset_fragments),
+                  'max_source_bytes': max_source_bytes,
+                  'selected_extensions': sorted(code_exts),
+                  'selected_config_names': sorted(config_names),
+              },
+          }
+          (evidence / 'CORPUS_SELECTION.json').write_text(json.dumps(selection, indent=2) + '\n', encoding='utf-8')
+          (corpus / '.graphifyignore').write_text('\n'.join([
+              '.git/', 'node_modules/', 'dist/', 'build/', 'coverage/', '*.min.js', '*.map',
+          ]) + '\n', encoding='utf-8')
+          print(json.dumps(selection, indent=2))
+          PY
+          printf '{"exit_code":%s}\n' "$status" > "$evidence/inventory-status.json"
+          exit "$status"
+
+      - name: Install checksum-verified Graphify
+        id: graphify_install
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/milaidy-evidence"
+          venv="$RUNNER_TEMP/graphify-venv"
+          status=0
+          python3 --version | tee "$evidence/logs/python-version.log" || status=$?
+          python3 -m venv "$venv" || status=$?
+          if [ "$status" -eq 0 ]; then
+            source "$venv/bin/activate"
+            python -m pip install --upgrade pip > "$evidence/logs/pip-upgrade.log" 2>&1 || status=$?
+            mkdir -p "$RUNNER_TEMP/graphify-wheel"
+            python -m pip download --no-deps --only-binary=:all: "graphifyy==$GRAPHIFY_VERSION" -d "$RUNNER_TEMP/graphify-wheel" > "$evidence/logs/wheel-download.log" 2>&1 || status=$?
+          fi
+          if [ "$status" -eq 0 ]; then
+            wheel="$(find "$RUNNER_TEMP/graphify-wheel" -maxdepth 1 -type f -name 'graphifyy-*.whl' -print -quit)"
+            test -n "$wheel" || status=1
+          fi
+          if [ "$status" -eq 0 ]; then
+            printf '%s  %s\n' "$GRAPHIFY_WHEEL_SHA256" "$wheel" | sha256sum -c - > "$evidence/logs/wheel-sha256.log" 2>&1 || status=$?
+            cp "$wheel" "$evidence/"
+            python -m pip install "$wheel" > "$evidence/logs/graphify-install.log" 2>&1 || status=$?
+          fi
+          if [ "$status" -eq 0 ]; then
+            graphify --version | tee "$evidence/logs/graphify-version.log" || status=$?
+            python -m pip freeze | sort > "$evidence/logs/python-environment.freeze.txt"
+          fi
+          printf '{"exit_code":%s}\n' "$status" > "$evidence/graphify-install-status.json"
+          exit "$status"
+
+      - name: Run native Graphify twice on bounded runtime corpus
+        id: graphify_runs
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/milaidy-evidence"
+          corpus="$RUNNER_TEMP/milaidy-graph-corpus"
+          status=0
+          if [ ! -f "$RUNNER_TEMP/graphify-venv/bin/activate" ]; then
+            status=125
+          else
+            source "$RUNNER_TEMP/graphify-venv/bin/activate"
+            cd "$corpus"
+            for run in 1 2; do
+              rm -rf graphify-out graph.json
+              graphify extract . --code-only --force --timing --max-workers 1 > "$evidence/logs/graphify-pass-${run}-extract.log" 2>&1 || status=$?
+              if [ "$status" -eq 0 ]; then
+                graphify cluster-only . --no-label --timing > "$evidence/logs/graphify-pass-${run}-cluster.log" 2>&1 || status=$?
+              fi
+              if [ "$status" -eq 0 ] && [ -s graphify-out/graph.json ] && [ -s graphify-out/GRAPH_REPORT.md ] && [ -s graphify-out/graph.html ]; then
+                cp -a graphify-out "$evidence/run-${run}"
+              elif [ "$status" -eq 0 ]; then
+                status=126
+              fi
+              if [ "$status" -ne 0 ]; then break; fi
+            done
+          fi
+          printf '{"exit_code":%s}\n' "$status" > "$evidence/graphify-runs-status.json"
+          exit "$status"
+
+      - name: Verify graph integrity and determinism
+        id: graph_review
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/milaidy-evidence"
+          export EVIDENCE_DIR="$evidence"
+          status=0
+          python3 - <<'PY' > "$evidence/logs/native-review.log" 2>&1 || status=$?
+          import hashlib
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          root = Path(os.environ['EVIDENCE_DIR'])
+          volatile = {'generated_at','created_at','updated_at','timestamp','timing','duration','duration_ms','elapsed','cost','run_id','built_at'}
+          def scrub(value):
+              if isinstance(value, dict):
+                  return {key: scrub(item) for key, item in sorted(value.items()) if key not in volatile}
+              if isinstance(value, list):
+                  return [scrub(item) for item in value]
+              return value
+
+          summaries = []
+          payloads = []
+          for name in ('run-1', 'run-2'):
+              graph_path = root / name / 'graph.json'
+              if not graph_path.exists():
+                  summaries.append({'run': name, 'present': False})
+                  payloads.append(None)
+                  continue
+              data = json.loads(graph_path.read_text(encoding='utf-8'))
+              nodes = data.get('nodes', [])
+              edges = data.get('links', data.get('edges', []))
+              if isinstance(nodes, dict): nodes = list(nodes.values())
+              if isinstance(edges, dict): edges = list(edges.values())
+              ids = [str(node.get('id')) for node in nodes]
+              endpoints = set(ids)
+              missing = []
+              self_loops = 0
+              signatures = []
+              for edge in edges:
+                  source = edge.get('source')
+                  target = edge.get('target')
+                  if isinstance(source, dict): source = source.get('id')
+                  if isinstance(target, dict): target = target.get('id')
+                  source = str(source)
+                  target = str(target)
+                  relation = str(edge.get('relation', edge.get('type', 'unknown')))
+                  signatures.append((source, target, relation))
+                  if source not in endpoints or target not in endpoints: missing.append([source, target])
+                  if source == target: self_loops += 1
+              canonical = json.dumps({
+                  'nodes': sorted(json.dumps(scrub(node), sort_keys=True, separators=(',', ':'), ensure_ascii=False) for node in nodes),
+                  'edges': sorted(json.dumps(scrub(edge), sort_keys=True, separators=(',', ':'), ensure_ascii=False) for edge in edges),
+              }, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+              payloads.append(canonical)
+              summaries.append({
+                  'run': name,
+                  'present': True,
+                  'graph_json_sha256': hashlib.sha256(graph_path.read_bytes()).hexdigest(),
+                  'canonical_structure_sha256': hashlib.sha256(canonical).hexdigest(),
+                  'node_count': len(nodes),
+                  'edge_count': len(edges),
+                  'unique_node_ids': len(ids) == len(set(ids)),
+                  'missing_endpoints': missing,
+                  'self_loops': self_loops,
+                  'duplicate_edge_signatures': len(signatures) - len(set(signatures)),
+                  'node_types': dict(sorted(Counter(str(node.get('type', node.get('kind', 'unknown'))) for node in nodes).items())),
+                  'edge_relations': dict(sorted(Counter(str(edge.get('relation', edge.get('type', 'unknown'))) for edge in edges).items())),
+              })
+          result = {
+              'runs': summaries,
+              'both_present': all(item.get('present') for item in summaries),
+              'exact_graph_json_match': len(summaries) == 2 and summaries[0].get('graph_json_sha256') == summaries[1].get('graph_json_sha256'),
+              'canonical_structure_match': payloads[0] is not None and payloads[0] == payloads[1],
+          }
+          (root / 'NATIVE_DETERMINISM.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+          if not result['both_present'] or not result['canonical_structure_match']:
+              raise SystemExit('native Graphify outputs missing or structurally non-deterministic')
+          for summary in summaries:
+              if not summary['unique_node_ids'] or summary['missing_endpoints'] or summary['self_loops'] or summary['duplicate_edge_signatures']:
+                  raise SystemExit('graph integrity failure')
+          PY
+          printf '{"exit_code":%s}\n' "$status" > "$evidence/native-review-status.json"
+          exit "$status"
+
+      - name: Run exact Graphify query probes
+        id: graph_queries
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/milaidy-evidence"
+          status=0
+          if [ ! -f "$RUNNER_TEMP/graphify-venv/bin/activate" ] || [ ! -f "$evidence/run-2/graph.json" ]; then
+            status=125
+          else
+            source "$RUNNER_TEMP/graphify-venv/bin/activate"
+            questions=(
+              'createMiladyRuntime AgentRuntime plugins'
+              'Gateway control plane sessions tools'
+              'local first cloud remote backend selection'
+              'desktop electrobun backend RPC permissions'
+              'database PGlite PostgreSQL migration'
+              'secrets manager credential storage'
+              'Telegram Discord WhatsApp connector lifecycle'
+              'browser computer use shell tool authorization'
+              'cloud agent template startup health'
+              'Alice Milady character persona runtime'
+            )
+            i=0
+            for question in "${questions[@]}"; do
+              i=$((i+1))
+              printf -v name 'Q%02d.txt' "$i"
+              {
+                echo 'QUESTION'
+                echo "$question"
+                echo
+                graphify query "$question" --graph "$evidence/run-2/graph.json"
+              } > "$evidence/queries/$name" 2>&1 || status=$?
+            done
+          fi
+          printf '{"exit_code":%s}\n' "$status" > "$evidence/query-status.json"
+          exit "$status"
+
+      - name: Set up Bun
+        id: bun_setup
+        continue-on-error: true
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
+
+      - name: Run fresh repository qualification
+        id: project_qualification
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/milaidy-evidence"
+          run_gate() {
+            local name="$1"; shift
+            set +e
+            "$@" > "$evidence/qualification/${name}.log" 2>&1
+            local rc=$?
+            set -e
+            printf '%s\n' "$rc" > "$evidence/qualification/${name}.exit-code"
+          }
+          set -e
+          bun --version > "$evidence/qualification/bun-version.log" 2>&1 || true
+          node --version > "$evidence/qualification/node-version.log" 2>&1 || true
+          run_gate bun-install bun install --frozen-lockfile
+          if [ "$(cat "$evidence/qualification/bun-install.exit-code")" = 0 ]; then
+            run_gate typecheck bun run typecheck
+            run_gate lint bun run lint
+            run_gate unit-tests bunx vitest run --config vitest.unit.config.ts
+            run_gate build-node bun run build:node
+          else
+            for name in typecheck lint unit-tests build-node; do printf '125\n' > "$evidence/qualification/${name}.exit-code"; done
+          fi
+          export EVIDENCE_DIR="$evidence"
+          python3 - <<'PY' > "$evidence/PROJECT_QUALIFICATION.json"
+          import json
+          import os
+          from pathlib import Path
+          root = Path(os.environ['EVIDENCE_DIR']) / 'qualification'
+          names = ['bun-install', 'typecheck', 'lint', 'unit-tests', 'build-node']
+          result = {}
+          for name in names:
+              path = root / f'{name}.exit-code'
+              result[name] = int(path.read_text().strip()) if path.exists() else 127
+          print(json.dumps(result, indent=2))
+          PY
+
+      - name: Record source paths relevant to Lady and Alice
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/milaidy-evidence"
+          {
+            git ls-files | grep -Ei '(^|/)(alice|milady|milaidy|character|persona|gateway|runtime|eliza|cloud-agent|electrobun|permission|secret|session|connector|telegram|discord|whatsapp|database)' || true
+          } > "$evidence/LADY_ALICE_PATH_CANDIDATES.txt"
+          {
+            git grep -n -I -E 'Alice|ALICE|Milady|Milaidy|Gateway|AgentRuntime|createMiladyRuntime|Eliza Cloud' "$SOURCE_SHA" -- ':!artifacts/**' ':!.claude/**' ':!.devin/**' 2>/dev/null || true
+          } > "$evidence/LADY_ALICE_SYMBOL_HITS.txt"
+
+      - name: Finalize evidence manifest and hashes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/milaidy-evidence"
+          mkdir -p "$evidence/logs"
+          export EVIDENCE_DIR="$evidence" EVENT_SHA="$GITHUB_SHA" EVENT_REF="$GITHUB_REF" REPOSITORY="$GITHUB_REPOSITORY" RUN_ID="$GITHUB_RUN_ID" RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT"
+          export INVENTORY_OUTCOME="${{ steps.inventory.outcome }}" INSTALL_OUTCOME="${{ steps.graphify_install.outcome }}" GRAPHIFY_OUTCOME="${{ steps.graphify_runs.outcome }}" REVIEW_OUTCOME="${{ steps.graph_review.outcome }}" QUERY_OUTCOME="${{ steps.graph_queries.outcome }}" PROJECT_OUTCOME="${{ steps.project_qualification.outcome }}"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          from pathlib import Path
+
+          root = Path(os.environ['EVIDENCE_DIR'])
+          def digest(path):
+              h = hashlib.sha256()
+              with path.open('rb') as stream:
+                  for block in iter(lambda: stream.read(1024 * 1024), b''):
+                      h.update(block)
+              return h.hexdigest()
+
+          files = []
+          for path in sorted(item for item in root.rglob('*') if item.is_file()):
+              if path.name in {'ARTIFACT_HASHES.sha256', 'NATIVE_RUN_MANIFEST.json'}:
+                  continue
+              files.append({'path': path.relative_to(root).as_posix(), 'bytes': path.stat().st_size, 'sha256': digest(path)})
+          manifest = {
+              'schema_version': '1.0',
+              'repository': os.environ['REPOSITORY'],
+              'frozen_source_sha': os.environ['SOURCE_SHA'],
+              'frozen_source_tree': os.environ['SOURCE_TREE'],
+              'workflow_event_sha': os.environ['EVENT_SHA'],
+              'workflow_ref': os.environ['EVENT_REF'],
+              'workflow_run_id': os.environ['RUN_ID'],
+              'workflow_run_attempt': os.environ['RUN_ATTEMPT'],
+              'graphify_package': 'graphifyy',
+              'graphify_version': os.environ['GRAPHIFY_VERSION'],
+              'graphify_wheel_sha256': os.environ['GRAPHIFY_WHEEL_SHA256'],
+              'execution_mode': 'complete repository census; bounded runtime-source native Graphify; two clean passes; no LLM labels',
+              'query_logging_disabled': os.environ.get('GRAPHIFY_QUERY_LOG_DISABLE') == '1',
+              'python': platform.python_version(),
+              'platform': platform.platform(),
+              'step_outcomes': {
+                  'inventory': os.environ['INVENTORY_OUTCOME'],
+                  'graphify_install': os.environ['INSTALL_OUTCOME'],
+                  'graphify_runs': os.environ['GRAPHIFY_OUTCOME'],
+                  'graph_review': os.environ['REVIEW_OUTCOME'],
+                  'graph_queries': os.environ['QUERY_OUTCOME'],
+                  'project_qualification': os.environ['PROJECT_OUTCOME'],
+              },
+              'files': files,
+          }
+          manifest_path = root / 'NATIVE_RUN_MANIFEST.json'
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+          with (root / 'ARTIFACT_HASHES.sha256').open('w', encoding='utf-8') as stream:
+              for item in files:
+                  stream.write(f"{item['sha256']}  {item['path']}\n")
+              stream.write(f"{digest(manifest_path)}  NATIVE_RUN_MANIFEST.json\n")
+          PY
+          find "$evidence" -maxdepth 5 -type f -printf '%P\t%s bytes\n' | sort | tee "$evidence/logs/artifact-list.log"
+
+      - name: Upload complete evidence pack
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: milaidy-graphify-4dfb59cd
+          path: ${{ runner.temp }}/milaidy-evidence/**
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 6
+          overwrite: false
