@@ -17,6 +17,8 @@ import type { BrandingConfig } from "./branding";
 export interface BundledVrmAsset {
   title: string;
   slug: string;
+  /** Optional immutable delivery URL for a large production VRM asset. */
+  vrmUrl?: string;
   speechCapabilities?: AvatarSpeechCapabilities;
   cameraDistanceScale?: number;
 }

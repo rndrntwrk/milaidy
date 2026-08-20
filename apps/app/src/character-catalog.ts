@@ -10,6 +10,8 @@ import {
 
 export const APP_VRM_ASSET_NAMESPACE = "milady";
 export const ALICE_CAMERA_DISTANCE_SCALE = 1.3;
+export const ALICE_EDGE_VRM_URL =
+  "https://assets.rndrntwrk.com/alice/vrms/milady-9-ccbe2ea31713e33d08c1d0cd6be3aab6c90155ff6488ce2d9bc23e86d5d66ac2.vrm.gz";
 export const APP_STYLE_PRESETS = getStylePresets();
 
 export function buildAppVrmAssets(
@@ -31,7 +33,10 @@ export function buildAppVrmAssets(
       title: preset.name,
       slug: `${APP_VRM_ASSET_NAMESPACE}-${preset.avatarIndex}`,
       ...(preset.avatarIndex === DEFAULT_VISUAL_AVATAR_INDEX
-        ? { cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE }
+        ? {
+            cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE,
+            vrmUrl: ALICE_EDGE_VRM_URL,
+          }
         : {}),
     }));
 }

@@ -54,6 +54,7 @@ import {
   setApiToken,
   stripOptionalHostPort,
 } from "../config/runtime-env.js";
+import { resolveFrameSecurityPolicy } from "./frame-security-policy.js";
 import {
   ONBOARDING_CLOUD_PROVIDER_OPTIONS,
   ONBOARDING_PROVIDER_CATALOG,
@@ -3100,7 +3101,18 @@ function applyCors(
 
   // Security headers
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
+  const framePolicy = resolveFrameSecurityPolicy(pathname);
+  if (framePolicy.xFrameOptions) {
+    res.setHeader("X-Frame-Options", framePolicy.xFrameOptions);
+  } else {
+    res.removeHeader("X-Frame-Options");
+  }
+  if (framePolicy.contentSecurityPolicy) {
+    res.setHeader(
+      "Content-Security-Policy",
+      framePolicy.contentSecurityPolicy,
+    );
+  }
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 

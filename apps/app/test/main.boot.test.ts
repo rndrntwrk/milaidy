@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   ALICE_CAMERA_DISTANCE_SCALE,
+  ALICE_EDGE_VRM_URL,
   buildAppVrmAssets,
 } from "../src/character-catalog";
 import * as characterCatalog from "../src/character-catalog";
@@ -120,6 +121,7 @@ describe("renderer boot guard", () => {
       title: "Alice",
       slug: "milady-9",
       cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE,
+      vrmUrl: ALICE_EDGE_VRM_URL,
     });
   });
 
@@ -140,10 +142,12 @@ describe("renderer boot guard", () => {
       title: "Alice",
       slug: "milady-9",
       cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE,
+      vrmUrl: ALICE_EDGE_VRM_URL,
     });
     expect(buildAppVrmAssets()[8]).toMatchObject({
       slug: "milady-9",
       cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE,
+      vrmUrl: ALICE_EDGE_VRM_URL,
     });
   });
 

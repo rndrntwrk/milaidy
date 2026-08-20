@@ -74,7 +74,10 @@ export function getVrmUrl(index: number): string {
     return resolveRootPublicAssetUrl(`vrms/${BUNDLED_VRM_FALLBACK_SLUG}.vrm.gz`);
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : getDefaultBundledVrmIndex();
-  const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
+  const asset = assets[safe - 1] ?? assets[0];
+  const slug = asset?.slug ?? "default";
+  const immutableEdgeUrl = asset?.vrmUrl?.trim();
+  if (immutableEdgeUrl) return immutableEdgeUrl;
   return resolveRootPublicAssetUrl(`vrms/${slug}.vrm.gz`);
 }
 
