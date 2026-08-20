@@ -46,6 +46,30 @@ test("manual cloud builds checkout the exact requested Alice revision", () => {
   );
 });
 
+test("cloud builds hydrate and validate Alice's runtime avatar assets before Vite", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const hydrateAssets = workflow.indexOf("- name: Hydrate Alice runtime avatar assets");
+  const validateAssets = workflow.indexOf("- name: Validate Alice runtime avatar assets");
+  const buildUi = workflow.indexOf("- name: Build UI (vite)");
+
+  assert.ok(hydrateAssets >= 0, "the cloud build must hydrate Git LFS avatar bytes");
+  assert.ok(validateAssets > hydrateAssets, "asset validation must follow hydration");
+  assert.ok(buildUi > validateAssets, "Vite must only package validated avatar bytes");
+  assert.match(
+    workflow.slice(hydrateAssets, validateAssets),
+    /git lfs pull --include="apps\/app\/public\/vrms\/\*\.vrm\.gz" --exclude=""/,
+    "the build must hydrate only the runtime-compressed VRM set",
+  );
+  assert.match(
+    workflow.slice(validateAssets, buildUi),
+    /node scripts\/validate-cloud-avatar-assets\.mjs/,
+    "the hydrated files must pass the fail-closed binary asset validator",
+  );
+});
+
 test("cloud builds hydrate the tracked Eliza commit from the official repository", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
@@ -149,6 +173,31 @@ test("staging and manual no-rollout builds smoke the exact image and always tear
   );
 });
 
+test("manual no-rollout canaries do not move the stable latest image tag", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const determineVersion = workflow.match(
+    /- name: Determine version[\s\S]*?- name: Load deploy config/,
+  )?.[0];
+  const publishImage = workflow.match(
+    /- name: Build and push Docker image[\s\S]*?- name: Smoke exact candidate image/,
+  )?.[0];
+
+  assert.ok(determineVersion, "the cloud build must determine candidate tag policy");
+  assert.ok(publishImage, "the cloud image publisher must exist");
+  assert.match(
+    determineVersion,
+    /github\.event_name[^\n]*workflow_dispatch[\s\S]*inputs\.skip_rollout[^\n]*true[\s\S]*PUBLISH_LATEST="false"/,
+  );
+  assert.match(
+    publishImage,
+    /steps\.version\.outputs\.publish_latest == 'true'[\s\S]*steps\.version\.outputs\.latest_tag/,
+    "the moving latest tag must be omitted for an unapproved canary",
+  );
+});
+
 test("cloud builds bind both server and browser bundles to Alice app-core", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
@@ -191,6 +240,9 @@ test("candidate image smoke proves the public broadcast shell and VRM control bu
   assert.match(smokeStep, /__agentShowControl/);
   assert.match(smokeStep, /playEmote/);
   assert.match(smokeStep, /eliza:app-emote-applied/);
+  assert.match(smokeStep, /\/vrms\/milady-9\.vrm\.gz/);
+  assert.match(smokeStep, /gunzipSync/);
+  assert.match(smokeStep, /glTF/);
 });
 
 test("cloud agent build keeps the checked-out Eliza workspace available", () => {

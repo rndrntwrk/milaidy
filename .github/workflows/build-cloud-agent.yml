@@ -87,6 +87,14 @@ jobs:
         with:
           bun-version: "1.3.14"
 
+      - name: Hydrate Alice runtime avatar assets
+        run: |
+          git lfs install --local
+          git lfs pull --include="apps/app/public/vrms/*.vrm.gz" --exclude=""
+
+      - name: Validate Alice runtime avatar assets
+        run: node scripts/validate-cloud-avatar-assets.mjs
+
       # ── 3. Cache bun store ──────────────────────────────────────────────────
       - name: Cache bun store
         uses: actions/cache@v5
@@ -308,11 +316,17 @@ jobs:
             VERSION_CLEAN="${VERSION#cloud-v}"
           fi
 
+          PUBLISH_LATEST="true"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.skip_rollout }}" = "true" ]; then
+            PUBLISH_LATEST="false"
+          fi
+
           {
             echo "version=${VERSION}"
             echo "version_clean=${VERSION_CLEAN}"
             echo "latest_tag=${LATEST_TAG}"
             echo "build_environment=${BUILD_ENVIRONMENT}"
+            echo "publish_latest=${PUBLISH_LATEST}"
           } >> "$GITHUB_OUTPUT"
           echo "Cloud version: ${VERSION}"
           echo "Build environment: ${BUILD_ENVIRONMENT}"
@@ -389,7 +403,7 @@ jobs:
           push: ${{ github.event_name == 'push' || inputs.push_image != false }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.latest_tag }}
+            ${{ steps.version.outputs.publish_latest == 'true' && format('{0}/{1}:{2}', env.REGISTRY, env.IMAGE_NAME, steps.version.outputs.latest_tag) || '' }}
           build-args: |
             APP_ENTRYPOINT=${{ env.APP_ENTRYPOINT }}
             APP_CMD_START=${{ env.APP_CMD_START }}
@@ -443,6 +457,7 @@ jobs:
 
             if [ "$health" = "healthy" ]; then
               if readiness="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
+                import { gunzipSync } from "node:zlib";
                 const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
                 const response = await fetch(`http://127.0.0.1:${port}/api/health`);
                 const health = await response.json();
@@ -489,7 +504,19 @@ jobs:
                   console.error(JSON.stringify({ bundleStatus: bundleResponse.status, missingMarkers: requiredMarkers.filter((marker) => !bundle.includes(marker)) }));
                   process.exit(6);
                 }
-                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, emoteStatus: emoteResponse.status, broadcastStatus: broadcastResponse.status, bundleStatus: bundleResponse.status }));
+                const vrmResponse = await fetch(`http://127.0.0.1:${port}/vrms/milady-9.vrm.gz`);
+                const compressedVrm = Buffer.from(await vrmResponse.arrayBuffer());
+                let vrmMagic = "";
+                try {
+                  vrmMagic = gunzipSync(compressedVrm).subarray(0, 4).toString("ascii");
+                } catch {
+                  // Fail closed below with a stable diagnostic.
+                }
+                if (vrmResponse.status !== 200 || compressedVrm.length <= 1024 || vrmMagic !== "glTF") {
+                  console.error(JSON.stringify({ vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
+                  process.exit(7);
+                }
+                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, emoteStatus: emoteResponse.status, broadcastStatus: broadcastResponse.status, bundleStatus: bundleResponse.status, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
               ')"; then
                 echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision health=$readiness"
                 exit 0
