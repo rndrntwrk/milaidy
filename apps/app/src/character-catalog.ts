@@ -10,6 +10,7 @@ import {
 
 export const APP_VRM_ASSET_NAMESPACE = "milady";
 export const ALICE_CAMERA_DISTANCE_SCALE = 1.3;
+export const APP_STYLE_PRESETS = getStylePresets();
 
 export function buildAppVrmAssets(
   stylePresets = getStylePresets(),
@@ -34,6 +35,8 @@ export function buildAppVrmAssets(
         : {}),
     }));
 }
+
+export const APP_VRM_ASSETS = buildAppVrmAssets(APP_STYLE_PRESETS);
 
 export const MILADY_CHARACTER_CATALOG: CharacterCatalogData =
   buildMiladyCharacterCatalog() as CharacterCatalogData;

@@ -147,7 +147,11 @@ import {
   APP_URL_SCHEME,
 } from "./app-config";
 import { APP_ENV_ALIASES, APP_ENV_PREFIX } from "./brand-env";
-import { APP_CHARACTER_CATALOG, buildAppVrmAssets } from "./character-catalog";
+import {
+  APP_CHARACTER_CATALOG,
+  APP_STYLE_PRESETS,
+  APP_VRM_ASSETS,
+} from "./character-catalog";
 import {
   apiBaseToDeviceBridgeUrl,
   type IosRuntimeConfig,
@@ -310,13 +314,6 @@ installDesktopPermissionsClientPatch(client);
 // Register custom character editor for app-core's ViewRouter to pick up
 window.__ELIZA_APP_CHARACTER_EDITOR__ = CharacterEditor;
 getAppWindow()[BRANDED_WINDOW_KEYS.characterEditor] = CharacterEditor;
-
-import { getStylePresets } from "@elizaos/shared";
-
-// Derive VRM roster from STYLE_PRESETS so character names stay in one place.
-const APP_STYLE_PRESETS = getStylePresets();
-
-const APP_VRM_ASSETS = buildAppVrmAssets(APP_STYLE_PRESETS);
 
 const appBootConfig: AppBootConfig = {
   ...getBootConfig(),

@@ -6,6 +6,7 @@ import {
   ALICE_CAMERA_DISTANCE_SCALE,
   buildAppVrmAssets,
 } from "../src/character-catalog";
+import * as characterCatalog from "../src/character-catalog";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const APP_CORE_SRC_DIR = path.resolve(
@@ -107,6 +108,21 @@ function collectExports(
 }
 
 describe("renderer boot guard", () => {
+  it("boots the product avatar roster with Alice at milady-9", () => {
+    const assets = (
+      characterCatalog as typeof characterCatalog & {
+        APP_VRM_ASSETS?: ReturnType<typeof buildAppVrmAssets>;
+      }
+    ).APP_VRM_ASSETS;
+
+    expect(assets).toHaveLength(9);
+    expect(assets?.at(-1)).toMatchObject({
+      title: "Alice",
+      slug: "milady-9",
+      cameraDistanceScale: ALICE_CAMERA_DISTANCE_SCALE,
+    });
+  });
+
   it("keeps duplicate style presets from shifting bundled VRM indices", () => {
     const assets = buildAppVrmAssets([
       { name: "First", avatarIndex: 1 },
