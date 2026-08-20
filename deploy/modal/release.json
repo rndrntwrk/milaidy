@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "alice-modal-release-receipt.v1",
+  "observedAt": "2026-08-20T14:15:05Z",
+  "release": {
+    "aliceImageSource": "044157c3d7d7f5dc97b7236ed4cbcfdb52d3b0b1",
+    "deployedLauncherCommit": "be30eaaa36741347fdf468b6247de6529f25ff2b",
+    "elizaSource": "dd57a68ef1e6c28c93c9974de61d4402492a0f31",
+    "buildRun": 32374476301,
+    "image": "ghcr.io/rndrntwrk/milaidy-agent@sha256:e19d305b2bb619c0b84cad6b44caf4b5132efaafe90883283fe4dcb8859b548f",
+    "imageVersion": "2.0.66",
+    "modalRevision": 48,
+    "rollbackModalRevision": 47
+  },
+  "verification": {
+    "workflowConclusion": "success",
+    "workflowImageRevisionMatched": true,
+    "workflowAgentState": "running",
+    "workflowEmotesStatus": 200,
+    "workflowBroadcastStatus": 200,
+    "workflowVrmStatus": 200,
+    "workflowVrmBytes": 58021632,
+    "workflowVrmMagic": "glTF",
+    "unauthenticatedHealthStatus": 401,
+    "authenticatedHealthStatus": 200,
+    "authenticatedAgentState": "running",
+    "danceHappyInCatalog": true,
+    "emoteRouteOk": true,
+    "streamServicePresent": true,
+    "streamSessionBoundDuringTargetedCheck": false,
+    "emoteSentDuringTargetedCheck": false,
+    "emoteNotSentReason": "NO_SESSION_BOUND",
+    "broadcastStatus": 200,
+    "broadcastRootBasePresent": true,
+    "broadcastBundlePresent": true,
+    "vrmStatus": 200,
+    "vrmBytes": 58021632,
+    "vrmSha256": "ccbe2ea31713e33d08c1d0cd6be3aab6c90155ff6488ce2d9bc23e86d5d66ac2",
+    "vrmMagic": "glTF",
+    "modalTasksAfterWindow": 0,
+    "modalContainersAfterWindow": 0
+  },
+  "upstreamBoundary": {
+    "latestOfficialHeadObservedAfterPromotion": "f43d944af31d7066438f3bae249f016cc885203d",
+    "latestOfficialHeadStatus": "blocked-not-deployed",
+    "reason": "packages/ui/src/api/client-cloud.ts has four TS2300 duplicate-identifier diagnostics",
+    "latestQualifiedOfficialHead": "dd57a68ef1e6c28c93c9974de61d4402492a0f31"
+  },
+  "productBoundaries": {
+    "streamCompositionEvidenceCommit": "60ab6609b11a173701a4e4d4a9a2e8840cc3fad7",
+    "arcadeControllerCommit": "c7b2104644ea1973c7eea62c3ac7969fb42c4bac",
+    "newFullCompositionCanaryRun": false,
+    "note": "The latest-Eliza promotion was a targeted runtime verification. The encoded Stream + Alice 9 + Ads + Cloudflare composition canary remains the separately preserved v47 evidence packet."
+  }
+}

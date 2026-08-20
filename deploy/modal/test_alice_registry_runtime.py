@@ -1,5 +1,6 @@
 """Static release-contract tests for the Alice Modal launcher."""
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ class AliceModalContractTest(unittest.TestCase):
     def setUpClass(cls):
         cls.launcher = (ROOT / "deploy/modal/alice_registry_runtime.py").read_text()
         cls.runbook = (ROOT / "deploy/modal/README.md").read_text()
+        cls.receipt = json.loads((ROOT / "deploy/modal/release.json").read_text())
 
     def test_exact_smoked_release_is_pinned(self):
         expected = {
@@ -54,6 +56,24 @@ class AliceModalContractTest(unittest.TestCase):
             self.launcher,
         )
         self.assertIn('modal.Secret.from_name("alice-cloudflare-ai")', self.launcher)
+
+    def test_release_receipt_records_live_checks_and_idle_posture(self):
+        release = self.receipt["release"]
+        checks = self.receipt["verification"]
+        boundary = self.receipt["upstreamBoundary"]
+
+        self.assertEqual(release["modalRevision"], 48)
+        self.assertEqual(release["rollbackModalRevision"], 47)
+        self.assertEqual(checks["unauthenticatedHealthStatus"], 401)
+        self.assertEqual(checks["authenticatedHealthStatus"], 200)
+        self.assertEqual(checks["authenticatedAgentState"], "running")
+        self.assertTrue(checks["danceHappyInCatalog"])
+        self.assertEqual(checks["vrmBytes"], 58021632)
+        self.assertEqual(checks["vrmMagic"], "glTF")
+        self.assertEqual(checks["modalTasksAfterWindow"], 0)
+        self.assertEqual(checks["modalContainersAfterWindow"], 0)
+        self.assertEqual(boundary["latestOfficialHeadStatus"], "blocked-not-deployed")
+        self.assertEqual(boundary["latestQualifiedOfficialHead"], release["elizaSource"])
 
 
 if __name__ == "__main__":
