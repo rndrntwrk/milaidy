@@ -19,15 +19,15 @@ The production branch already has a native knowledge persistence path:
 - `packages/agent/src/runtime/eliza.ts` schedules bundled knowledge seeding after runtime startup when native knowledge is enabled.
 - `packages/app-core/src/runtime/eliza.ts` already probes document and knowledge row counts after SQL compatibility bootstrap.
 
-The corpus binding will use that persistence contract through a dedicated core plugin rather than hard-coding hundreds of private records into the Milaidy repository.
+The corpus binding uses that persistence contract through a dedicated core plugin inside the existing `@miladyai/agent` package. This avoids adding a new workspace dependency or lockfile mutation and keeps the integration on the same runtime release boundary.
 
 ## Architecture
 
 ### 1. Dedicated core plugin
 
-Create `@rndrntwrk/plugin-alice-corpus` under `plugins/plugin-alice-corpus` and add it to `CORE_PLUGINS`.
+Create `packages/agent/src/plugins/alice-corpus` and load it through the existing package export `@miladyai/agent/plugins/alice-corpus` in `CORE_PLUGINS`.
 
-The plugin is always resolvable in the workspace but remains inert unless `ALICE_CORPUS_ROOT` is configured. This gives production an explicit mount contract while preserving ordinary Milaidy startup when no corpus is present.
+The plugin remains inert unless `ALICE_CORPUS_ROOT` is configured. This gives production an explicit mount contract while preserving ordinary Milaidy startup when no corpus is present.
 
 ### 2. External, immutable corpus root
 
@@ -69,11 +69,13 @@ Before ingestion, the plugin validates:
 
 - the corpus root and selected projection remain inside the configured root;
 - manifest structure and projection identity;
-- the selected projection's declared record count;
+- agreement between the top-level and selected projection manifests;
+- the selected projection's declared record, graph-node and graph-edge counts;
 - every selected input against `SHA256SUMS.txt` when a checksum entry exists;
 - JSONL parseability and uniqueness of record, node and edge IDs;
 - every graph edge endpoint exists in the selected node set;
-- every loaded record visibility is admitted by the projection manifest;
+- every loaded record, node and edge visibility is admitted by the projection manifest;
+- no dossier symlink or path traversal can escape the corpus root;
 - no secret-value file is read.
 
 Verification modes:
@@ -86,7 +88,7 @@ off       # development only; prohibited in strict mode
 
 ### 5. Knowledge-document construction
 
-The loader produces `DefaultKnowledgeDocumentDefinition[]` without modifying the corpus.
+The loader produces the structural equivalent of `DefaultKnowledgeDocumentDefinition[]` without modifying the corpus.
 
 Dossiers become one document each. Their fragments are split by Markdown headings and bounded paragraphs.
 
@@ -115,7 +117,7 @@ After seeding, the plugin removes prior `alice-corpus` documents and their fragm
 
 This is essential when a runtime changes from `internal` to `public`: private fragments must be physically removed, not merely ignored by a response filter.
 
-Default Milady knowledge is never removed.
+Default Milaidy knowledge is never removed.
 
 ### 7. Read-only graph index
 
@@ -148,7 +150,7 @@ ALICE_GRAPH_FIND_EVIDENCE
 ALICE_GRAPH_LIST_GAPS
 ```
 
-Each result includes the corpus version, projection, node or edge identifiers and relevant record/source references. Actions are unavailable when the corpus is disabled or invalid.
+Each result includes the corpus version, projection, selected-input digest, node or edge identifiers and relevant record/source references. Actions are unavailable when the corpus is disabled or invalid.
 
 ### 9. Action-authority boundary
 
@@ -189,7 +191,7 @@ Startup logs must report:
 - record count;
 - generated document and fragment counts;
 - graph node and edge counts;
-- seeded, updated, retained and pruned memory counts;
+- pruned document and fragment counts;
 - elapsed time.
 
 No source text, private relationship data or secret values are logged.
@@ -199,14 +201,14 @@ No source text, private relationship data or secret values are logged.
 The feature is admitted only when:
 
 - parser and projection tests pass;
-- checksum and path-traversal tests pass;
+- checksum, manifest-agreement and path-traversal tests pass;
 - owner-private gating tests pass;
 - knowledge seeding is idempotent;
 - projection switching removes prior private corpus rows;
 - graph endpoints and query operations pass;
 - public projection cannot retrieve internal fixture records;
 - corpus text cannot grant action authority;
-- package typecheck and build pass;
+- agent package typecheck and build pass;
 - the production runtime starts with the internal projection and reports expected counts;
 - the public runtime starts separately with the public projection;
 - no secret patterns appear in generated logs or fixtures.
