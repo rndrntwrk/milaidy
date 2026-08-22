@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node", "bun", "vitest/globals"],
+    "declaration": false,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@elizaos/core": ["../../eliza/packages/typescript/src/index.node.ts"],
+      "@elizaos/core/*": ["../../eliza/packages/typescript/src/*"],
+      "@miladyai/agent": ["../../packages/agent/src/index.ts"],
+      "@miladyai/agent/*": ["../../packages/agent/src/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": []
+}
