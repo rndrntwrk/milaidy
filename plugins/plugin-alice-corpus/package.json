@@ -1,0 +1,31 @@
+{
+  "name": "@rndrntwrk/plugin-alice-corpus",
+  "version": "1.0.0",
+  "description": "Physically projected Alice corpus knowledge and read-only graph integration for Milaidy.",
+  "type": "module",
+  "main": "src/index.ts",
+  "license": "MIT",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts",
+    "./manifest": "./src/manifest.ts",
+    "./knowledge": "./src/knowledge.ts",
+    "./graph": "./src/graph.ts"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "bun run build:dist",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/prepare-package-dist.mjs plugins/plugin-alice-corpus",
+    "test": "cd ../.. && vitest run plugins/plugin-alice-corpus/src/*.test.ts"
+  },
+  "dependencies": {
+    "@elizaos/core": "workspace:*",
+    "@miladyai/agent": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
