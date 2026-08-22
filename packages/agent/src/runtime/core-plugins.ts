@@ -17,6 +17,7 @@ export const DESKTOP_ONLY_PLUGINS: readonly string[] = [
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql", // database adapter — required
   "@elizaos/plugin-local-embedding", // local embeddings — required for memory
+  "@miladyai/agent/plugins/alice-corpus", // external projected corpus + read-only graph; inert without ALICE_CORPUS_ROOT
   "@elizaos/plugin-form", // form handling for guided user journeys
   "@elizaos/plugin-agent-orchestrator", // task-agent orchestration (PTY, coordinator, workspace provisioning)
   "@elizaos/plugin-agent-skills", // skill execution and marketplace runtime
