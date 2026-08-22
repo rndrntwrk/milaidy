@@ -24,7 +24,7 @@ export function createAliceCorpusPlugin(): Plugin {
     init: async (_pluginConfig, runtime) => {
       const config = resolveAliceCorpusConfig(process.env);
       if (!config) return;
-      if (!runtimeKnowledgeEnabled(runtime)) {
+      if (!runtimeKnowledgeEnabled(runtime as AgentRuntime)) {
         throw new Error(
           "Alice corpus requires the native Eliza knowledge feature to be enabled",
         );
