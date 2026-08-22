@@ -137,17 +137,6 @@ jobs:
           MILADY_SKIP_LOCAL_UPSTREAMS=1 node scripts/init-submodules.mjs || echo "Some submodules failed, continuing"
 
       # ── 4. Install dependencies ─────────────────────────────────────────────
-      - name: Apply qualified Eliza develop hotfix
-        env:
-          ELIZA_DEVELOP_HOTFIX_SHA256: 2d00d5c219ec5adf6258fbad2dae702eea8d9af23ee9892d0aa18a1efac3843e
-        run: |
-          patch_path="scripts/alice-eliza-runtime-patches/eliza-f43d944-client-cloud-import-dedupe.patch"
-          test "$(git -C eliza rev-parse HEAD)" = "f43d944af31d7066438f3bae249f016cc885203d"
-          printf '%s  %s\n' "$ELIZA_DEVELOP_HOTFIX_SHA256" "$patch_path" | sha256sum -c -
-          git -C eliza apply --check ../scripts/alice-eliza-runtime-patches/eliza-f43d944-client-cloud-import-dedupe.patch
-          git -C eliza apply ../scripts/alice-eliza-runtime-patches/eliza-f43d944-client-cloud-import-dedupe.patch
-          git -C eliza diff --check
-
       - name: Port Alice operator bridge
         run: node scripts/port-alice-operator-bridge.mjs
 

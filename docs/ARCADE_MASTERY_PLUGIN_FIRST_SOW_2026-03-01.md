@@ -69,3 +69,35 @@ Required release artifacts per milestone:
 - migration notes,
 - test evidence for policy and reflection behavior,
 - security and fairness notes for observable-state boundary.
+
+## 8) Production 555Drive Native-Control Addendum (August 21, 2026)
+
+`FIVE55_GAMES_GO_LIVE_PLAY` has a separate fail-closed contract when `gameId` is
+`555drive`; the local rehearsal action remains local-only.
+
+- `FIVE55_GAMES_DRIVE555_LIVE_CONTROL_ENABLED=true`, an explicit `sessionId`, an
+  immutable `gameRunId`, agent mode, Alice room context, configured agent auth,
+  and a credential-free remote HTTPS `STREAM555_BASE_URL` are required before
+  production provisioning.
+- The play request binds `runId`, `controlAuthority: "milaidy"`, and the exact
+  racing-line policy snapshot. The returned session, game, run, and source must
+  match the request, and the gameplay authority must report the same
+  `fenced_agent_v1` binding both before and after control.
+- The action does not return live success until the existing gameplay supervisor
+  has observed the ordered accepted -> enqueued -> injected -> reflected receipt
+  chain plus the matching authoritative native raw movement sample, persisted
+  Alice reflection/mastery, persisted and broadcast the VRM reaction, and proved
+  the terminal neutral release. Any missing proof fails the action.
+- Concurrent requests for the same session/run/source share one in-flight
+  control execution. Transport closure, stop, timeout, or another terminal error
+  follows the supervisor's bounded neutral-release path; neutral-proof failure is
+  never converted to success.
+- The deployed Alice image must mount the approved digest-pinned gameplay SDK
+  bundle and Arcade controller closure at the three
+  `FIVE55_GAMES_LOCAL_SDK_ROOT`, `FIVE55_GAMES_LOCAL_SDK_ENTRY`, and
+  `FIVE55_GAMES_LOCAL_ARCADE_ROOT` paths. These local files supply controller
+  code only; success evidence still comes from the authenticated remote Stream
+  gameplay authority and native renderer.
+
+This contract qualifies the action wiring; it is not a substitute for the
+controlled live canary and teardown evidence required for production promotion.
