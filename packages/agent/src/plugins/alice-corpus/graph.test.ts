@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { AliceCorpusGraphIndex } from "./graph.js";
+import type {
+  AliceCorpusGraphEdge,
+  AliceCorpusGraphNode,
+} from "./manifest.js";
 
-const nodes = [
+const nodes: AliceCorpusGraphNode[] = [
   {
     node_id: "system:alice",
     node_type: "System",
@@ -42,7 +46,7 @@ const nodes = [
   },
 ];
 
-const edges = [
+const edges: AliceCorpusGraphEdge[] = [
   {
     edge_id: "edge:1",
     source: "system:alice",
@@ -70,7 +74,7 @@ const edges = [
 ];
 
 function graph() {
-  return new AliceCorpusGraphIndex(nodes as any, edges as any, {
+  return new AliceCorpusGraphIndex(nodes, edges, {
     version: "1.0.0",
     projection: "internal",
   });
@@ -113,11 +117,11 @@ describe("AliceCorpusGraphIndex", () => {
       "record:decision:alice",
       "source:spec",
     ]);
-    expect(
-      (result as any)?.steps?.map(
-        (step: { direction: "in" | "out" }) => step.direction,
-      ),
-    ).toEqual(["in", "in", "out"]);
+    expect(result?.steps.map((step) => step.direction)).toEqual([
+      "in",
+      "in",
+      "out",
+    ]);
     expect(
       graph().shortestPath("runtime:eliza", "source:spec", {
         maxDepth: 2,
@@ -126,7 +130,7 @@ describe("AliceCorpusGraphIndex", () => {
   });
 
   it("applies edge-type filtering before the neighbor fan-out limit", () => {
-    const manyNodes = [
+    const manyNodes: AliceCorpusGraphNode[] = [
       {
         node_id: "source",
         node_type: "System",
@@ -149,7 +153,7 @@ describe("AliceCorpusGraphIndex", () => {
         properties: {},
       })),
     ];
-    const manyEdges = [
+    const manyEdges: AliceCorpusGraphEdge[] = [
       ...Array.from({ length: 101 }, (_, index) => ({
         edge_id: `edge:${String(index).padStart(3, "0")}`,
         source: "source",
@@ -167,11 +171,10 @@ describe("AliceCorpusGraphIndex", () => {
         properties: {},
       },
     ];
-    const index = new AliceCorpusGraphIndex(
-      manyNodes as any,
-      manyEdges as any,
-      { version: "1.0.0", projection: "internal" },
-    );
+    const index = new AliceCorpusGraphIndex(manyNodes, manyEdges, {
+      version: "1.0.0",
+      projection: "internal",
+    });
 
     expect(
       index.shortestPath("source", "target", {
