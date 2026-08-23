@@ -63,6 +63,7 @@ jobs:
           mkdir -p \
             "$ROOT/packages/agent/src/plugins" \
             "$ROOT/packages/agent/src/runtime" \
+            "$ROOT/packages/agent/src/config" \
             "$ROOT/stubs"
 
           cp biome.json "$ROOT/biome.json"
@@ -76,24 +77,146 @@ jobs:
             "$ROOT/packages/agent/src/runtime/"
 
           cat > "$ROOT/packages/agent/src/runtime/default-knowledge.ts" <<'EOF'
-          export async function seedBundledKnowledge(): Promise<void> {}
+          export interface DefaultKnowledgeFragmentDefinition {
+            text: string;
+            embedding?: number[];
+          }
+
+          export interface DefaultKnowledgeDocumentDefinition {
+            key: string;
+            version: number;
+            filename: string;
+            contentType: string;
+            text: string;
+            fragments: readonly DefaultKnowledgeFragmentDefinition[];
+            metadata?: Record<string, unknown>;
+          }
+
+          export async function seedBundledKnowledge(
+            _runtime: unknown,
+            _documents: readonly DefaultKnowledgeDocumentDefinition[] = [],
+          ): Promise<void> {}
           EOF
+
           cat > "$ROOT/packages/agent/src/runtime/native-runtime-features.ts" <<'EOF'
-          export function runtimeKnowledgeEnabled(): boolean { return true; }
+          export function runtimeKnowledgeEnabled(_runtime?: unknown): boolean {
+            return true;
+          }
+          EOF
+
+          cat > "$ROOT/packages/agent/src/config/config.ts" <<'EOF'
+          export interface ElizaConfig {
+            features?: Record<string, unknown> & { shellEnabled?: boolean };
+            cloud?: { enabled?: boolean };
+            env?: Record<string, unknown> & { vars?: Record<string, unknown> };
+            plugins?: {
+              allow?: string[];
+              entries?: Record<
+                string,
+                { enabled?: boolean } & Record<string, unknown>
+              >;
+              installs?: Record<string, unknown>;
+            };
+            connectors?: Record<string, unknown>;
+            channels?: Record<string, unknown>;
+            x402?: { enabled?: boolean };
+            [key: string]: unknown;
+          }
           EOF
 
           cat > "$ROOT/stubs/elizaos-core.ts" <<'EOF'
-          export const logger = { info: (..._args: unknown[]) => undefined };
-          export function stringToUuid(value: string): string { return value; }
-          EOF
-          cat > "$ROOT/stubs/shared-contracts.ts" <<'EOF'
-          export function resolveElizaCloudTopology() {
-            return { shouldLoadPlugin: false, services: { inference: false } };
+          export interface IAgentRuntime {
+            agentId: string;
+          }
+
+          export interface AgentRuntime extends IAgentRuntime {}
+
+          export interface HandlerOptions {
+            parameters?: Record<string, unknown>;
+          }
+
+          export interface ActionParameterSchema {
+            type?: string;
+            items?: ActionParameterSchema;
+            [key: string]: unknown;
+          }
+
+          export interface ActionParameter {
+            name: string;
+            description: string;
+            required?: boolean;
+            schema: ActionParameterSchema;
+          }
+
+          export interface Action {
+            name: string;
+            similes?: string[];
+            description: string;
+            validate?: (
+              runtime: IAgentRuntime,
+              ...args: unknown[]
+            ) => boolean | Promise<boolean>;
+            handler?: (
+              runtime: IAgentRuntime,
+              message: unknown,
+              state: unknown,
+              options?: HandlerOptions,
+              callback?: unknown,
+              responses?: unknown,
+            ) => unknown | Promise<unknown>;
+            parameters?: ActionParameter[];
+            [key: string]: unknown;
+          }
+
+          export interface Plugin {
+            name: string;
+            description?: string;
+            init?: (
+              pluginConfig: Record<string, string>,
+              runtime: IAgentRuntime,
+            ) => void | Promise<void>;
+            actions?: Action[];
+            [key: string]: unknown;
+          }
+
+          export const logger = {
+            info: (..._args: unknown[]) => undefined,
+          };
+
+          export function stringToUuid(value: string): string {
+            return value;
           }
           EOF
+
+          cat > "$ROOT/stubs/shared-contracts.ts" <<'EOF'
+          export interface ResolvedElizaCloudTopology {
+            shouldLoadPlugin: boolean;
+            services: {
+              inference: boolean;
+              [key: string]: boolean;
+            };
+          }
+
+          export function resolveElizaCloudTopology(
+            _config?: Record<string, unknown>,
+          ): ResolvedElizaCloudTopology {
+            return {
+              shouldLoadPlugin: false,
+              services: { inference: false },
+            };
+          }
+          EOF
+
           cat > "$ROOT/stubs/shared-onboarding.ts" <<'EOF'
-          export function hasExplicitCanonicalRuntimeConfig(): boolean { return false; }
-          export function migrateLegacyRuntimeConfig(): void {}
+          export function hasExplicitCanonicalRuntimeConfig(
+            _config?: Record<string, unknown>,
+          ): boolean {
+            return false;
+          }
+
+          export function migrateLegacyRuntimeConfig(
+            _config?: Record<string, unknown>,
+          ): void {}
           EOF
 
           cat > "$ROOT/package.json" <<'EOF'
@@ -113,29 +236,36 @@ jobs:
           cat > "$ROOT/vitest.config.ts" <<'EOF'
           import { defineConfig } from "vitest/config";
           import path from "node:path";
+
           export default defineConfig({
             resolve: {
               alias: [
                 {
                   find: "@miladyai/shared/contracts/onboarding",
-                  replacement: path.resolve(__dirname, "stubs/shared-onboarding.ts"),
+                  replacement: path.resolve(
+                    __dirname,
+                    "stubs/shared-onboarding.ts",
+                  ),
                 },
                 {
                   find: "@miladyai/shared/contracts",
-                  replacement: path.resolve(__dirname, "stubs/shared-contracts.ts"),
+                  replacement: path.resolve(
+                    __dirname,
+                    "stubs/shared-contracts.ts",
+                  ),
                 },
                 {
                   find: "@elizaos/core",
                   replacement: path.resolve(__dirname, "stubs/elizaos-core.ts"),
-                }
-              ]
+                },
+              ],
             },
             test: {
               environment: "node",
               include: ["packages/**/*.test.ts"],
               testTimeout: 10_000,
-              hookTimeout: 10_000
-            }
+              hookTimeout: 10_000,
+            },
           });
           EOF
 
@@ -226,19 +356,102 @@ jobs:
           fetch-depth: 0
           submodules: false
 
-      - name: Setup exact release workspace
-        uses: ./.github/actions/setup-bun-workspace
+      - name: Free disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python build support
+        run: pip install setuptools
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
-          install-native-deps: "false"
-          run-postinstall: "false"
-          skip-avatar-clone: "true"
-          no-vision-deps: "true"
-          disable-local-eliza-workspace: "false"
-          prepare-local-eliza-runtime: "true"
-          skip-cloud-submodule: "false"
-          skip-local-upstreams-postinstall: "true"
+
+      - name: Initialize exact Eliza workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync -- eliza
+          git submodule update --init eliza
+
+          EXPECTED_SHA="$(git ls-tree HEAD eliza | awk '{print $3}')"
+          ACTUAL_SHA="$(git -C eliza rev-parse HEAD)"
+          if [ -z "$EXPECTED_SHA" ] || [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+            echo "::error::Eliza submodule mismatch: expected $EXPECTED_SHA, got $ACTUAL_SHA"
+            exit 1
+          fi
+
+          git -C eliza submodule sync --recursive
+          git -C eliza submodule update --init --recursive
+
+          REQUIRED_WORKSPACES=(
+            packages/app-core/deploy/cloud-agent-template
+            packages/cloud/api
+            packages/cloud/infra
+            packages/cloud/routing
+            packages/cloud/sdk
+            packages/cloud/shared
+            packages/cloud/test-mocks
+            packages/cloud/e2e
+            packages/typescript
+          )
+          for workspace in "${REQUIRED_WORKSPACES[@]}"; do
+            if [ ! -f "eliza/$workspace/package.json" ]; then
+              echo "::error::Required exact Eliza workspace is missing: eliza/$workspace/package.json"
+              exit 1
+            fi
+          done
+
+          echo "ELIZA_EXACT_SHA=$ACTUAL_SHA" >> "$GITHUB_ENV"
+
+      - name: Apply repository Eliza patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f scripts/apply-eliza-ci-patches.mjs ]; then
+            node scripts/apply-eliza-ci-patches.mjs
+          fi
+
+      - name: Install exact release dependencies
+        shell: bash
+        run: bun install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
+
+      - name: Generate local Eliza protobuf types
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d eliza/packages/schemas ] \
+            && [ -f eliza/packages/schemas/buf.gen.yaml ] \
+            && [ ! -f eliza/packages/core/src/types/generated/eliza/v1/agent_pb.ts ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
+      - name: Generate Eliza keyword data
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f eliza/packages/shared/scripts/generate-keywords.mjs ]; then
+            cd eliza
+            node packages/shared/scripts/generate-keywords.mjs --target ts
+          fi
 
       - name: Typecheck agent package
         working-directory: packages/agent
