@@ -1,7 +1,4 @@
-import type {
-  AliceCorpusGraphEdge,
-  AliceCorpusGraphNode,
-} from "./manifest.js";
+import type { AliceCorpusGraphEdge, AliceCorpusGraphNode } from "./manifest.js";
 
 export interface AliceCorpusGraphSearchOptions {
   nodeTypes?: string[];
@@ -113,7 +110,8 @@ export class AliceCorpusGraphIndex {
       )
       .map((node) => {
         const label = node.label.toLowerCase();
-        const haystack = `${node.label}\n${node.node_type}\n${JSON.stringify(node.properties)}`.toLowerCase();
+        const haystack =
+          `${node.label}\n${node.node_type}\n${JSON.stringify(node.properties)}`.toLowerCase();
         let score = 0;
         if (label === needle) score += 100;
         if (label.includes(needle)) score += 20;
@@ -171,7 +169,9 @@ export class AliceCorpusGraphIndex {
     }
 
     return rows
-      .sort((left, right) => left.edge.edge_id.localeCompare(right.edge.edge_id))
+      .sort((left, right) =>
+        left.edge.edge_id.localeCompare(right.edge.edge_id),
+      )
       .slice(0, limit);
   }
 
@@ -194,11 +194,9 @@ export class AliceCorpusGraphIndex {
     }
 
     const maxDepth = Math.min(Math.max(options.maxDepth ?? 6, 1), 8);
-    const queue: Array<[
-      string,
-      string[],
-      AliceCorpusGraphPathStep[],
-    ]> = [[source, [source], []]];
+    const queue: Array<[string, string[], AliceCorpusGraphPathStep[]]> = [
+      [source, [source], []],
+    ];
     const visited = new Set([source]);
 
     while (queue.length > 0) {
@@ -237,10 +235,7 @@ export class AliceCorpusGraphIndex {
     return null;
   }
 
-  findEvidence(
-    nodeId: string,
-    depth = 3,
-  ): AliceCorpusGraphEvidenceResult {
+  findEvidence(nodeId: string, depth = 3): AliceCorpusGraphEvidenceResult {
     const recordIds = new Set<string>();
     const recordNodeIds = new Set<string>();
     const sourceNodeIds = new Set<string>();

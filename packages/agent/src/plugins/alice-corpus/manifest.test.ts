@@ -1,10 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  type AliceCorpusConfig,
-  resolveAliceCorpusConfig,
-} from "./config.js";
+import { type AliceCorpusConfig, resolveAliceCorpusConfig } from "./config.js";
 import { loadAndValidateCorpus } from "./manifest.js";
 import {
   createCorpusFixture,

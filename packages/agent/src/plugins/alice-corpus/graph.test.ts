@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AliceCorpusGraphIndex } from "./graph.js";
-import type {
-  AliceCorpusGraphEdge,
-  AliceCorpusGraphNode,
-} from "./manifest.js";
+import type { AliceCorpusGraphEdge, AliceCorpusGraphNode } from "./manifest.js";
 
 const nodes: AliceCorpusGraphNode[] = [
   {
@@ -177,10 +174,12 @@ describe("AliceCorpusGraphIndex", () => {
     });
 
     expect(
-      index.shortestPath("source", "target", {
-        edgeTypes: ["SUPPORTS"],
-        maxDepth: 1,
-      })?.nodes.map((node) => node.node_id),
+      index
+        .shortestPath("source", "target", {
+          edgeTypes: ["SUPPORTS"],
+          maxDepth: 1,
+        })
+        ?.nodes.map((node) => node.node_id),
     ).toEqual(["source", "target"]);
   });
 
@@ -188,8 +187,10 @@ describe("AliceCorpusGraphIndex", () => {
     const evidence = graph().findEvidence("system:alice", 3);
     expect(evidence.recordIds).toEqual(["decision:alice"]);
     expect(evidence.sourceNodeIds).toEqual(["source:spec"]);
-    expect(graph().listGaps().map((node) => node.node_id)).toEqual([
-      "gap:wallets",
-    ]);
+    expect(
+      graph()
+        .listGaps()
+        .map((node) => node.node_id),
+    ).toEqual(["gap:wallets"]);
   });
 });

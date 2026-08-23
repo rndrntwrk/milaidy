@@ -127,7 +127,8 @@ export const aliceGraphGetNodeAction: Action = {
     const state = runtimeState(runtime);
     if (!state?.graph) return unavailable("ALICE_GRAPH_GET_NODE");
     const params = parameters(options);
-    const nodeId = typeof params.nodeId === "string" ? params.nodeId.trim() : "";
+    const nodeId =
+      typeof params.nodeId === "string" ? params.nodeId.trim() : "";
     if (!nodeId) {
       return invalid("ALICE_GRAPH_GET_NODE", "A nodeId is required.");
     }
@@ -165,7 +166,8 @@ export const aliceGraphNeighborsAction: Action = {
     const state = runtimeState(runtime);
     if (!state?.graph) return unavailable("ALICE_GRAPH_NEIGHBORS");
     const params = parameters(options);
-    const nodeId = typeof params.nodeId === "string" ? params.nodeId.trim() : "";
+    const nodeId =
+      typeof params.nodeId === "string" ? params.nodeId.trim() : "";
     if (!nodeId) {
       return invalid("ALICE_GRAPH_NEIGHBORS", "A nodeId is required.");
     }
@@ -237,8 +239,10 @@ export const aliceGraphPathAction: Action = {
     const state = runtimeState(runtime);
     if (!state?.graph) return unavailable("ALICE_GRAPH_PATH");
     const params = parameters(options);
-    const source = typeof params.source === "string" ? params.source.trim() : "";
-    const target = typeof params.target === "string" ? params.target.trim() : "";
+    const source =
+      typeof params.source === "string" ? params.source.trim() : "";
+    const target =
+      typeof params.target === "string" ? params.target.trim() : "";
     if (!source || !target) {
       return invalid(
         "ALICE_GRAPH_PATH",
@@ -309,7 +313,8 @@ export const aliceGraphFindEvidenceAction: Action = {
     const state = runtimeState(runtime);
     if (!state?.graph) return unavailable("ALICE_GRAPH_FIND_EVIDENCE");
     const params = parameters(options);
-    const nodeId = typeof params.nodeId === "string" ? params.nodeId.trim() : "";
+    const nodeId =
+      typeof params.nodeId === "string" ? params.nodeId.trim() : "";
     if (!nodeId) {
       return invalid("ALICE_GRAPH_FIND_EVIDENCE", "A nodeId is required.");
     }

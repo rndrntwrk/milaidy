@@ -14,9 +14,9 @@ describe("Alice corpus regular-plugin admission", () => {
     const plugins = collectPluginNames({} as CollectorConfig, reasons);
 
     expect(CORE_PLUGINS).not.toContain(ALICE_CORPUS_PLUGIN);
-    expect([...plugins].filter((name) => name === ALICE_CORPUS_PLUGIN)).toHaveLength(
-      1,
-    );
+    expect(
+      [...plugins].filter((name) => name === ALICE_CORPUS_PLUGIN),
+    ).toHaveLength(1);
     expect(reasons.get(ALICE_CORPUS_PLUGIN)).toBe(
       "builtin: Alice corpus lifecycle",
     );

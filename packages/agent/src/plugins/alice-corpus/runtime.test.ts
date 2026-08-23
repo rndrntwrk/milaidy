@@ -57,11 +57,15 @@ describe("initializeAliceCorpusRuntime", () => {
     const logs: Array<[string, Record<string, unknown>]> = [];
 
     await expect(
-      initializeAliceCorpusRuntime(runtime as any, {}, {
-        seed: async () => undefined,
-        documentIdForKey: () => "unused",
-        log: (event, payload) => logs.push([event, payload]),
-      }),
+      initializeAliceCorpusRuntime(
+        runtime as any,
+        {},
+        {
+          seed: async () => undefined,
+          documentIdForKey: () => "unused",
+          log: (event, payload) => logs.push([event, payload]),
+        },
+      ),
     ).resolves.toBeNull();
 
     expect(memories.has("corpus-document")).toBe(false);

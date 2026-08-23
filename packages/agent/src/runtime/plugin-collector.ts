@@ -281,10 +281,7 @@ export function collectPluginNames(
     pluginsToLoad.add(STREAM555_PLUGIN_PACKAGE);
     track(STREAM555_PLUGIN_PACKAGE, "env: STREAM555_BASE_URL + stream auth");
     pluginsToLoad.add(FIVE55_GAMES_PLUGIN_PACKAGE);
-    track(
-      FIVE55_GAMES_PLUGIN_PACKAGE,
-      "env: STREAM555_BASE_URL + stream auth",
-    );
+    track(FIVE55_GAMES_PLUGIN_PACKAGE, "env: STREAM555_BASE_URL + stream auth");
   }
 
   const connectors =

@@ -8,9 +8,7 @@ import {
   seedAliceCorpusKnowledge,
 } from "./knowledge.js";
 
-type KnowledgeCorpus = Parameters<
-  typeof buildAliceCorpusKnowledgeDocuments
->[0];
+type KnowledgeCorpus = Parameters<typeof buildAliceCorpusKnowledgeDocuments>[0];
 
 interface TestMemory extends AliceCorpusStoredMemory {
   id: string;

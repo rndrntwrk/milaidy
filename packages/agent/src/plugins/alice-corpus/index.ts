@@ -11,9 +11,7 @@ import { resolveAliceCorpusConfig } from "./config.js";
 import { initializeAliceCorpusRuntime } from "./runtime.js";
 
 function corpusDocumentId(agentId: string, key: string): string {
-  return stringToUuid(
-    `milady-default-knowledge:${agentId}:${key}:document`,
-  );
+  return stringToUuid(`milady-default-knowledge:${agentId}:${key}:document`);
 }
 
 export function createAliceCorpusPlugin(): Plugin {

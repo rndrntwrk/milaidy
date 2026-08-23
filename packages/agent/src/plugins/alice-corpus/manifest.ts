@@ -76,7 +76,10 @@ function assertObject(
   }
 }
 
-function assertNonEmptyString(value: unknown, label: string): asserts value is string {
+function assertNonEmptyString(
+  value: unknown,
+  label: string,
+): asserts value is string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${label} must be a non-empty string`);
   }
@@ -97,16 +100,27 @@ function validateRecord(value: unknown, label: string): AliceCorpusRecord {
   return value as AliceCorpusRecord;
 }
 
-function validateGraphNode(value: unknown, label: string): AliceCorpusGraphNode {
+function validateGraphNode(
+  value: unknown,
+  label: string,
+): AliceCorpusGraphNode {
   assertObject(value, label);
-  for (const field of ["node_id", "node_type", "label", "visibility"] as const) {
+  for (const field of [
+    "node_id",
+    "node_type",
+    "label",
+    "visibility",
+  ] as const) {
     assertNonEmptyString(value[field], `${label} graph node ${field}`);
   }
   assertObject(value.properties, `${label} graph node properties`);
   return value as AliceCorpusGraphNode;
 }
 
-function validateGraphEdge(value: unknown, label: string): AliceCorpusGraphEdge {
+function validateGraphEdge(
+  value: unknown,
+  label: string,
+): AliceCorpusGraphEdge {
   assertObject(value, label);
   for (const field of [
     "edge_id",
@@ -240,9 +254,7 @@ function validateManifestShapes(
   expectedProjection: string,
 ): void {
   if (!manifest.schema_version || !manifest.corpus_id || !manifest.version) {
-    throw new Error(
-      "CORPUS_MANIFEST.json is missing required identity fields",
-    );
+    throw new Error("CORPUS_MANIFEST.json is missing required identity fields");
   }
   if (!manifest.projections || typeof manifest.projections !== "object") {
     throw new Error("CORPUS_MANIFEST.json is missing projections");
@@ -312,12 +324,18 @@ export async function loadAndValidateCorpus(
     dossiers: path.join(projectionRoot, "dossiers"),
   };
 
-  const manifestPath = await assertContainedFile(rootReal, requiredPaths.manifest);
+  const manifestPath = await assertContainedFile(
+    rootReal,
+    requiredPaths.manifest,
+  );
   const projectionManifestPath = await assertContainedFile(
     rootReal,
     requiredPaths.projectionManifest,
   );
-  const recordsPath = await assertContainedFile(rootReal, requiredPaths.records);
+  const recordsPath = await assertContainedFile(
+    rootReal,
+    requiredPaths.records,
+  );
   const graphNodesPath = await assertContainedFile(
     rootReal,
     requiredPaths.graphNodes,
@@ -430,9 +448,7 @@ export async function loadAndValidateCorpus(
     );
   }
 
-  const allowedVisibilities = new Set(
-    projectionManifest.allowed_visibilities,
-  );
+  const allowedVisibilities = new Set(projectionManifest.allowed_visibilities);
   for (const record of records) {
     if (!allowedVisibilities.has(record.visibility)) {
       throw new Error(

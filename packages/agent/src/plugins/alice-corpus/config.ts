@@ -8,13 +8,11 @@ export const ALICE_CORPUS_PROJECTIONS = [
   "owner-private",
 ] as const;
 
-export type AliceCorpusProjection =
-  (typeof ALICE_CORPUS_PROJECTIONS)[number];
+export type AliceCorpusProjection = (typeof ALICE_CORPUS_PROJECTIONS)[number];
 
 export const ALICE_CORPUS_VERIFY_MODES = ["selected", "full", "off"] as const;
 
-export type AliceCorpusVerifyMode =
-  (typeof ALICE_CORPUS_VERIFY_MODES)[number];
+export type AliceCorpusVerifyMode = (typeof ALICE_CORPUS_VERIFY_MODES)[number];
 
 export interface AliceCorpusConfig {
   rootDir: string;
@@ -50,9 +48,7 @@ export function resolveAliceCorpusConfig(
   }
 
   const verifyMode = env.ALICE_CORPUS_VERIFY?.trim() || "selected";
-  if (
-    !(ALICE_CORPUS_VERIFY_MODES as readonly string[]).includes(verifyMode)
-  ) {
+  if (!(ALICE_CORPUS_VERIFY_MODES as readonly string[]).includes(verifyMode)) {
     throw new Error(
       `Unsupported Alice corpus verification mode: ${verifyMode}`,
     );
