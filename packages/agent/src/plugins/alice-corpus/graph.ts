@@ -85,6 +85,16 @@ export class AliceCorpusGraphIndex {
     }
   }
 
+  private requireNode(nodeId: string): AliceCorpusGraphNode {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(
+        `Projected corpus graph node missing after admission: ${nodeId}`,
+      );
+    }
+    return node;
+  }
+
   search(
     query: string,
     options: AliceCorpusGraphSearchOptions = {},
@@ -141,7 +151,7 @@ export class AliceCorpusGraphIndex {
       for (const edge of this.outgoing.get(nodeId) ?? []) {
         if (!allowedEdgeTypes || allowedEdgeTypes.has(edge.edge_type)) {
           rows.push({
-            node: this.nodes.get(edge.target)!,
+            node: this.requireNode(edge.target),
             edge,
             direction: "out",
           });
@@ -152,7 +162,7 @@ export class AliceCorpusGraphIndex {
       for (const edge of this.incoming.get(nodeId) ?? []) {
         if (!allowedEdgeTypes || allowedEdgeTypes.has(edge.edge_type)) {
           rows.push({
-            node: this.nodes.get(edge.source)!,
+            node: this.requireNode(edge.source),
             edge,
             direction: "in",
           });
@@ -180,7 +190,7 @@ export class AliceCorpusGraphIndex {
   ): AliceCorpusGraphPath | null {
     if (!this.nodes.has(source) || !this.nodes.has(target)) return null;
     if (source === target) {
-      return { nodes: [this.nodes.get(source)!], edges: [], steps: [] };
+      return { nodes: [this.requireNode(source)], edges: [], steps: [] };
     }
 
     const maxDepth = Math.min(Math.max(options.maxDepth ?? 6, 1), 8);
@@ -192,7 +202,9 @@ export class AliceCorpusGraphIndex {
     const visited = new Set([source]);
 
     while (queue.length > 0) {
-      const [current, path, pathSteps] = queue.shift()!;
+      const entry = queue.shift();
+      if (!entry) break;
+      const [current, path, pathSteps] = entry;
       if (pathSteps.length >= maxDepth) continue;
 
       for (const neighbor of this.collectNeighbors(
@@ -212,7 +224,7 @@ export class AliceCorpusGraphIndex {
         ];
         if (next === target) {
           return {
-            nodes: nextPath.map((nodeId) => this.nodes.get(nodeId)!),
+            nodes: nextPath.map((nodeId) => this.requireNode(nodeId)),
             edges: nextSteps.map((step) => step.edge),
             steps: nextSteps,
           };
@@ -252,8 +264,10 @@ export class AliceCorpusGraphIndex {
     const queue: Array<[string, number]> = [[nodeId, 0]];
     const visited = new Set([nodeId]);
     while (queue.length > 0) {
-      const [current, currentDepth] = queue.shift()!;
-      const node = this.nodes.get(current)!;
+      const entry = queue.shift();
+      if (!entry) break;
+      const [current, currentDepth] = entry;
+      const node = this.requireNode(current);
       const ids = node.properties?.record_ids;
       if (Array.isArray(ids)) {
         for (const id of ids) {
