@@ -238,6 +238,14 @@ jobs:
             deploy.modal.test_alice_registry_runtime \
             deploy.modal.test_alice_modal_provider_readback \
             deploy.modal.test_alice_safe_bootstrap
+          ./node_modules/.bin/wrangler types \
+            --config workers/alice-production-control/wrangler.jsonc \
+            --env-interface AliceEnv \
+            workers/alice-production-control/worker-configuration.d.ts
+          ./node_modules/.bin/wrangler types \
+            --config workers/alice-access-gateway/wrangler.jsonc \
+            --env-interface AliceAccessGatewayBindings \
+            workers/alice-access-gateway/worker-configuration.d.ts
           bun x tsc --project workers/alice-production-control/tsconfig.json --noEmit
           bun x tsc --project workers/alice-access-gateway/tsconfig.json --noEmit
 
