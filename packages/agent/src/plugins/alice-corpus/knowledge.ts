@@ -16,6 +16,11 @@ export interface AliceCorpusKnowledgeDocumentDefinition {
   metadata?: Record<string, unknown>;
 }
 
+export interface AliceCorpusStoredMemory {
+  id?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface AliceCorpusMemoryRuntime {
   agentId: string;
   getMemories(options: {
@@ -23,7 +28,7 @@ export interface AliceCorpusMemoryRuntime {
     roomId?: string;
     count: number;
     start: number;
-  }): Promise<any[]>;
+  }): Promise<AliceCorpusStoredMemory[]>;
   deleteMemory(id: string): Promise<void>;
 }
 
@@ -220,8 +225,8 @@ export function buildAliceCorpusKnowledgeDocuments(
 async function listAllMemories(
   runtime: AliceCorpusMemoryRuntime,
   tableName: string,
-): Promise<any[]> {
-  const rows: any[] = [];
+): Promise<AliceCorpusStoredMemory[]> {
+  const rows: AliceCorpusStoredMemory[] = [];
   let start = 0;
   while (true) {
     const batch = await runtime.getMemories({
@@ -237,8 +242,8 @@ async function listAllMemories(
   return rows;
 }
 
-function isAliceCorpusDocument(memory: any): boolean {
-  const metadata = memory?.metadata as Record<string, unknown> | undefined;
+function isAliceCorpusDocument(memory: AliceCorpusStoredMemory): boolean {
+  const metadata = memory.metadata;
   const key = metadata?.key ?? metadata?.bundledKnowledgeKey;
   return (
     metadata?.source === ALICE_CORPUS_SOURCE ||
@@ -251,7 +256,7 @@ export async function purgeAliceCorpusKnowledge(
 ): Promise<AliceCorpusPurgeReport> {
   const documentIds = new Set<string>();
   for (const memory of await listAllMemories(runtime, "documents")) {
-    if (isAliceCorpusDocument(memory) && typeof memory?.id === "string") {
+    if (isAliceCorpusDocument(memory) && typeof memory.id === "string") {
       documentIds.add(memory.id);
     }
   }
@@ -259,11 +264,9 @@ export async function purgeAliceCorpusKnowledge(
   let prunedFragments = 0;
   if (documentIds.size > 0) {
     for (const fragment of await listAllMemories(runtime, "knowledge")) {
-      const documentId = (
-        fragment?.metadata as Record<string, unknown> | undefined
-      )?.documentId;
+      const documentId = fragment.metadata?.documentId;
       if (
-        typeof fragment?.id === "string" &&
+        typeof fragment.id === "string" &&
         typeof documentId === "string" &&
         documentIds.has(documentId)
       ) {
@@ -304,7 +307,7 @@ export async function seedAliceCorpusKnowledge(
   for (const memory of await listAllMemories(runtime, "documents")) {
     if (
       isAliceCorpusDocument(memory) &&
-      typeof memory?.id === "string" &&
+      typeof memory.id === "string" &&
       !expectedDocumentIds.has(memory.id)
     ) {
       staleDocumentIds.add(memory.id);
@@ -314,11 +317,9 @@ export async function seedAliceCorpusKnowledge(
   let prunedFragments = 0;
   if (staleDocumentIds.size > 0) {
     for (const fragment of await listAllMemories(runtime, "knowledge")) {
-      const documentId = (
-        fragment?.metadata as Record<string, unknown> | undefined
-      )?.documentId;
+      const documentId = fragment.metadata?.documentId;
       if (
-        typeof fragment?.id === "string" &&
+        typeof fragment.id === "string" &&
         typeof documentId === "string" &&
         staleDocumentIds.has(documentId)
       ) {
