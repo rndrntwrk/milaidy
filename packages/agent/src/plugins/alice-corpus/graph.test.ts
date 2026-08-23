@@ -102,22 +102,83 @@ describe("AliceCorpusGraphIndex", () => {
     ).toEqual(["record:decision:alice"]);
   });
 
-  it("finds a bounded shortest path across both edge directions", () => {
-    expect(
-      graph()
-        .shortestPath("runtime:eliza", "source:spec", { maxDepth: 4 })
-        ?.nodes.map((node) => node.node_id),
-    ).toEqual([
+  it("finds a bounded shortest path and preserves the direction used for every traversed edge", () => {
+    const result = graph().shortestPath("runtime:eliza", "source:spec", {
+      maxDepth: 4,
+    });
+
+    expect(result?.nodes.map((node) => node.node_id)).toEqual([
       "runtime:eliza",
       "system:alice",
       "record:decision:alice",
       "source:spec",
     ]);
     expect(
+      (result as any)?.steps?.map(
+        (step: { direction: "in" | "out" }) => step.direction,
+      ),
+    ).toEqual(["in", "in", "out"]);
+    expect(
       graph().shortestPath("runtime:eliza", "source:spec", {
         maxDepth: 2,
       }),
     ).toBeNull();
+  });
+
+  it("applies edge-type filtering before the neighbor fan-out limit", () => {
+    const manyNodes = [
+      {
+        node_id: "source",
+        node_type: "System",
+        label: "Source",
+        visibility: "INTERNAL",
+        properties: {},
+      },
+      {
+        node_id: "target",
+        node_type: "System",
+        label: "Target",
+        visibility: "INTERNAL",
+        properties: {},
+      },
+      ...Array.from({ length: 101 }, (_, index) => ({
+        node_id: `noise:${index}`,
+        node_type: "System",
+        label: `Noise ${index}`,
+        visibility: "INTERNAL",
+        properties: {},
+      })),
+    ];
+    const manyEdges = [
+      ...Array.from({ length: 101 }, (_, index) => ({
+        edge_id: `edge:${String(index).padStart(3, "0")}`,
+        source: "source",
+        target: `noise:${index}`,
+        edge_type: "NOISE",
+        visibility: "INTERNAL",
+        properties: {},
+      })),
+      {
+        edge_id: "edge:999",
+        source: "source",
+        target: "target",
+        edge_type: "SUPPORTS",
+        visibility: "INTERNAL",
+        properties: {},
+      },
+    ];
+    const index = new AliceCorpusGraphIndex(
+      manyNodes as any,
+      manyEdges as any,
+      { version: "1.0.0", projection: "internal" },
+    );
+
+    expect(
+      index.shortestPath("source", "target", {
+        edgeTypes: ["SUPPORTS"],
+        maxDepth: 1,
+      })?.nodes.map((node) => node.node_id),
+    ).toEqual(["source", "target"]);
   });
 
   it("traces record and source evidence and lists gaps", () => {
