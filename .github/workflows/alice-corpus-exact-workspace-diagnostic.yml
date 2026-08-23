@@ -6,6 +6,7 @@ on:
       - feat/alice-corpus-runtime-binding-2026-08-22
     paths:
       - ".github/workflows/alice-corpus-exact-workspace-diagnostic.yml"
+      - ".github/workflows/alice-corpus-binding-ci.yml"
       - "package.json"
       - "bun.lock"
       - "packages/agent/vitest.config.ts"
@@ -17,6 +18,7 @@ on:
       - release/alice-production-core-2026-08-22
     paths:
       - ".github/workflows/alice-corpus-exact-workspace-diagnostic.yml"
+      - ".github/workflows/alice-corpus-binding-ci.yml"
       - "package.json"
       - "bun.lock"
       - "packages/agent/vitest.config.ts"
@@ -104,6 +106,8 @@ jobs:
           set -euo pipefail
           cp package.json "$RUNNER_TEMP/package.before.json"
           cp bun.lock "$RUNNER_TEMP/bun.before.lock"
+          cp .github/workflows/alice-corpus-binding-ci.yml \
+            "$RUNNER_TEMP/alice-corpus-binding-ci.before.yml"
 
           test -f plugins/plugin-bluebubbles/typescript/package.json || {
             echo "::error::Required local BlueBubbles workspace is missing"
@@ -150,16 +154,6 @@ jobs:
           git diff --stat -- package.json bun.lock || true
           git status --short -- package.json bun.lock || true
 
-      - name: Require PR workspace reconciliation to be committed
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! git diff --exit-code -- package.json bun.lock; then
-            echo "::error::Exact package.json/bun.lock reconciliation is not committed on the PR head"
-            exit 1
-          fi
-
       - name: Generate local Eliza protobuf types
         shell: bash
         run: |
@@ -195,22 +189,77 @@ jobs:
         working-directory: packages/agent
         run: bun run build
 
-      - name: Persist exact workspace reconciliation on the feature branch
+      - name: Prepare the fail-closed main binding gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const path = ".github/workflows/alice-corpus-binding-ci.yml";
+          let workflow = fs.readFileSync(path, "utf8");
+          workflow = workflow.replace("    continue-on-error: true\n", "");
+
+          const oldRegression = `      - name: Run exact corpus admission regression
+        run: >-
+          bunx vitest run
+          packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts
+`;
+          const exactRegression = `      - name: Run exact corpus admission regression
+        working-directory: packages/agent
+        run: >-
+          bunx vitest run
+          src/runtime/eliza.alice-corpus-admission.test.ts
+`;
+
+          if (workflow.includes(oldRegression)) {
+            workflow = workflow.replace(oldRegression, exactRegression);
+          }
+          if (!workflow.includes(exactRegression)) {
+            throw new Error("Unable to establish package-scoped exact regression step");
+          }
+          if (workflow.includes("continue-on-error: true")) {
+            throw new Error("Exact release-runtime gate remains advisory");
+          }
+
+          fs.writeFileSync(path, workflow);
+          NODE
+
+      - name: Require PR reconciliation to be committed
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- \
+            package.json \
+            bun.lock \
+            .github/workflows/alice-corpus-binding-ci.yml; then
+            echo "::error::Exact workspace or fail-closed binding reconciliation is not committed on the PR head"
+            exit 1
+          fi
+
+      - name: Persist exact reconciliation on the feature branch
         if: >-
           github.event_name == 'push' &&
           github.ref_name == 'feat/alice-corpus-runtime-binding-2026-08-22'
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- package.json bun.lock; then
-            echo "Exact workspace already reconciled; nothing to commit."
+          if git diff --quiet -- \
+            package.json \
+            bun.lock \
+            .github/workflows/alice-corpus-binding-ci.yml; then
+            echo "Exact workspace and binding gate already reconciled; nothing to commit."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json bun.lock
-          git commit -m "chore(alice): reconcile exact release workspace lock"
+          git add \
+            package.json \
+            bun.lock \
+            .github/workflows/alice-corpus-binding-ci.yml
+          git commit -m "chore(alice): reconcile exact release admission"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload exact workspace diagnostics
@@ -221,8 +270,10 @@ jobs:
           path: |
             package.json
             bun.lock
+            .github/workflows/alice-corpus-binding-ci.yml
             ${{ runner.temp }}/package.before.json
             ${{ runner.temp }}/bun.before.lock
+            ${{ runner.temp }}/alice-corpus-binding-ci.before.yml
             ${{ runner.temp }}/exact-workspace.diff
           if-no-files-found: error
           retention-days: 3
@@ -247,7 +298,7 @@ jobs:
           - attempt: \`$RUN_ATTEMPT\`
           - artifact: \`alice-corpus-exact-workspace-${{ github.sha }}\`
 
-          The PR lane is read-only and fails unless the exact workspace reconciliation is already committed.
+          The PR lane executes the exact regression, typecheck and build read-only, then fails unless all reconciliation is already committed.
           EOF
           )
           gh api \
