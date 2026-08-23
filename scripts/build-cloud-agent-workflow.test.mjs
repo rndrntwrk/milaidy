@@ -187,6 +187,21 @@ test("Alice production base images are immutable reviewed manifests", () => {
   assert.doesNotMatch(dockerfile, /^FROM (?:node|oven\/bun):[^@\n]+$/m);
 });
 
+test("Alice Worker builds install the lockfile-pinned Wrangler at the repository root", () => {
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+  );
+  const lockfile = fs.readFileSync(path.join(repoRoot, "bun.lock"), "utf8");
+  const rootImporter = lockfile.slice(0, lockfile.indexOf('\n    "apps/app":'));
+
+  assert.equal(packageJson.devDependencies?.wrangler, "4.122.0");
+  assert.match(
+    rootImporter,
+    /"devDependencies": \{[\s\S]*?"wrangler": "4\.122\.0"/,
+    "the root lockfile importer must materialize node_modules/.bin/wrangler",
+  );
+});
+
 test("protected Alice qualification verifies provider identity and exact Worker bundles", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
