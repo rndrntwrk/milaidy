@@ -1,17 +1,46 @@
 import { describe, expect, it } from "vitest";
+import type { AliceCorpusProjection } from "./config.js";
 import {
+  type AliceCorpusKnowledgeDocumentDefinition,
+  type AliceCorpusMemoryRuntime,
+  type AliceCorpusStoredMemory,
   buildAliceCorpusKnowledgeDocuments,
   seedAliceCorpusKnowledge,
 } from "./knowledge.js";
 
-function fixtureCorpus(projection = "internal") {
+type KnowledgeCorpus = Parameters<
+  typeof buildAliceCorpusKnowledgeDocuments
+>[0];
+
+interface TestMemory extends AliceCorpusStoredMemory {
+  id: string;
+  tableName: "documents" | "knowledge";
+  content?: { text: string };
+}
+
+function fixtureCorpus(
+  projection: AliceCorpusProjection = "internal",
+): KnowledgeCorpus {
   return {
-    config: { projection },
-    manifest: { corpus_id: "test-corpus", version: "1.2.3" },
+    config: {
+      rootDir: "/tmp/alice-corpus",
+      projection,
+      verifyMode: "selected",
+      strict: true,
+      graphEnabled: true,
+      allowOwnerPrivate: false,
+    },
+    manifest: {
+      schema_version: "1.0",
+      corpus_id: "test-corpus",
+      version: "1.2.3",
+      projections: {},
+    },
     inputDigest: "a".repeat(64),
     dossiers: [
       {
         relativePath: `projections/${projection}/dossiers/system-test.md`,
+        absolutePath: `/tmp/alice-corpus/projections/${projection}/dossiers/system-test.md`,
         text: "# Test system\n\n## Purpose\n\nBody.\n\n## Boundary\n\nNot production.\n",
       },
     ],
@@ -33,7 +62,7 @@ function fixtureCorpus(projection = "internal") {
         visibility: "INTERNAL",
       },
     ],
-  } as any;
+  };
 }
 
 describe("Alice corpus knowledge", () => {
@@ -47,9 +76,7 @@ describe("Alice corpus knowledge", () => {
     );
 
     expect(documents).toHaveLength(2);
-    expect(dossier?.key).toMatch(
-      /alice-corpus:1\.2\.3:internal:dossier:/,
-    );
+    expect(dossier?.key).toMatch(/alice-corpus:1\.2\.3:internal:dossier:/);
     expect(dossier?.filename).toMatch(/^alice-corpus-[a-f0-9]{24}\.md$/);
     expect(dossier?.filename).not.toContain("system-test");
     expect(dossier?.metadata?.corpusLogicalPath).toBe(
@@ -59,24 +86,14 @@ describe("Alice corpus knowledge", () => {
     expect(records?.fragments).toHaveLength(1);
     expect(records?.fragments[0]?.text).toContain("record_id: fact:test");
     expect(records?.fragments[0]?.text).toContain("source_refs: src:test");
-    expect(records?.fragments[0]?.text).toContain(
-      "Boundary: Not production.",
-    );
+    expect(records?.fragments[0]?.text).toContain("Boundary: Not production.");
   });
 
   it("is idempotent and physically removes the previous projection", async () => {
-    const memories = new Map<string, any>();
-    const runtime = {
+    const memories = new Map<string, TestMemory>();
+    const runtime: AliceCorpusMemoryRuntime = {
       agentId: "agent",
-      async getMemories({
-        tableName,
-        start = 0,
-        count = 100,
-      }: {
-        tableName: string;
-        start?: number;
-        count?: number;
-      }) {
+      async getMemories({ tableName, start = 0, count = 100 }) {
         return [...memories.values()]
           .filter((memory) => memory.tableName === tableName)
           .slice(start, start + count);
@@ -87,7 +104,10 @@ describe("Alice corpus knowledge", () => {
     };
     const documentIdForKey = (agentId: string, key: string) =>
       `document:${agentId}:${key}`;
-    const seed = async (_runtime: unknown, documents: readonly any[]) => {
+    const seed = async (
+      _runtime: unknown,
+      documents: readonly AliceCorpusKnowledgeDocumentDefinition[],
+    ) => {
       for (const document of documents) {
         const documentId = documentIdForKey("agent", document.key);
         memories.set(documentId, {
@@ -95,7 +115,7 @@ describe("Alice corpus knowledge", () => {
           tableName: "documents",
           metadata: { ...document.metadata, documentId },
         });
-        document.fragments.forEach((fragment: any, index: number) => {
+        document.fragments.forEach((fragment, index) => {
           memories.set(`${documentId}:fragment:${index}`, {
             id: `${documentId}:fragment:${index}`,
             tableName: "knowledge",
@@ -107,13 +127,13 @@ describe("Alice corpus knowledge", () => {
     };
 
     const first = await seedAliceCorpusKnowledge(
-      runtime as any,
+      runtime,
       fixtureCorpus("internal"),
       { seed, documentIdForKey },
     );
     const sizeAfterFirst = memories.size;
     const second = await seedAliceCorpusKnowledge(
-      runtime as any,
+      runtime,
       fixtureCorpus("internal"),
       { seed, documentIdForKey },
     );
@@ -123,7 +143,7 @@ describe("Alice corpus knowledge", () => {
     expect(memories.size).toBe(sizeAfterFirst);
 
     const switched = await seedAliceCorpusKnowledge(
-      runtime as any,
+      runtime,
       fixtureCorpus("public"),
       { seed, documentIdForKey },
     );
