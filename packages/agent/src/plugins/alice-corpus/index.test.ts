@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAliceCorpusPlugin } from "./index.js";
 
+type AliceCorpusPluginInit = NonNullable<
+  ReturnType<typeof createAliceCorpusPlugin>["init"]
+>;
+type AliceCorpusPluginRuntime = Parameters<AliceCorpusPluginInit>[1];
+
+interface TestMemory {
+  id: string;
+  tableName: "documents" | "knowledge";
+  metadata: Record<string, string>;
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
@@ -8,7 +19,7 @@ afterEach(() => {
 describe("Alice corpus plugin lifecycle", () => {
   it("runs no-root cleanup instead of returning before persisted corpus is purged", async () => {
     vi.stubEnv("ALICE_CORPUS_ROOT", "");
-    const memories = new Map<string, any>([
+    const memories = new Map<string, TestMemory>([
       [
         "corpus-document",
         {
@@ -46,7 +57,10 @@ describe("Alice corpus plugin lifecycle", () => {
       },
     };
 
-    await createAliceCorpusPlugin().init?.({}, runtime as any);
+    await createAliceCorpusPlugin().init?.(
+      {},
+      runtime as unknown as AliceCorpusPluginRuntime,
+    );
 
     expect(memories.size).toBe(0);
   });
