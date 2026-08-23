@@ -250,14 +250,15 @@ function normalizeWorkflow(workflow) {
 
 function normalizeBucket(bucket) {
   const createdAt = normalizedTimestamp(bucket?.creation_date);
+  const location = typeof bucket?.location === "string"
+    ? bucket.location.toLowerCase()
+    : null;
   if (
     !bucket ||
     bucket.name !== ALICE_CLOUDFLARE_TARGET.evidenceBucket ||
     createdAt === null ||
     !["default", "eu", "fedramp"].includes(bucket.jurisdiction) ||
-    !["apac", "eeur", "enam", "weur", "wnam", "oc"].includes(
-      bucket.location,
-    ) ||
+    !["apac", "eeur", "enam", "weur", "wnam", "oc"].includes(location) ||
     !["Standard", "InfrequentAccess"].includes(bucket.storage_class)
   ) {
     invalid();
@@ -266,7 +267,7 @@ function normalizeBucket(bucket) {
     name: bucket.name,
     createdAt,
     jurisdiction: bucket.jurisdiction,
-    location: bucket.location,
+    location,
     storageClass: bucket.storage_class,
   };
 }

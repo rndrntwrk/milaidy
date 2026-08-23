@@ -114,6 +114,14 @@ test("normalizes one exact provider continuity identity bundle", () => {
   assert.match(digestAliceCloudflareContinuityConfig(config), /^sha256:[a-f0-9]{64}$/);
 });
 
+test("case-folds Cloudflare's canonical uppercase ENAM bucket location", () => {
+  const config = buildAliceCloudflareContinuityConfig({
+    ...readback,
+    bucket: { ...readback.bucket, location: "ENAM" },
+  });
+  assert.equal(config.evidenceBucket.location, "enam");
+});
+
 test("fails closed on every substituted continuity boundary", () => {
   const substitutions = [
     { ...readback, accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
@@ -143,6 +151,10 @@ test("fails closed on every substituted continuity boundary", () => {
     },
     { ...readback, workflow: { ...readback.workflow, id: "other" } },
     { ...readback, bucket: { ...readback.bucket, location: "other" } },
+    { ...readback, bucket: { ...readback.bucket, location: " ENAM " } },
+    { ...readback, bucket: { ...readback.bucket, location: 123 } },
+    { ...readback, bucket: { ...readback.bucket, name: "other" } },
+    { ...readback, bucket: { ...readback.bucket, storage_class: "Other" } },
     { ...readback, sentinel: { ...readback.sentinel, key: "other" } },
     { ...readback, sentinel: { ...readback.sentinel, content_sha256: `sha256:${"0".repeat(64)}` } },
     {

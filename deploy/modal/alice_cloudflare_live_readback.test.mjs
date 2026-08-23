@@ -222,6 +222,36 @@ test("fetches the exact queue, DLQ, consumer, Workflow, R2, sentinel, and DO con
   }
 });
 
+test("accepts Cloudflare's uppercase ENAM readback and emits canonical continuity", async () => {
+  const calls = [];
+  const baseFetch = continuityApi(calls);
+  const fetchImpl = async (url, options) => {
+    const parsed = new URL(url);
+    if (
+      parsed.pathname.replace("/client/v4", "") ===
+      `/accounts/${accountId}/r2/buckets/alice-production-evidence`
+    ) {
+      calls.push({ url: parsed.href, options });
+      return json({
+        success: true,
+        result: { ...continuityFixture.bucket, location: "ENAM" },
+      });
+    }
+    return baseFetch(url, options);
+  };
+  const state = await fetchAliceCloudflareContinuityState({
+    fetchImpl,
+    apiToken: "read-only-token",
+    expectedDurableObjectNamespaceIds:
+      continuityFixture.durableObjectNamespaceIds,
+    accountId,
+    zoneId,
+    baseUrl,
+  });
+  assert.equal(state.readback.bucket.location, "ENAM");
+  assert.equal(state.sanitized.evidenceBucket.location, "enam");
+});
+
 test("accepts Cloudflare's exact zero-subscription pagination response", async () => {
   const calls = [];
   const baseFetch = continuityApi(calls);
