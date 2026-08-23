@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type {
+  AliceCorpusMemoryRuntime,
+  AliceCorpusStoredMemory,
+} from "./knowledge.js";
 import {
   clearAliceCorpusRuntimeState,
   getAliceCorpusRuntimeState,
@@ -6,21 +10,21 @@ import {
 } from "./runtime.js";
 import { createCorpusFixture } from "./test-fixtures.js";
 
-function createRuntimeHarness() {
-  const memories = new Map<string, any>();
+interface TestMemory extends AliceCorpusStoredMemory {
+  id: string;
+  tableName: "documents" | "knowledge";
+}
+
+function createRuntimeHarness(): {
+  memories: Map<string, TestMemory>;
+  runtime: AliceCorpusMemoryRuntime;
+} {
+  const memories = new Map<string, TestMemory>();
   return {
     memories,
     runtime: {
       agentId: "agent",
-      async getMemories({
-        tableName,
-        start = 0,
-        count = 100,
-      }: {
-        tableName: string;
-        start?: number;
-        count?: number;
-      }) {
+      async getMemories({ tableName, start = 0, count = 100 }) {
         return [...memories.values()]
           .filter((memory) => memory.tableName === tableName)
           .slice(start, start + count);
@@ -57,15 +61,11 @@ describe("initializeAliceCorpusRuntime", () => {
     const logs: Array<[string, Record<string, unknown>]> = [];
 
     await expect(
-      initializeAliceCorpusRuntime(
-        runtime as any,
-        {},
-        {
-          seed: async () => undefined,
-          documentIdForKey: () => "unused",
-          log: (event, payload) => logs.push([event, payload]),
-        },
-      ),
+      initializeAliceCorpusRuntime(runtime, {}, {
+        seed: async () => undefined,
+        documentIdForKey: () => "unused",
+        log: (event, payload) => logs.push([event, payload]),
+      }),
     ).resolves.toBeNull();
 
     expect(memories.has("corpus-document")).toBe(false);
@@ -84,7 +84,7 @@ describe("initializeAliceCorpusRuntime", () => {
       `document:${agentId}:${key}`;
 
     const state = await initializeAliceCorpusRuntime(
-      runtime as any,
+      runtime,
       {
         ALICE_CORPUS_ROOT: root,
         ALICE_CORPUS_PROJECTION: "internal",
