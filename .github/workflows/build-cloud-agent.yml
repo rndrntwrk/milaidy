@@ -56,6 +56,7 @@ permissions:
   contents: read
   packages: write
   id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -64,26 +65,59 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      - name: Enforce Alice release dispatch contract
+        if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release/alice-production-core-2026-08-22' && (inputs.source_sha == '' || inputs.skip_rollout != true) }}
+        run: |
+          echo "Alice release dispatches require exact source_sha and skip_rollout=true" >&2
+          exit 1
+
+      - name: Require isolated Alice candidate mode
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha != '' && inputs.skip_rollout != true }}
+        run: |
+          echo "Exact Alice source_sha builds require skip_rollout=true" >&2
+          exit 1
+
       # ── 1. Checkout ─────────────────────────────────────────────────────────
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.SOURCE_REF }}
           fetch-depth: 0
           submodules: false
+          persist-credentials: false
+
+      - name: Require exact protected Alice release head
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha != '' }}
+        env:
+          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          PROTECTED_ALICE_REF: refs/heads/release/alice-production-core-2026-08-22
+        run: |
+          if ! printf '%s' "$REQUESTED_SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'; then
+            echo "Alice source_sha must be an exact lowercase commit" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "$PROTECTED_ALICE_REF" ]; then
+            echo "Alice exact-image builds must be dispatched from $PROTECTED_ALICE_REF" >&2
+            exit 1
+          fi
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$REQUESTED_SOURCE_SHA" != "$GITHUB_SHA" ] || [ "$actual_sha" != "$GITHUB_SHA" ]; then
+            echo "Alice source_sha must equal the protected release branch head" >&2
+            exit 1
+          fi
 
       - name: Resolve checked-out source revision
         id: source_revision
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # ── 2. Set up Node + Bun ────────────────────────────────────────────────
-      - name: Setup Node.js 24
-        uses: actions/setup-node@v6
+      - name: Setup Node.js 24.19.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: "24"
+          node-version: "24.19.0"
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: "1.3.14"
 
@@ -97,7 +131,7 @@ jobs:
 
       # ── 3. Cache bun store ──────────────────────────────────────────────────
       - name: Cache bun store
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.bun/install/cache
           key: bun-store-cloud-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -106,16 +140,24 @@ jobs:
 
       # ── 3.5. Init submodules + patch workspace for CI ──────────────
       - name: Init submodules
+        id: eliza_revision
         run: |
           # The parent gitlink is the release authority. Hydrate that exact
-          # commit from the official repository rather than either floating
-          # develop branch or the lagging RNDRNTWRK fork.
+          # commit from the protected Alice runtime branch in the canonical
+          # organization fork; never float on either develop branch.
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "${#eliza_sha}" -eq 40
-          git clone --no-checkout --filter=blob:none https://github.com/elizaOS/eliza.git eliza
+          expected_eliza_sha="e219c232e21d8b61017129647130830d811ee45a"
+          git clone --no-checkout --filter=blob:none https://github.com/rndrntwrk/eliza.git eliza
+          git -C eliza fetch --depth=1 origin refs/heads/alice/runtime-stable-2026-08-22:refs/remotes/origin/alice/runtime-stable-2026-08-22
+          protected_eliza_sha="$(git -C eliza rev-parse refs/remotes/origin/alice/runtime-stable-2026-08-22)"
+          test "$protected_eliza_sha" = "$expected_eliza_sha"
+          test "$eliza_sha" = "$protected_eliza_sha"
           git -C eliza fetch --depth=1 origin "$eliza_sha"
           git -C eliza checkout --detach "$eliza_sha"
           test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
+          echo "sha=$eliza_sha" >> "$GITHUB_OUTPUT"
+          test "$(git config -f .gitmodules --get submodule.eliza.branch)" = "alice/runtime-stable-2026-08-22"
           # Apply cloud runtime patches to eliza submodule
           if [ -f cloud/patches/cloud-runtime-patches.patch ]; then
             echo "Applying cloud runtime patches to eliza submodule..."
@@ -132,9 +174,7 @@ jobs:
               echo "AppBlockerSettingsCard alias added to $LIFEOPS_UI"
             fi
           fi
-          ls eliza/package.json && echo "eliza submodule OK" || echo "WARN: eliza submodule missing"
-          # Init other submodules (skip local upstreams to avoid nested plugin submodules)
-          MILADY_SKIP_LOCAL_UPSTREAMS=1 node scripts/init-submodules.mjs || echo "Some submodules failed, continuing"
+          test -f eliza/package.json
 
       # ── 4. Install dependencies ─────────────────────────────────────────────
       - name: Port Alice operator bridge
@@ -148,6 +188,122 @@ jobs:
           bun install --ignore-scripts --frozen-lockfile
           cd eliza
           bun install --ignore-scripts --frozen-lockfile
+
+      - name: Qualify Alice production-core contracts
+        env:
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+        run: |
+          bun test \
+            packages/agent/src/api/alice-production-auth-boundary.test.ts \
+            packages/agent/src/api/alice-production-chat.test.ts \
+            packages/agent/src/api/alice-production-guard.test.ts \
+            packages/agent/src/api/alice-production-proof.test.ts \
+            packages/agent/src/api/alice-release-metadata.test.ts \
+            packages/agent/src/runtime/alice-production-plugin-policy.test.ts \
+            packages/agent/src/runtime/alice-production-runtime-plugin.test.ts \
+            packages/agent/src/runtime/alice-production-startup-guard.test.ts \
+            packages/agent/src/runtime/plugin-resolver.test.ts \
+            deploy/modal/alice_production_acceptance.test.ts \
+            deploy/modal/verify_alice_program_admission.test.ts \
+            workers/alice-access-gateway/test/index.test.ts \
+            workers/alice-production-control/test/*.test.ts
+          node --test \
+            deploy/modal/alice_cloudflare_bootstrap.test.mjs \
+            workers/alice-ai-gateway/src/index.test.mjs \
+            deploy/modal/alice_cloudflare_config.test.mjs \
+            deploy/modal/alice_cloudflare_continuity.test.mjs \
+            deploy/modal/alice_cloudflare_live_readback.test.mjs \
+            deploy/modal/alice_cloudflare_provider_config.test.mjs \
+            deploy/modal/alice_cloudflare_provider_readback.test.mjs \
+            deploy/modal/alice_cloudflare_recovery_preprovision.test.mjs \
+            deploy/modal/alice_program_signing_key.test.mjs \
+            deploy/modal/alice_terminal_publication.test.mjs \
+            deploy/modal/alice_cloudflare_release.test.mjs \
+            deploy/modal/alice_cloudflare_traffic.test.mjs \
+            deploy/modal/alice_cloudflare_worker_rollback.test.mjs \
+            deploy/modal/alice_deployment_manifest.test.mjs \
+            deploy/modal/alice_modal_promote.test.mjs \
+            deploy/modal/alice_modal_release.test.mjs \
+            deploy/modal/alice_modal_safe_bootstrap.test.mjs \
+            deploy/modal/alice_recovery_credential_binding.test.mjs \
+            deploy/modal/alice_release_controller.test.mjs \
+            deploy/modal/alice_release_deadline.test.mjs \
+            deploy/modal/alice_smoke_model_server.test.mjs \
+            deploy/modal/verify_alice_runtime_boundary.test.mjs \
+            deploy/modal/write_alice_runtime_build_manifest.test.mjs \
+            deploy/modal/alice_worker_bundle_artifact.test.mjs \
+            deploy/modal/alice_workflow_binding_canary.test.mjs \
+            scripts/deploy-alice-cloudflare-workflow.test.mjs \
+            scripts/build-cloud-agent-workflow.test.mjs
+          python3 -m unittest \
+            deploy.modal.test_alice_registry_runtime \
+            deploy.modal.test_alice_modal_provider_readback \
+            deploy.modal.test_alice_safe_bootstrap
+          bun x tsc --project workers/alice-production-control/tsconfig.json --noEmit
+          bun x tsc --project workers/alice-access-gateway/tsconfig.json --noEmit
+
+      - name: Build exact Alice Worker bundles
+        id: worker_bundles
+        env:
+          ALICE_SOURCE_COMMIT: ${{ steps.source_revision.outputs.sha }}
+        run: |
+          bundle_root="$(mktemp -d "${RUNNER_TEMP}/alice-worker-bundles.XXXXXX")"
+          wrangler_version="$(./node_modules/.bin/wrangler --version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          test "$wrangler_version" = "4.122.0"
+          for worker in alice-access-gateway alice-production-control alice-ai-gateway; do
+            mkdir "$bundle_root/$worker"
+            ./node_modules/.bin/wrangler deploy \
+              --dry-run \
+              --outdir "$bundle_root/$worker" \
+              --config "workers/$worker/wrangler.jsonc"
+            test -s "$bundle_root/$worker/index.js"
+          done
+          ALICE_WORKER_BUNDLE_ROOT="$bundle_root" \
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH="$bundle_root/alice-worker-bundles.json" \
+          ALICE_WRANGLER_VERSION="$wrangler_version" \
+          node deploy/modal/alice_worker_bundle_artifact.mjs
+          test -s "$bundle_root/alice-worker-bundles.json"
+          echo "root=$bundle_root" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Alice Worker bundle artifact'
+            echo '```text'
+            cat "$bundle_root/alice-worker-bundles.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attest exact Alice Worker bundle provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ steps.worker_bundles.outputs.root }}/**/*
+
+      - name: Upload immutable Alice Worker bundle artifact
+        id: upload_worker_bundles
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-worker-bundles-${{ steps.source_revision.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.worker_bundles.outputs.root }}
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Record immutable Worker artifact identity
+        run: |
+          {
+            echo "Artifact ID: ${{ steps.upload_worker_bundles.outputs.artifact-id }}"
+            echo "Artifact digest: ${{ steps.upload_worker_bundles.outputs.artifact-digest }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove runner-local Worker bundle staging directory
+        if: always()
+        env:
+          BUNDLE_ROOT: ${{ steps.worker_bundles.outputs.root }}
+        run: |
+          case "$BUNDLE_ROOT" in
+            "$RUNNER_TEMP"/alice-worker-bundles.*) rm -rf -- "$BUNDLE_ROOT" ;;
+            "") ;;
+            *) echo "Refusing unsafe bundle cleanup target" >&2; exit 1 ;;
+          esac
 
       # ── 5. Build Capacitor plugins ──────────────────────────────────────────
       - name: Build Capacitor plugins
@@ -284,7 +440,7 @@ jobs:
       # ── 6. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
         run: |
-          npx tsdown
+          ./node_modules/.bin/tsdown
           echo '{"type":"module"}' > dist/package.json
           node --import tsx eliza/packages/app-core/scripts/write-build-info.ts 2>/dev/null || true
         env:
@@ -293,6 +449,8 @@ jobs:
       # ── 7. Determine version ────────────────────────────────────────────────
       - name: Determine version
         id: version
+        env:
+          ALICE_INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [ "${SOURCE_REF}" = "cloud/staging" ]; then
             VERSION_PREFIX="cloud-staging-v"
@@ -304,8 +462,12 @@ jobs:
             BUILD_ENVIRONMENT="production"
           fi
 
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${VERSION_PREFIX}${{ inputs.version }}"
+          if [ -n "$ALICE_INPUT_VERSION" ]; then
+            if ! printf '%s' "$ALICE_INPUT_VERSION" | grep -Eq '^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}(-[0-9A-Za-z][0-9A-Za-z.-]{0,31})?$'; then
+              echo "Cloud version input is invalid" >&2
+              exit 1
+            fi
+            VERSION="${VERSION_PREFIX}${ALICE_INPUT_VERSION}"
           else
             VERSION="${VERSION_PREFIX}2.0.${{ github.run_number }}"
           fi
@@ -374,18 +536,27 @@ jobs:
           echo '!eliza/apps/app-lifeops' >> .dockerignore
           echo '!deploy/cloud-agent-template' >> .dockerignore
           echo '!deploy/cloud-agent-template/**' >> .dockerignore
+          echo '!deploy/modal' >> .dockerignore
+          echo '!deploy/modal/write_alice_runtime_build_manifest.mjs' >> .dockerignore
+          echo '!deploy/modal/verify_alice_runtime_build_manifest.mjs' >> .dockerignore
           echo '!apps/homepage' >> .dockerignore
           echo '!apps/homepage/**' >> .dockerignore
           echo '!eliza/packages/examples' >> .dockerignore
           echo '!eliza/packages/examples/**' >> .dockerignore
+          # Alice production admits only the pinned Eliza source tree. Economic
+          # and test-contract gitlinks must never enter the image context.
+          echo 'steward-fi' >> .dockerignore
+          echo 'steward-fi/**' >> .dockerignore
+          echo 'test/contracts' >> .dockerignore
+          echo 'test/contracts/**' >> .dockerignore
 
       # ── 10. Set up Docker Buildx ────────────────────────────────
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
       # ── 11. Login to GHCR ──────────────────────────────────────────────────
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         if: ${{ github.event_name == 'push' || inputs.push_image != false }}
         with:
           registry: ${{ env.REGISTRY }}
@@ -395,7 +566,7 @@ jobs:
       # ── 12. Build and push Docker image ────────────────────────────────────
       - name: Build and push Docker image
         id: cloud-image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: deploy/Dockerfile.ci
@@ -416,7 +587,17 @@ jobs:
             VERSION=${{ steps.version.outputs.version }}
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
             REVISION=${{ steps.source_revision.outputs.sha }}
-          provenance: false
+            ELIZA_REVISION=${{ steps.eliza_revision.outputs.sha }}
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest exact Alice image provenance
+        if: success() && (github.event_name == 'push' || inputs.push_image != false)
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.cloud-image.outputs.digest }}
+          push-to-registry: true
 
       - name: Smoke exact candidate image
         if: success() && (steps.version.outputs.build_environment == 'staging' || (github.event_name == 'workflow_dispatch' && inputs.skip_rollout == true)) && (github.event_name == 'push' || inputs.push_image != false)
@@ -425,16 +606,50 @@ jobs:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.cloud-image.outputs.digest }}
           EXPECTED_REVISION: ${{ steps.source_revision.outputs.sha }}
           SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_PRODUCTION_SKIP_PLUGINS_FILE: deploy/modal/alice-denied-plugins.txt
         run: |
           set -euo pipefail
 
           cleanup() {
             docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+            if [ -n "${SMOKE_MODEL_PID:-}" ]; then
+              kill "$SMOKE_MODEL_PID" >/dev/null 2>&1 || true
+              wait "$SMOKE_MODEL_PID" >/dev/null 2>&1 || true
+            fi
           }
           trap cleanup EXIT
 
           test -n "${{ steps.cloud-image.outputs.digest }}"
+          test -s "$ALICE_PRODUCTION_SKIP_PLUGINS_FILE"
+          ALICE_PRODUCTION_SKIP_PLUGINS="$(awk 'NF && $1 !~ /^#/ { if (seen++) printf ","; printf "%s", $0 } END { print "" }' "$ALICE_PRODUCTION_SKIP_PLUGINS_FILE")"
+          test -n "$ALICE_PRODUCTION_SKIP_PLUGINS"
+          EXPECTED_ELIZA_REVISION="$(git ls-tree "$EXPECTED_REVISION" eliza | awk '{print $3}')"
+          test "${#EXPECTED_ELIZA_REVISION}" -eq 40
+          test "$EXPECTED_ELIZA_REVISION" = "${{ steps.eliza_revision.outputs.sha }}"
+
+          ALICE_SMOKE_MODEL_PORT=18080 node deploy/modal/alice_smoke_model_server.mjs >/tmp/alice-smoke-model.log 2>&1 &
+          SMOKE_MODEL_PID=$!
+          printf '%s\n' "$SMOKE_MODEL_PID" > "/tmp/${SMOKE_CONTAINER}.model.pid"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18080/__smoke/state >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$SMOKE_MODEL_PID" 2>/dev/null; then
+              cat /tmp/alice-smoke-model.log >&2 || true
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18080/__smoke/state >/dev/null
           docker pull --platform linux/amd64 "$IMAGE"
+
+          EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256="$(docker run --rm \
+            --platform linux/amd64 \
+            --entrypoint node \
+            "$IMAGE" \
+            --input-type=module \
+            -e 'import fs from "node:fs"; import crypto from "node:crypto"; const bytes = fs.readFileSync("/app/alice-runtime-build-manifest.json"); process.stdout.write(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`);')"
+          printf '%s' "$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" | grep -Eq '^sha256:[a-f0-9]{64}$'
 
           actual_revision="$(docker image inspect "$IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
           if [ "$actual_revision" != "$EXPECTED_REVISION" ]; then
@@ -445,10 +660,31 @@ jobs:
           docker run -d \
             --platform linux/amd64 \
             --name "$SMOKE_CONTAINER" \
+            --add-host host.docker.internal:host-gateway \
             --env MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
-            --env ELIZA_AUTH_DISABLED=1 \
+            --env ELIZA_AUTH_DISABLED=0 \
+            --env MILADY_API_TOKEN=alice-cloud-smoke-runtime-token \
+            --env MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET=alice-cloud-smoke-access-proxy-secret \
+            --env ALICE_RUNTIME_AUTHORITY_MODE=proposer-only \
+            --env ENABLE_AUTONOMY=false \
+            --env ELIZA_TRIGGERS_ENABLED=false \
+            --env MILADY_ALLOWED_ORIGINS=https://alice.rndrntwrk.com \
+            --env ELIZA_ALLOWED_ORIGINS=https://alice.rndrntwrk.com \
             --env OPENAI_API_KEY=alice-cloud-smoke-provider-sentinel \
+            --env OPENAI_BASE_URL=http://host.docker.internal:18080/v1 \
+            --env OPENAI_EMBEDDING_URL=http://host.docker.internal:18080/v1 \
             --env ELIZA_VAULT_PASSPHRASE=alice-cloud-smoke-vault-passphrase \
+            --env ALICE_PROGRAM_DIGEST=sha256:1111111111111111111111111111111111111111111111111111111111111111 \
+            --env ALICE_RELEASE_DIGEST=sha256:2222222222222222222222222222222222222222222222222222222222222222 \
+            --env ALICE_POLICY_HASH=sha256:3333333333333333333333333333333333333333333333333333333333333333 \
+            --env ALICE_SOURCE_COMMIT="$EXPECTED_REVISION" \
+            --env ALICE_DEPLOYMENT_CONTROLLER_COMMIT="$EXPECTED_REVISION" \
+            --env ALICE_RUNTIME_IMAGE="$IMAGE" \
+            --env ALICE_RUNTIME_BUILD_MANIFEST_SHA256="$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" \
+            --env ALICE_DEPLOYMENT_MANIFEST_SHA256=sha256:9999999999999999999999999999999999999999999999999999999999999999 \
+            --env ALICE_ELIZA_COMMIT="$EXPECTED_ELIZA_REVISION" \
+            --env ALICE_MODAL_REVISION=49 \
+            --env ELIZA_SKIP_PLUGINS="$ALICE_PRODUCTION_SKIP_PLUGINS" \
             "$IMAGE"
 
           for attempt in $(seq 1 72); do
@@ -456,16 +692,49 @@ jobs:
             state="$(docker inspect "$SMOKE_CONTAINER" --format '{{ .State.Status }}')"
 
             if [ "$health" = "healthy" ]; then
+              docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/steward-fi'
+              docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/test/contracts'
+              runtime_build_attestation="$(docker exec "$SMOKE_CONTAINER" node deploy/modal/verify_alice_runtime_build_manifest.mjs)"
+              printf '%s' "$runtime_build_attestation" | grep -q '"ok":true'
               if readiness="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
                 import { gunzipSync } from "node:zlib";
                 const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
-                const response = await fetch(`http://127.0.0.1:${port}/api/health`);
+                const base = `http://127.0.0.1:${port}`;
+                const authHeaders = {
+                  authorization: `Bearer ${process.env.MILADY_API_TOKEN}`,
+                  "cf-access-authenticated-user-email": "alice-owner-verified.invalid",
+                  "x-milady-cloudflare-access-secret": process.env.MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET,
+                };
+                const liveness = await fetch(`${base}/health/live`);
+                if (liveness.status !== 200) {
+                  console.error(JSON.stringify({ livenessStatus: liveness.status }));
+                  process.exit(2);
+                }
+                const unauthenticatedRuntimeReads = [
+                  "/api/health",
+                  "/health",
+                  "/health/ready",
+                  "/api/alice-production/proof",
+                ];
+                for (const pathname of unauthenticatedRuntimeReads) {
+                  const unauthenticated = await fetch(`${base}${pathname}`);
+                  if (unauthenticated.status !== 401) {
+                    console.error(JSON.stringify({ pathname, unauthenticatedStatus: unauthenticated.status }));
+                    process.exit(2);
+                  }
+                }
+                const response = await fetch(`${base}/api/health`, { headers: authHeaders });
                 const health = await response.json();
                 if (response.status !== 200 || health.agentState !== "running") {
                   console.error(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond }));
                   process.exit(2);
                 }
-                const emoteResponse = await fetch(`http://127.0.0.1:${port}/api/emotes`);
+                const readyResponse = await fetch(`${base}/health/ready`, { headers: authHeaders });
+                if (readyResponse.status !== 200) {
+                  console.error(JSON.stringify({ readyStatus: readyResponse.status }));
+                  process.exit(2);
+                }
+                const emoteResponse = await fetch(`${base}/api/emotes`, { headers: authHeaders });
                 const emoteBody = await emoteResponse.json();
                 if (
                   emoteResponse.status !== 200 ||
@@ -476,35 +745,121 @@ jobs:
                   process.exit(3);
                 }
                 const broadcastResponse = await fetch(`http://127.0.0.1:${port}/broadcast/alice-cam`);
-                const broadcastHtml = await broadcastResponse.text();
-                if (
-                  broadcastResponse.status !== 200 ||
-                  !broadcastHtml.includes(`<base href="/" />`)
-                ) {
-                  console.error(JSON.stringify({ broadcastStatus: broadcastResponse.status, hasRootBase: broadcastHtml.includes(`<base href="/" />`) }));
+                if (broadcastResponse.status !== 401) {
+                  console.error(JSON.stringify({ broadcastStatus: broadcastResponse.status }));
                   process.exit(4);
                 }
-                const scriptMatch = broadcastHtml.match(/<script[^>]+src="([^"]+\.js)"/);
-                if (!scriptMatch) {
-                  console.error("Broadcast shell has no JavaScript entry");
-                  process.exit(5);
-                }
-                const bundleResponse = await fetch(new URL(scriptMatch[1], `http://127.0.0.1:${port}/`));
-                const bundle = await bundleResponse.text();
-                const requiredMarkers = [
-                  "data-broadcast-shell",
-                  "__agentShowControl",
-                  "playEmote",
-                  "eliza:app-emote-applied",
+                const deniedReads = [
+                  "/api/wallet/keys",
+                  "/api/onboarding/status",
+                  "/api/secrets",
+                  "/api/runtime",
+                  "/api/broadcast/alice-cam/scene",
+                  "/broadcast/alice-cam",
                 ];
-                if (
-                  bundleResponse.status !== 200 ||
-                  requiredMarkers.some((marker) => !bundle.includes(marker))
-                ) {
-                  console.error(JSON.stringify({ bundleStatus: bundleResponse.status, missingMarkers: requiredMarkers.filter((marker) => !bundle.includes(marker)) }));
+                for (const pathname of deniedReads) {
+                  const denied = await fetch(`${base}${pathname}`, { headers: authHeaders });
+                  const body = await denied.json();
+                  if (denied.status !== 403 || body.code !== "ALICE_PRODUCTION_MUTATION_DENIED") {
+                    console.error(JSON.stringify({ pathname, status: denied.status, code: body.code }));
+                    process.exit(5);
+                  }
+                }
+                const dashboardResponse = await fetch(`${base}/`, { headers: authHeaders });
+                const dashboardHtml = await dashboardResponse.text();
+                const scriptMatch = dashboardHtml.match(/<script[^>]+src="([^"]+\.js)"/);
+                if (!scriptMatch) {
+                  console.error(JSON.stringify({ dashboardStatus: dashboardResponse.status, hasScript: false }));
                   process.exit(6);
                 }
-                const vrmResponse = await fetch(`http://127.0.0.1:${port}/vrms/milady-9.vrm.gz`);
+                const bundleResponse = await fetch(new URL(scriptMatch[1], `${base}/`), { headers: authHeaders });
+                if (dashboardResponse.status !== 200 || bundleResponse.status !== 200) {
+                  console.error(JSON.stringify({ dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status }));
+                  process.exit(7);
+                }
+                const deniedMutations = [
+                  ["POST", "/api/plugins/install", { packageName: "@elizaos/plugin-evm" }],
+                  ["POST", "/api/wallet/import", { chain: "evm", privateKey: "blocked" }],
+                  ["POST", "/api/wallet/trade/execute", {}],
+                  ["POST", "/api/stream/start", {}],
+                  ["POST", "/api/terminal/run", { command: "blocked" }],
+                ];
+                for (const [method, pathname, payload] of deniedMutations) {
+                  const denied = await fetch(`${base}${pathname}`, {
+                    method,
+                    headers: { ...authHeaders, "content-type": "application/json" },
+                    body: JSON.stringify(payload),
+                  });
+                  const body = await denied.json();
+                  if (denied.status !== 403 || body.code !== "ALICE_PRODUCTION_MUTATION_DENIED") {
+                    console.error(JSON.stringify({ method, pathname, status: denied.status, code: body.code }));
+                    process.exit(8);
+                  }
+                }
+                const maliciousOrigin = await fetch(`${base}/api/conversations`, {
+                  method: "POST",
+                  headers: { ...authHeaders, origin: "https://attacker.example", "content-type": "application/json" },
+                  body: "{}",
+                });
+                if (maliciousOrigin.status !== 403) {
+                  console.error(JSON.stringify({ maliciousOriginStatus: maliciousOrigin.status }));
+                  process.exit(9);
+                }
+                const bearerOnlyChat = await fetch(`${base}/v1/chat/completions`, {
+                  method: "POST",
+                  headers: {
+                    authorization: `Bearer ${process.env.MILADY_API_TOKEN}`,
+                    "content-type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    model: "alice-exact-image-smoke",
+                    messages: [{ role: "user", content: "This must be denied without Access proxy proof." }],
+                  }),
+                });
+                const bearerOnlyBody = await bearerOnlyChat.json();
+                if (
+                  bearerOnlyChat.status !== 403 ||
+                  bearerOnlyBody.code !== "ALICE_DURABLE_CHAT_INGRESS_REQUIRED"
+                ) {
+                  console.error(JSON.stringify({ bearerOnlyChatStatus: bearerOnlyChat.status, bearerOnlyBody }));
+                  process.exit(10);
+                }
+                const chatResponse = await fetch(`${base}/v1/chat/completions`, {
+                  method: "POST",
+                  headers: { ...authHeaders, "content-type": "application/json" },
+                  body: JSON.stringify({
+                    model: "alice-exact-image-smoke",
+                    messages: [{ role: "user", content: "Return the bounded smoke sentinel." }],
+                  }),
+                });
+                const chatBody = await chatResponse.json();
+                const expectedBoundary = {
+                  schemaVersion: "alice.chat-boundary.v1",
+                  authorityMode: "proposer-only",
+                  modelInterface: "TEXT_LARGE",
+                  actionExecution: "disabled",
+                  tools: "disabled",
+                  services: "not-invoked",
+                };
+                if (
+                  chatResponse.status !== 200 ||
+                  chatBody?.choices?.[0]?.message?.content !== "ALICE_EXACT_IMAGE_RESPONSE_ONLY_OK" ||
+                  JSON.stringify(chatBody.alice_boundary) !== JSON.stringify(expectedBoundary)
+                ) {
+                  console.error(JSON.stringify({ chatStatus: chatResponse.status, chatBody }));
+                  process.exit(11);
+                }
+                const modelStateResponse = await fetch("http://host.docker.internal:18080/__smoke/state");
+                const modelState = await modelStateResponse.json();
+                if (
+                  modelStateResponse.status !== 200 ||
+                  modelState.chatRequests !== 1 ||
+                  modelState.rejectedAuthorityFields !== 0
+                ) {
+                  console.error(JSON.stringify({ modelStateStatus: modelStateResponse.status, modelState }));
+                  process.exit(12);
+                }
+                const vrmResponse = await fetch(`${base}/vrms/milady-9.vrm.gz`, { headers: authHeaders });
                 const compressedVrm = Buffer.from(await vrmResponse.arrayBuffer());
                 let vrmMagic = "";
                 try {
@@ -514,11 +869,22 @@ jobs:
                 }
                 if (vrmResponse.status !== 200 || compressedVrm.length <= 1024 || vrmMagic !== "glTF") {
                   console.error(JSON.stringify({ vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
-                  process.exit(7);
+                  process.exit(13);
                 }
-                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, emoteStatus: emoteResponse.status, broadcastStatus: broadcastResponse.status, bundleStatus: bundleResponse.status, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
+                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, emoteStatus: emoteResponse.status, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatBoundary: chatBody.alice_boundary, modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
               ')"; then
-                echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision health=$readiness"
+                runtime_snapshot="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
+                  const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
+                  const response = await fetch(`http://127.0.0.1:${port}/api/alice-production/proof`, { headers: { authorization: `Bearer ${process.env.MILADY_API_TOKEN}` } });
+                  const body = await response.text();
+                  if (response.status !== 200) {
+                    console.error(JSON.stringify({ proofStatus: response.status }));
+                    process.exit(14);
+                  }
+                  process.stdout.write(body);
+                ')"
+                boundary="$(printf '%s' "$runtime_snapshot" | EXPECTED_SOURCE_COMMIT="$EXPECTED_REVISION" EXPECTED_DEPLOYMENT_CONTROLLER_COMMIT="$EXPECTED_REVISION" EXPECTED_RUNTIME_IMAGE="$IMAGE" EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256="$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" EXPECTED_DEPLOYMENT_MANIFEST_SHA256=sha256:9999999999999999999999999999999999999999999999999999999999999999 EXPECTED_ELIZA_COMMIT="$EXPECTED_ELIZA_REVISION" node deploy/modal/verify_alice_runtime_boundary.mjs)"
+                echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision build=$runtime_build_attestation health=$readiness boundary=$boundary"
                 exit 0
               fi
             fi
@@ -539,7 +905,12 @@ jobs:
         if: always() && (steps.version.outputs.build_environment == 'staging' || (github.event_name == 'workflow_dispatch' && inputs.skip_rollout == true))
         env:
           SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
-        run: docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+        run: |
+          docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+          if [ -s "/tmp/${SMOKE_CONTAINER}.model.pid" ]; then
+            kill "$(cat "/tmp/${SMOKE_CONTAINER}.model.pid")" >/dev/null 2>&1 || true
+            rm -f "/tmp/${SMOKE_CONTAINER}.model.pid"
+          fi
 
       # ── 13. Trigger production deploy webhook ──────────────────────────────
       - name: Trigger cloud fleet deploy webhook
@@ -597,9 +968,12 @@ jobs:
             echo "|----------|-------|"
             echo "| Environment | \`${{ steps.version.outputs.build_environment }}\` |"
             echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |"
+            echo "| Digest | \`${{ steps.cloud-image.outputs.digest }}\` |"
             echo "| Version | \`${{ steps.version.outputs.version }}\` |"
             echo "| Branch | \`${SOURCE_REF}\` |"
-            echo "| Commit | \`$(git rev-parse --short HEAD)\` |"
+            echo "| Commit | \`$(git rev-parse HEAD)\` |"
+            echo "| SBOM | OCI attestation |"
+            echo "| Provenance | BuildKit mode=max plus GitHub artifact attestation |"
             echo "| Auto-deploy | ${ROLLOUT_STATUS} |"
             echo ""
             echo '```bash'

@@ -147,6 +147,13 @@ import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
 import { handleAliceCodingPolicyRoutes } from "./alice-coding-policy-routes.js";
 import { handleAliceCorpusRoutes } from "./alice-corpus-routes.js";
 import { handleAliceOperatorRoutes } from "./alice-operator-routes.js";
+import {
+  evaluateAliceProductionRequest,
+  isAliceProductionChatIngressAuthenticated,
+  isAliceProductionRequestAuthenticated,
+  isAliceProductionRuntime,
+  shouldStartOptionalRuntimeSubsystems,
+} from "./alice-production-guard.js";
 import { handleAppPackageRoutes } from "./app-package-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
 import { handleAuthRoutes } from "./auth-routes.js";
@@ -3026,6 +3033,14 @@ export function resolveCorsOrigin(origin?: string): string | null {
   const trimmed = origin.trim();
   if (!trimmed) return null;
 
+  // Alice production never treats a cloud/wildcard bind as an origin
+  // wildcard. Only the source-owned Access gateway origin is admitted.
+  if (isAliceProductionRuntime(process.env)) {
+    return resolveAllowedOrigins(process.env).includes(trimmed)
+      ? trimmed
+      : null;
+  }
+
   // Cloud-provisioned containers default to allowing all origins so the
   // browser web UI can reach the agent API without extra config.
   if (
@@ -3341,6 +3356,16 @@ export function ensureApiTokenForBindHost(host: string): void {
 }
 
 export function isAuthorized(req: http.IncomingMessage): boolean {
+  if (isAliceProductionRuntime(process.env)) {
+    const expected = getConfiguredApiToken();
+    const provided = extractAuthToken(req);
+    return isAliceProductionRequestAuthenticated({
+      authDisabled: isApiAuthDisabled(),
+      trustedProxyAuthenticated: isCloudflareAccessAuthenticated(req),
+      bearerConfigured: Boolean(expected),
+      bearerMatches: Boolean(expected && provided && tokenMatches(expected, provided)),
+    });
+  }
   if (isApiAuthDisabled()) return true;
   if (isCloudflareAccessAuthenticated(req)) return true;
 
@@ -3548,6 +3573,13 @@ export function resolveWebSocketUpgradeRejection(
   req: http.IncomingMessage,
   wsUrl: URL,
 ): WebSocketUpgradeRejection | null {
+  if (isAliceProductionRuntime(process.env)) {
+    return {
+      status: 403,
+      reason: "Alice production WebSocket mutation surface is disabled",
+    };
+  }
+
   if (wsUrl.pathname !== "/ws") {
     return { status: 404, reason: "Not found" };
   }
@@ -4898,11 +4930,7 @@ async function handleRequest(
   const pathname = url.pathname;
   const isAuthEndpoint = pathname.startsWith("/api/auth/");
   const isHealthEndpoint =
-    method === "GET" &&
-    (pathname === "/api/health" ||
-      pathname === "/health" ||
-      pathname === "/health/live" ||
-      pathname === "/health/ready");
+    method === "GET" && pathname === "/health/live";
   const isCloudProvisioned = isCloudProvisionedContainer();
   const isCloudOnboardingStatusEndpoint =
     method === "GET" &&
@@ -5016,6 +5044,56 @@ async function handleRequest(
 
   if (!applyCors(req, res, pathname)) {
     json(res, { error: "Origin not allowed" }, 403);
+    return;
+  }
+
+  // In production-core mode even the normally public dashboard/broadcast
+  // paths require runtime auth. This closes direct Modal-origin access while
+  // retaining only process liveness for unauthenticated provider probes.
+  // Detailed health, readiness, and release proof stay authenticated.
+  if (
+    isAliceProductionRuntime(process.env) &&
+    method !== "OPTIONS" &&
+    !isHealthEndpoint &&
+    !isAuthorized(req)
+  ) {
+    json(res, { error: "Unauthorized" }, 401);
+    return;
+  }
+
+  if (
+    isAliceProductionRuntime(process.env) &&
+    method === "POST" &&
+    pathname === "/v1/chat/completions" &&
+    !isAliceProductionChatIngressAuthenticated(
+      isCloudflareAccessAuthenticated(req),
+    )
+  ) {
+    json(
+      res,
+      {
+        error: "Alice production chat requires durable Access ingress",
+        code: "ALICE_DURABLE_CHAT_INGRESS_REQUIRED",
+      },
+      403,
+    );
+    return;
+  }
+
+  const aliceProductionDecision = evaluateAliceProductionRequest(
+    method,
+    pathname,
+    process.env,
+  );
+  if (!aliceProductionDecision.allowed) {
+    json(
+      res,
+      {
+        error: "Alice production runtime capability is disabled",
+        code: aliceProductionDecision.code,
+      },
+      403,
+    );
     return;
   }
 
@@ -6750,6 +6828,10 @@ export async function startApiServer(opts?: {
 }> {
   const apiStartTime = Date.now();
   console.log(`[eliza-api] startApiServer called`);
+  const optionalRuntimeSubsystems = shouldStartOptionalRuntimeSubsystems(
+    process.env,
+  );
+  const aliceProduction = !optionalRuntimeSubsystems;
 
   const port = opts?.port ?? resolveServerOnlyPort(process.env);
   const host = resolveApiBindHost(process.env);
@@ -6781,10 +6863,12 @@ export async function startApiServer(opts?: {
     "BIRDEYE_API_KEY",
     "SOLANA_RPC_URL",
   ] as const;
-  for (const key of envKeysToHydrate) {
-    const value = persistedEnv?.[key];
-    if (typeof value === "string" && value.trim() && !process.env[key]) {
-      process.env[key] = value.trim();
+  if (optionalRuntimeSubsystems) {
+    for (const key of envKeysToHydrate) {
+      const value = persistedEnv?.[key];
+      if (typeof value === "string" && value.trim() && !process.env[key]) {
+        process.env[key] = value.trim();
+      }
     }
   }
 
@@ -6797,7 +6881,11 @@ export async function startApiServer(opts?: {
     walletAutoProvisionRaw === "true" ||
     walletAutoProvisionRaw === "on" ||
     walletAutoProvisionRaw === "yes";
-  if (walletAutoProvisionEnabled && ensureWalletKeysInEnvAndConfig(config)) {
+  if (
+    optionalRuntimeSubsystems &&
+    walletAutoProvisionEnabled &&
+    ensureWalletKeysInEnvAndConfig(config)
+  ) {
     try {
       saveElizaConfig(config);
     } catch (err) {
@@ -6809,11 +6897,11 @@ export async function startApiServer(opts?: {
 
   // Pre-load steward wallet addresses so getWalletAddresses() has them
   // available synchronously from the start (cloud-provisioned containers).
-  await initStewardWalletCache();
+  if (optionalRuntimeSubsystems) await initStewardWalletCache();
 
   // Warn when wallet private keys live in plaintext config and the OS secure
   // store is not enabled.  This nudges operators toward MILADY_WALLET_OS_STORE=1.
-  {
+  if (optionalRuntimeSubsystems) {
     const hasPlaintextKeys =
       (typeof persistedEnv?.EVM_PRIVATE_KEY === "string" &&
         persistedEnv.EVM_PRIVATE_KEY.trim()) ||
@@ -6833,7 +6921,7 @@ export async function startApiServer(opts?: {
     }
   }
 
-  const plugins = discoverPluginsFromManifest();
+  const plugins = optionalRuntimeSubsystems ? discoverPluginsFromManifest() : [];
   console.log(
     `[eliza-api] Plugins discovered (${Date.now() - apiStartTime}ms)`,
   );
@@ -6892,14 +6980,17 @@ export async function startApiServer(opts?: {
     broadcastWsToClientId: null,
     activeConversationId: null,
     permissionStates: {},
-    shellEnabled: config.features?.shellEnabled !== false,
+    shellEnabled:
+      optionalRuntimeSubsystems && config.features?.shellEnabled !== false,
     agentAutomationMode: resolveAgentAutomationModeFromConfig(config),
     tradePermissionMode: resolveTradePermissionMode(config),
     pendingRestartReasons: [],
     connectorRouteHandlers: [],
     connectorHealthMonitor: null,
   };
-  const trainingServiceCtor = await resolveTrainingServiceCtor();
+  const trainingServiceCtor = optionalRuntimeSubsystems
+    ? await resolveTrainingServiceCtor()
+    : null;
   const trainingServiceOptions = {
     getRuntime: () => state.runtime,
     getConfig: () => state.config,
@@ -6992,9 +7083,11 @@ export async function startApiServer(opts?: {
   );
 
   // Warm per-provider model caches in background (non-blocking)
-  void getOrFetchAllProviders().catch((err) => {
-    logger.warn("[api] Provider cache warm-up failed:", err);
-  });
+  if (optionalRuntimeSubsystems) {
+    void getOrFetchAllProviders().catch((err) => {
+      logger.warn("[api] Provider cache warm-up failed:", err);
+    });
+  }
 
   // ── Intercept loggers so ALL agent/plugin/service logs appear in the UI ──
   // We patch both the global `logger` singleton from @elizaos/core (used by
@@ -7081,7 +7174,7 @@ export async function startApiServer(opts?: {
   }
 
   // Store the restart callback on the state so the route handler can access it.
-  const onRestart = opts?.onRestart ?? null;
+  const onRestart = aliceProduction ? null : (opts?.onRestart ?? null);
 
   console.log(
     `[eliza-api] Creating http server (${Date.now() - apiStartTime}ms)`,
@@ -7091,15 +7184,17 @@ export async function startApiServer(opts?: {
       await handleRequest(req, res, state, {
         onRestart,
         onRuntimeSwapped: () => {
-          bindRuntimeStreams(state.runtime);
-          void wireCoordinatorBridgesWhenReady(state, {
-            wireChatBridge: wireCodingAgentChatBridge,
-            wireWsBridge: wireCodingAgentWsBridge,
-            wireEventRouting: wireCoordinatorEventRouting,
-            wireSwarmSynthesis: wireCodingAgentSwarmSynthesis,
-            context: "restart",
-            logger,
-          });
+          if (optionalRuntimeSubsystems) {
+            bindRuntimeStreams(state.runtime);
+            void wireCoordinatorBridgesWhenReady(state, {
+              wireChatBridge: wireCodingAgentChatBridge,
+              wireWsBridge: wireCodingAgentWsBridge,
+              wireEventRouting: wireCoordinatorEventRouting,
+              wireSwarmSynthesis: wireCodingAgentSwarmSynthesis,
+              context: "restart",
+              logger,
+            });
+          }
         },
       });
     } catch (err) {
@@ -7540,11 +7635,13 @@ export async function startApiServer(opts?: {
     WebSocket,
     Map<string, () => void>
   >();
-  bindRuntimeStreams(opts?.runtime ?? null);
-  bindTrainingStream();
+  if (optionalRuntimeSubsystems) {
+    bindRuntimeStreams(opts?.runtime ?? null);
+    bindTrainingStream();
+  }
 
   // Wire coding-agent bridges at initial boot (event-driven via getServiceLoadPromise)
-  if (opts?.runtime) {
+  if (opts?.runtime && optionalRuntimeSubsystems) {
     void wireCoordinatorBridgesWhenReady(state, {
       wireChatBridge: wireCodingAgentChatBridge,
       wireWsBridge: wireCodingAgentWsBridge,
@@ -7987,10 +8084,12 @@ export async function startApiServer(opts?: {
     void beginConversationRestore(opts.runtime).catch((err) => {
       logger.warn("[api] Conversation restore failed:", err);
     });
-    void overlayDbCharacter(opts.runtime, state).catch((err) => {
-      logger.warn("[api] Character overlay restore failed:", err);
-    });
-    registerClientChatSendHandler(opts.runtime, state);
+    if (optionalRuntimeSubsystems) {
+      void overlayDbCharacter(opts.runtime, state).catch((err) => {
+        logger.warn("[api] Character overlay restore failed:", err);
+      });
+      registerClientChatSendHandler(opts.runtime, state);
+    }
   }
 
   /** Hot-swap the runtime reference (used after an in-process restart). */
@@ -7998,7 +8097,7 @@ export async function startApiServer(opts?: {
     state.runtime = rt;
     state.chatConnectionReady = null;
     state.chatConnectionPromise = null;
-    bindRuntimeStreams(rt);
+    if (optionalRuntimeSubsystems) bindRuntimeStreams(rt);
     // AppManager doesn't need a runtime reference
     state.agentState = "running";
     state.agentName =
@@ -8020,25 +8119,29 @@ export async function startApiServer(opts?: {
     });
 
     // Overlay DB-persisted character data (from Character Editor saves)
-    void overlayDbCharacter(rt, state).catch((err) => {
-      logger.warn("[api] Character overlay restore failed on restart:", err);
-    });
+    if (optionalRuntimeSubsystems) {
+      void overlayDbCharacter(rt, state).catch((err) => {
+        logger.warn("[api] Character overlay restore failed on restart:", err);
+      });
+    }
 
     // Broadcast status update immediately after restart
     broadcastStatus();
 
     // Re-register client_chat send handler on the new runtime
-    registerClientChatSendHandler(rt, state);
+    if (optionalRuntimeSubsystems) registerClientChatSendHandler(rt, state);
 
     // Wire coding-agent bridges (event-driven via getServiceLoadPromise)
-    void wireCoordinatorBridgesWhenReady(state, {
-      wireChatBridge: wireCodingAgentChatBridge,
-      wireWsBridge: wireCodingAgentWsBridge,
-      wireEventRouting: wireCoordinatorEventRouting,
-      wireSwarmSynthesis: wireCodingAgentSwarmSynthesis,
-      context: "restart",
-      logger,
-    });
+    if (optionalRuntimeSubsystems) {
+      void wireCoordinatorBridgesWhenReady(state, {
+        wireChatBridge: wireCodingAgentChatBridge,
+        wireWsBridge: wireCodingAgentWsBridge,
+        wireEventRouting: wireCoordinatorEventRouting,
+        wireSwarmSynthesis: wireCodingAgentSwarmSynthesis,
+        context: "restart",
+        logger,
+      });
+    }
   };
 
   const updateStartup = (
@@ -8116,7 +8219,7 @@ export async function startApiServer(opts?: {
       logger.info(
         `[eliza-api] Listening on http://${displayHost}:${actualPort}`,
       );
-      startDeferredStartupWork();
+      if (optionalRuntimeSubsystems) startDeferredStartupWork();
       resolve({
         port: actualPort,
         close: async () =>

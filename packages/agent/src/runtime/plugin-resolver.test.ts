@@ -15,6 +15,7 @@ const ENV_KEYS = [
   "ELIZA_STATE_DIR",
   "ELIZA_WORKSPACE_ROOT",
   "ELIZA_SKIP_PLUGINS",
+  "ALICE_RUNTIME_AUTHORITY_MODE",
 ] as const;
 const envBackup = new Map<string, string | undefined>();
 
@@ -502,5 +503,30 @@ describe("resolvePlugins", () => {
 
     expect(skipped.map((plugin) => plugin.name)).not.toContain(missingPlugin);
     expect(getLastFailedPluginNames()).toEqual([]);
+  });
+
+  it("does not rewrite denied Telegram package files in proposer-only production", async () => {
+    const previousCwd = process.cwd();
+    const telegramRoot = path.join(
+      tempRoot,
+      "node_modules",
+      "@elizaos",
+      "plugin-telegram",
+    );
+    const packageJsonPath = path.join(telegramRoot, "package.json");
+    const originalPackageJson = '{"name":"@elizaos/plugin-telegram","type":"module"}\n';
+    await writeFile(packageJsonPath, originalPackageJson);
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.chdir(tempRoot);
+    try {
+      await resolvePlugins({ plugins: { allow: [] } } as never, { quiet: true });
+    } finally {
+      process.chdir(previousCwd);
+    }
+
+    expect(await fs.readFile(packageJsonPath, "utf8")).toBe(originalPackageJson);
+    await expect(
+      fs.stat(path.join(telegramRoot, "dist", "account-auth-service.js")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

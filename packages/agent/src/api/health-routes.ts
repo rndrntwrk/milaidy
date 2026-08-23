@@ -4,6 +4,9 @@ import type { ElizaConfig } from "../config/config.js";
 import type { ConnectorHealthMonitor } from "./connector-health.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { resolveCloudApiKey } from "./wallet-rpc.js";
+import { readAliceReleaseMetadata } from "./alice-release-metadata.js";
+import { buildAliceProductionProof } from "./alice-production-proof.js";
+import { isAliceProductionRuntime } from "./alice-production-guard.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -446,8 +449,9 @@ export async function handleHealthRoutes(
       }
     }
 
-    const ready =
-      state.agentState !== "starting" && state.agentState !== "restarting";
+    const ready = isAliceProductionRuntime(process.env)
+      ? state.agentState === "running" && runtime !== null
+      : state.agentState !== "starting" && state.agentState !== "restarting";
 
     const payload = {
       ready,
@@ -462,6 +466,7 @@ export async function handleHealthRoutes(
       uptime,
       agentState: state.agentState,
       startup: state.startup,
+      aliceRelease: readAliceReleaseMetadata(process.env),
     };
 
     if (isApiHealthRoute) {
@@ -493,6 +498,24 @@ export async function handleHealthRoutes(
       },
       ready ? 200 : 503,
     );
+    return true;
+  }
+
+  // ── GET /api/alice-production/proof ───────────────────────────────────
+  if (method === "GET" && pathname === "/api/alice-production/proof") {
+    if (
+      !isAliceProductionRuntime(process.env) ||
+      state.agentState !== "running" ||
+      !state.runtime
+    ) {
+      error(res, "Alice production proof unavailable", 503);
+      return true;
+    }
+    try {
+      json(res, buildAliceProductionProof(state.runtime, process.env));
+    } catch {
+      error(res, "Alice production proof unavailable", 503);
+    }
     return true;
   }
 

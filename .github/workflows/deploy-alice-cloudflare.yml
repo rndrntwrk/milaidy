@@ -1,0 +1,1282 @@
+name: Deploy Alice Cloudflare Production
+run-name: Alice production deploy watchdog-${{ inputs.recovery_watchdog_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Exact protected Alice release commit"
+        required: true
+        type: string
+      recovery_watchdog_run_id:
+        description: "In-progress protected push recovery watchdog run ID"
+        required: true
+        type: string
+      build_run_id:
+        description: "Successful Build Cloud Agent run ID for source_sha"
+        required: true
+        type: string
+      worker_artifact_name:
+        description: "Immutable Worker bundle artifact name from build_run_id"
+        required: true
+        type: string
+      worker_artifact_digest:
+        description: "Server-reported sha256 digest of the immutable artifact"
+        required: true
+        type: string
+      runtime_image:
+        description: "Smoke-qualified GHCR image pinned by sha256 digest"
+        required: true
+        type: string
+      release_epoch:
+        description: "Signed Program release epoch"
+        required: true
+        type: number
+      modal_revision:
+        description: "Admitted Modal Alice revision"
+        required: true
+        type: number
+      policy_hash:
+        description: "Exact signed Alice policy sha256"
+        required: true
+        type: string
+
+concurrency:
+  group: alice-cloudflare-production
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  attestations: read
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: Promote attested Alice Worker bytes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: alice-production
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      RECOVERY_WATCHDOG_RUN_ID: ${{ inputs.recovery_watchdog_run_id }}
+
+    steps:
+      - name: Checkout exact protected release
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+
+      - name: Enforce protected source and build identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          ARTIFACT_NAME: ${{ inputs.worker_artifact_name }}
+          ARTIFACT_DIGEST: ${{ inputs.worker_artifact_digest }}
+          EXPECTED_REF: refs/heads/release/alice-production-core-2026-08-22
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          printf '%s' "$RECOVERY_WATCHDOG_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$BUILD_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$ARTIFACT_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          printf '%s' "$ARTIFACT_NAME" | grep -Eq "^alice-worker-bundles-${SOURCE_SHA}-${BUILD_RUN_ID}-[1-9][0-9]*$"
+          test "$GITHUB_REF" = "$EXPECTED_REF"
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          test "$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" \
+            --jq .object.sha)" = "$SOURCE_SHA"
+
+          watchdog_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}")"
+          test "$(printf '%s' "$watchdog_json" | jq -r .head_sha)" = "$SOURCE_SHA"
+          test "$(printf '%s' "$watchdog_json" | jq -r .head_branch)" = \
+            "release/alice-production-core-2026-08-22"
+          test "$(printf '%s' "$watchdog_json" | jq -r .event)" = "push"
+          test "$(printf '%s' "$watchdog_json" | jq -r .run_attempt)" = "1"
+          test "$(printf '%s' "$watchdog_json" | jq -r .path)" = \
+            ".github/workflows/recover-alice-production-watchdog.yml"
+          test "$(printf '%s' "$watchdog_json" | jq -r .status)" = "in_progress"
+          test "$(printf '%s' "$watchdog_json" | jq -r .conclusion)" = "null"
+
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}")"
+          test "$(printf '%s' "$run_json" | jq -r .head_sha)" = "$SOURCE_SHA"
+          test "$(printf '%s' "$run_json" | jq -r .head_branch)" = "release/alice-production-core-2026-08-22"
+          test "$(printf '%s' "$run_json" | jq -r .event)" = "workflow_dispatch"
+          test "$(printf '%s' "$run_json" | jq -r .conclusion)" = "success"
+          test "$(printf '%s' "$run_json" | jq -r .path)" = ".github/workflows/build-cloud-agent.yml"
+
+          artifact_record="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | [.digest, .expired] | @tsv")"
+          test "$(printf '%s' "$artifact_record" | wc -l | tr -d ' ')" = "1"
+          test "$(printf '%s' "$artifact_record" | cut -f1)" = "$ARTIFACT_DIGEST"
+          test "$(printf '%s' "$artifact_record" | cut -f2)" = "false"
+
+      - name: Establish global mutation cutoff and recovery reserve
+        run: |
+          set -euo pipefail
+          node deploy/modal/alice_release_deadline.mjs initialize >> "$GITHUB_ENV"
+
+      - name: Setup Node.js 24.19.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.19.0"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Setup Python 3.13.14
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Bind exact protected tool paths
+        run: |
+          set -euo pipefail
+          echo "ALICE_BUN_BIN=$(command -v bun)" >> "$GITHUB_ENV"
+
+      - name: Install exact Modal 1.5.4 deployment client
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/alice-modal-client"
+          "${RUNNER_TEMP}/alice-modal-client/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            --only-binary=:all: \
+            --requirement deploy/modal/requirements-modal-1.5.4.lock
+          test "$("${RUNNER_TEMP}/alice-modal-client/bin/python" --version)" = "Python 3.13.14"
+          test "$("${RUNNER_TEMP}/alice-modal-client/bin/modal" --version)" = \
+            "modal client version: 1.5.4"
+          echo "ALICE_MODAL_PYTHON_BIN=${RUNNER_TEMP}/alice-modal-client/bin/python" >> "$GITHUB_ENV"
+          echo "ALICE_MODAL_BIN=${RUNNER_TEMP}/alice-modal-client/bin/modal" >> "$GITHUB_ENV"
+
+      - name: Install exact release dependencies
+        run: bun install --ignore-scripts --frozen-lockfile
+
+      - name: Download immutable Worker bundle artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.build_run_id }}
+          name: ${{ inputs.worker_artifact_name }}
+          path: ${{ runner.temp }}/alice-worker-bundles
+
+      - name: Verify exact runtime image and derive build-manifest identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+          ELIZA_SHA: e219c232e21d8b61017129647130830d811ee45a
+        run: |
+          set -euo pipefail
+          printf '%s' "$RUNTIME_IMAGE" | grep -Eq '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$'
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          gh attestation verify "oci://${RUNTIME_IMAGE}" \
+            --repo rndrntwrk/milaidy \
+            --signer-workflow rndrntwrk/milaidy/.github/workflows/build-cloud-agent.yml \
+            --source-digest "$SOURCE_SHA" \
+            --source-ref refs/heads/release/alice-production-core-2026-08-22 \
+            --deny-self-hosted-runners
+          docker pull --platform linux/amd64 "$RUNTIME_IMAGE"
+          test "$(docker image inspect "$RUNTIME_IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$SOURCE_SHA"
+          runtime_build_manifest_sha256="$(docker run --rm \
+            --platform linux/amd64 \
+            --entrypoint node \
+            "$RUNTIME_IMAGE" \
+            --input-type=module \
+            -e 'import fs from "node:fs"; import crypto from "node:crypto"; const bytes = fs.readFileSync("/app/alice-runtime-build-manifest.json"); process.stdout.write(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`);')"
+          printf '%s' "$runtime_build_manifest_sha256" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          docker run --rm \
+            --platform linux/amd64 \
+            --entrypoint node \
+            --env ALICE_SOURCE_COMMIT="$SOURCE_SHA" \
+            --env ALICE_ELIZA_COMMIT="$ELIZA_SHA" \
+            --env ALICE_RUNTIME_BUILD_MANIFEST_SHA256="$runtime_build_manifest_sha256" \
+            "$RUNTIME_IMAGE" \
+            deploy/modal/verify_alice_runtime_build_manifest.mjs
+          echo "ALICE_RUNTIME_BUILD_MANIFEST_SHA256=$runtime_build_manifest_sha256" >> "$GITHUB_ENV"
+
+      - name: Verify immutable Worker attestations before unrouted fail-closed bootstrap
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for subject in \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-worker-bundles.json" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-access-gateway/index.js" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-production-control/index.js" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-ai-gateway/index.js"
+          do
+            gh attestation verify "$subject" \
+              --repo rndrntwrk/milaidy \
+              --signer-workflow rndrntwrk/milaidy/.github/workflows/build-cloud-agent.yml \
+              --source-digest "$SOURCE_SHA" \
+              --source-ref refs/heads/release/alice-production-core-2026-08-22 \
+              --deny-self-hosted-runners
+          done
+
+      - name: Revalidate protected head before first provider mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          protected_sha="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" \
+            --jq .object.sha)"
+          test "$protected_sha" = "$SOURCE_SHA"
+
+      - name: Verify two-way provider recovery readiness before first mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          readiness_root="${RUNNER_TEMP}/alice-watchdog-readiness"
+          mkdir "$readiness_root" "${RUNNER_TEMP}/alice-release"
+          for provider in modal cloudflare
+          do
+            artifact_name="alice-watchdog-ready-${provider}-${SOURCE_SHA}-${RECOVERY_WATCHDOG_RUN_ID}-1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            artifact_json=''
+            for attempt in $(seq 1 120)
+            do
+              artifacts_json="$(gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}/artifacts?per_page=100")"
+              matches="$(printf '%s' "$artifacts_json" | jq \
+                --arg name "$artifact_name" \
+                '[.artifacts[] | select(.name == $name and .expired == false)]')"
+              count="$(printf '%s' "$matches" | jq 'length')"
+              test "$count" = "0" || test "$count" = "1"
+              if test "$count" = "1"
+              then
+                artifact_json="$(printf '%s' "$matches" | jq '.[0]')"
+                break
+              fi
+              sleep 5
+            done
+            test -n "$artifact_json"
+            mkdir "$readiness_root/$provider"
+            gh run download "$RECOVERY_WATCHDOG_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "$artifact_name" \
+              --dir "$readiness_root/$provider"
+            readiness="$readiness_root/$provider/readiness.json"
+            test -f "$readiness"
+            jq -e \
+              --arg source "$SOURCE_SHA" \
+              --arg watchdog "$RECOVERY_WATCHDOG_RUN_ID" \
+              --arg parent "$GITHUB_RUN_ID" \
+              --arg provider "$provider" \
+              '.schemaVersion == 1 and
+               .sourceSha == $source and
+               (.watchdogRunId | tostring) == $watchdog and
+               .watchdogRunAttempt == 1 and
+               (.parentRunId | tostring) == $parent and
+               .parentRunAttempt == 1 and
+               .provider == $provider and
+               .providerReadback == "verified" and
+               (.credentialIdSha256 | test("^sha256:[a-f0-9]{64}$")) and
+               (.credentialPolicySha256 | test("^sha256:[a-f0-9]{64}$"))' \
+              "$readiness" >/dev/null
+            cp -- "$readiness" \
+              "${RUNNER_TEMP}/alice-release/watchdog-${provider}-readiness.json"
+          done
+
+          watchdog_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}")"
+          test "$(printf '%s' "$watchdog_json" | jq -r .head_sha)" = "$SOURCE_SHA"
+          test "$(printf '%s' "$watchdog_json" | jq -r .status)" = "in_progress"
+          test "$(printf '%s' "$watchdog_json" | jq -r .conclusion)" = "null"
+          jobs_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}/jobs?filter=all&per_page=100")"
+          for job_name in \
+            "Prestarted independent Modal recovery" \
+            "Prestarted independent Cloudflare recovery"
+          do
+            job_matches="$(printf '%s' "$jobs_json" | jq \
+              --arg name "$job_name" \
+              '[.jobs[] | select(.name == $name and .run_attempt == 1 and
+                .status == "in_progress" and .conclusion == null)]')"
+            test "$(printf '%s' "$job_matches" | jq 'length')" = "1"
+          done
+
+      - name: Bootstrap unrouted fail-closed continuity identities
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
+          ALICE_BOOTSTRAP_OUTPUT_DIR: ${{ runner.temp }}/alice-bootstrap
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+          ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH: ${{ runner.temp }}/alice-release/continuity-readback.json
+          ALICE_BOOTSTRAP_PREFLIGHT_PATH: ${{ runner.temp }}/alice-release/bootstrap-preflight.json
+          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/alice-release"
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_bootstrap.mjs
+
+      - name: Assert independently preprovisioned recovery boundary
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_BOOTSTRAP_CONTROL_CONFIG_PATH: ${{ runner.temp }}/alice-bootstrap/control.bootstrap.wrangler.json
+          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_recovery_preprovision.mjs
+
+      - name: Materialize signed manifest and exact-byte Worker configs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_ELIZA_COMMIT: e219c232e21d8b61017129647130830d811ee45a
+          ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+          ALICE_RELEASE_EPOCH: ${{ inputs.release_epoch }}
+          ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
+          ALICE_POLICY_HASH: ${{ inputs.policy_hash }}
+          ALICE_ROLLBACK_BOUNDARY: "modal:alice-runtime:v${{ inputs.modal_revision }}"
+          ALICE_ACCESS_ISSUER: https://rndrntwrk.cloudflareaccess.com
+          ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
+          ALICE_OWNER_EMAIL_SHA256: ${{ secrets.ALICE_OWNER_EMAIL_SHA256 }}
+          ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
+          ALICE_UPSTREAM_ORIGIN: https://rndrntwrk--alice.modal.run
+          ALICE_MODEL_DAILY_BUDGET_UNITS: "10000"
+          ALICE_PROGRAM_ENVELOPE_B64: ${{ secrets.ALICE_PROGRAM_ENVELOPE_B64 }}
+          ALICE_PROGRAM_SIGNATURE_B64: ${{ secrets.ALICE_PROGRAM_SIGNATURE_B64 }}
+          ALICE_PROGRAM_PUBLIC_JWK_B64: ${{ secrets.ALICE_PROGRAM_PUBLIC_JWK_B64 }}
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH: ${{ runner.temp }}/alice-release/provider-readback.json
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+          ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-release/wrangler
+        run: |
+          set -euo pipefail
+          node deploy/modal/alice_deployment_manifest.mjs
+          node deploy/modal/alice_cloudflare_config.mjs
+          manifest_sha256="sha256:$(sha256sum "${RUNNER_TEMP}/alice-release/alice-deployment-manifest.json" | cut -d' ' -f1)"
+          echo "ALICE_PRODUCTION_RELEASE_CONFIRM=${SOURCE_SHA}:${manifest_sha256}" >> "$GITHUB_ENV"
+
+      - name: Derive one release-bound runtime credential set
+        env:
+          ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-release/wrangler
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token
+          ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token-sha256
+          ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-release/.alice-evidence-queue-hmac-key
+          ALICE_ACCESS_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_CONTROL_SERVICE_TOKEN }}
+          ALICE_ACCESS_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN }}
+          ALICE_AI_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_AI_CONTROL_SERVICE_TOKEN }}
+          ALICE_AI_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN }}
+          ALICE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+          ALICE_RUNTIME_RELEASE_TOKEN_ROOT: ${{ secrets.ALICE_RUNTIME_RELEASE_TOKEN_ROOT }}
+          MILADY_API_TOKEN: ${{ secrets.MILADY_API_TOKEN }}
+          ELIZA_VAULT_PASSPHRASE: ${{ secrets.ELIZA_VAULT_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          bun deploy/modal/verify_alice_program_admission.ts
+          release_digest="$(jq -r .releaseDigest "${RUNNER_TEMP}/alice-release/program-admission.json")"
+          printf '%s' "$release_digest" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          echo "ALICE_MODAL_RELEASE_SECRET_NAME=alice-production-core-${release_digest#sha256:}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Capture immutable Cloudflare rollback journal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_BUN_BIN: ${{ env.ALICE_BUN_BIN }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-release/wrangler
+          ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/rollback-anchor.json
+          ALICE_CLOUDFLARE_PREPARE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/cloudflare-prepare-evidence.json
+          ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+          ALICE_CLOUDFLARE_READBACK_PATH: ${{ runner.temp }}/alice-release/live-readback.json
+          ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH: ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token
+          ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token-sha256
+          ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-release/.alice-evidence-queue-hmac-key
+          ALICE_CLOUDFLARE_RELEASE_PHASE: capture
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+          ALICE_ACCESS_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN }}
+          ALICE_AI_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN }}
+          ALICE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+          ALICE_ACCESS_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_CONTROL_SERVICE_TOKEN }}
+          ALICE_RUNTIME_RELEASE_TOKEN_ROOT: ${{ secrets.ALICE_RUNTIME_RELEASE_TOKEN_ROOT }}
+          ALICE_AI_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_AI_CONTROL_SERVICE_TOKEN }}
+          MILADY_API_TOKEN: ${{ secrets.MILADY_API_TOKEN }}
+          ELIZA_VAULT_PASSPHRASE: ${{ secrets.ELIZA_VAULT_PASSPHRASE }}
+          MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_release.mjs
+
+      - name: Persist pre-mutation Cloudflare rollback journal
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-cloudflare-anchor-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-worker-bundles
+            ${{ runner.temp }}/alice-release
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+
+      - name: Prepare service-authenticated fail-closed control route
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_BUN_BIN: ${{ env.ALICE_BUN_BIN }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-release/wrangler
+          ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/rollback-anchor.json
+          ALICE_CLOUDFLARE_PREPARE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/cloudflare-prepare-evidence.json
+          ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+          ALICE_CLOUDFLARE_READBACK_PATH: ${{ runner.temp }}/alice-release/live-readback.json
+          ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH: ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token
+          ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token-sha256
+          ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-release/.alice-evidence-queue-hmac-key
+          ALICE_CLOUDFLARE_RELEASE_PHASE: prepare
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+          ALICE_ACCESS_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN }}
+          ALICE_AI_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN }}
+          ALICE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+          ALICE_ACCESS_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_CONTROL_SERVICE_TOKEN }}
+          ALICE_RUNTIME_RELEASE_TOKEN_ROOT: ${{ secrets.ALICE_RUNTIME_RELEASE_TOKEN_ROOT }}
+          ALICE_AI_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_AI_CONTROL_SERVICE_TOKEN }}
+          MILADY_API_TOKEN: ${{ secrets.MILADY_API_TOKEN }}
+          ELIZA_VAULT_PASSPHRASE: ${{ secrets.ELIZA_VAULT_PASSPHRASE }}
+          MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_release.mjs
+
+      - name: Commit first-release PAUSE_ALL before runtime mutation
+        env:
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
+          ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/rollback-anchor.json
+          ALICE_CLOUDFLARE_PREPARE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/cloudflare-prepare-evidence.json
+          ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+          ALICE_RELEASE_ACCESS_CLIENT_ID: ${{ secrets.ALICE_RELEASE_ACCESS_CLIENT_ID }}
+          ALICE_RELEASE_ACCESS_CLIENT_SECRET: ${{ secrets.ALICE_RELEASE_ACCESS_CLIENT_SECRET }}
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_release_pause.mjs
+
+      - name: Persist pre-runtime PAUSE_ALL journal
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-pause-journal-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-release/rollback-anchor.json
+            ${{ runner.temp }}/alice-release/cloudflare-prepare-evidence.json
+            ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+
+      - name: Capture exact legacy Modal stop boundary or safe re-entry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_MODAL_LEGACY_TRANSITION_PATH: ${{ runner.temp }}/alice-release/modal-legacy-transition.json
+          ALICE_MODAL_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+          ALICE_MODAL_SAFE_BOOTSTRAP_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-safe-bootstrap-evidence.json
+          ALICE_MODAL_BIN: ${{ env.ALICE_MODAL_BIN }}
+          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_MODAL_PYTHON_BIN }}
+          ALICE_MODAL_RELEASE_SECRET_NAME: ${{ env.ALICE_MODAL_RELEASE_SECRET_NAME }}
+          ALICE_MODAL_SAFE_BOOTSTRAP_PHASE: capture
+          ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
+          ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_modal_safe_bootstrap_cli.mjs
+
+      - name: Persist exact Modal legacy transition before bootstrap mutation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-modal-legacy-transition-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-release/modal-legacy-transition.json
+            ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+            ${{ runner.temp }}/alice-release/modal-safe-bootstrap-evidence.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+
+      - name: Establish inert proxy-authenticated Modal rollback anchor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_MODAL_LEGACY_TRANSITION_PATH: ${{ runner.temp }}/alice-release/modal-legacy-transition.json
+          ALICE_MODAL_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+          ALICE_MODAL_SAFE_BOOTSTRAP_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-safe-bootstrap-evidence.json
+          ALICE_MODAL_BIN: ${{ env.ALICE_MODAL_BIN }}
+          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_MODAL_PYTHON_BIN }}
+          ALICE_MODAL_RELEASE_SECRET_NAME: ${{ env.ALICE_MODAL_RELEASE_SECRET_NAME }}
+          ALICE_MODAL_SAFE_BOOTSTRAP_PHASE: deploy
+          ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
+          ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_modal_safe_bootstrap_cli.mjs
+
+      - name: Stop unsafe Modal transition when no safe anchor was persisted
+        if: failure() || cancelled()
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_MODAL_LEGACY_TRANSITION_PATH: ${{ runner.temp }}/alice-release/modal-legacy-transition.json
+          ALICE_MODAL_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+          ALICE_MODAL_SAFE_BOOTSTRAP_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-safe-bootstrap-evidence.json
+          ALICE_MODAL_BIN: ${{ env.ALICE_MODAL_BIN }}
+          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_MODAL_PYTHON_BIN }}
+          ALICE_MODAL_RELEASE_SECRET_NAME: ${{ env.ALICE_MODAL_RELEASE_SECRET_NAME }}
+          ALICE_MODAL_SAFE_BOOTSTRAP_PHASE: stop-if-unanchored
+          ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
+          ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs modal-recovery)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_modal_safe_bootstrap_cli.mjs
+
+      - name: Persist verified inert Modal rollback anchor
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-modal-safe-anchor-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+            ${{ runner.temp }}/alice-release/modal-safe-bootstrap-evidence.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+
+      - name: Capture immutable Modal rollback journal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token
+          ALICE_MODAL_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+          ALICE_MODAL_MUTATION_JOURNAL_PATH: ${{ runner.temp }}/alice-release/modal-mutation-journal.json
+          ALICE_MODAL_PROMOTION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-promotion-evidence.json
+          ALICE_MODAL_BIN: ${{ env.ALICE_MODAL_BIN }}
+          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_MODAL_PYTHON_BIN }}
+          ALICE_MODAL_RELEASE_SECRET_NAME: ${{ env.ALICE_MODAL_RELEASE_SECRET_NAME }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_MODAL_PROMOTION_PHASE: capture
+          ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
+          ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_modal_promote.mjs
+
+      - name: Persist pre-mutation Modal rollback journal
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-modal-anchor-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+            ${{ runner.temp }}/alice-release/modal-mutation-journal.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+
+      - name: Promote exact Modal runtime with rollback and forward proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token
+          ALICE_MODAL_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+          ALICE_MODAL_MUTATION_JOURNAL_PATH: ${{ runner.temp }}/alice-release/modal-mutation-journal.json
+          ALICE_MODAL_PROMOTION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-promotion-evidence.json
+          ALICE_MODAL_EMERGENCY_ROLLBACK_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-emergency-rollback-evidence.json
+          ALICE_MODAL_BIN: ${{ env.ALICE_MODAL_BIN }}
+          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_MODAL_PYTHON_BIN }}
+          ALICE_MODAL_RELEASE_SECRET_NAME: ${{ env.ALICE_MODAL_RELEASE_SECRET_NAME }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_MODAL_PROMOTION_PHASE: promote
+          ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
+          ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+          MILADY_API_TOKEN: ${{ secrets.MILADY_API_TOKEN }}
+          MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          ELIZA_VAULT_PASSPHRASE: ${{ secrets.ELIZA_VAULT_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          set +e
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_modal_promote.mjs
+          promotion_status=$?
+          set -e
+          if test "$promotion_status" -ne 0
+          then
+            phase_seconds="$(node deploy/modal/alice_release_deadline.mjs modal-recovery)"
+            timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+              node deploy/modal/alice_modal_emergency_rollback.mjs
+            exit "$promotion_status"
+          fi
+
+      - name: Promote only attested immutable Worker bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_BUN_BIN: ${{ env.ALICE_BUN_BIN }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-release/wrangler
+          ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/rollback-anchor.json
+          ALICE_CLOUDFLARE_PREPARE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/cloudflare-prepare-evidence.json
+          ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+          ALICE_CLOUDFLARE_READBACK_PATH: ${{ runner.temp }}/alice-release/live-readback.json
+          ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH: ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token
+          ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token-sha256
+          ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-release/.alice-evidence-queue-hmac-key
+          ALICE_CLOUDFLARE_RELEASE_PHASE: promote
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+          ALICE_ACCESS_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN }}
+          ALICE_AI_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN }}
+          ALICE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+          ALICE_ACCESS_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_CONTROL_SERVICE_TOKEN }}
+          ALICE_RUNTIME_RELEASE_TOKEN_ROOT: ${{ secrets.ALICE_RUNTIME_RELEASE_TOKEN_ROOT }}
+          ALICE_AI_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_AI_CONTROL_SERVICE_TOKEN }}
+          MILADY_API_TOKEN: ${{ secrets.MILADY_API_TOKEN }}
+          ELIZA_VAULT_PASSPHRASE: ${{ secrets.ELIZA_VAULT_PASSPHRASE }}
+          MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_release.mjs
+
+      - name: Persist qualified candidate evidence before terminal acceptance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-qualified-candidate-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+            ${{ runner.temp }}/alice-release/provider-readback.json
+            ${{ runner.temp }}/alice-release/continuity-readback.json
+            ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+            ${{ runner.temp }}/alice-release/bootstrap-state.json
+            ${{ runner.temp }}/alice-release/bootstrap-preflight.json
+            ${{ runner.temp }}/alice-release/rollback-anchor.json
+            ${{ runner.temp }}/alice-release/cloudflare-prepare-evidence.json
+            ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+            ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
+            ${{ runner.temp }}/alice-release/live-readback.json
+            ${{ runner.temp }}/alice-release/program-admission.json
+            ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+            ${{ runner.temp }}/alice-release/modal-mutation-journal.json
+            ${{ runner.temp }}/alice-release/modal-promotion-evidence.json
+            ${{ runner.temp }}/alice-release/watchdog-modal-readiness.json
+            ${{ runner.temp }}/alice-release/watchdog-cloudflare-readiness.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Restore prior Modal graph if downstream promotion fails
+        if: failure() || cancelled()
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_MODAL_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+          ALICE_MODAL_MUTATION_JOURNAL_PATH: ${{ runner.temp }}/alice-release/modal-mutation-journal.json
+          ALICE_MODAL_PROMOTION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-promotion-evidence.json
+          ALICE_MODAL_EMERGENCY_ROLLBACK_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-emergency-rollback-evidence.json
+          ALICE_MODAL_BIN: ${{ env.ALICE_MODAL_BIN }}
+          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_MODAL_PYTHON_BIN }}
+          ALICE_MODAL_RELEASE_SECRET_NAME: ${{ env.ALICE_MODAL_RELEASE_SECRET_NAME }}
+          ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
+          ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+        run: |
+          set -euo pipefail
+          if test ! -f "${RUNNER_TEMP}/alice-release/modal-rollback-anchor.json" || \
+             test ! -f "${RUNNER_TEMP}/alice-release/modal-mutation-journal.json" || \
+             test -f "${RUNNER_TEMP}/alice-release/modal-emergency-rollback-evidence.json"
+          then
+            exit 0
+          fi
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs modal-recovery)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_modal_emergency_rollback.mjs
+
+      - name: Restore prior Cloudflare graph after any failed or cancelled mutation
+        if: failure() || cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_BUN_BIN: ${{ env.ALICE_BUN_BIN }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-release/wrangler
+          ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/rollback-anchor.json
+          ALICE_CLOUDFLARE_PREPARE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/cloudflare-prepare-evidence.json
+          ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+          ALICE_CLOUDFLARE_READBACK_PATH: ${{ runner.temp }}/alice-release/cloudflare-emergency-rollback.json
+          ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH: ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token
+          ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token-sha256
+          ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-release/.alice-evidence-queue-hmac-key
+          ALICE_CLOUDFLARE_RELEASE_PHASE: rollback
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+          ALICE_ACCESS_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN }}
+          ALICE_AI_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN }}
+          ALICE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+          ALICE_ACCESS_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_CONTROL_SERVICE_TOKEN }}
+          ALICE_RUNTIME_RELEASE_TOKEN_ROOT: ${{ secrets.ALICE_RUNTIME_RELEASE_TOKEN_ROOT }}
+          ALICE_AI_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_AI_CONTROL_SERVICE_TOKEN }}
+          MILADY_API_TOKEN: ${{ secrets.MILADY_API_TOKEN }}
+          ELIZA_VAULT_PASSPHRASE: ${{ secrets.ELIZA_VAULT_PASSPHRASE }}
+          MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+        run: |
+          set -euo pipefail
+          if test ! -f "${RUNNER_TEMP}/alice-release/rollback-anchor.json" || \
+             test -f "${RUNNER_TEMP}/alice-release/cloudflare-emergency-rollback.json"
+          then
+            exit 0
+          fi
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs cloudflare-recovery)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_release.mjs
+
+      - name: Preserve terminal recovery evidence
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-recovery-evidence-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+            ${{ runner.temp }}/alice-release/provider-readback.json
+            ${{ runner.temp }}/alice-release/continuity-readback.json
+            ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+            ${{ runner.temp }}/alice-release/bootstrap-state.json
+            ${{ runner.temp }}/alice-release/bootstrap-preflight.json
+            ${{ runner.temp }}/alice-release/rollback-anchor.json
+            ${{ runner.temp }}/alice-release/cloudflare-prepare-evidence.json
+            ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+            ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
+            ${{ runner.temp }}/alice-release/cloudflare-emergency-rollback.json
+            ${{ runner.temp }}/alice-release/live-readback.json
+            ${{ runner.temp }}/alice-release/program-admission.json
+            ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+            ${{ runner.temp }}/alice-release/modal-mutation-journal.json
+            ${{ runner.temp }}/alice-release/modal-promotion-evidence.json
+            ${{ runner.temp }}/alice-release/modal-emergency-rollback-evidence.json
+            ${{ runner.temp }}/alice-release/alice-production-acceptance.json
+            ${{ runner.temp }}/alice-release/watchdog-modal-readiness.json
+            ${{ runner.temp }}/alice-release/watchdog-cloudflare-readiness.json
+          if-no-files-found: warn
+          retention-days: 90
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Remove ephemeral release material
+        if: always()
+        run: |
+          rm -rf -- "${RUNNER_TEMP}/alice-worker-bundles" "${RUNNER_TEMP}/alice-release" "${RUNNER_TEMP}/alice-bootstrap" "${RUNNER_TEMP}/alice-modal-client"
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+  accept:
+    name: Independently recover and accept terminal Alice
+    needs: deploy
+    if: ${{ needs.deploy.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: alice-production-cloudflare-recovery
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+
+    steps:
+      - name: Checkout exact promoted release source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+
+      - name: Validate independent recovery-operator source
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Download exact qualified candidate evidence
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: alice-qualified-candidate-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/alice-release
+
+      - name: Validate exact qualified candidate handoff
+        run: |
+          set -euo pipefail
+          release_root="${RUNNER_TEMP}/alice-release"
+          for required in \
+            alice-deployment-manifest.json \
+            program-admission.json \
+            deployment-pause-evidence.json \
+            rollback-anchor.json \
+            cloudflare-rollback-proof.json \
+            live-readback.json \
+            modal-promotion-evidence.json
+          do
+            test -s "$release_root/$required"
+          done
+          test "$(jq -r .sourceCommit "$release_root/program-admission.json")" = "$SOURCE_SHA"
+          test "$(jq -r .source.sourceCommit "$release_root/alice-deployment-manifest.json")" = "$SOURCE_SHA"
+
+      - name: Prove terminal authenticated Alice production acceptance
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ALICE_OWNER_AUTHORIZATION: ${{ secrets.ALICE_OWNER_AUTHORIZATION }}
+          ALICE_ACCESS_ISSUER: https://rndrntwrk.cloudflareaccess.com
+          ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
+          ALICE_OWNER_EMAIL_SHA256: ${{ secrets.ALICE_OWNER_EMAIL_SHA256 }}
+          ALICE_CONTROL_RECOVERY_TOKEN: ${{ secrets.ALICE_CONTROL_RECOVERY_TOKEN }}
+          ALICE_RELEASE_ACCESS_CLIENT_ID: ${{ secrets.ALICE_RELEASE_ACCESS_CLIENT_ID }}
+          ALICE_RELEASE_ACCESS_CLIENT_SECRET: ${{ secrets.ALICE_RELEASE_ACCESS_CLIENT_SECRET }}
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+          ALICE_DEPLOYMENT_RUN_ID: ${{ github.run_id }}
+          ALICE_DEPLOYMENT_RUN_ATTEMPT: ${{ github.run_attempt }}
+          ALICE_RECOVERY_OPERATOR_RUN_ID: ${{ github.run_id }}
+          ALICE_RECOVERY_OPERATOR_RUN_ATTEMPT: ${{ github.run_attempt }}
+          ALICE_RECOVERY_OPERATOR_JOB: accept
+          ALICE_EXPECTED_WORKFLOW_CONCLUSION: success
+          ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+          ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
+          ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
+          ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/rollback-anchor.json
+          ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH: ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
+          ALICE_CLOUDFLARE_READBACK_PATH: ${{ runner.temp }}/alice-release/live-readback.json
+          ALICE_MODAL_PROMOTION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-promotion-evidence.json
+          ALICE_PRODUCTION_ACCEPTANCE_PATH: ${{ runner.temp }}/alice-release/alice-production-acceptance.json
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 1200s \
+            "$(command -v bun)" deploy/modal/alice_production_acceptance.ts
+
+      - name: Remove recovery-operator ephemeral material before publication
+        if: always()
+        run: |
+          rm -rf -- "${RUNNER_TEMP}/alice-recovery-operator-private" 2>/dev/null || true
+
+      - name: Persist terminal production acceptance evidence as final success action
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-production-acceptance-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-release/alice-deployment-manifest.json
+            ${{ runner.temp }}/alice-release/provider-readback.json
+            ${{ runner.temp }}/alice-release/continuity-readback.json
+            ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+            ${{ runner.temp }}/alice-release/rollback-anchor.json
+            ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
+            ${{ runner.temp }}/alice-release/live-readback.json
+            ${{ runner.temp }}/alice-release/program-admission.json
+            ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+            ${{ runner.temp }}/alice-release/modal-mutation-journal.json
+            ${{ runner.temp }}/alice-release/modal-promotion-evidence.json
+            ${{ runner.temp }}/alice-release/alice-production-acceptance.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+          include-hidden-files: false
+
+  recover-modal:
+    name: Independently stop or restore Modal after deploy-job loss
+    needs: [deploy, accept]
+    if: ${{ always() && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: alice-production-modal-recovery
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+
+    steps:
+      - name: Checkout exact failed release source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+
+      - name: Validate trusted recovery source before setup or secrets
+        run: |
+          set -euo pipefail
+          printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Setup Node.js 24.19.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.19.0"
+
+      - name: Setup Python 3.13.14
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Install exact Modal 1.5.4 recovery client
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/alice-modal-recovery-client"
+          "${RUNNER_TEMP}/alice-modal-recovery-client/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            --only-binary=:all: \
+            --requirement deploy/modal/requirements-modal-1.5.4.lock
+          test "$("${RUNNER_TEMP}/alice-modal-recovery-client/bin/modal" --version)" = \
+            "modal client version: 1.5.4"
+
+      - name: Consume external journals and recover Modal independently
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          set -euo pipefail
+          recovery_root="${RUNNER_TEMP}/alice-independent-modal-recovery"
+          mkdir -p "$recovery_root" "$recovery_root/modal-legacy" \
+            "$recovery_root/modal-safe" "$recovery_root/modal-journal" \
+            "$recovery_root/terminal"
+          artifacts_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100")"
+          download_optional() {
+            artifact_name="$1"
+            destination="$2"
+            count="$(printf '%s' "$artifacts_json" | jq \
+              --arg name "$artifact_name" \
+              '[.artifacts[] | select(.name == $name and .expired == false)] | length')"
+            if test "$count" = "1"
+            then
+              timeout --signal=TERM --kill-after=10s 120s gh run download \
+                "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+                --name "$artifact_name" --dir "$destination"
+            elif test "$count" != "0"
+            then
+              exit 1
+            fi
+          }
+          download_optional \
+            "alice-cloudflare-anchor-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$recovery_root"
+          if test ! -d "$recovery_root/alice-release"
+          then
+            exit 0
+          fi
+          download_optional \
+            "alice-modal-legacy-transition-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$recovery_root/modal-legacy"
+          download_optional \
+            "alice-modal-safe-anchor-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$recovery_root/modal-safe"
+          download_optional \
+            "alice-modal-anchor-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$recovery_root/modal-journal"
+          download_optional \
+            "alice-recovery-evidence-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$recovery_root/terminal"
+          for artifact_dir in modal-legacy modal-safe modal-journal terminal
+          do
+            for artifact_file in \
+              modal-legacy-transition.json \
+              modal-rollback-anchor.json \
+              modal-safe-bootstrap-evidence.json \
+              modal-mutation-journal.json \
+              modal-promotion-evidence.json \
+              modal-emergency-rollback-evidence.json
+            do
+              if test -f "$recovery_root/$artifact_dir/$artifact_file"
+              then
+                cp -- "$recovery_root/$artifact_dir/$artifact_file" \
+                  "$recovery_root/alice-release/$artifact_file"
+              fi
+            done
+          done
+          if test -f "$recovery_root/alice-release/modal-emergency-rollback-evidence.json"
+          then
+            exit 0
+          fi
+          admission="$recovery_root/alice-release/program-admission.json"
+          test -f "$admission"
+          release_digest="$(jq -r .releaseDigest "$admission")"
+          export ALICE_SOURCE_ROOT="$GITHUB_WORKSPACE"
+          export ALICE_DEPLOYMENT_MANIFEST_PATH="$recovery_root/alice-release/alice-deployment-manifest.json"
+          export ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH="$admission"
+          export ALICE_MODAL_LEGACY_TRANSITION_PATH="$recovery_root/alice-release/modal-legacy-transition.json"
+          export ALICE_MODAL_ROLLBACK_ANCHOR_PATH="$recovery_root/alice-release/modal-rollback-anchor.json"
+          export ALICE_MODAL_SAFE_BOOTSTRAP_EVIDENCE_PATH="$recovery_root/alice-release/modal-safe-bootstrap-evidence.json"
+          export ALICE_MODAL_MUTATION_JOURNAL_PATH="$recovery_root/alice-release/modal-mutation-journal.json"
+          export ALICE_MODAL_PROMOTION_EVIDENCE_PATH="$recovery_root/alice-release/modal-promotion-evidence.json"
+          export ALICE_MODAL_EMERGENCY_ROLLBACK_EVIDENCE_PATH="$recovery_root/alice-release/modal-independent-recovery-evidence.json"
+          export ALICE_MODAL_BIN="${RUNNER_TEMP}/alice-modal-recovery-client/bin/modal"
+          export ALICE_MODAL_PYTHON_BIN="${RUNNER_TEMP}/alice-modal-recovery-client/bin/python"
+          export ALICE_MODAL_RELEASE_SECRET_NAME="alice-production-core-${release_digest#sha256:}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export ALICE_MODAL_REVISION="$(jq -r .modalRevision "$admission")"
+          export ALICE_RUNTIME_IMAGE="$(jq -r .runtimeImage "$admission")"
+          if test -f "$ALICE_MODAL_ROLLBACK_ANCHOR_PATH" && \
+             test -f "$ALICE_MODAL_MUTATION_JOURNAL_PATH"
+          then
+            timeout --signal=TERM --kill-after=30s 900s \
+              node deploy/modal/alice_modal_emergency_rollback.mjs
+          elif test ! -f "$ALICE_MODAL_ROLLBACK_ANCHOR_PATH" && \
+               test -f "$ALICE_MODAL_LEGACY_TRANSITION_PATH"
+          then
+            export ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=stop-if-unanchored
+            timeout --signal=TERM --kill-after=30s 900s \
+              node deploy/modal/alice_modal_safe_bootstrap_cli.mjs
+          elif test -f "$ALICE_MODAL_ROLLBACK_ANCHOR_PATH"
+          then
+            exit 0
+          else
+            exit 1
+          fi
+
+      - name: Preserve independent Modal recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-independent-modal-recovery-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-independent-recovery-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
+          overwrite: false
+
+  recover-cloudflare:
+    name: Independently restore Cloudflare after deploy-job loss
+    needs: [deploy, accept]
+    if: ${{ always() && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: alice-production-cloudflare-recovery
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+
+    steps:
+      - name: Checkout exact failed release source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+
+      - name: Validate trusted recovery source before setup or secrets
+        run: |
+          set -euo pipefail
+          printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Setup Node.js 24.19.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.19.0"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Install exact recovery dependencies
+        run: bun install --ignore-scripts --frozen-lockfile
+
+      - name: Consume external journal and recover Cloudflare independently
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+        run: |
+          set -euo pipefail
+          recovery_root="${RUNNER_TEMP}/alice-independent-cloudflare-recovery"
+          terminal_root="${RUNNER_TEMP}/alice-independent-cloudflare-terminal"
+          mkdir -p "$recovery_root" "$terminal_root"
+          artifacts_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100")"
+          download_optional() {
+            artifact_name="$1"
+            destination="$2"
+            count="$(printf '%s' "$artifacts_json" | jq \
+              --arg name "$artifact_name" \
+              '[.artifacts[] | select(.name == $name and .expired == false)] | length')"
+            if test "$count" = "1"
+            then
+              timeout --signal=TERM --kill-after=10s 120s gh run download \
+                "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+                --name "$artifact_name" --dir "$destination"
+            elif test "$count" != "0"
+            then
+              exit 1
+            fi
+          }
+          download_optional \
+            "alice-cloudflare-anchor-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$recovery_root"
+          if test ! -f "$recovery_root/alice-release/rollback-anchor.json"
+          then
+            exit 0
+          fi
+          download_optional \
+            "alice-recovery-evidence-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$terminal_root"
+          if test -f "$terminal_root/cloudflare-emergency-rollback.json"
+          then
+            exit 0
+          fi
+          manifest="$recovery_root/alice-release/alice-deployment-manifest.json"
+          manifest_sha256="sha256:$(sha256sum "$manifest" | cut -d' ' -f1)"
+          export ALICE_SOURCE_ROOT="$GITHUB_WORKSPACE"
+          export ALICE_SOURCE_COMMIT="$SOURCE_SHA"
+          export ALICE_RELEASE_RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export ALICE_WRANGLER_BIN="$GITHUB_WORKSPACE/node_modules/.bin/wrangler"
+          export ALICE_BUN_BIN="$(command -v bun)"
+          export ALICE_WORKER_BUNDLE_ROOT="$recovery_root/alice-worker-bundles"
+          export ALICE_WORKER_BUNDLE_ARTIFACT_PATH="$recovery_root/alice-worker-bundles/alice-worker-bundles.json"
+          export ALICE_DEPLOYMENT_MANIFEST_PATH="$manifest"
+          export ALICE_WRANGLER_OUTPUT_DIR="$recovery_root/alice-release/wrangler"
+          export ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH="$recovery_root/alice-release/rollback-anchor.json"
+          export ALICE_CLOUDFLARE_PREPARE_EVIDENCE_PATH="$recovery_root/alice-release/cloudflare-prepare-evidence.json"
+          export ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH="$recovery_root/alice-release/deployment-pause-evidence.json"
+          export ALICE_CLOUDFLARE_READBACK_PATH="$recovery_root/alice-release/cloudflare-independent-recovery.json"
+          export ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH="$recovery_root/alice-release/cloudflare-independent-rollback-proof.json"
+          export ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH="$recovery_root/alice-release/durable-object-namespace-ids.json"
+          export ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH="$recovery_root/alice-release/program-admission.json"
+          export ALICE_CLOUDFLARE_RELEASE_PHASE=rollback
+          export ALICE_PRODUCTION_RELEASE_CONFIRM="${SOURCE_SHA}:${manifest_sha256}"
+          timeout --signal=TERM --kill-after=30s 900s \
+            node deploy/modal/alice_cloudflare_release.mjs
+
+      - name: Preserve independent Cloudflare recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-independent-cloudflare-recovery-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/alice-independent-cloudflare-recovery/alice-release/cloudflare-independent-recovery.json
+          if-no-files-found: warn
+          retention-days: 90
+          overwrite: false

@@ -28,6 +28,10 @@ import type { PluginInstallRecord } from "../config/types.eliza.js";
 import { diagnoseNoAIProvider } from "../services/version-compat.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import {
+  enforceAliceProductionPluginPolicy,
+  isAliceProductionPluginPolicyEnabled,
+} from "./alice-production-plugin-policy.js";
+import {
   CUSTOM_PLUGINS_DIRNAME,
   EJECTED_PLUGINS_DIRNAME,
   ensureBrowserServerLink,
@@ -757,7 +761,9 @@ export async function resolvePlugins(
   const failedPlugins: Array<{ name: string; error: string }> = [];
   const repairedInstallRecords = new Set<string>();
 
-  await ensureTelegramAccountAuthExportCompat(process.cwd());
+  if (!isAliceProductionPluginPolicyEnabled(process.env)) {
+    await ensureTelegramAccountAuthExportCompat(process.cwd());
+  }
 
   // NOTE: Auto-enable runs before dependency validation intentionally.
   // It returns a new config object (structuredClone under the hood) with
@@ -807,13 +813,26 @@ export async function resolvePlugins(
   for (const pluginName of denyList) {
     pluginsToLoad.delete(pluginName);
   }
+  const alicePolicyRemovals = enforceAliceProductionPluginPolicy(
+    pluginsToLoad,
+    process.env,
+  );
+  if (alicePolicyRemovals.length > 0) {
+    logger.info(
+      `[eliza] Alice proposer-only plugin policy removed ${alicePolicyRemovals.length} unapproved plugin(s): ${alicePolicyRemovals.join(", ")}`,
+    );
+  }
 
   // ── Auto-discover ejected plugins ───────────────────────────────────────
   // Ejected plugins override npm/core versions, so they are tracked
   // separately and consulted first at import time.
-  const ejectedRecords = await scanDropInPlugins(
-    path.join(resolveStateDir(), EJECTED_PLUGINS_DIRNAME),
-  );
+  const aliceProductionPluginPolicy =
+    isAliceProductionPluginPolicyEnabled(process.env);
+  const ejectedRecords = aliceProductionPluginPolicy
+    ? {}
+    : await scanDropInPlugins(
+        path.join(resolveStateDir(), EJECTED_PLUGINS_DIRNAME),
+      );
   const ejectedPluginNames: string[] = [];
   for (const [name, _record] of Object.entries(ejectedRecords)) {
     if (denyList.has(name)) continue;
@@ -829,10 +848,12 @@ export async function resolvePlugins(
 
   // ── Auto-discover drop-in custom plugins ────────────────────────────────
   // Scan well-known dir + any extra dirs from plugins.load.paths (first wins).
-  const scanDirs = [
-    path.join(resolveStateDir(), CUSTOM_PLUGINS_DIRNAME),
-    ...(config.plugins?.load?.paths ?? []).map(resolveUserPath),
-  ];
+  const scanDirs = aliceProductionPluginPolicy
+    ? []
+    : [
+        path.join(resolveStateDir(), CUSTOM_PLUGINS_DIRNAME),
+        ...(config.plugins?.load?.paths ?? []).map(resolveUserPath),
+      ];
   const dropInRecords: Record<string, PluginInstallRecord> = {};
   for (const dir of scanDirs) {
     for (const [name, record] of Object.entries(await scanDropInPlugins(dir))) {

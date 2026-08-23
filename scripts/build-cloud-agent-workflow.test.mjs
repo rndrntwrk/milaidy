@@ -46,6 +46,52 @@ test("manual cloud builds checkout the exact requested Alice revision", () => {
   );
 });
 
+test("exact Alice revision builds cannot inherit the legacy fleet rollout path", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+
+  assert.match(
+    workflow,
+    /Require isolated Alice candidate mode[\s\S]*?github\.event_name == 'workflow_dispatch'[\s\S]*?inputs\.source_sha != ''[\s\S]*?inputs\.skip_rollout != true[\s\S]*?exit 1/,
+    "an exact source_sha must fail closed unless skip_rollout=true",
+  );
+});
+
+test("privileged Alice image publication accepts only the exact protected release head", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+
+  assert.match(
+    workflow,
+    /Checkout[\s\S]*?persist-credentials: false[\s\S]*?Require exact protected Alice release head/,
+    "checkout credentials must be removed before any repository-owned code executes",
+  );
+  assert.match(
+    workflow,
+    /PROTECTED_ALICE_REF: refs\/heads\/release\/alice-production-core-2026-08-22[\s\S]*?REQUESTED_SOURCE_SHA[\s\S]*?GITHUB_REF[\s\S]*?GITHUB_SHA/,
+    "manual source builds must bind the requested SHA to the protected release head",
+  );
+  const gate = workflow.indexOf("- name: Require exact protected Alice release head");
+  const setup = workflow.indexOf("- name: Setup Node.js 24");
+  const hydrate = workflow.indexOf("- name: Hydrate Alice runtime avatar assets");
+  assert.ok(gate >= 0 && gate < setup && gate < hydrate);
+});
+
+test("Alice release dispatch cannot fall through to cloud main or fleet rollout", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  assert.match(
+    workflow,
+    /Enforce Alice release dispatch contract[\s\S]*?github\.ref == 'refs\/heads\/release\/alice-production-core-2026-08-22'[\s\S]*?inputs\.source_sha == ''[\s\S]*?inputs\.skip_rollout != true[\s\S]*?exit 1/,
+  );
+});
+
 test("cloud builds hydrate and validate Alice's runtime avatar assets before Vite", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
@@ -70,7 +116,7 @@ test("cloud builds hydrate and validate Alice's runtime avatar assets before Vit
   );
 });
 
-test("cloud builds hydrate the tracked Eliza commit from the official repository", () => {
+test("cloud builds hydrate the tracked Eliza commit from the protected Alice fork", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -79,13 +125,177 @@ test("cloud builds hydrate the tracked Eliza commit from the official repository
   assert.match(workflow, /eliza_sha="\$\(git ls-tree HEAD eliza \| awk '\{print \$3\}'\)"/);
   assert.match(
     workflow,
-    /git clone --no-checkout --filter=blob:none https:\/\/github\.com\/elizaOS\/eliza\.git eliza/,
+    /git clone --no-checkout --filter=blob:none https:\/\/github\.com\/rndrntwrk\/eliza\.git eliza/,
   );
   assert.match(workflow, /git -C eliza fetch --depth=1 origin "\$eliza_sha"/);
+  assert.match(workflow, /expected_eliza_sha="e219c232e21d8b61017129647130830d811ee45a"/);
+  assert.match(
+    workflow,
+    /git -C eliza fetch --depth=1 origin refs\/heads\/alice\/runtime-stable-2026-08-22:refs\/remotes\/origin\/alice\/runtime-stable-2026-08-22/,
+  );
+  assert.match(workflow, /test "\$eliza_sha" = "\$protected_eliza_sha"/);
   assert.match(workflow, /git -C eliza checkout --detach "\$eliza_sha"/);
   assert.match(workflow, /test "\$\(git -C eliza rev-parse HEAD\)" = "\$eliza_sha"/);
+  assert.match(workflow, /alice\/runtime-stable-2026-08-22/);
   assert.doesNotMatch(workflow, /MILADY_ELIZA_BRANCH/);
   assert.doesNotMatch(workflow, /eliza submodule init failed, continuing/);
+});
+
+test("published Alice images carry SBOM and verifiable provenance", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /provenance: mode=max/);
+  assert.match(workflow, /sbom: true/);
+  assert.match(
+    workflow,
+    /permissions:[\s\S]*?id-token: write[\s\S]*?attestations: write/,
+    "GitHub artifact attestation requires both OIDC and attestation write authority",
+  );
+  assert.match(
+    workflow,
+    /actions\/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a[\s\S]*?subject-digest: \$\{\{ steps\.cloud-image\.outputs\.digest \}\}[\s\S]*?push-to-registry: true/,
+  );
+  assert.doesNotMatch(workflow, /provenance: false/);
+});
+
+test("Alice production base images are immutable reviewed manifests", () => {
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  assert.match(
+    dockerfile,
+    /FROM oven\/bun:1\.3\.14@sha256:50317d83cd5a5ae1d8b35b3379c69f57ce1a0dbf4def91f0965653d767851834 AS bun-runtime/,
+  );
+  assert.equal(
+    dockerfile.match(
+      /FROM node:24\.19\.0-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848/g,
+    )?.length,
+    2,
+  );
+  assert.match(
+    dockerfile,
+    /FROM python:3\.11\.13-slim-bookworm@sha256:cec9aa7aa96eea4fa036e9b82be1e6b325f2e3707f462d885868df51ec0a4b47 AS python-runtime/,
+  );
+  assert.match(dockerfile, /COPY --from=python-runtime \/usr\/local \/usr\/local/);
+  assert.match(
+    dockerfile,
+    /node deploy\/modal\/write_alice_runtime_build_manifest\.mjs/,
+  );
+  assert.doesNotMatch(dockerfile, /^FROM (?:node|oven\/bun):[^@\n]+$/m);
+});
+
+test("protected Alice qualification verifies provider identity and exact Worker bundles", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  for (const testFile of [
+    "deploy/modal/alice_production_acceptance.test.ts",
+    "deploy/modal/alice_program_signing_key.test.mjs",
+    "deploy/modal/alice_terminal_publication.test.mjs",
+    "deploy/modal/alice_cloudflare_live_readback.test.mjs",
+    "deploy/modal/alice_cloudflare_provider_config.test.mjs",
+    "deploy/modal/alice_cloudflare_provider_readback.test.mjs",
+    "deploy/modal/alice_cloudflare_release.test.mjs",
+    "deploy/modal/alice_modal_safe_bootstrap.test.mjs",
+    "deploy/modal/alice_recovery_credential_binding.test.mjs",
+    "deploy/modal/alice_release_deadline.test.mjs",
+    "deploy/modal/alice_worker_bundle_artifact.test.mjs",
+    "scripts/deploy-alice-cloudflare-workflow.test.mjs",
+  ]) {
+    assert.ok(workflow.includes(testFile), `missing protected test ${testFile}`);
+  }
+  assert.match(
+    workflow,
+    /python3 -m unittest[\s\S]*?deploy\.modal\.test_alice_safe_bootstrap/,
+    "protected qualification must exercise the safe bootstrap provider contract",
+  );
+  assert.match(
+    workflow,
+    /Build exact Alice Worker bundles[\s\S]*?\.\/node_modules\/\.bin\/wrangler --version[\s\S]*?test "\$wrangler_version" = "4\.122\.0"[\s\S]*?\.\/node_modules\/\.bin\/wrangler deploy[\s\S]*?--dry-run[\s\S]*?alice_worker_bundle_artifact\.mjs/,
+  );
+  const manifestSource = fs.readFileSync(
+    path.join(repoRoot, "deploy/modal/alice_deployment_manifest.mjs"),
+    "utf8",
+  );
+  assert.match(manifestSource, /fetchAliceCloudflareProviderState/);
+  assert.match(manifestSource, /CLOUDFLARE_API_TOKEN/);
+  assert.match(manifestSource, /verifyAliceWorkerBundleArtifact/);
+  assert.doesNotMatch(manifestSource, /ALICE_ACCESS_POLICY_READBACK_PATH/);
+  assert.doesNotMatch(manifestSource, /ALICE_AI_GATEWAY_PROVIDER_READBACK_PATH/);
+  assert.doesNotMatch(manifestSource, /ALICE_ACCESS_WORKER_BUNDLE_SHA256/);
+  assert.doesNotMatch(workflow, /bun x wrangler@/);
+  assert.match(
+    workflow,
+    /Upload immutable Alice Worker bundle artifact[\s\S]*?actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02[\s\S]*?overwrite: false[\s\S]*?include-hidden-files: false/,
+  );
+  assert.match(
+    workflow,
+    /Attest exact Alice Worker bundle provenance[\s\S]*?subject-path: \$\{\{ steps\.worker_bundles\.outputs\.root \}\}\/\*\*\/\*/,
+  );
+  assert.match(
+    workflow,
+    /Remove runner-local Worker bundle staging directory[\s\S]*?"\$RUNNER_TEMP"\/alice-worker-bundles\.\*/,
+  );
+});
+
+test("cloud release actions are pinned to immutable revisions", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  for (const revision of [
+    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+    "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
+    "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
+    "actions/cache@caa296126883cff596d87d8935842f9db880ef25",
+    "docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+    "docker/login-action@dbcb813823bdd20940b903addbd779551569679f",
+    "docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
+    "actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a",
+    "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+  ]) {
+    assert.ok(workflow.includes(revision), `missing immutable action pin ${revision}`);
+  }
+  assert.doesNotMatch(
+    workflow,
+    /uses:\s+(?:actions|docker|oven-sh)\/[a-z0-9-]+@v\d+/i,
+  );
+});
+
+test("the exact-image smoke proves Alice's production runtime authority boundary", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /deploy\/modal\/alice-denied-plugins\.txt/);
+  assert.match(workflow, /ELIZA_SKIP_PLUGINS/);
+  assert.match(workflow, /ALICE_RUNTIME_AUTHORITY_MODE=proposer-only/);
+  assert.match(workflow, /\/api\/alice-production\/proof/);
+  assert.match(workflow, /verify_alice_runtime_boundary\.mjs/);
+  assert.match(workflow, /verify_alice_runtime_build_manifest\.mjs/);
+  assert.match(workflow, /ALICE_RUNTIME_BUILD_MANIFEST_SHA256/);
+  assert.match(workflow, /ALICE_EXACT_IMAGE_RESPONSE_ONLY_OK/);
+  assert.match(workflow, /alice\.chat-boundary\.v1/);
+  assert.match(workflow, /alice_smoke_model_server\.mjs/);
+  assert.match(workflow, /ALICE_PRODUCTION_MUTATION_DENIED/);
+  assert.match(workflow, /ALICE_DURABLE_CHAT_INGRESS_REQUIRED/);
+  for (const forbiddenPath of [
+    "/api/plugins/install",
+    "/api/wallet/import",
+    "/api/wallet/trade/execute",
+    "/api/stream/start",
+    "/api/terminal/run",
+    "/api/wallet/keys",
+    "/api/onboarding/status",
+    "/api/secrets",
+    "/api/broadcast/alice-cam/scene",
+  ]) {
+    assert.ok(workflow.includes(forbiddenPath), `missing live deny probe ${forbiddenPath}`);
+  }
 });
 
 test("cloud builds port Alice's operator bridge before compiling the official agent", () => {
@@ -148,7 +358,7 @@ test("staging and manual no-rollout builds smoke the exact image and always tear
 
   assert.match(
     workflow,
-    /id: cloud-image[\s\S]*?uses: docker\/build-push-action@v7/,
+    /id: cloud-image[\s\S]*?uses: docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/,
     "the published image step must expose its immutable digest",
   );
   assert.match(
@@ -168,7 +378,7 @@ test("staging and manual no-rollout builds smoke the exact image and always tear
   );
   assert.match(
     workflow,
-    /--env ELIZA_AUTH_DISABLED=1[\s\S]*?fetch\(`http:\/\/127\.0\.0\.1:\$\{port\}\/api\/emotes`\)[\s\S]*?dance-happy/,
+    /--env ELIZA_AUTH_DISABLED=0[\s\S]*?--env MILADY_API_TOKEN=alice-cloud-smoke-runtime-token[\s\S]*?\/api\/emotes[\s\S]*?dance-happy/,
     "the exact image smoke must reject a runtime missing Alice's VRM emote route",
   );
 });
@@ -198,6 +408,24 @@ test("manual no-rollout canaries do not move the stable latest image tag", () =>
   );
 });
 
+test("manual version input cannot inject shell into the privileged image job", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const start = workflow.indexOf("- name: Determine version");
+  const end = workflow.indexOf("- name: Load deploy config", start);
+  const step = workflow.slice(start, end);
+  const run = step.slice(step.indexOf("run: |"));
+  assert.match(step, /ALICE_INPUT_VERSION: \$\{\{ inputs\.version \}\}/);
+  assert.doesNotMatch(run, /\$\{\{ inputs\.version \}\}/);
+  assert.match(
+    run,
+    /\^\[0-9\]\{1,6\}\\\.\[0-9\]\{1,6\}\\\.\[0-9\]\{1,6\}/,
+  );
+  assert.match(run, /printf '%s' "\$ALICE_INPUT_VERSION"/);
+});
+
 test("cloud builds bind both server and browser bundles to Alice app-core", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
@@ -224,7 +452,7 @@ test("cloud builds bind both server and browser bundles to Alice app-core", () =
   );
 });
 
-test("candidate image smoke proves the public broadcast shell and VRM control bundle", () => {
+test("candidate image smoke proves public broadcast is disabled and VRM bytes remain valid", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -235,11 +463,8 @@ test("candidate image smoke proves the public broadcast shell and VRM control bu
 
   assert.ok(smokeStep, "candidate image smoke step must exist");
   assert.match(smokeStep, /\/broadcast\/alice-cam/);
-  assert.match(smokeStep, /<base href=["']\/["']/);
-  assert.match(smokeStep, /data-broadcast-shell/);
-  assert.match(smokeStep, /__agentShowControl/);
-  assert.match(smokeStep, /playEmote/);
-  assert.match(smokeStep, /eliza:app-emote-applied/);
+  assert.match(smokeStep, /broadcastResponse\.status !== 401/);
+  assert.doesNotMatch(smokeStep, /data-broadcast-shell/);
   assert.match(smokeStep, /\/vrms\/milady-9\.vrm\.gz/);
   assert.match(smokeStep, /gunzipSync/);
   assert.match(smokeStep, /glTF/);
@@ -270,6 +495,31 @@ test("cloud agent build keeps the checked-out Eliza workspace available", () => 
   );
 });
 
+test("Alice image hydrates only its exact Eliza gitlink and excludes unadmitted contract trees", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const initStart = workflow.indexOf("- name: Init submodules");
+  const installStart = workflow.indexOf("- name: Install dependencies");
+  const initStep = workflow.slice(initStart, installStart);
+  const dockerignoreStart = workflow.indexOf("- name: Set up CI dockerignore");
+  const buildxStart = workflow.indexOf("- name: Set up Docker Buildx");
+  const dockerignoreStep = workflow.slice(dockerignoreStart, buildxStart);
+  const smokeStart = workflow.indexOf("- name: Smoke exact candidate image");
+  const cleanupStart = workflow.indexOf("- name: Cleanup candidate smoke container");
+  const smokeStep = workflow.slice(smokeStart, cleanupStart);
+
+  assert.match(initStep, /git ls-tree HEAD eliza/);
+  assert.match(initStep, /checkout --detach "\$eliza_sha"/);
+  assert.doesNotMatch(initStep, /scripts\/init-submodules\.mjs/);
+  assert.doesNotMatch(initStep, /\|\|\s*(?:echo|true)/);
+  assert.match(dockerignoreStep, /echo 'steward-fi' >> \.dockerignore/);
+  assert.match(dockerignoreStep, /echo 'test\/contracts' >> \.dockerignore/);
+  assert.match(smokeStep, /test ! -e \/app\/steward-fi/);
+  assert.match(smokeStep, /test ! -e \/app\/test\/contracts/);
+});
+
 test("Alice root has no exact workspace paths removed by latest Eliza", () => {
   const rootPackage = JSON.parse(
     fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
@@ -284,7 +534,7 @@ test("Alice root has no exact workspace paths removed by latest Eliza", () => {
   assert.deepEqual(missing, [], `missing exact workspaces: ${missing.join(", ")}`);
 });
 
-test("cloud agent build uses the Node major required by pinned Eliza", () => {
+test("cloud agent build pins the reviewed Node patch and locked tsdown binary", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -296,13 +546,24 @@ test("cloud agent build uses the Node major required by pinned Eliza", () => {
     ),
   );
   const requiredMajor = elizaCore.engines?.node?.match(/>=\s*(\d+)/)?.[1];
+  const pinnedNode = "24.19.0";
 
   assert.ok(requiredMajor, "pinned Eliza must declare a minimum Node major");
+  assert.equal(
+    pinnedNode.split(".")[0],
+    requiredMajor,
+    "reviewed Node patch must satisfy the pinned Eliza major",
+  );
   assert.match(
     workflow,
-    new RegExp(`node-version: ["']${requiredMajor}["']`),
-    `cloud agent build must use Node ${requiredMajor} required by pinned Eliza`,
+    new RegExp(`node-version: ["']${pinnedNode.replaceAll(".", "\\.")}["']`),
+    `cloud agent build must use reviewed Node ${pinnedNode}`,
   );
+  const runtimeBuild = workflow.match(
+    /- name: Build runtime \(tsdown\)[\s\S]*?- name: Determine version/,
+  )?.[0] ?? "";
+  assert.match(runtimeBuild, /\.\/node_modules\/\.bin\/tsdown/);
+  assert.doesNotMatch(runtimeBuild, /\bnpx\b/);
 
   const dockerfile = fs.readFileSync(
     path.join(repoRoot, "deploy/Dockerfile.ci"),
@@ -310,8 +571,11 @@ test("cloud agent build uses the Node major required by pinned Eliza", () => {
   );
   assert.match(
     dockerfile,
-    new RegExp(`^ARG NODE_VERSION=${requiredMajor}$`, "m"),
-    `cloud runtime image must use Node ${requiredMajor} required by pinned Eliza`,
+    new RegExp(
+      `^FROM node:${requiredMajor}\\.\\d+\\.\\d+-bookworm-slim@sha256:[a-f0-9]{64} AS pruner$`,
+      "m",
+    ),
+    `cloud runtime image must use immutable Node ${requiredMajor} required by pinned Eliza`,
   );
 });
 
@@ -346,8 +610,11 @@ test("cloud agent build uses the Bun version required by pinned Eliza", () => {
   );
   assert.match(
     dockerfile,
-    new RegExp(`^ARG BUN_VERSION=${requiredVersion.replaceAll(".", "\\.")}$`, "m"),
-    `cloud runtime image must use Bun ${requiredVersion} required by pinned Eliza`,
+    new RegExp(
+      `^FROM oven/bun:${requiredVersion.replaceAll(".", "\\.")}@sha256:[a-f0-9]{64} AS bun-runtime$`,
+      "m",
+    ),
+    `cloud runtime image must use immutable Bun ${requiredVersion} required by pinned Eliza`,
   );
 });
 
@@ -400,6 +667,11 @@ test("cloud agent frozen install accepts the current Eliza layout", () => {
   );
   assert.match(
     workflow,
+    /echo '!deploy\/modal\/verify_alice_runtime_build_manifest\.mjs' >> \.dockerignore/,
+    "Docker context must retain the runtime build verifier embedded in the image",
+  );
+  assert.match(
+    workflow,
     /echo '!apps\/homepage' >> \.dockerignore/,
     "Docker context must retain the apps wildcard workspace that exists in this checkout",
   );
@@ -439,8 +711,10 @@ test("cloud agent image does not copy removed Eliza apps", () => {
   assert.ok(requiredBun, "pinned Eliza must declare a Bun version");
   assert.match(
     dockerfile,
-    new RegExp(`FROM oven/bun:\\$\\{BUN_VERSION\\} AS bun-runtime`),
-    "image build must source Bun from an exact versioned image",
+    new RegExp(
+      `FROM oven/bun:${requiredBun.replaceAll(".", "\\.")}@sha256:[a-f0-9]{64} AS bun-runtime`,
+    ),
+    "image build must source Bun from an immutable versioned image",
   );
   assert.match(
     dockerfile,

@@ -121,6 +121,12 @@ import {
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import { seedBundledKnowledge } from "./default-knowledge.js";
 import discordLocalPlugin from "./discord-local-plugin.js";
+import { stampAliceProductionRuntimeBoundary } from "../api/alice-production-proof.js";
+import {
+  ALICE_PRODUCTION_PLUGIN_ALLOWLIST,
+  isAliceProductionPluginPolicyEnabled,
+} from "./alice-production-plugin-policy.js";
+import { createAliceProductionRuntimePlugin } from "./alice-production-runtime-plugin.js";
 import { createElizaPlugin } from "./eliza-plugin.js";
 import { detectEmbeddingPreset } from "./embedding-presets.js";
 import {
@@ -2625,13 +2631,16 @@ function summarizeComponentWrite(input: unknown): Record<string, unknown> {
   };
 }
 
-export function installRuntimeMethodBindings(runtime: AgentRuntime): void {
+export function installRuntimeMethodBindings(
+  runtime: AgentRuntime,
+  options: { disablePluginLifecycle?: boolean } = {},
+): void {
   const runtimeWithBindings = runtime as RuntimeWithMethodBindings;
   if (runtimeWithBindings.__elizaMethodBindingsInstalled) {
     return;
   }
 
-  installRuntimePluginLifecycle(runtime);
+  if (!options.disablePluginLifecycle) installRuntimePluginLifecycle(runtime);
 
   // Some plugin builds store this method and invoke it later without the
   // runtime receiver, which breaks private-field access in AgentRuntime.
@@ -3388,12 +3397,13 @@ export const logToChatListener = (entry: LogEntry) => {
 export async function startEliza(
   opts?: StartElizaOptions,
 ): Promise<AgentRuntime | undefined> {
+  const aliceProduction = isAliceProductionPluginPolicyEnabled(process.env);
   // Start buffering logs early so startup messages appear in the UI log viewer
   const { captureEarlyLogs } = await import("../api/early-logs.js");
   captureEarlyLogs();
 
   // Register log listener for chat mirroring
-  addLogListener(logToChatListener);
+  if (!aliceProduction) addLogListener(logToChatListener);
 
   // 1. Load Eliza config from ~/.eliza/eliza.json
   let config: ElizaConfig;
@@ -3428,17 +3438,19 @@ export async function startEliza(
   }
 
   // 2. Push channel secrets into process.env for plugin discovery
-  applyConnectorSecretsToEnv(config);
-  await autoResolveDiscordAppId();
+  if (!aliceProduction) {
+    applyConnectorSecretsToEnv(config);
+    await autoResolveDiscordAppId();
 
-  // 2b. Propagate cloud config into process.env for ElizaCloud plugin
-  applyCloudConfigToEnv(config);
+    // 2b. Propagate cloud config into process.env for ElizaCloud plugin
+    applyCloudConfigToEnv(config);
 
-  // 2c. Propagate x402 config into process.env
-  applyX402ConfigToEnv(config);
+    // 2c. Propagate x402 config into process.env
+    applyX402ConfigToEnv(config);
 
-  // 2d. Propagate database config into process.env for plugin-sql
-  applyDatabaseConfigToEnv(config);
+    // 2d. Propagate database config into process.env for plugin-sql
+    applyDatabaseConfigToEnv(config);
+  }
 
   // 2e. Propagate arbitrary env vars from config.env into process.env.
   // Eliza stores user-defined env vars (plugin settings, API URLs, etc.)
@@ -3446,6 +3458,7 @@ export async function startEliza(
   // Skip ELIZAOS_CLOUD_* — applyCloudConfigToEnv() owns those; otherwise a
   // stale key in config.env refills process.env after disconnect cleared it.
   if (
+    !aliceProduction &&
     config.env &&
     typeof config.env === "object" &&
     !Array.isArray(config.env)
@@ -3475,9 +3488,9 @@ export async function startEliza(
 
   // Keep the canonical public key env in sync for Solana plugins that still
   // read process.env directly instead of runtime settings.
-  syncSolanaPublicKeyEnv();
+  if (!aliceProduction) syncSolanaPublicKeyEnv();
 
-  normalizeOpenAiCompatibleProviderConfig(config);
+  if (!aliceProduction) normalizeOpenAiCompatibleProviderConfig(config);
 
   // Log active database configuration for debugging persistence issues
   {
@@ -3496,18 +3509,20 @@ export async function startEliza(
   }
 
   // 2d-iii. OG tracking code initialization
-  try {
-    const { initializeOGCode } = await import("../api/og-tracker.js");
-    initializeOGCode();
-  } catch {
-    // Silent — OG tracking is non-critical
+  if (!aliceProduction) {
+    try {
+      const { initializeOGCode } = await import("../api/og-tracker.js");
+      initializeOGCode();
+    } catch {
+      // Silent — OG tracking is non-critical
+    }
   }
 
   // 2d-ii. Allow destructive migrations (e.g. dropping tables removed between
   //        plugin versions) so the runtime doesn't silently stall.  Without this
   //        the migration system throws an error that gets swallowed, leaving the
   //        app hanging indefinitely with no output.
-  if (!process.env.ELIZA_ALLOW_DESTRUCTIVE_MIGRATIONS) {
+  if (!aliceProduction && !process.env.ELIZA_ALLOW_DESTRUCTIVE_MIGRATIONS) {
     process.env.ELIZA_ALLOW_DESTRUCTIVE_MIGRATIONS = "true";
   }
 
@@ -3542,13 +3557,15 @@ export async function startEliza(
   //     Failure is non-fatal — the agent can still start with other providers.
   //     Config is NOT rolled back on failure; partial mutations may persist in
   //     the in-memory config but are not saved to disk until explicit save.
-  try {
-    const { applySubscriptionCredentials } = await import("../auth/index.js");
-    await applySubscriptionCredentials(config);
-  } catch (err) {
-    logger.warn(
-      `[eliza] Failed to apply subscription credentials (agent will continue without them): ${formatError(err)}`,
-    );
+  if (!aliceProduction) {
+    try {
+      const { applySubscriptionCredentials } = await import("../auth/index.js");
+      await applySubscriptionCredentials(config);
+    } catch (err) {
+      logger.warn(
+        `[eliza] Failed to apply subscription credentials (agent will continue without them): ${formatError(err)}`,
+      );
+    }
   }
 
   // 2g. Cloud mode — if the user chose cloud during onboarding (or on a
@@ -3558,6 +3575,7 @@ export async function startEliza(
     config as Record<string, unknown>,
   );
   if (
+    !aliceProduction &&
     deploymentTarget.runtime === "cloud" &&
     deploymentTarget.provider === "elizacloud" &&
     config.cloud?.apiKey &&
@@ -3568,6 +3586,14 @@ export async function startEliza(
 
   // 3. Build elizaOS Character from Eliza config
   const character = buildCharacterFromConfig(config);
+  if (aliceProduction) {
+    character.secrets = {};
+    character.settings = {
+      DISABLE_BASIC_CAPABILITIES: true,
+      ENABLE_AUTONOMY: false,
+      DISABLE_EMOTES: true,
+    };
+  }
 
   const primaryModel = resolvePrimaryModel(config);
   const preferredProviderId = resolvePreferredProviderId(config);
@@ -3588,13 +3614,13 @@ export async function startEliza(
   const agentId = character.name?.toLowerCase().replace(/\s+/g, "-") ?? "main";
 
   // 5a. If cloud is configured and no local GitHub token, try fetching from cloud
-  await autoFetchCloudGithubToken(config.cloud?.agentId?.trim() || agentId);
+  if (!aliceProduction) {
+    await autoFetchCloudGithubToken(config.cloud?.agentId?.trim() || agentId);
+  }
 
-  const elizaPlugin = createElizaPlugin({
-    workspaceDir,
-
-    agentId,
-  });
+  const elizaPlugin = aliceProduction
+    ? createAliceProductionRuntimePlugin()
+    : createElizaPlugin({ workspaceDir, agentId });
 
   // 6. Resolve and load plugins
   // In headless (GUI) mode before onboarding, the user hasn't configured a
@@ -3712,10 +3738,11 @@ export async function startEliza(
   const sandboxConfig = config.agents?.defaults?.sandbox;
   const sandboxModeStr = (sandboxConfig as Record<string, unknown> | undefined)
     ?.mode as string | undefined;
-  const sandboxMode: SandboxMode =
-    sandboxModeStr === "light" ||
-    sandboxModeStr === "standard" ||
-    sandboxModeStr === "max"
+  const sandboxMode: SandboxMode = aliceProduction
+    ? "off"
+    : sandboxModeStr === "light" ||
+        sandboxModeStr === "standard" ||
+        sandboxModeStr === "max"
       ? sandboxModeStr
       : "off";
   const isSandboxActive = sandboxMode !== "off";
@@ -3863,12 +3890,12 @@ export async function startEliza(
   let runtime = new AgentRuntime({
     character,
     // advancedCapabilities: true,
-    actionPlanning: true,
+    actionPlanning: !aliceProduction,
     // advancedMemory is enabled via character.advancedMemory
     plugins: [elizaPlugin, ...pluginsForRuntime],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
     // Sandbox options — only active when mode != "off"
-    ...(isSandboxActive
+    ...(isSandboxActive && !aliceProduction
       ? {
           sandboxMode: true,
           sandboxAuditHandler: sandboxAuditLog
@@ -3882,7 +3909,15 @@ export async function startEliza(
             : undefined,
         }
       : {}),
-    settings: {
+    settings: aliceProduction
+      ? {
+          VALIDATION_LEVEL: "fast",
+          DISABLE_BASIC_CAPABILITIES: "true",
+          ENABLE_AUTONOMY: "false",
+          DISABLE_EMOTES: "true",
+          ...(preferredProviderId ? { MODEL_PROVIDER: preferredProviderId } : {}),
+        }
+      : {
       VALIDATION_LEVEL: "fast",
       // Forward non-sensitive Eliza config.env vars as runtime settings so
       // plugins can access them via runtime.getSetting(). This fixes a bug where
@@ -3950,9 +3985,11 @@ export async function startEliza(
       ...(config.features?.vision === false
         ? { DISABLE_IMAGE_DESCRIPTION: "true" }
         : {}),
-    },
+        },
   });
-  installRuntimeMethodBindings(runtime);
+  installRuntimeMethodBindings(runtime, {
+    disablePluginLifecycle: aliceProduction,
+  });
 
   // 7b. Pre-register plugin-sql so the adapter is ready before other plugins init.
   //     This is OPTIONAL — without it, some features (memory, todos) won't work.
@@ -4014,7 +4051,7 @@ export async function startEliza(
   //     Each registerPlugin() call runs the plugin's init() before proceeding
   //     to the next, guaranteeing that cross-plugin getService() calls resolve.
   {
-    try {
+    if (!aliceProduction) try {
       logger.info("[eliza] Pre-registering internal roles capability...");
       await runtime.registerPlugin(rolesPlugin);
       logger.info("[eliza] ✓ internal roles capability pre-registered");
@@ -4135,7 +4172,7 @@ export async function startEliza(
   };
 
   const initializeRuntimeServices = async (): Promise<void> => {
-    try {
+    if (!aliceProduction) try {
       const { stewardEvmPreBoot } = await import(
         "../services/steward-evm-bridge.js"
       );
@@ -4154,10 +4191,12 @@ export async function startEliza(
       },
       async () => {
         await runtime.initialize();
-        await prepareRuntimeForTrajectoryCapture(
-          runtime,
-          "runtime.initialize()",
-        );
+        if (!aliceProduction) {
+          await prepareRuntimeForTrajectoryCapture(
+            runtime,
+            "runtime.initialize()",
+          );
+        }
       },
     );
 
@@ -4172,7 +4211,7 @@ export async function startEliza(
     // 8b. Register lightweight conversation-proximity evaluator.
     // Updates relationship strength when people post near each other in a room.
     // No LLM calls — deterministic, runs on every message.
-    try {
+    if (!aliceProduction) try {
       const { updateProximityRelationships } = await import(
         "../services/conversation-proximity.js"
       );
@@ -4217,7 +4256,7 @@ export async function startEliza(
       );
     }
 
-    try {
+    if (!aliceProduction) try {
       const { stewardEvmPostBoot } = await import(
         "../services/steward-evm-bridge.js"
       );
@@ -4228,7 +4267,7 @@ export async function startEliza(
       );
     }
 
-    try {
+    if (!aliceProduction) try {
       const { installAnthropicWebSearch } = await import(
         "./web-search-tools.js"
       );
@@ -4243,7 +4282,7 @@ export async function startEliza(
     // registers this service) from loading, so we start it explicitly.
     // Respect ENABLE_AUTONOMY env var — cloud-provisioned containers may
     // disable this to prevent runaway autonomous actions.
-    const autonomyEnabled =
+    const autonomyEnabled = !aliceProduction &&
       (process.env.ENABLE_AUTONOMY ?? "true").toLowerCase() !== "false";
 
     if (autonomyEnabled && !runtime.getService("AUTONOMY")) {
@@ -4283,9 +4322,25 @@ export async function startEliza(
     }
 
     // Do not block runtime startup on skills warm-up.
-    void warmAgentSkillsService().catch((err) => {
-      logger.warn(`[eliza] Skills warm-up failed: ${formatError(err)}`);
-    });
+    if (!aliceProduction) {
+      void warmAgentSkillsService().catch((err) => {
+        logger.warn(`[eliza] Skills warm-up failed: ${formatError(err)}`);
+      });
+    } else {
+      const resolvedNames = new Set(resolvedPlugins.map((plugin) => plugin.name));
+      if (
+        resolvedNames.size !== ALICE_PRODUCTION_PLUGIN_ALLOWLIST.size ||
+        [...ALICE_PRODUCTION_PLUGIN_ALLOWLIST].some(
+          (name) => !resolvedNames.has(name),
+        )
+      ) {
+        throw new Error("ALICE_PRODUCTION_PLUGIN_CLOSURE_INVALID");
+      }
+      stampAliceProductionRuntimeBoundary(runtime, [
+        "alice-production-response-only",
+        ...ALICE_PRODUCTION_PLUGIN_ALLOWLIST,
+      ]);
+    }
   };
 
   type RuntimeApiServerHandle = Awaited<
@@ -4313,6 +4368,10 @@ export async function startEliza(
         runtime,
         initialAgentState,
         onRestart: async () => {
+          if (aliceProduction) {
+            logger.warn("[alice-production] Runtime hot-reload is disabled");
+            return null;
+          }
           logger.info("[eliza] Hot-reload: Restarting runtime...");
           try {
             // Stop the old runtime to release resources (DB connections, timers, etc.)
@@ -4542,7 +4601,7 @@ export async function startEliza(
       const dashboardUrl = `http://localhost:${handle.port}`;
       console.log(`[eliza] Control UI: ${dashboardUrl}`);
       logger.info(`[eliza] API server listening on ${dashboardUrl}`);
-      if (scheduleBundledSeed) {
+      if (scheduleBundledSeed && !aliceProduction) {
         scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
       }
       return handle;
@@ -4603,7 +4662,9 @@ export async function startEliza(
         phase: "running",
         attempt: 0,
       });
-      scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
+      if (!aliceProduction) {
+        scheduleBundledKnowledgeSeed(runtime, "api-server-listen");
+      }
     }
   } catch (err) {
     const pgliteDataDir = resolveActivePgliteDataDir(config);
@@ -4657,6 +4718,7 @@ export async function startEliza(
   }
 
   const loadHooksSystem = async (): Promise<void> => {
+    if (aliceProduction) return;
     try {
       const internalHooksConfig = config.hooks
         ?.internal as LoadHooksOptions["internalConfig"];
@@ -4681,9 +4743,13 @@ export async function startEliza(
     void loadHooksSystem().catch((err) => {
       logger.warn(`[eliza] Hooks system load failed: ${formatError(err)}`);
     });
-    scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");
+    if (!aliceProduction) {
+      scheduleBundledKnowledgeSeed(runtime, "headless-runtime-init");
+    }
     logger.info(
-      "[eliza] Runtime initialised in headless mode (autonomy enabled)",
+      aliceProduction
+        ? "[eliza] Alice proposer-only runtime initialised in headless mode"
+        : "[eliza] Runtime initialised in headless mode (autonomy enabled)",
     );
     return runtime;
   }
