@@ -79,6 +79,36 @@ test("every secret-bearing job executes only the workflow ref after validating t
   }
 });
 
+test("every frozen recovery or deployment install hydrates the exact protected Eliza workspace first", () => {
+  const expectedElizaSha = "e219c232e21d8b61017129647130830d811ee45a";
+  const protectedBranch = "alice/runtime-stable-2026-08-22";
+  const exactHydration = new RegExp(
+    String.raw`Hydrate exact protected Eliza workspace[\s\S]*?` +
+      String.raw`EXPECTED_ELIZA_SHA: ${expectedElizaSha}[\s\S]*?` +
+      String.raw`https:\/\/github\.com\/rndrntwrk\/eliza\.git[\s\S]*?` +
+      protectedBranch.replace("/", String.raw`\/`) +
+      String.raw`[\s\S]*?git ls-tree HEAD eliza[\s\S]*?` +
+      String.raw`git clone --no-checkout --filter=blob:none[\s\S]*?` +
+      String.raw`git -C eliza fetch --depth=1 origin[\s\S]*?refs\/heads\/alice\/runtime-stable-2026-08-22[\s\S]*?` +
+      String.raw`test "\$protected_eliza_sha" = "\$EXPECTED_ELIZA_SHA"[\s\S]*?` +
+      String.raw`test "\$eliza_sha" = "\$protected_eliza_sha"[\s\S]*?` +
+      String.raw`git -C eliza checkout --detach "\$eliza_sha"[\s\S]*?` +
+      String.raw`git -C eliza rev-parse HEAD[\s\S]*?` +
+      String.raw`Install exact (?:release|recovery) dependencies[\s\S]*?` +
+      String.raw`bun install --ignore-scripts --frozen-lockfile`,
+  );
+
+  const deployJob = workflow.match(/  deploy:[\s\S]*?(?=\n  accept:)/)?.[0] ?? "";
+  const recoveryJob =
+    workflow.match(/  recover-cloudflare:[\s\S]*$/)?.[0] ?? "";
+  const watchdogRecoveryJob =
+    watchdog.match(/  recover-cloudflare:[\s\S]*$/)?.[0] ?? "";
+
+  assert.match(deployJob, exactHydration);
+  assert.match(recoveryJob, exactHydration);
+  assert.match(watchdogRecoveryJob, exactHydration);
+});
+
 test("protected Alice deployment verifies image and Worker provenance before promotion", () => {
   assert.match(
     workflow,

@@ -118,6 +118,30 @@ jobs:
           test "$(printf '%s' "$artifact_record" | cut -f1)" = "$ARTIFACT_DIGEST"
           test "$(printf '%s' "$artifact_record" | cut -f2)" = "false"
 
+      - name: Hydrate exact protected Eliza workspace
+        env:
+          EXPECTED_ELIZA_SHA: e219c232e21d8b61017129647130830d811ee45a
+        run: |
+          set -euo pipefail
+          test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
+            "https://github.com/rndrntwrk/eliza.git"
+          test "$(git config -f .gitmodules --get submodule.eliza.branch)" = \
+            "alice/runtime-stable-2026-08-22"
+          eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
+          test "$eliza_sha" = "$EXPECTED_ELIZA_SHA"
+          git clone --no-checkout --filter=blob:none \
+            https://github.com/rndrntwrk/eliza.git eliza
+          git -C eliza fetch --depth=1 origin \
+            refs/heads/alice/runtime-stable-2026-08-22:refs/remotes/origin/alice/runtime-stable-2026-08-22
+          protected_eliza_sha="$(git -C eliza rev-parse \
+            refs/remotes/origin/alice/runtime-stable-2026-08-22)"
+          test "$protected_eliza_sha" = "$EXPECTED_ELIZA_SHA"
+          test "$eliza_sha" = "$protected_eliza_sha"
+          git -C eliza fetch --depth=1 origin "$eliza_sha"
+          git -C eliza checkout --detach "$eliza_sha"
+          test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
+          test -f eliza/package.json
+
       - name: Establish global mutation cutoff and recovery reserve
         run: |
           set -euo pipefail
@@ -1192,6 +1216,30 @@ jobs:
           test "$GITHUB_SHA" = "$SOURCE_SHA"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Hydrate exact protected Eliza workspace
+        env:
+          EXPECTED_ELIZA_SHA: e219c232e21d8b61017129647130830d811ee45a
+        run: |
+          set -euo pipefail
+          test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
+            "https://github.com/rndrntwrk/eliza.git"
+          test "$(git config -f .gitmodules --get submodule.eliza.branch)" = \
+            "alice/runtime-stable-2026-08-22"
+          eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
+          test "$eliza_sha" = "$EXPECTED_ELIZA_SHA"
+          git clone --no-checkout --filter=blob:none \
+            https://github.com/rndrntwrk/eliza.git eliza
+          git -C eliza fetch --depth=1 origin \
+            refs/heads/alice/runtime-stable-2026-08-22:refs/remotes/origin/alice/runtime-stable-2026-08-22
+          protected_eliza_sha="$(git -C eliza rev-parse \
+            refs/remotes/origin/alice/runtime-stable-2026-08-22)"
+          test "$protected_eliza_sha" = "$EXPECTED_ELIZA_SHA"
+          test "$eliza_sha" = "$protected_eliza_sha"
+          git -C eliza fetch --depth=1 origin "$eliza_sha"
+          git -C eliza checkout --detach "$eliza_sha"
+          test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
+          test -f eliza/package.json
 
       - name: Setup Node.js 24.19.0
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
