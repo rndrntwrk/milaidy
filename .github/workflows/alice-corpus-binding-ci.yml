@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/alice-corpus-binding-ci.yml"
       - ".env.alice-corpus.example"
+      - ".gitignore"
       - "biome.json"
       - "packages/agent/src/plugins/alice-corpus/**"
       - "packages/agent/src/runtime/core-plugins.ts"
@@ -20,6 +21,7 @@ on:
     paths:
       - ".github/workflows/alice-corpus-binding-ci.yml"
       - ".env.alice-corpus.example"
+      - ".gitignore"
       - "biome.json"
       - "packages/agent/src/plugins/alice-corpus/**"
       - "packages/agent/src/runtime/core-plugins.ts"
@@ -64,6 +66,7 @@ jobs:
             "$ROOT/stubs"
 
           cp biome.json "$ROOT/biome.json"
+          cp .gitignore "$ROOT/.gitignore"
           cp -R packages/agent/src/plugins/alice-corpus \
             "$ROOT/packages/agent/src/plugins/alice-corpus"
           cp packages/agent/src/runtime/core-plugins.ts \
