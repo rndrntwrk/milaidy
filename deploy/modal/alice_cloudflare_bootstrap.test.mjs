@@ -181,7 +181,7 @@ test("finds the exact paused queue across every provider page without mutating",
     settings: {
       delivery_delay: 0,
       delivery_paused: true,
-      message_retention_period: 345_600,
+      message_retention_period: 86_400,
     },
   };
   const fetchImpl = async (url, options) => {
@@ -227,7 +227,7 @@ test("accepts Cloudflare's observed page-one metadata without total_pages", asyn
           settings: {
             delivery_delay: 0,
             delivery_paused: true,
-            message_retention_period: 345_600,
+            message_retention_period: 86_400,
           },
         }],
       });
@@ -256,7 +256,7 @@ test("accepts Cloudflare's observed page-one metadata without total_pages", asyn
       settings: {
         delivery_delay: 0,
         delivery_paused: true,
-        message_retention_period: 345_600,
+        message_retention_period: 86_400,
       },
     },
   });

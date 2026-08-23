@@ -112,7 +112,7 @@ test("updates the exact evidence queue with a complete fail-closed provider body
     settings: {
       delivery_delay: 0,
       delivery_paused: true,
-      message_retention_period: 345_600,
+      message_retention_period: 86_400,
     },
   };
   assert.deepEqual(buildAliceEvidenceQueueUpdate(queue, false), {
@@ -123,7 +123,7 @@ test("updates the exact evidence queue with a complete fail-closed provider body
       settings: {
         delivery_delay: 0,
         delivery_paused: false,
-        message_retention_period: 345_600,
+        message_retention_period: 86_400,
       },
     },
   });
