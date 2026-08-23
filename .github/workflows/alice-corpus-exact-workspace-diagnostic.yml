@@ -14,6 +14,8 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 env:
   BUN_VERSION: "1.3.14"
@@ -170,3 +172,31 @@ jobs:
             ${{ runner.temp }}/exact-workspace.diff
           if-no-files-found: error
           retention-days: 3
+
+      - name: Report diagnostic run on PR 212
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          HEAD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(cat <<EOF
+          Exact workspace diagnostic completed.
+
+          - status: \\`$JOB_STATUS\\`
+          - head: \\`$HEAD_SHA\\`
+          - run: https://github.com/${{ github.repository }}/actions/runs/$RUN_ID
+          - attempt: \\`$RUN_ATTEMPT\\`
+          - artifact: \\`alice-corpus-exact-workspace-$HEAD_SHA\\`
+
+          This diagnostic regenerates the lock only inside the runner and does not mutate the branch.
+          EOF
+          )
+          gh api \
+            --method POST \
+            repos/${{ github.repository }}/issues/212/comments \
+            -f body="$body"
