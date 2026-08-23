@@ -835,12 +835,26 @@ async function ensureConsumer({ fetchImpl, apiToken, queue }) {
       pathname: pathName,
     });
   }
+  if (consumers.length !== 1) invalid();
   const consumer = consumers[0];
+  verifyAliceBootstrapQueueConsumer(consumer);
+  return { consumer, created };
+}
+
+export function verifyAliceBootstrapQueueConsumer(consumer) {
+  const hasScript = Object.prototype.hasOwnProperty.call(consumer ?? {}, "script");
+  const hasScriptName = Object.prototype.hasOwnProperty.call(
+    consumer ?? {},
+    "script_name",
+  );
+  const scriptName = hasScript ? consumer?.script : consumer?.script_name;
   if (
-    consumers.length !== 1 ||
+    !consumer ||
+    hasScript === hasScriptName ||
+    typeof scriptName !== "string" ||
     !RESOURCE_ID.test(consumer?.consumer_id ?? "") ||
     consumer?.queue_name !== ALICE_CLOUDFLARE_TARGET.evidenceQueue ||
-    consumer?.script_name !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
+    scriptName !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
     consumer?.type !== "worker" ||
     consumer?.dead_letter_queue !== ALICE_CLOUDFLARE_TARGET.evidenceDlq ||
     consumer?.settings?.batch_size !== 10 ||
@@ -851,7 +865,7 @@ async function ensureConsumer({ fetchImpl, apiToken, queue }) {
   ) {
     invalid();
   }
-  return { consumer, created };
+  return consumer;
 }
 
 async function activeControlVersionId({ fetchImpl, apiToken }) {
@@ -877,6 +891,26 @@ async function activeControlVersionId({ fetchImpl, apiToken }) {
   return active.versions[0].version_id;
 }
 
+export function extractAliceLatestUploadedControlVersionId(value) {
+  const items = Array.isArray(value)
+    ? value
+    : value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        canonicalAliceJson(Object.keys(value).sort()) ===
+          canonicalAliceJson(["items"])
+      ? value.items
+      : null;
+  if (
+    !Array.isArray(items) ||
+    items.length !== 1 ||
+    !VERSION_ID.test(items[0]?.id ?? "")
+  ) {
+    invalid();
+  }
+  return items[0].id;
+}
+
 async function latestUploadedControlVersionId({ fetchImpl, apiToken }) {
   const versions = await api({
     fetchImpl,
@@ -885,9 +919,7 @@ async function latestUploadedControlVersionId({ fetchImpl, apiToken }) {
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/versions?page=1&per_page=1`,
   });
-  if (!Array.isArray(versions) || versions.length !== 1) invalid();
-  if (!VERSION_ID.test(versions[0]?.id ?? "")) invalid();
-  return versions[0].id;
+  return extractAliceLatestUploadedControlVersionId(versions);
 }
 
 function writeReadonly(filePath, value) {

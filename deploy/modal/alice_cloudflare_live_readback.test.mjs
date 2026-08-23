@@ -252,6 +252,37 @@ test("accepts Cloudflare's uppercase ENAM readback and emits canonical continuit
   assert.equal(state.sanitized.evidenceBucket.location, "enam");
 });
 
+test("accepts Cloudflare's Queue consumer GET script field", async () => {
+  const calls = [];
+  const baseFetch = continuityApi(calls);
+  const fetchImpl = async (url, options) => {
+    const parsed = new URL(url);
+    if (
+      parsed.pathname.replace("/client/v4", "") ===
+      `/accounts/${accountId}/queues/${continuityFixture.queue.queue_id}/consumers`
+    ) {
+      calls.push({ url: parsed.href, options });
+      const { script_name: script, ...consumer } =
+        continuityFixture.queueConsumers[0];
+      return json({ success: true, result: [{ ...consumer, script }] });
+    }
+    return baseFetch(url, options);
+  };
+  const state = await fetchAliceCloudflareContinuityState({
+    fetchImpl,
+    apiToken: "read-only-token",
+    expectedDurableObjectNamespaceIds:
+      continuityFixture.durableObjectNamespaceIds,
+    accountId,
+    zoneId,
+    baseUrl,
+  });
+  assert.equal(
+    state.sanitized.evidenceQueueConsumer.scriptName,
+    "alice-production-control",
+  );
+});
+
 test("accepts Cloudflare's exact zero-subscription pagination response", async () => {
   const calls = [];
   const baseFetch = continuityApi(calls);

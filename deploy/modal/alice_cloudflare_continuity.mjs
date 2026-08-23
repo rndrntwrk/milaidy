@@ -194,11 +194,19 @@ export function buildAliceCandidateCloudflareContinuityReadback(readback) {
 
 function normalizeQueueConsumer(consumer) {
   const createdAt = normalizedTimestamp(consumer?.created_on);
+  const hasScript = Object.prototype.hasOwnProperty.call(consumer ?? {}, "script");
+  const hasScriptName = Object.prototype.hasOwnProperty.call(
+    consumer ?? {},
+    "script_name",
+  );
+  const scriptName = hasScript ? consumer?.script : consumer?.script_name;
   if (
     !consumer ||
+    hasScript === hasScriptName ||
+    typeof scriptName !== "string" ||
     !RESOURCE_ID.test(consumer.consumer_id ?? "") ||
     consumer.queue_name !== ALICE_CLOUDFLARE_TARGET.evidenceQueue ||
-    consumer.script_name !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
+    scriptName !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
     consumer.type !== "worker" ||
     consumer.dead_letter_queue !== ALICE_CLOUDFLARE_TARGET.evidenceDlq ||
     createdAt === null ||
@@ -214,7 +222,7 @@ function normalizeQueueConsumer(consumer) {
     id: consumer.consumer_id,
     createdAt,
     queueName: consumer.queue_name,
-    scriptName: consumer.script_name,
+    scriptName,
     deadLetterQueue: consumer.dead_letter_queue,
     type: consumer.type,
     settings: {
