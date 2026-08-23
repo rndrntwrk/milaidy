@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
+    "customConditions": ["eliza-source"],
     "strict": false,
     "skipLibCheck": true,
     "types": ["node", "bun"],
@@ -11,8 +12,6 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@elizaos/core": ["../../eliza/packages/typescript/src/index.node.ts"],
-      "@elizaos/core/*": ["../../eliza/packages/typescript/src/*"],
       "@miladyai/plugin-selfcontrol": ["../plugin-selfcontrol/src/index.ts"],
       "@miladyai/plugin-selfcontrol/*": ["../plugin-selfcontrol/src/*"],
       "@miladyai/shared": ["../shared/src/index.ts"],
