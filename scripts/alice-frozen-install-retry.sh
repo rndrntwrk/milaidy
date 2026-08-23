@@ -13,7 +13,7 @@ esac
 install_log="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/alice-frozen-install.XXXXXX")"
 trap 'rm -f -- "$install_log"' EXIT
 
-for attempt in 1 2 3; do
+for attempt in 1 2 3 4 5; do
   set +e
   "$bun_bin" install --ignore-scripts --frozen-lockfile 2>&1 | tee "$install_log"
   install_status="${PIPESTATUS[0]}"
@@ -30,12 +30,12 @@ for attempt in 1 2 3; do
     exit "$install_status"
   fi
 
-  if [ "$attempt" -eq 3 ]; then
-    echo "Frozen dependency install exhausted three transient-failure attempts" >&2
+  if [ "$attempt" -eq 5 ]; then
+    echo "Frozen dependency install exhausted five transient-failure attempts" >&2
     exit "$install_status"
   fi
 
-  echo "Transient dependency fetch failure; retrying frozen install (attempt $((attempt + 1))/3)" >&2
+  echo "Transient dependency fetch failure; retrying frozen install (attempt $((attempt + 1))/5)" >&2
   if [ "$retry_delay_seconds" -gt 0 ]; then
     sleep "$((retry_delay_seconds * attempt))"
   fi

@@ -30,6 +30,12 @@ case "$ALICE_FAKE_MODE" in
       exit 1
     fi
     ;;
+  transient-four)
+    if [ "$count" -le 4 ]; then
+      printf '%s\\n' 'error: GET https://api.github.com/repos/example/plugin/tarball/ - 504' >&2
+      exit 1
+    fi
+    ;;
   deterministic)
     printf '%s\\n' 'error: lockfile had changes, but lockfile is frozen' >&2
     exit 17
@@ -86,10 +92,16 @@ test("fails deterministic frozen-lockfile errors without retrying", () => {
   assert.equal(result.count, 1);
 });
 
-test("bounds repeated transient failures to three attempts", () => {
+test("survives four consecutive transient registry failures", () => {
+  const result = run("transient-four");
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.count, 5);
+});
+
+test("bounds repeated transient failures to five attempts", () => {
   const result = run("transient-always");
   assert.equal(result.status, 29);
-  assert.equal(result.count, 3);
+  assert.equal(result.count, 5);
 });
 
 test("all critical Alice release installs use the bounded retry helper", () => {
