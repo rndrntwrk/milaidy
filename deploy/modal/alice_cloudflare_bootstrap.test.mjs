@@ -6,9 +6,11 @@ import {
   buildAliceBootstrapPromotionCommand,
   buildAliceBootstrapControlConfig,
   ensureAliceBootstrapQueue,
+  extractAliceLatestUploadedControlVersionId,
   extractAliceBootstrapNamespaceIds,
   parseAliceWranglerDeployVersionId,
   verifyAliceBootstrapBucket,
+  verifyAliceBootstrapQueueConsumer,
 } from "./alice_cloudflare_bootstrap.mjs";
 import fs from "node:fs";
 
@@ -172,6 +174,66 @@ test("parses only one exact pinned-Wrangler first-deploy version", () => {
     assert.throws(
       () => parseAliceWranglerDeployVersionId(output),
       /ALICE_CLOUDFLARE_BOOTSTRAP_DEPLOY_VERSION_INVALID/,
+    );
+  }
+});
+
+test("accepts Cloudflare's exact object-wrapped latest-version list", () => {
+  const versionId = "11111111-1111-4111-8111-111111111111";
+  assert.equal(
+    extractAliceLatestUploadedControlVersionId({ items: [{ id: versionId }] }),
+    versionId,
+  );
+  assert.equal(
+    extractAliceLatestUploadedControlVersionId([{ id: versionId }]),
+    versionId,
+  );
+  for (const value of [
+    { items: [{ id: versionId }], unexpected: true },
+    { items: [] },
+    { items: [{ id: versionId }, { id: versionId }] },
+    { items: [{ id: "invalid" }] },
+    { items: { id: versionId } },
+  ]) {
+    assert.throws(
+      () => extractAliceLatestUploadedControlVersionId(value),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
+    );
+  }
+});
+
+test("accepts only Cloudflare's unambiguous Queue consumer script field", () => {
+  const consumer = {
+    consumer_id: "a".repeat(32),
+    queue_name: "alice-production-evidence-v1",
+    script: "alice-production-control",
+    type: "worker",
+    dead_letter_queue: "alice-production-evidence-dlq-v1",
+    settings: {
+      batch_size: 10,
+      max_concurrency: 1,
+      max_retries: 3,
+      max_wait_time_ms: 5_000,
+      retry_delay: 10,
+    },
+  };
+  assert.deepEqual(verifyAliceBootstrapQueueConsumer(consumer), consumer);
+  const { script, ...legacyConsumer } = consumer;
+  assert.deepEqual(
+    verifyAliceBootstrapQueueConsumer({
+      ...legacyConsumer,
+      script_name: script,
+    }),
+    { ...legacyConsumer, script_name: script },
+  );
+  for (const substitution of [
+    { ...consumer, script_name: consumer.script },
+    { ...consumer, script: "other" },
+    { ...consumer, script: undefined },
+  ]) {
+    assert.throws(
+      () => verifyAliceBootstrapQueueConsumer(substitution),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
     );
   }
 });

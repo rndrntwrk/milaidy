@@ -122,6 +122,28 @@ test("case-folds Cloudflare's canonical uppercase ENAM bucket location", () => {
   assert.equal(config.evidenceBucket.location, "enam");
 });
 
+test("normalizes Cloudflare's Queue consumer script field without ambiguity", () => {
+  const { script_name: scriptName, ...providerConsumer } =
+    readback.queueConsumers[0];
+  const config = buildAliceCloudflareContinuityConfig({
+    ...readback,
+    queueConsumers: [{ ...providerConsumer, script: scriptName }],
+  });
+  assert.equal(config.evidenceQueueConsumer.scriptName, scriptName);
+  for (const consumer of [
+    { ...providerConsumer, script: "other" },
+    { ...providerConsumer },
+    { ...providerConsumer, script: scriptName, script_name: scriptName },
+  ]) {
+    assert.throws(() =>
+      buildAliceCloudflareContinuityConfig({
+        ...readback,
+        queueConsumers: [consumer],
+      }),
+    );
+  }
+});
+
 test("fails closed on every substituted continuity boundary", () => {
   const substitutions = [
     { ...readback, accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
