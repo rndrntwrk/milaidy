@@ -59,6 +59,24 @@ test("exact Alice revision builds cannot inherit the legacy fleet rollout path",
   );
 });
 
+test("exact-image qualification reserves the bounded smoke window", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+
+  assert.match(
+    workflow,
+    /jobs:\n  build:\n    name: Build cloud agent image\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 60/,
+    "the job must retain enough time for the separately bounded candidate smoke",
+  );
+  assert.match(
+    workflow,
+    /- name: Smoke exact candidate image[\s\S]*?timeout-minutes: 10/,
+    "candidate runtime smoke must keep its independent ten-minute ceiling",
+  );
+});
+
 test("privileged Alice image publication accepts only the exact protected release head", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

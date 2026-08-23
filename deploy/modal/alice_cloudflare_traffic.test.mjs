@@ -166,7 +166,6 @@ function paginatedTrafficFetch({ shadowRoute = false, customDomain = false }) {
           per_page: 100,
           count: page === 1 ? 100 : 1,
           total_count: 101,
-          total_pages: 2,
         },
       );
     }
@@ -186,7 +185,6 @@ function paginatedTrafficFetch({ shadowRoute = false, customDomain = false }) {
           per_page: 100,
           count: page === 1 ? 100 : 1,
           total_count: 101,
-          total_pages: 2,
         },
       );
     }
@@ -237,14 +235,21 @@ test("exhausts custom-domain pages and rejects a later-page Alice domain", async
 test("accepts Cloudflare's page-one metadata for an empty collection", async () => {
   const fetchImpl = async (input) => {
     const url = new URL(input);
-    if (url.pathname.endsWith("/workers/routes") ||
-        url.pathname.endsWith("/workers/domains")) {
+    if (url.pathname.endsWith("/workers/routes")) {
       return cloudflareResponse([], {
         page: 1,
         per_page: 100,
         count: 0,
         total_count: 0,
         total_pages: 0,
+      });
+    }
+    if (url.pathname.endsWith("/workers/domains")) {
+      return cloudflareResponse([], {
+        page: 1,
+        per_page: 100,
+        count: 0,
+        total_count: 0,
       });
     }
     if (url.pathname.endsWith("/subdomain")) {

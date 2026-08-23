@@ -311,11 +311,18 @@ async function apiGetAll(client, pathname, search = {}) {
       return values;
     }
     const info = body.result_info;
+    const totalPages =
+      info?.total_pages === undefined &&
+        Number.isSafeInteger(info?.total_count) &&
+        Number.isSafeInteger(info?.per_page) &&
+        info.per_page > 0
+        ? Math.ceil(info.total_count / info.per_page)
+        : info?.total_pages;
     const empty =
       page === 1 &&
       body.result.length === 0 &&
       (info?.page === 0 || info?.page === page) &&
-      info?.total_pages === 0 &&
+      totalPages === 0 &&
       info?.total_count === 0 &&
       info?.count === 0 &&
       info?.per_page === 100;
@@ -323,37 +330,37 @@ async function apiGetAll(client, pathname, search = {}) {
       !info ||
       typeof info !== "object" ||
       !Number.isSafeInteger(info.page) ||
-      !Number.isSafeInteger(info.total_pages) ||
+      !Number.isSafeInteger(totalPages) ||
       !Number.isSafeInteger(info.per_page) ||
       !Number.isSafeInteger(info.count) ||
       !Number.isSafeInteger(info.total_count) ||
       (!empty && info.page !== page) ||
-      info.total_pages < 0 ||
-      info.total_pages > 100 ||
+      totalPages < 0 ||
+      totalPages > 100 ||
       info.per_page !== 100 ||
       info.count !== body.result.length ||
       info.total_count < 0 ||
       info.total_count > 10_000 ||
-      info.total_pages !== Math.ceil(info.total_count / info.per_page) ||
+      totalPages !== Math.ceil(info.total_count / info.per_page) ||
       (expectedTotalPages !== undefined &&
-        info.total_pages !== expectedTotalPages) ||
+        totalPages !== expectedTotalPages) ||
       (expectedTotalCount !== undefined &&
         info.total_count !== expectedTotalCount)
     ) {
       invalid();
     }
     if (empty) return values;
-    const expectedPageCount = page < info.total_pages
+    const expectedPageCount = page < totalPages
       ? info.per_page
       : info.total_count - (page - 1) * info.per_page;
     if (
-      info.total_pages === 0 ||
+      totalPages === 0 ||
       info.count !== expectedPageCount ||
       expectedPageCount <= 0
     ) {
       invalid();
     }
-    expectedTotalPages = info.total_pages;
+    expectedTotalPages = totalPages;
     expectedTotalCount = info.total_count;
     if (page === expectedTotalPages) return values;
     if (page > expectedTotalPages) invalid();
