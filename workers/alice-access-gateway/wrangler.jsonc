@@ -1,0 +1,57 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "036df6c823669b8fa2f66cf4c16eeb29",
+  "name": "alice-access-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "minify": true,
+  "upload_source_maps": true,
+  "routes": [
+    {
+      "pattern": "alice.rndrntwrk.com/*",
+      "zone_name": "rndrntwrk.com"
+    }
+  ],
+  "vars": {
+    "ALICE_ACCESS_ISSUER": "https://rndrntwrk.cloudflareaccess.com",
+    "ALICE_ACCESS_AUDIENCE": "1f65441271f72eee92c371c42306885595ae71f950d2ed5aaa1ac354788410e4",
+    "ALICE_OWNER_EMAIL_SHA256": "REPLACED_BY_PRODUCTION_DEPLOY",
+    "ALICE_UPSTREAM_ORIGIN": "https://rndrntwrk--alice.modal.run",
+    "ALICE_DEPLOYMENT_MANIFEST_SHA256": "pending",
+    "ALICE_DEPLOYMENT_MANIFEST_B64": "pending"
+  },
+  "secrets": {
+    "required": [
+      "ALICE_ACCESS_PROXY_SECRET",
+      "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
+      "ALICE_MODAL_PROXY_KEY",
+      "ALICE_MODAL_PROXY_SECRET"
+    ]
+  },
+  "services": [
+    {
+      "binding": "ALICE_CONTROL",
+      "service": "alice-production-control"
+    }
+  ],
+  "version_metadata": {
+    "binding": "ALICE_VERSION"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
+  }
+}

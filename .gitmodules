@@ -8,8 +8,8 @@
 	branch = alpha
 [submodule "eliza"]
 	path = eliza
-	url = https://github.com/elizaOS/eliza.git
-	branch = develop
+	url = https://github.com/rndrntwrk/eliza.git
+	branch = alice/runtime-stable-2026-08-22
 [submodule "steward-fi"]
 	path = steward-fi
 	url = https://github.com/Steward-Fi/steward.git

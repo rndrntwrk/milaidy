@@ -48,6 +48,12 @@ import { startTrajectoryStepInDatabase } from "../runtime/trajectory-storage.js"
 import { syncCharacterIntoConfig } from "../services/character-persistence.js";
 import { detectRuntimeModel } from "./agent-model.js";
 import {
+  buildAliceProductionChatBoundary,
+  generateAliceProductionText,
+  type AliceProductionChatBoundary,
+} from "./alice-production-chat.js";
+import { isAliceProductionRuntime } from "./alice-production-guard.js";
+import {
   isClientVisibleNoResponse,
   isNoResponsePlaceholder,
   stripAssistantStageDirections,
@@ -112,6 +118,7 @@ export interface ChatGenerationResult {
     id?: string;
     content?: Content;
   }>;
+  aliceBoundary?: AliceProductionChatBoundary;
   usage?: {
     promptTokens: number;
     completionTokens: number;
@@ -865,6 +872,41 @@ export async function generateChatResponse(
     const originalUserText = String(
       extractCompatTextContent(message.content) ?? "",
     );
+
+    if (isAliceProductionRuntime(process.env)) {
+      const text = await withTimeout(
+        generateAliceProductionText(
+          runtime,
+          originalUserText,
+          agentName,
+          opts?.preferredLanguage,
+        ),
+        generationTimeoutMs,
+        () => createChatGenerationTimeoutError(generationTimeoutMs),
+        () => {
+          generationTimedOut = true;
+        },
+      );
+      if (generationTimedOut || opts?.isAborted?.()) {
+        throw createChatGenerationTimeoutError(generationTimeoutMs);
+      }
+      opts?.onSnapshot?.(text);
+      const promptTokens = Math.ceil(originalUserText.length / 4);
+      const completionTokens = Math.ceil(text.length / 4);
+      return {
+        text,
+        agentName,
+        responseContent: { text },
+        aliceBoundary: buildAliceProductionChatBoundary(),
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          model: detectRuntimeModel(runtime, undefined) ?? undefined,
+        },
+      };
+    }
+
     type StreamSource = "unset" | "callback" | "onStreamChunk";
     let responseText = "";
     let forcedWalletExecutionText = false;
@@ -1837,6 +1879,65 @@ export async function handleChatRoutes(
     const id = `chatcmpl-${crypto.randomUUID()}`;
     const model = requestedModel ?? state.agentName ?? "eliza";
 
+    // Alice production uses an isolated response-only path. Do not create a
+    // local room, connection, world, message, or invoke any runtime service;
+    // Cloudflare is the durable session authority and supplies bounded context.
+    if (isAliceProductionRuntime(process.env)) {
+      if (wantsStream) {
+        json(
+          res,
+          {
+            error: {
+              message: "Alice production core requires a complete durable response",
+              type: "invalid_request_error",
+              code: "ALICE_DURABLE_CHAT_STREAMING_DISABLED",
+            },
+          },
+          400,
+        );
+        return true;
+      }
+      if (!state.runtime) {
+        json(
+          res,
+          { error: { message: "Agent is not running", type: "service_unavailable" } },
+          503,
+        );
+        return true;
+      }
+      try {
+        const prompt = extracted.system
+          ? `${extracted.system}\n\n${extracted.user}`.trim()
+          : extracted.user;
+        const responseText = await generateAliceProductionText(
+          state.runtime,
+          prompt,
+          state.agentName || "Alice",
+        );
+        json(res, {
+          id,
+          object: "chat.completion",
+          created,
+          model,
+          choices: [
+            {
+              index: 0,
+              message: { role: "assistant", content: responseText },
+              finish_reason: "stop",
+            },
+          ],
+          alice_boundary: buildAliceProductionChatBoundary(),
+        });
+      } catch (err) {
+        json(
+          res,
+          { error: { message: getErrorMessage(err), type: "server_error" } },
+          500,
+        );
+      }
+      return true;
+    }
+
     if (wantsStream) {
       initSse(res);
       let aborted = false;
@@ -1957,6 +2058,7 @@ export async function handleChatRoutes(
     // Non-streaming
     try {
       let responseText: string;
+      let aliceBoundary: AliceProductionChatBoundary | undefined;
 
       {
         if (!state.runtime) {
@@ -2002,6 +2104,7 @@ export async function handleChatRoutes(
         );
         syncRuntimeCharacterToChatStateConfig(state);
         responseText = result.text;
+        aliceBoundary = result.aliceBoundary;
       }
 
       const resolvedText = normalizeChatResponseText(
@@ -2021,6 +2124,7 @@ export async function handleChatRoutes(
             finish_reason: "stop",
           },
         ],
+        ...(aliceBoundary ? { alice_boundary: aliceBoundary } : {}),
       });
     } catch (err) {
       json(

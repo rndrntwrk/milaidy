@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "alice.production-policy.v1",
+  "policyId": "alice-production-core-2026-08-22",
+  "authority": {
+    "canonicalTaskState": "cloudflare-durable-objects",
+    "ownerAuthentication": "cloudflare-access-exact-owner-jwt",
+    "privilegedCapabilityGrant": "disabled-pending-device-bound-webauthn",
+    "economicSigner": "renclave-external-only",
+    "runtimeAuthority": "proposer-only"
+  },
+  "autonomousActions": [
+    "research.read",
+    "research.retrieve",
+    "memory.read",
+    "draft.create",
+    "runtime.health"
+  ],
+  "capabilityActions": [
+    "sandbox.execute",
+    "coding.patch.sandbox"
+  ],
+  "disabledActions": [
+    "social.post",
+    "social.message",
+    "production.deploy",
+    "repository.merge",
+    "trade.execute",
+    "funds.withdraw",
+    "funds.bridge",
+    "economic.sign",
+    "identity.admin",
+    "issuer.admin",
+    "stream.public",
+    "risk.increase"
+  ],
+  "pauseScopes": [
+    "all",
+    "social",
+    "trading",
+    "stream",
+    "coding",
+    "model",
+    "modal",
+    "signer",
+    "release"
+  ],
+  "modelRouting": {
+    "cloudflareAiGateway": "alice-production",
+    "dailySynchronousUnitCeiling": 10000,
+    "gatewayCaching": "disabled",
+    "gatewayPayloadLogging": "disabled",
+    "models": [
+      "workers-ai/@cf/openai/gpt-oss-20b",
+      "workers-ai/@cf/openai/gpt-oss-120b",
+      "@cf/baai/bge-m3"
+    ]
+  },
+  "runtimeBoundaries": {
+    "cloudflare": "durable-authority-workflows-queues-evidence-and-model-control",
+    "modal": "zero-idle-bounded-proposer-runtime-only",
+    "railway": "not-admitted-for-alice-core-v1",
+    "stream": "installed-but-disabled",
+    "social": "installed-but-disabled",
+    "trading": "installed-but-disabled",
+    "codingExecution": "installed-but-disabled",
+    "signing": "not-present"
+  }
+}

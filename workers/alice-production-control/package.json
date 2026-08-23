@@ -1,0 +1,13 @@
+{
+  "name": "@rndrntwrk/alice-production-control",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test test",
+    "types": "wrangler types --config wrangler.jsonc --env-interface AliceEnv worker-configuration.d.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "dry-run": "wrangler deploy --dry-run",
+    "check": "bun run types && bun run test && bun run typecheck && bun run dry-run"
+  }
+}

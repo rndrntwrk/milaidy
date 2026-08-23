@@ -1,0 +1,118 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "036df6c823669b8fa2f66cf4c16eeb29",
+  "name": "alice-production-control",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "minify": true,
+  "upload_source_maps": true,
+  "routes": [
+    {
+      "pattern": "alice.rndrntwrk.com/control/*",
+      "zone_name": "rndrntwrk.com"
+    },
+    {
+      "pattern": "alice-release.rndrntwrk.com/control/internal/v1/deployment/*",
+      "zone_name": "rndrntwrk.com"
+    }
+  ],
+  "vars": {
+    "ALICE_ACCESS_ISSUER": "https://rndrntwrk.cloudflareaccess.com",
+    "ALICE_ACCESS_AUDIENCE": "1f65441271f72eee92c371c42306885595ae71f950d2ed5aaa1ac354788410e4",
+    "ALICE_OWNER_EMAIL_SHA256": "REPLACED_BY_PRODUCTION_DEPLOY",
+    "ALICE_RELEASE_ACCESS_AUDIENCE": "REPLACED_BY_PRODUCTION_DEPLOY",
+    "ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256": "REPLACED_BY_PRODUCTION_DEPLOY",
+    "ALICE_MODEL_DAILY_BUDGET_UNITS": "10000",
+    "ALICE_PROGRAM_ENVELOPE_B64": "e30",
+    "ALICE_PROGRAM_SIGNATURE_B64": "invalid",
+    "ALICE_PROGRAM_PUBLIC_JWK_B64": "e30",
+    "ALICE_MODAL_REVISION": "pending",
+    "ALICE_DEPLOYMENT_MANIFEST_SHA256": "pending",
+    "ALICE_DEPLOYMENT_MANIFEST_B64": "pending"
+  },
+  "secrets": {
+    "required": [
+      "ALICE_CONTROL_RECOVERY_TOKEN",
+      "ALICE_DEPLOYMENT_PAUSE_TOKEN",
+      "ALICE_ACCESS_GATEWAY_SERVICE_TOKEN",
+      "ALICE_AI_GATEWAY_SERVICE_TOKEN"
+      ,"ALICE_EVIDENCE_QUEUE_HMAC_KEY"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ALICE_AUTHORITY",
+        "class_name": "AliceAuthority"
+      },
+      {
+        "name": "ALICE_SESSIONS",
+        "class_name": "AliceSession"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "alice-production-core-v1",
+      "new_sqlite_classes": [
+        "AliceAuthority",
+        "AliceSession"
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "binding": "ALICE_PLANS",
+      "name": "alice-production-plans",
+      "class_name": "AlicePlanWorkflow",
+      "limits": {
+        "steps": 16
+      }
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "ALICE_EVIDENCE_QUEUE",
+        "queue": "alice-production-evidence-v1"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "alice-production-evidence-v1",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "alice-production-evidence-dlq-v1",
+        "max_concurrency": 1,
+        "retry_delay": 10
+      }
+    ]
+  },
+  "r2_buckets": [
+    {
+      "binding": "ALICE_EVIDENCE",
+      "bucket_name": "alice-production-evidence"
+    }
+  ],
+  "version_metadata": {
+    "binding": "ALICE_VERSION"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
+  }
+}

@@ -1,0 +1,1089 @@
+import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+import {
+  ALICE_CLOUDFLARE_TARGET,
+  canonicalAliceJson,
+} from "../../workers/alice-effective-config.js";
+import {
+  ALICE_CONTINUITY_SENTINEL_KEY,
+  aliceCloudflareContinuitySentinelBytes,
+} from "./alice_cloudflare_continuity.mjs";
+import {
+  fetchAliceCloudflareContinuityState,
+} from "./alice_cloudflare_live_readback.mjs";
+import {
+  aliceCloudflareCommandEnv,
+  parseAliceWranglerUploadVersionId,
+} from "./alice_cloudflare_release.mjs";
+import {
+  verifyAliceWorkerBundleArtifact,
+} from "./alice_worker_bundle_artifact.mjs";
+
+const API_BASE = "https://api.cloudflare.com/client/v4";
+const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
+const NAMESPACE_ID = /^[a-f0-9]{32}$/;
+const COMMIT = /^[a-f0-9]{40}$/;
+const RELEASE_RUN_ID = /^[1-9][0-9]*-[1-9][0-9]*$/;
+const RESOURCE_ID = /^[A-Za-z0-9_-]{16,64}$/;
+const VERSION_ID =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const CONTROL_DIRECTORY = "alice-production-control";
+const PROTECTED_BRANCH = "release/alice-production-core-2026-08-22";
+const REPOSITORY = "rndrntwrk/milaidy";
+const BOOTSTRAP_RESOURCE_KEYS = [
+  "controlWorker",
+  "evidenceBucket",
+  "evidenceDeadLetterQueue",
+  "evidenceQueue",
+  "evidenceQueueConsumer",
+  "evidenceSentinel",
+];
+
+function invalid(message = "ALICE_CLOUDFLARE_BOOTSTRAP_INVALID") {
+  throw new Error(message);
+}
+
+function absolute(value) {
+  return typeof value === "string" && path.isAbsolute(value);
+}
+
+export function verifyAliceBootstrapState(state) {
+  if (
+    !state ||
+    typeof state !== "object" ||
+    Array.isArray(state) ||
+    canonicalAliceJson(Object.keys(state).sort()) !==
+      canonicalAliceJson([
+        "activeVersionId",
+        "createdByRun",
+        "mode",
+        "preexisting",
+        "schemaVersion",
+      ].sort()) ||
+    state.schemaVersion !== "alice.cloudflare-bootstrap-state.v1" ||
+    !["bootstrap", "release"].includes(state.mode) ||
+    !VERSION_ID.test(state.activeVersionId ?? "")
+  ) {
+    invalid();
+  }
+  for (const [name, value] of Object.entries({
+    createdByRun: state.createdByRun,
+    preexisting: state.preexisting,
+  })) {
+    const expectedKeys = name === "createdByRun"
+      ? BOOTSTRAP_RESOURCE_KEYS
+      : BOOTSTRAP_RESOURCE_KEYS.filter((key) => key !== "controlWorker");
+    if (
+      !value ||
+      typeof value !== "object" ||
+      Array.isArray(value) ||
+      canonicalAliceJson(Object.keys(value).sort()) !==
+        canonicalAliceJson([...expectedKeys].sort()) ||
+      Object.values(value).some((flag) => typeof flag !== "boolean")
+    ) {
+      invalid();
+    }
+  }
+  return state;
+}
+
+function run(binary, argv, { cwd, env, errorCode }) {
+  const execution = spawnSync(binary, argv, {
+    cwd,
+    env,
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (execution.error || execution.status !== 0) {
+    invalid(errorCode);
+  }
+  return execution.stdout;
+}
+
+async function apiEnvelope(
+  { fetchImpl, apiToken, method, pathname, body, headers = {} },
+) {
+  const response = await fetchImpl(`${API_BASE}${pathname}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${apiToken}`,
+      accept: "application/json",
+      "cache-control": "no-cache",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...headers,
+    },
+    ...(body === undefined
+      ? {}
+      : { body: typeof body === "string" ? body : JSON.stringify(body) }),
+  });
+  if (!(response instanceof Response)) invalid();
+  if (response.status === 404 && method === "GET") return null;
+  if (!response.ok) invalid();
+  let value;
+  try {
+    value = await response.json();
+  } catch {
+    invalid();
+  }
+  if (value?.success !== true || !("result" in value)) invalid();
+  return value;
+}
+
+async function api(options) {
+  const envelope = await apiEnvelope(options);
+  return envelope === null ? null : envelope.result;
+}
+
+async function apiSuccessBody({ fetchImpl, apiToken, pathname }) {
+  const response = await fetchImpl(`${API_BASE}${pathname}`, {
+    method: "GET",
+    headers: {
+      authorization: `Bearer ${apiToken}`,
+      accept: "application/json",
+      "cache-control": "no-cache",
+    },
+  });
+  if (!(response instanceof Response)) invalid();
+  if (response.status === 404) return null;
+  if (!response.ok) invalid();
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    invalid();
+  }
+  if (body?.success !== true) invalid();
+  return body;
+}
+
+async function apiGetAllResults({
+  fetchImpl,
+  apiToken,
+  pathname,
+}) {
+  const values = [];
+  let expectedTotalPages;
+  let expectedTotalCount;
+  for (let page = 1; page <= 100; page += 1) {
+    const separator = pathname.includes("?") ? "&" : "?";
+    const envelope = await apiEnvelope({
+      fetchImpl,
+      apiToken,
+      method: "GET",
+      pathname: `${pathname}${separator}page=${page}&per_page=100`,
+    });
+    if (envelope === null || !Array.isArray(envelope.result)) invalid();
+    values.push(...envelope.result);
+    if (envelope.result_info === undefined) {
+      if (envelope.result.length >= 100) invalid();
+      return values;
+    }
+    const info = envelope.result_info;
+    const empty =
+      page === 1 &&
+      envelope.result.length === 0 &&
+      (info?.page === 0 || info?.page === page) &&
+      info?.total_pages === 0 &&
+      info?.total_count === 0 &&
+      info?.count === 0 &&
+      info?.per_page === 100;
+    if (
+      !info ||
+      !Number.isSafeInteger(info.page) ||
+      !Number.isSafeInteger(info.total_pages) ||
+      !Number.isSafeInteger(info.per_page) ||
+      !Number.isSafeInteger(info.count) ||
+      !Number.isSafeInteger(info.total_count) ||
+      (!empty && info.page !== page) ||
+      info.total_pages < 0 ||
+      info.total_pages > 100 ||
+      info.per_page !== 100 ||
+      info.count !== envelope.result.length ||
+      info.total_count < 0 ||
+      info.total_count > 10_000 ||
+      info.total_pages !== Math.ceil(info.total_count / info.per_page) ||
+      (expectedTotalPages !== undefined &&
+        info.total_pages !== expectedTotalPages) ||
+      (expectedTotalCount !== undefined &&
+        info.total_count !== expectedTotalCount)
+    ) {
+      invalid();
+    }
+    if (empty) return values;
+    const expectedPageCount = page < info.total_pages
+      ? info.per_page
+      : info.total_count - (page - 1) * info.per_page;
+    if (
+      info.total_pages === 0 ||
+      info.count !== expectedPageCount ||
+      expectedPageCount <= 0
+    ) {
+      invalid();
+    }
+    expectedTotalPages = info.total_pages;
+    expectedTotalCount = info.total_count;
+    if (page === expectedTotalPages) return values;
+    if (page > expectedTotalPages) invalid();
+  }
+  invalid();
+}
+
+async function ensureExactSentinelBody({ fetchImpl, apiToken, objectsPath }) {
+  const expected = Buffer.from(aliceCloudflareContinuitySentinelBytes(), "utf8");
+  const response = await fetchImpl(
+    `${API_BASE}${objectsPath}/${ALICE_CONTINUITY_SENTINEL_KEY}`,
+    {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        accept: "application/json",
+        "cache-control": "no-cache",
+      },
+    },
+  );
+  if (!(response instanceof Response) || !response.ok || !response.body) invalid();
+  const reader = response.body.getReader();
+  const actual = Buffer.alloc(expected.length);
+  let offset = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!(value instanceof Uint8Array) || offset + value.byteLength > actual.length) {
+      await reader.cancel().catch(() => undefined);
+      invalid();
+    }
+    Buffer.from(value).copy(actual, offset);
+    offset += value.byteLength;
+  }
+  if (offset !== expected.length || !actual.equals(expected)) invalid();
+}
+
+async function putSentinelIfAbsent({ fetchImpl, apiToken, objectsPath }) {
+  const response = await fetchImpl(
+    `${API_BASE}${objectsPath}/${ALICE_CONTINUITY_SENTINEL_KEY}`,
+    {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        accept: "application/json",
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "cf-r2-storage-class": "Standard",
+        "if-none-match": "*",
+      },
+      body: aliceCloudflareContinuitySentinelBytes(),
+    },
+  );
+  if (!(response instanceof Response) || (!response.ok && response.status !== 412)) {
+    invalid();
+  }
+  return response.status;
+}
+
+export async function ensureAliceBootstrapQueue({ fetchImpl, apiToken, name }) {
+  let queues = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues`,
+  });
+  let matches = queues.filter((queue) => queue?.queue_name === name);
+  if (matches.length > 1) invalid();
+  let created = false;
+  if (matches.length === 0) {
+    await api({
+      fetchImpl,
+      apiToken,
+      method: "POST",
+      pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues`,
+      body: {
+        queue_name: name,
+        settings: {
+          delivery_delay: 0,
+          delivery_paused: true,
+          message_retention_period: 345_600,
+        },
+      },
+    });
+    created = true;
+    queues = await apiGetAllResults({
+      fetchImpl,
+      apiToken,
+      pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues`,
+    });
+    matches = queues.filter((queue) => queue?.queue_name === name);
+  }
+  if (
+    matches.length !== 1 ||
+    !RESOURCE_ID.test(matches[0]?.queue_id ?? "") ||
+    matches[0]?.settings?.delivery_paused !== true ||
+    matches[0]?.settings?.delivery_delay !== 0 ||
+    matches[0]?.settings?.message_retention_period !== 345_600
+  ) {
+    invalid();
+  }
+  return { created, queue: matches[0] };
+}
+
+async function ensureBucketAndSentinel({ fetchImpl, apiToken }) {
+  const bucketPath =
+    `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/r2/buckets/${ALICE_CLOUDFLARE_TARGET.evidenceBucket}`;
+  let bucket = await api({
+    fetchImpl,
+    apiToken,
+    method: "GET",
+    pathname: bucketPath,
+  });
+  let bucketCreated = false;
+  let sentinelCreated = false;
+  if (bucket === null) {
+    await api({
+      fetchImpl,
+      apiToken,
+      method: "POST",
+      pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/r2/buckets`,
+      headers: { "cf-r2-jurisdiction": "default" },
+      body: {
+        name: ALICE_CLOUDFLARE_TARGET.evidenceBucket,
+        locationHint: "enam",
+        storageClass: "Standard",
+      },
+    });
+    bucketCreated = true;
+    bucket = await api({
+      fetchImpl,
+      apiToken,
+      method: "GET",
+      pathname: bucketPath,
+    });
+  }
+  if (
+    bucket?.name !== ALICE_CLOUDFLARE_TARGET.evidenceBucket ||
+    bucket?.jurisdiction !== "default" ||
+    bucket?.location !== "enam" ||
+    bucket?.storage_class !== "Standard"
+  ) {
+    invalid();
+  }
+  const objectsPath = `${bucketPath}/objects`;
+  const sentinelObjects = await api({
+    fetchImpl,
+    apiToken,
+    method: "GET",
+    pathname: `${objectsPath}?prefix=${ALICE_CONTINUITY_SENTINEL_KEY}&per_page=2`,
+  });
+  if (!Array.isArray(sentinelObjects) || sentinelObjects.length > 1) invalid();
+  if (sentinelObjects.length === 0) {
+    const status = await putSentinelIfAbsent({
+      fetchImpl,
+      apiToken,
+      objectsPath,
+    });
+    if (status === 412) invalid("ALICE_CLOUDFLARE_BOOTSTRAP_CONCURRENT_MUTATION");
+    sentinelCreated = true;
+  }
+  await ensureExactSentinelBody({ fetchImpl, apiToken, objectsPath });
+  return { bucketCreated, sentinelCreated };
+}
+
+export async function fetchAliceBootstrapResourceSnapshot({
+  fetchImpl,
+  apiToken,
+}) {
+  const inventorySha256 = (value) => `sha256:${crypto
+    .createHash("sha256")
+    .update(canonicalAliceJson(value))
+    .digest("hex")}`;
+  const inventoryIdentity = (value, summary = {}) => ({
+    present: value !== null,
+    providerSha256: inventorySha256(value),
+    summary,
+  });
+  const routeCanMatchHostname = (pattern, hostname) => {
+    if (typeof pattern !== "string") invalid();
+    const hostPattern = pattern
+      .replace(/^https?:\/\//i, "")
+      .split("/", 1)[0]
+      .toLowerCase();
+    if (hostPattern.length === 0 || /[^a-z0-9.*_-]/.test(hostPattern)) {
+      invalid();
+    }
+    const expression = hostPattern
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replaceAll("*", ".*");
+    return new RegExp(`^${expression}$`, "i").test(hostname);
+  };
+  const queues = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues`,
+  });
+  const namedQueues = {};
+  const consumers = {};
+  for (const [key, name] of [
+    ["evidence", ALICE_CLOUDFLARE_TARGET.evidenceQueue],
+    ["deadLetter", ALICE_CLOUDFLARE_TARGET.evidenceDlq],
+  ]) {
+    const matches = queues.filter((queue) => queue?.queue_name === name);
+    if (matches.length > 1) invalid();
+    namedQueues[key] = matches[0] ?? null;
+    consumers[key] = matches.length === 0
+      ? []
+      : await apiGetAllResults({
+          fetchImpl,
+          apiToken,
+          pathname:
+            `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues/${matches[0].queue_id}/consumers`,
+        });
+  }
+  const targetedQueueIds = new Set(
+    Object.values(namedQueues)
+      .filter((queue) => queue !== null)
+      .map((queue) => queue.queue_id),
+  );
+  const allEventSubscriptions = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/event_subscriptions/subscriptions`,
+  });
+  const eventSubscriptions = allEventSubscriptions.filter((subscription) =>
+    targetedQueueIds.has(subscription?.destination?.queue_id)
+  );
+
+  const zoneApplications = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname: `/zones/${ZONE_ID}/access/apps`,
+  });
+  const accountApplications = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/access/apps`,
+  });
+  const aliceDomains = new Set([
+    ALICE_CLOUDFLARE_TARGET.accessDomain,
+    ALICE_CLOUDFLARE_TARGET.releaseControlDomain,
+  ]);
+  const aliceApplication = (application) => {
+    const domain = application?.domain?.split("/", 1)[0]?.toLowerCase();
+    return aliceDomains.has(domain);
+  };
+  const aliceZoneApplications = zoneApplications.filter(aliceApplication);
+  const aliceAccountApplications = accountApplications.filter(aliceApplication);
+  const accessPolicies = {};
+  for (const application of aliceZoneApplications) {
+    if (typeof application?.id !== "string" || application.id.length < 16) {
+      invalid();
+    }
+    const policies = await apiGetAllResults({
+      fetchImpl,
+      apiToken,
+      pathname: `/zones/${ZONE_ID}/access/apps/${application.id}/policies`,
+    });
+    accessPolicies[application.id] = inventoryIdentity(policies, {
+      count: policies.length,
+      ids: policies.map((policy) => policy?.id).sort(),
+    });
+  }
+  const identityProviders = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/access/identity_providers`,
+  });
+  const postureRules = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/devices/posture`,
+  });
+
+  const gatewayPath =
+    `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/ai-gateway/gateways/${ALICE_CLOUDFLARE_TARGET.aiGateway}`;
+  const aiGateway = await api({
+    fetchImpl,
+    apiToken,
+    method: "GET",
+    pathname: gatewayPath,
+  });
+  const aiGatewayRoutes = aiGateway === null
+    ? null
+    : await apiSuccessBody({
+        fetchImpl,
+        apiToken,
+        pathname: `${gatewayPath}/routes?page=1&per_page=100`,
+      });
+
+  const routes = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname: `/zones/${ZONE_ID}/workers/routes`,
+  });
+  const customDomains = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/domains?zone_id=${ZONE_ID}`,
+  });
+  const aliceRoutes = routes.filter((route) =>
+    [...aliceDomains].some((hostname) =>
+      routeCanMatchHostname(route?.pattern, hostname)
+    )
+  );
+  const aliceCustomDomains = customDomains.filter((domain) =>
+    aliceDomains.has(domain?.hostname?.toLowerCase())
+  );
+
+  const workers = {};
+  for (const workerName of [
+    ALICE_CLOUDFLARE_TARGET.accessWorker,
+    ALICE_CLOUDFLARE_TARGET.controlWorker,
+    ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
+  ]) {
+    const workerPath =
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${workerName}`;
+    const state = {
+      deployments: await api({
+        fetchImpl,
+        apiToken,
+        method: "GET",
+        pathname: `${workerPath}/deployments`,
+      }),
+      scriptSettings: await api({
+        fetchImpl,
+        apiToken,
+        method: "GET",
+        pathname: `${workerPath}/script-settings`,
+      }),
+      settings: await api({
+        fetchImpl,
+        apiToken,
+        method: "GET",
+        pathname: `${workerPath}/settings`,
+      }),
+      subdomain: await api({
+        fetchImpl,
+        apiToken,
+        method: "GET",
+        pathname: `${workerPath}/subdomain`,
+      }),
+    };
+    const present = Object.values(state).filter((value) => value !== null).length;
+    if (![0, Object.keys(state).length].includes(present)) invalid();
+    workers[workerName] = inventoryIdentity(
+      present === 0 ? null : state,
+      present === 0
+        ? {}
+        : {
+            deploymentIds:
+              state.deployments?.deployments?.map((deployment) => deployment.id)
+                ?? [],
+          },
+    );
+  }
+
+  const workflow = await api({
+    fetchImpl,
+    apiToken,
+    method: "GET",
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workflows/${ALICE_CLOUDFLARE_TARGET.planWorkflow}`,
+  });
+  const bucketPath =
+    `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/r2/buckets/${ALICE_CLOUDFLARE_TARGET.evidenceBucket}`;
+  const bucket = await api({
+    fetchImpl,
+    apiToken,
+    method: "GET",
+    pathname: bucketPath,
+  });
+  const sentinelObjects = bucket === null
+    ? []
+    : await api({
+        fetchImpl,
+        apiToken,
+        method: "GET",
+        pathname:
+          `${bucketPath}/objects?prefix=${ALICE_CONTINUITY_SENTINEL_KEY}&per_page=2`,
+      });
+  if (!Array.isArray(sentinelObjects) || sentinelObjects.length > 1) invalid();
+  if (sentinelObjects.length === 1) {
+    await ensureExactSentinelBody({ fetchImpl, apiToken, objectsPath: bucketPath + "/objects" });
+  }
+  return {
+    schemaVersion: "alice.cloudflare-bootstrap-preflight.v2",
+    accountId: ALICE_CLOUDFLARE_TARGET.accountId,
+    access: {
+      accountApplications: inventoryIdentity(aliceAccountApplications, {
+        count: aliceAccountApplications.length,
+        ids: aliceAccountApplications.map((application) => application?.id).sort(),
+      }),
+      identityProviders: inventoryIdentity(identityProviders, {
+        count: identityProviders.length,
+        ids: identityProviders.map((provider) => provider?.id).sort(),
+      }),
+      policies: accessPolicies,
+      postureRules: inventoryIdentity(postureRules, {
+        count: postureRules.length,
+        ids: postureRules.map((rule) => rule?.id).sort(),
+      }),
+      zoneApplications: inventoryIdentity(aliceZoneApplications, {
+        count: aliceZoneApplications.length,
+        ids: aliceZoneApplications.map((application) => application?.id).sort(),
+      }),
+    },
+    aiGateway: inventoryIdentity(
+      aiGateway === null ? null : { gateway: aiGateway, routes: aiGatewayRoutes },
+      { id: aiGateway?.id ?? null },
+    ),
+    queues: namedQueues,
+    consumers,
+    eventSubscriptions,
+    bucket,
+    sentinelObjects,
+    sentinelBodyVerified: sentinelObjects.length === 1,
+    traffic: { routes: aliceRoutes, customDomains: aliceCustomDomains },
+    workers,
+    workflow,
+  };
+}
+
+function verifyProtectedRefStillExact({ sourceRoot, sourceCommit }) {
+  const protectedRefSha = run(
+    "gh",
+    [
+      "api",
+      `repos/${REPOSITORY}/git/ref/heads/${PROTECTED_BRANCH}`,
+      "--jq",
+      ".object.sha",
+    ],
+    {
+      cwd: sourceRoot,
+      errorCode: "ALICE_PROTECTED_REF_READBACK_INVALID",
+    },
+  ).trim();
+  if (protectedRefSha !== sourceCommit) {
+    invalid("ALICE_PROTECTED_REF_READBACK_INVALID");
+  }
+}
+
+export function buildAliceBootstrapControlConfig({
+  sourceConfig,
+  deploymentMainPath,
+}) {
+  if (
+    !sourceConfig ||
+    sourceConfig.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
+    sourceConfig.name !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
+    !absolute(deploymentMainPath)
+  ) {
+    invalid();
+  }
+  const config = JSON.parse(JSON.stringify(sourceConfig));
+  config.main = deploymentMainPath;
+  config.routes = [];
+  config.workers_dev = false;
+  config.preview_urls = false;
+  config.queues = {
+    ...config.queues,
+    consumers: [],
+  };
+  config.secrets = { required: [] };
+  Object.assign(config.vars, {
+    ALICE_PROGRAM_ENVELOPE_B64: "e30",
+    ALICE_PROGRAM_SIGNATURE_B64: "invalid",
+    ALICE_PROGRAM_PUBLIC_JWK_B64: "e30",
+    ALICE_DEPLOYMENT_MANIFEST_SHA256: `sha256:${"0".repeat(64)}`,
+    ALICE_DEPLOYMENT_MANIFEST_B64: "e30",
+  });
+  return config;
+}
+
+export function buildAliceBootstrapPromotionCommand({ versionId, configPath }) {
+  if (!VERSION_ID.test(versionId ?? "") || !absolute(configPath)) invalid();
+  return [
+    "versions",
+    "deploy",
+    "--config",
+    configPath,
+    "--version-id",
+    versionId,
+    "--percentage",
+    "100",
+    "--message",
+    "Alice fail-closed continuity bootstrap",
+    "--yes",
+  ];
+}
+
+export function extractAliceBootstrapNamespaceIds(version) {
+  const bindings = version?.resources?.bindings;
+  if (!Array.isArray(bindings)) invalid();
+  const control = bindings
+    .filter((binding) => binding?.type === "durable_object_namespace")
+    .map((binding) => ({
+      className: binding.class_name,
+      name: binding.name,
+      namespaceId: binding.namespace_id,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  if (
+    control.length !== 2 ||
+    control[0]?.name !== "ALICE_AUTHORITY" ||
+    control[0]?.className !== "AliceAuthority" ||
+    control[1]?.name !== "ALICE_SESSIONS" ||
+    control[1]?.className !== "AliceSession" ||
+    control.some((binding) => !NAMESPACE_ID.test(binding.namespaceId ?? "")) ||
+    new Set(control.map((binding) => binding.namespaceId)).size !== 2
+  ) {
+    invalid();
+  }
+  return { access: [], aiGateway: [], control };
+}
+
+async function ensureConsumer({ fetchImpl, apiToken, queue }) {
+  const pathName =
+    `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues/${queue.queue_id}/consumers`;
+  let consumers = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    pathname: pathName,
+  });
+  let created = false;
+  if (consumers.length === 0) {
+    await api({
+      fetchImpl,
+      apiToken,
+      method: "POST",
+      pathname: pathName,
+      body: {
+        type: "worker",
+        script_name: ALICE_CLOUDFLARE_TARGET.controlWorker,
+        dead_letter_queue: ALICE_CLOUDFLARE_TARGET.evidenceDlq,
+        settings: {
+          batch_size: 10,
+          max_concurrency: 1,
+          max_retries: 3,
+          max_wait_time_ms: 5_000,
+          retry_delay: 10,
+        },
+      },
+    });
+    created = true;
+    consumers = await apiGetAllResults({
+      fetchImpl,
+      apiToken,
+      pathname: pathName,
+    });
+  }
+  const consumer = consumers[0];
+  if (
+    consumers.length !== 1 ||
+    !RESOURCE_ID.test(consumer?.consumer_id ?? "") ||
+    consumer?.queue_name !== ALICE_CLOUDFLARE_TARGET.evidenceQueue ||
+    consumer?.script_name !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
+    consumer?.type !== "worker" ||
+    consumer?.dead_letter_queue !== ALICE_CLOUDFLARE_TARGET.evidenceDlq ||
+    consumer?.settings?.batch_size !== 10 ||
+    consumer?.settings?.max_concurrency !== 1 ||
+    consumer?.settings?.max_retries !== 3 ||
+    consumer?.settings?.max_wait_time_ms !== 5_000 ||
+    consumer?.settings?.retry_delay !== 10
+  ) {
+    invalid();
+  }
+  return { consumer, created };
+}
+
+async function activeControlVersionId({ fetchImpl, apiToken }) {
+  const deployments = await api({
+    fetchImpl,
+    apiToken,
+    method: "GET",
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/deployments`,
+  });
+  if (deployments === null) return null;
+  if (!Array.isArray(deployments?.deployments)) invalid();
+  if (deployments.deployments.length === 0) return null;
+  const active = deployments.deployments[0];
+  if (
+    !Array.isArray(active?.versions) ||
+    active.versions.length !== 1 ||
+    active.versions[0]?.percentage !== 100 ||
+    !VERSION_ID.test(active.versions[0]?.version_id ?? "")
+  ) {
+    invalid();
+  }
+  return active.versions[0].version_id;
+}
+
+async function latestUploadedControlVersionId({ fetchImpl, apiToken }) {
+  const versions = await api({
+    fetchImpl,
+    apiToken,
+    method: "GET",
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/versions?page=1&per_page=1`,
+  });
+  if (!Array.isArray(versions) || versions.length !== 1) invalid();
+  if (!VERSION_ID.test(versions[0]?.id ?? "")) invalid();
+  return versions[0].id;
+}
+
+function writeReadonly(filePath, value) {
+  if (!absolute(filePath) || !fs.existsSync(path.dirname(filePath))) invalid();
+  fs.writeFileSync(filePath, `${canonicalAliceJson(value)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o444,
+  });
+}
+
+async function main() {
+  const sourceRoot = process.env.ALICE_SOURCE_ROOT;
+  const artifactRoot = process.env.ALICE_WORKER_BUNDLE_ROOT;
+  const artifactPath = process.env.ALICE_WORKER_BUNDLE_ARTIFACT_PATH;
+  const wranglerBin = process.env.ALICE_WRANGLER_BIN;
+  const outputDir = process.env.ALICE_BOOTSTRAP_OUTPUT_DIR;
+  const namespaceIdsPath = process.env.ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH;
+  const continuityReadbackPath =
+    process.env.ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH;
+  const bootstrapPreflightPath =
+    process.env.ALICE_BOOTSTRAP_PREFLIGHT_PATH;
+  const bootstrapStatePath = process.env.ALICE_BOOTSTRAP_STATE_PATH;
+  const sourceCommit = process.env.ALICE_SOURCE_COMMIT;
+  const releaseRunId = process.env.ALICE_RELEASE_RUN_ID;
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (
+    ![sourceRoot, artifactRoot, artifactPath, wranglerBin, outputDir,
+      namespaceIdsPath, continuityReadbackPath, bootstrapStatePath].every(absolute) ||
+    !absolute(bootstrapPreflightPath) ||
+    !COMMIT.test(sourceCommit ?? "") ||
+    !RELEASE_RUN_ID.test(releaseRunId ?? "") ||
+    typeof apiToken !== "string" ||
+    apiToken.length < 16 ||
+    fs.existsSync(outputDir)
+  ) {
+    invalid();
+  }
+  verifyAliceWorkerBundleArtifact(fs.readFileSync(artifactPath, "utf8"), {
+    root: artifactRoot,
+    expectedSourceCommit: sourceCommit,
+  });
+  fs.mkdirSync(outputDir, { recursive: false, mode: 0o700 });
+  const controlConfigPath = path.join(outputDir, "control.bootstrap.wrangler.json");
+  const controlMain = path.join(
+    artifactRoot,
+    CONTROL_DIRECTORY,
+    "index.js",
+  );
+  const sourceConfig = JSON.parse(
+    fs.readFileSync(
+      path.join(sourceRoot, "workers", CONTROL_DIRECTORY, "wrangler.jsonc"),
+      "utf8",
+    ),
+  );
+  const bootstrapConfig = buildAliceBootstrapControlConfig({
+    sourceConfig,
+    deploymentMainPath: controlMain,
+  });
+  fs.writeFileSync(controlConfigPath, `${JSON.stringify(bootstrapConfig)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o444,
+  });
+  const preflightFirst = await fetchAliceBootstrapResourceSnapshot({
+    fetchImpl: globalThis.fetch,
+    apiToken,
+  });
+  const preflightSecond = await fetchAliceBootstrapResourceSnapshot({
+    fetchImpl: globalThis.fetch,
+    apiToken,
+  });
+  if (canonicalAliceJson(preflightFirst) !== canonicalAliceJson(preflightSecond)) {
+    invalid("ALICE_CLOUDFLARE_BOOTSTRAP_PREFLIGHT_DRIFT");
+  }
+  writeReadonly(bootstrapPreflightPath, preflightSecond);
+  const priorVersionId = await activeControlVersionId({
+    fetchImpl: globalThis.fetch,
+    apiToken,
+  });
+  verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+  let versionId = priorVersionId;
+  let mode = "release";
+  let queue;
+  const createdByRun = {
+    controlWorker: false,
+    evidenceQueue: false,
+    evidenceDeadLetterQueue: false,
+    evidenceBucket: false,
+    evidenceSentinel: false,
+    evidenceQueueConsumer: false,
+  };
+  if (versionId === null) {
+    mode = "bootstrap";
+    const evidenceQueue = await ensureAliceBootstrapQueue({
+      fetchImpl: globalThis.fetch,
+      apiToken,
+      name: ALICE_CLOUDFLARE_TARGET.evidenceQueue,
+    });
+    queue = evidenceQueue.queue;
+    createdByRun.evidenceQueue = evidenceQueue.created;
+    const deadLetterQueue = await ensureAliceBootstrapQueue({
+      fetchImpl: globalThis.fetch,
+      apiToken,
+      name: ALICE_CLOUDFLARE_TARGET.evidenceDlq,
+    });
+    createdByRun.evidenceDeadLetterQueue = deadLetterQueue.created;
+    const evidenceStore = await ensureBucketAndSentinel({
+      fetchImpl: globalThis.fetch,
+      apiToken,
+    });
+    createdByRun.evidenceBucket = evidenceStore.bucketCreated;
+    createdByRun.evidenceSentinel = evidenceStore.sentinelCreated;
+    const output = run(
+      wranglerBin,
+      [
+        "versions",
+        "upload",
+        controlMain,
+        "--config",
+        controlConfigPath,
+        "--no-bundle",
+        "--strict",
+        "--tag",
+        `alice-continuity-bootstrap-${sourceCommit}-${releaseRunId}`,
+        "--message",
+        `Alice unrouted fail-closed continuity bootstrap ${sourceCommit}`,
+      ],
+      {
+        cwd: sourceRoot,
+        env: aliceCloudflareCommandEnv(),
+        errorCode: "ALICE_CLOUDFLARE_BOOTSTRAP_UPLOAD_FAILED",
+      },
+    );
+    versionId = parseAliceWranglerUploadVersionId(output);
+    createdByRun.controlWorker = true;
+  }
+  const version = await api({
+    fetchImpl: globalThis.fetch,
+    apiToken,
+    method: "GET",
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/versions/${versionId}`,
+  });
+  const namespaceIds = extractAliceBootstrapNamespaceIds(version);
+  const versionTag = version?.annotations?.["workers/tag"];
+  if (priorVersionId !== null) {
+    mode =
+      typeof versionTag === "string" &&
+      (versionTag.startsWith("alice-continuity-bootstrap-") ||
+        versionTag.startsWith("alice-recovery-boundary-"))
+        ? "bootstrap"
+        : "release";
+  }
+  if (priorVersionId === null) {
+    run(
+      wranglerBin,
+      buildAliceBootstrapPromotionCommand({ versionId, configPath: controlConfigPath }),
+      {
+        cwd: sourceRoot,
+        env: aliceCloudflareCommandEnv(),
+        errorCode: "ALICE_CLOUDFLARE_BOOTSTRAP_PROMOTION_FAILED",
+      },
+    );
+    const deployedVersionId = await activeControlVersionId({
+      fetchImpl: globalThis.fetch,
+      apiToken,
+    });
+    if (deployedVersionId !== versionId) invalid();
+  }
+  if (mode === "bootstrap") {
+    if (queue === undefined) {
+      const evidenceQueue = await ensureAliceBootstrapQueue({
+        fetchImpl: globalThis.fetch,
+        apiToken,
+        name: ALICE_CLOUDFLARE_TARGET.evidenceQueue,
+      });
+      queue = evidenceQueue.queue;
+      createdByRun.evidenceQueue = evidenceQueue.created;
+      const deadLetterQueue = await ensureAliceBootstrapQueue({
+        fetchImpl: globalThis.fetch,
+        apiToken,
+        name: ALICE_CLOUDFLARE_TARGET.evidenceDlq,
+      });
+      createdByRun.evidenceDeadLetterQueue = deadLetterQueue.created;
+      const evidenceStore = await ensureBucketAndSentinel({
+        fetchImpl: globalThis.fetch,
+        apiToken,
+      });
+      createdByRun.evidenceBucket = evidenceStore.bucketCreated;
+      createdByRun.evidenceSentinel = evidenceStore.sentinelCreated;
+    }
+    if (
+      (await latestUploadedControlVersionId({
+        fetchImpl: globalThis.fetch,
+        apiToken,
+      })) !== versionId
+    ) {
+      invalid();
+    }
+    const consumer = await ensureConsumer({
+      fetchImpl: globalThis.fetch,
+      apiToken,
+      queue,
+    });
+    createdByRun.evidenceQueueConsumer = consumer.created;
+  }
+  const continuityState = await fetchAliceCloudflareContinuityState({
+    apiToken,
+    expectedDurableObjectNamespaceIds: namespaceIds,
+  });
+  writeReadonly(namespaceIdsPath, namespaceIds);
+  writeReadonly(continuityReadbackPath, continuityState.readback);
+  writeReadonly(bootstrapStatePath, verifyAliceBootstrapState({
+    schemaVersion: "alice.cloudflare-bootstrap-state.v1",
+    mode,
+    activeVersionId: versionId,
+    preexisting: {
+      evidenceQueue: preflightSecond.queues.evidence !== null,
+      evidenceDeadLetterQueue: preflightSecond.queues.deadLetter !== null,
+      evidenceBucket: preflightSecond.bucket !== null,
+      evidenceSentinel: preflightSecond.sentinelObjects.length === 1,
+      evidenceQueueConsumer: preflightSecond.consumers.evidence.length > 0,
+    },
+    createdByRun,
+  }));
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: true,
+      controlConfigPath,
+      namespaceIdsPath,
+      continuityReadbackPath,
+      bootstrapVersionId: versionId,
+      bootstrapStatePath,
+      mode,
+      publicHttpTrafficChanged: false,
+      queueConsumerAttached: true,
+      queueDeliveryPaused: true,
+    })}\n`,
+  );
+}
+
+const invokedPath = process.argv[1]
+  ? pathToFileURL(path.resolve(process.argv[1])).href
+  : "";
+if (invokedPath === import.meta.url) {
+  main().catch((error) => {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  });
+}
