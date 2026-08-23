@@ -3893,6 +3893,13 @@ export async function startEliza(
     actionPlanning: !aliceProduction,
     // advancedMemory is enabled via character.advancedMemory
     plugins: [elizaPlugin, ...pluginsForRuntime],
+    ...(aliceProduction
+      ? {
+          enableDocuments: false,
+          enableRelationships: false,
+          enableTrajectories: false,
+        }
+      : {}),
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
     // Sandbox options — only active when mode != "off"
     ...(isSandboxActive && !aliceProduction

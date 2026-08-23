@@ -183,7 +183,7 @@ jobs:
           echo "ALICE_MODAL_BIN=${RUNNER_TEMP}/alice-modal-client/bin/modal" >> "$GITHUB_ENV"
 
       - name: Install exact release dependencies
-        run: bun install --ignore-scripts --frozen-lockfile
+        run: bash scripts/alice-frozen-install-retry.sh
 
       - name: Download immutable Worker bundle artifact
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
@@ -1252,7 +1252,7 @@ jobs:
           bun-version: "1.3.14"
 
       - name: Install exact recovery dependencies
-        run: bun install --ignore-scripts --frozen-lockfile
+        run: bash scripts/alice-frozen-install-retry.sh
 
       - name: Consume external journal and recover Cloudflare independently
         env:
