@@ -7,6 +7,7 @@ import {
   buildAliceBootstrapControlConfig,
   ensureAliceBootstrapQueue,
   extractAliceBootstrapNamespaceIds,
+  parseAliceWranglerDeployVersionId,
   verifyAliceBootstrapBucket,
 } from "./alice_cloudflare_bootstrap.mjs";
 import fs from "node:fs";
@@ -152,6 +153,27 @@ test("deploys the unrouted fail-closed bootstrap before attaching one paused con
   assert.ok(main.indexOf("buildAliceBootstrapCreationCommand") < main.indexOf("ensureConsumer"));
   assert.ok(main.indexOf("buildAliceBootstrapPromotionCommand") < main.indexOf("ensureConsumer"));
   assert.ok(main.indexOf("ensureConsumer") < main.indexOf("fetchAliceCloudflareContinuityState"));
+});
+
+test("parses only one exact pinned-Wrangler first-deploy version", () => {
+  const versionId = "11111111-1111-4111-8111-111111111111";
+  assert.equal(
+    parseAliceWranglerDeployVersionId(
+      `Uploaded alice-production-control (1.23 sec)\nCurrent Version ID: ${versionId}\n`,
+    ),
+    versionId,
+  );
+  for (const output of [
+    `Worker Version ID: ${versionId}\n`,
+    `Current version ID: ${versionId}\n`,
+    `Current Version ID: not-a-version\n`,
+    `Current Version ID: ${versionId}\nCurrent Version ID: ${versionId}\n`,
+  ]) {
+    assert.throws(
+      () => parseAliceWranglerDeployVersionId(output),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_DEPLOY_VERSION_INVALID/,
+    );
+  }
 });
 
 test("snapshots every Alice provider surface twice before the first mutation", () => {

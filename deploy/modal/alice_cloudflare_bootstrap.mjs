@@ -17,7 +17,6 @@ import {
 } from "./alice_cloudflare_live_readback.mjs";
 import {
   aliceCloudflareCommandEnv,
-  parseAliceWranglerUploadVersionId,
 } from "./alice_cloudflare_release.mjs";
 import {
   verifyAliceWorkerBundleArtifact,
@@ -745,6 +744,20 @@ export function buildAliceBootstrapCreationCommand({
   ];
 }
 
+export function parseAliceWranglerDeployVersionId(output) {
+  if (typeof output !== "string") {
+    invalid("ALICE_CLOUDFLARE_BOOTSTRAP_DEPLOY_VERSION_INVALID");
+  }
+  const matches = output
+    .split(/\r?\n/)
+    .map((line) => line.match(/^Current Version ID:\s*([a-f0-9-]+)\s*$/))
+    .filter(Boolean);
+  if (matches.length !== 1 || !VERSION_ID.test(matches[0][1] ?? "")) {
+    invalid("ALICE_CLOUDFLARE_BOOTSTRAP_DEPLOY_VERSION_INVALID");
+  }
+  return matches[0][1];
+}
+
 export function buildAliceBootstrapPromotionCommand({ versionId, configPath }) {
   if (!VERSION_ID.test(versionId ?? "") || !absolute(configPath)) invalid();
   return [
@@ -1002,7 +1015,7 @@ async function main() {
         errorCode: "ALICE_CLOUDFLARE_BOOTSTRAP_UPLOAD_FAILED",
       },
     );
-    versionId = parseAliceWranglerUploadVersionId(output);
+    versionId = parseAliceWranglerDeployVersionId(output);
     createdByRun.controlWorker = true;
   }
   const version = await api({
