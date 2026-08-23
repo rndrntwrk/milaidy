@@ -183,7 +183,13 @@ jobs:
 
       - name: Build pinned Eliza declarations
         working-directory: eliza
-        run: bun run build:core
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile --ignore-scripts
+          bun run build:core
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
       - name: Typecheck agent production build surface
         working-directory: packages/agent
@@ -247,7 +253,13 @@ jobs:
           const exactTypecheck = [
             "      - name: Build pinned Eliza declarations",
             "        working-directory: eliza",
-            "        run: bun run build:core",
+            "        shell: bash",
+            "        run: |",
+            "          set -euo pipefail",
+            "          bun install --frozen-lockfile --ignore-scripts",
+            "          bun run build:core",
+            "        env:",
+            "          npm_config_python: ${{ env.pythonLocation }}/bin/python3",
             "",
             "      - name: Typecheck agent production build surface",
             "        working-directory: packages/agent",
@@ -344,7 +356,7 @@ jobs:
           - attempt: \`$RUN_ATTEMPT\`
           - artifact: \`alice-corpus-exact-workspace-${{ github.sha }}\`
 
-          The PR lane executes the exact runtime regression, builds pinned Eliza declarations, typechecks the agent production surface, and builds the agent read-only before requiring committed reconciliation.
+          The PR lane executes the exact runtime regression, hydrates and builds the pinned Eliza declaration toolchain, typechecks the agent production surface, and builds the agent read-only before requiring committed reconciliation.
           EOF
           )
           gh api \
