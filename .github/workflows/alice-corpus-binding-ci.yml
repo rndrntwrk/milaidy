@@ -407,7 +407,6 @@ jobs:
             packages/cloud/shared
             packages/cloud/test-mocks
             packages/cloud/e2e
-            packages/typescript
           )
           for workspace in "${REQUIRED_WORKSPACES[@]}"; do
             if [ ! -f "eliza/$workspace/package.json" ]; then
