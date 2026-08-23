@@ -181,9 +181,13 @@ jobs:
           bunx vitest run
           src/runtime/eliza.alice-corpus-admission.test.ts
 
-      - name: Typecheck agent package
+      - name: Build pinned Eliza declarations
+        working-directory: eliza
+        run: bun run build:core
+
+      - name: Typecheck agent production build surface
         working-directory: packages/agent
-        run: bun run typecheck
+        run: bunx tsc --noEmit -p tsconfig.build.json
 
       - name: Build agent package
         working-directory: packages/agent
@@ -200,6 +204,21 @@ jobs:
           let workflow = fs.readFileSync(path, "utf8");
           workflow = workflow.replace("    continue-on-error: true\n", "");
 
+          if (!workflow.includes('      - "package.json"')) {
+            workflow = workflow.replaceAll(
+              '      - "scripts/verify-alice-corpus-runtime.ts"\n',
+              [
+                '      - "scripts/verify-alice-corpus-runtime.ts"',
+                '      - "package.json"',
+                '      - "bun.lock"',
+                '      - "packages/agent/vitest.config.ts"',
+                '      - "packages/agent/tsconfig.json"',
+                '      - "packages/agent/tsconfig.build.json"',
+                "",
+              ].join("\n"),
+            );
+          }
+
           const oldRegression = [
             "      - name: Run exact corpus admission regression",
             "        run: >-",
@@ -215,12 +234,35 @@ jobs:
             "          src/runtime/eliza.alice-corpus-admission.test.ts",
             "",
           ].join("\n");
-
           if (workflow.includes(oldRegression)) {
             workflow = workflow.replace(oldRegression, exactRegression);
           }
+
+          const oldTypecheck = [
+            "      - name: Typecheck agent package",
+            "        working-directory: packages/agent",
+            "        run: bun run typecheck",
+            "",
+          ].join("\n");
+          const exactTypecheck = [
+            "      - name: Build pinned Eliza declarations",
+            "        working-directory: eliza",
+            "        run: bun run build:core",
+            "",
+            "      - name: Typecheck agent production build surface",
+            "        working-directory: packages/agent",
+            "        run: bunx tsc --noEmit -p tsconfig.build.json",
+            "",
+          ].join("\n");
+          if (workflow.includes(oldTypecheck)) {
+            workflow = workflow.replace(oldTypecheck, exactTypecheck);
+          }
+
           if (!workflow.includes(exactRegression)) {
             throw new Error("Unable to establish package-scoped exact regression step");
+          }
+          if (!workflow.includes(exactTypecheck)) {
+            throw new Error("Unable to establish built-declaration typecheck step");
           }
           if (workflow.includes("continue-on-error: true")) {
             throw new Error("Exact release-runtime gate remains advisory");
@@ -302,7 +344,7 @@ jobs:
           - attempt: \`$RUN_ATTEMPT\`
           - artifact: \`alice-corpus-exact-workspace-${{ github.sha }}\`
 
-          The PR lane executes the exact regression, typecheck and build read-only, then fails unless all reconciliation is already committed.
+          The PR lane executes the exact runtime regression, builds pinned Eliza declarations, typechecks the agent production surface, and builds the agent read-only before requiring committed reconciliation.
           EOF
           )
           gh api \
