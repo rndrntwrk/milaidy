@@ -6,6 +6,11 @@ on:
       - feat/alice-corpus-runtime-binding-2026-08-22
     paths:
       - ".github/workflows/alice-corpus-exact-workspace-diagnostic.yml"
+  pull_request:
+    branches:
+      - release/alice-production-core-2026-08-22
+    paths:
+      - ".github/workflows/alice-corpus-exact-workspace-diagnostic.yml"
   workflow_dispatch:
 
 concurrency:
@@ -187,11 +192,11 @@ jobs:
           body=$(cat <<EOF
           Exact workspace diagnostic completed.
 
-          - status: \\`$JOB_STATUS\\`
-          - head: \\`$HEAD_SHA\\`
+          - status: \`$JOB_STATUS\`
+          - head: \`$HEAD_SHA\`
           - run: https://github.com/${{ github.repository }}/actions/runs/$RUN_ID
-          - attempt: \\`$RUN_ATTEMPT\\`
-          - artifact: \\`alice-corpus-exact-workspace-$HEAD_SHA\\`
+          - attempt: \`$RUN_ATTEMPT\`
+          - artifact: \`alice-corpus-exact-workspace-$HEAD_SHA\`
 
           This diagnostic regenerates the lock only inside the runner and does not mutate the branch.
           EOF
