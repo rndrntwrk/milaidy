@@ -154,9 +154,10 @@ jobs:
           fi
 
       - name: Run exact corpus admission regression
+        working-directory: packages/agent
         run: >-
           bunx vitest run
-          packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts
+          src/runtime/eliza.alice-corpus-admission.test.ts
 
       - name: Typecheck agent package
         working-directory: packages/agent
