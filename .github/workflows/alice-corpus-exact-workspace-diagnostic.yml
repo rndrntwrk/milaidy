@@ -6,11 +6,23 @@ on:
       - feat/alice-corpus-runtime-binding-2026-08-22
     paths:
       - ".github/workflows/alice-corpus-exact-workspace-diagnostic.yml"
+      - "package.json"
+      - "bun.lock"
+      - "packages/agent/vitest.config.ts"
+      - "packages/agent/tsconfig.json"
+      - "packages/agent/tsconfig.build.json"
+      - "packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts"
   pull_request:
     branches:
       - release/alice-production-core-2026-08-22
     paths:
       - ".github/workflows/alice-corpus-exact-workspace-diagnostic.yml"
+      - "package.json"
+      - "bun.lock"
+      - "packages/agent/vitest.config.ts"
+      - "packages/agent/tsconfig.json"
+      - "packages/agent/tsconfig.build.json"
+      - "packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts"
   workflow_dispatch:
 
 concurrency:
@@ -18,7 +30,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   issues: write
   pull-requests: write
 
@@ -27,7 +39,7 @@ env:
 
 jobs:
   diagnose:
-    name: Rebuild exact workspace without mutating the branch
+    name: Rebuild exact workspace without mutating the PR merge ref
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
@@ -123,6 +135,12 @@ jobs:
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
+      - name: Verify regenerated exact lock is frozen-installable
+        shell: bash
+        run: bun install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
+
       - name: Record workspace delta
         if: always()
         shell: bash
@@ -131,6 +149,16 @@ jobs:
           git diff -- package.json bun.lock > "$RUNNER_TEMP/exact-workspace.diff" || true
           git diff --stat -- package.json bun.lock || true
           git status --short -- package.json bun.lock || true
+
+      - name: Require PR workspace reconciliation to be committed
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- package.json bun.lock; then
+            echo "::error::Exact package.json/bun.lock reconciliation is not committed on the PR head"
+            exit 1
+          fi
 
       - name: Generate local Eliza protobuf types
         shell: bash
@@ -167,6 +195,24 @@ jobs:
         working-directory: packages/agent
         run: bun run build
 
+      - name: Persist exact workspace reconciliation on the feature branch
+        if: >-
+          github.event_name == 'push' &&
+          github.ref_name == 'feat/alice-corpus-runtime-binding-2026-08-22'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package.json bun.lock; then
+            echo "Exact workspace already reconciled; nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json bun.lock
+          git commit -m "chore(alice): reconcile exact release workspace lock"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
       - name: Upload exact workspace diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -182,13 +228,13 @@ jobs:
           retention-days: 3
 
       - name: Report diagnostic run on PR 212
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          HEAD_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -196,12 +242,12 @@ jobs:
           Exact workspace diagnostic completed.
 
           - status: \`$JOB_STATUS\`
-          - head: \`$HEAD_SHA\`
+          - PR head: \`$HEAD_SHA\`
           - run: https://github.com/${{ github.repository }}/actions/runs/$RUN_ID
           - attempt: \`$RUN_ATTEMPT\`
-          - artifact: \`alice-corpus-exact-workspace-$HEAD_SHA\`
+          - artifact: \`alice-corpus-exact-workspace-${{ github.sha }}\`
 
-          This diagnostic regenerates the lock only inside the runner and does not mutate the branch.
+          The PR lane is read-only and fails unless the exact workspace reconciliation is already committed.
           EOF
           )
           gh api \
