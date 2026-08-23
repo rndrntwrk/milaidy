@@ -33,19 +33,45 @@ function createRuntimeHarness() {
 }
 
 describe("initializeAliceCorpusRuntime", () => {
-  it("is a clean no-op when no corpus root is configured", async () => {
+  it("purges previously persisted corpus knowledge when no corpus root is configured", async () => {
     clearAliceCorpusRuntimeState();
-    const { runtime } = createRuntimeHarness();
+    const { runtime, memories } = createRuntimeHarness();
+    memories.set("corpus-document", {
+      id: "corpus-document",
+      tableName: "documents",
+      metadata: {
+        source: "alice-corpus",
+        corpusProjection: "internal",
+      },
+    });
+    memories.set("corpus-fragment", {
+      id: "corpus-fragment",
+      tableName: "knowledge",
+      metadata: { documentId: "corpus-document" },
+    });
+    memories.set("unrelated-document", {
+      id: "unrelated-document",
+      tableName: "documents",
+      metadata: { source: "other" },
+    });
+    const logs: Array<[string, Record<string, unknown>]> = [];
 
     await expect(
       initializeAliceCorpusRuntime(runtime as any, {}, {
         seed: async () => undefined,
         documentIdForKey: () => "unused",
+        log: (event, payload) => logs.push([event, payload]),
       }),
     ).resolves.toBeNull();
+
+    expect(memories.has("corpus-document")).toBe(false);
+    expect(memories.has("corpus-fragment")).toBe(false);
+    expect(memories.has("unrelated-document")).toBe(true);
+    expect(logs[0]?.[0]).toBe("alice-corpus-purged");
+    expect(getAliceCorpusRuntimeState("agent")).toBeNull();
   });
 
-  it("seeds knowledge, builds the projected graph and stores runtime state", async () => {
+  it("seeds knowledge, builds the projected graph and stores only compact runtime identity", async () => {
     clearAliceCorpusRuntimeState();
     const { root } = await createCorpusFixture();
     const { runtime, memories } = createRuntimeHarness();
@@ -75,8 +101,11 @@ describe("initializeAliceCorpusRuntime", () => {
       },
     );
 
-    expect(state?.corpus.manifest.version).toBe("1.0.0");
+    expect(state?.identity.version).toBe("1.0.0");
+    expect(state?.identity.projection).toBe("internal");
+    expect(state?.identity.recordCount).toBe(1);
     expect(state?.graph?.getNode("system:test")?.label).toBe("Test system");
+    expect(state && "corpus" in state).toBe(false);
     expect(getAliceCorpusRuntimeState("agent")).toBe(state);
     expect(logs[0]?.[0]).toBe("alice-corpus-ready");
     expect(JSON.stringify(logs)).not.toContain("The test fact is true");
