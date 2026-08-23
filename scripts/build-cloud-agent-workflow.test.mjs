@@ -202,6 +202,36 @@ test("Alice Worker builds install the lockfile-pinned Wrangler at the repository
   );
 });
 
+test("Alice Worker typechecks generate exact Cloudflare binding declarations first", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const controlTypes = workflow.indexOf(
+    "--config workers/alice-production-control/wrangler.jsonc",
+  );
+  const accessTypes = workflow.indexOf(
+    "--config workers/alice-access-gateway/wrangler.jsonc",
+  );
+  const controlTypecheck = workflow.indexOf(
+    "bun x tsc --project workers/alice-production-control/tsconfig.json --noEmit",
+  );
+  const accessTypecheck = workflow.indexOf(
+    "bun x tsc --project workers/alice-access-gateway/tsconfig.json --noEmit",
+  );
+
+  assert.match(
+    workflow,
+    /\.\/node_modules\/\.bin\/wrangler types[\s\S]*?--env-interface AliceEnv[\s\S]*?workers\/alice-production-control\/worker-configuration\.d\.ts/,
+  );
+  assert.match(
+    workflow,
+    /\.\/node_modules\/\.bin\/wrangler types[\s\S]*?--env-interface AliceAccessGatewayBindings[\s\S]*?workers\/alice-access-gateway\/worker-configuration\.d\.ts/,
+  );
+  assert.ok(controlTypes >= 0 && controlTypes < controlTypecheck);
+  assert.ok(accessTypes >= 0 && accessTypes < accessTypecheck);
+});
+
 test("protected Alice qualification verifies provider identity and exact Worker bundles", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
