@@ -51,13 +51,7 @@ test("preprovisions only the recovery secret on an unrouted bootstrap version", 
     "ALICE_CONTROL_RECOVERY_TOKEN",
   ]);
   assert.ok(commands.put.includes(`alice-recovery-boundary-${sourceCommit}`));
-  assert.deepEqual(commands.list.slice(0, 4), [
-    "versions",
-    "secret",
-    "list",
-    "--config",
-  ]);
-  assert.ok(commands.list.includes("--latest-version"));
+  assert.deepEqual(Object.keys(commands), ["put"]);
 });
 
 test("parses and promotes only the recovery-bearing fail-closed version", () => {

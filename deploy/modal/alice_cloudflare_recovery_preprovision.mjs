@@ -43,14 +43,6 @@ export function buildAliceRecoveryPreprovisionCommands({
       "--message",
       `Alice protected recovery boundary ${sourceCommit}`,
     ],
-    list: [
-      "versions",
-      "secret",
-      "list",
-      "--config",
-      configPath,
-      "--latest-version",
-    ],
   };
 }
 
@@ -221,12 +213,6 @@ function main() {
     input: `${recoveryToken}\n`,
   });
   const recoveryVersionId = parseAliceRecoveryVersionId(putOutput);
-  const list = run(wranglerBin, commands.list, {
-    cwd: sourceRoot,
-    env: commandEnv,
-  });
-  const occurrences = list.match(new RegExp(`\\b${SECRET_NAME}\\b`, "g")) ?? [];
-  if (occurrences.length !== 1) invalid();
   const recoveryView = parsedJson(
     run(wranglerBin, versionViewCommand({
       versionId: recoveryVersionId,
