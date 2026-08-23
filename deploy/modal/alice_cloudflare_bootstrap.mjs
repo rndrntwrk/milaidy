@@ -717,6 +717,34 @@ export function buildAliceBootstrapControlConfig({
   return config;
 }
 
+export function buildAliceBootstrapCreationCommand({
+  controlMain,
+  configPath,
+  sourceCommit,
+  releaseRunId,
+}) {
+  if (
+    !absolute(controlMain) ||
+    !absolute(configPath) ||
+    !COMMIT.test(sourceCommit ?? "") ||
+    !RELEASE_RUN_ID.test(releaseRunId ?? "")
+  ) {
+    invalid();
+  }
+  return [
+    "deploy",
+    controlMain,
+    "--config",
+    configPath,
+    "--no-bundle",
+    "--strict",
+    "--tag",
+    `alice-continuity-bootstrap-${sourceCommit}-${releaseRunId}`,
+    "--message",
+    `Alice unrouted fail-closed continuity bootstrap ${sourceCommit}`,
+  ];
+}
+
 export function buildAliceBootstrapPromotionCommand({ versionId, configPath }) {
   if (!VERSION_ID.test(versionId ?? "") || !absolute(configPath)) invalid();
   return [
@@ -962,19 +990,12 @@ async function main() {
     createdByRun.evidenceSentinel = evidenceStore.sentinelCreated;
     const output = run(
       wranglerBin,
-      [
-        "versions",
-        "upload",
+      buildAliceBootstrapCreationCommand({
         controlMain,
-        "--config",
-        controlConfigPath,
-        "--no-bundle",
-        "--strict",
-        "--tag",
-        `alice-continuity-bootstrap-${sourceCommit}-${releaseRunId}`,
-        "--message",
-        `Alice unrouted fail-closed continuity bootstrap ${sourceCommit}`,
-      ],
+        configPath: controlConfigPath,
+        sourceCommit,
+        releaseRunId,
+      }),
       {
         cwd: sourceRoot,
         env: aliceCloudflareCommandEnv(),
