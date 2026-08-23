@@ -534,6 +534,37 @@ test("Alice root has no exact workspace paths removed by latest Eliza", () => {
   assert.deepEqual(missing, [], `missing exact workspaces: ${missing.join(", ")}`);
 });
 
+test("Alice frozen install retains its reviewed BlueBubbles workspace when pinned Eliza omits it", () => {
+  const rootPackage = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+  );
+  const localBlueBubbles = path.join(
+    repoRoot,
+    "plugins/plugin-bluebubbles/typescript/package.json",
+  );
+  const pinnedElizaBlueBubbles = path.join(
+    repoRoot,
+    "eliza/plugins/plugin-bluebubbles/package.json",
+  );
+  const lockfile = fs.readFileSync(path.join(repoRoot, "bun.lock"), "utf8");
+
+  assert.equal(
+    rootPackage.dependencies["@elizaos/plugin-bluebubbles"],
+    "workspace:*",
+  );
+  assert.ok(fs.existsSync(localBlueBubbles));
+  assert.equal(fs.existsSync(pinnedElizaBlueBubbles), false);
+  assert.ok(rootPackage.workspaces.includes("plugins/plugin-*/typescript"));
+  assert.equal(
+    rootPackage.workspaces.includes("!plugins/plugin-bluebubbles/typescript"),
+    false,
+  );
+  assert.match(
+    lockfile,
+    /"@elizaos\/plugin-bluebubbles@workspace:plugins\/plugin-bluebubbles\/typescript"/,
+  );
+});
+
 test("cloud agent build pins the reviewed Node patch and locked tsdown binary", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
