@@ -3,7 +3,6 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
-    "customConditions": ["eliza-source"],
     "strict": false,
     "skipLibCheck": true,
     "types": ["node", "bun"],
