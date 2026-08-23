@@ -23,8 +23,7 @@ export function createAliceCorpusPlugin(): Plugin {
       "Physically projected Alice corpus knowledge and read-only evidence graph integration.",
     init: async (_pluginConfig, runtime) => {
       const config = resolveAliceCorpusConfig(process.env);
-      if (!config) return;
-      if (!runtimeKnowledgeEnabled(runtime as AgentRuntime)) {
+      if (config && !runtimeKnowledgeEnabled(runtime as AgentRuntime)) {
         throw new Error(
           "Alice corpus requires the native Eliza knowledge feature to be enabled",
         );

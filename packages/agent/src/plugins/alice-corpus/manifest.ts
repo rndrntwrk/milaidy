@@ -76,6 +76,51 @@ function assertObject(
   }
 }
 
+function assertNonEmptyString(value: unknown, label: string): asserts value is string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+}
+
+function validateRecord(value: unknown, label: string): AliceCorpusRecord {
+  assertObject(value, label);
+  for (const field of [
+    "record_id",
+    "record_type",
+    "title",
+    "statement",
+    "subject_id",
+    "visibility",
+  ] as const) {
+    assertNonEmptyString(value[field], `${label} record ${field}`);
+  }
+  return value as AliceCorpusRecord;
+}
+
+function validateGraphNode(value: unknown, label: string): AliceCorpusGraphNode {
+  assertObject(value, label);
+  for (const field of ["node_id", "node_type", "label", "visibility"] as const) {
+    assertNonEmptyString(value[field], `${label} graph node ${field}`);
+  }
+  assertObject(value.properties, `${label} graph node properties`);
+  return value as AliceCorpusGraphNode;
+}
+
+function validateGraphEdge(value: unknown, label: string): AliceCorpusGraphEdge {
+  assertObject(value, label);
+  for (const field of [
+    "edge_id",
+    "source",
+    "target",
+    "edge_type",
+    "visibility",
+  ] as const) {
+    assertNonEmptyString(value[field], `${label} graph edge ${field}`);
+  }
+  assertObject(value.properties, `${label} graph edge properties`);
+  return value as AliceCorpusGraphEdge;
+}
+
 async function readJson<T>(filePath: string, label: string): Promise<T> {
   let parsed: unknown;
   try {
@@ -89,17 +134,20 @@ async function readJson<T>(filePath: string, label: string): Promise<T> {
   return parsed as T;
 }
 
-function parseJsonLines<T>(text: string, label: string): T[] {
+function parseJsonLines<T>(
+  text: string,
+  label: string,
+  validate: (value: unknown, rowLabel: string) => T,
+): T[] {
   const rows: T[] = [];
   for (const [index, raw] of text.split(/\r?\n/).entries()) {
     if (!raw.trim()) continue;
+    const rowLabel = `${label} line ${index + 1}`;
     try {
-      const parsed: unknown = JSON.parse(raw);
-      assertObject(parsed, `${label} line ${index + 1}`);
-      rows.push(parsed as T);
+      rows.push(validate(JSON.parse(raw), rowLabel));
     } catch (error) {
       throw new Error(
-        `Malformed ${label} line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        `Malformed ${rowLabel}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -245,15 +293,15 @@ function assertProjectionManifestsAgree(
   }
 }
 
+function relativeCorpusPath(root: string, absolute: string): string {
+  return path.relative(root, absolute).split(path.sep).join("/");
+}
+
 export async function loadAndValidateCorpus(
   config: AliceCorpusConfig,
 ): Promise<ValidatedAliceCorpus> {
   const rootReal = await realpath(config.rootDir);
-  const projectionRoot = path.join(
-    rootReal,
-    "projections",
-    config.projection,
-  );
+  const projectionRoot = path.join(rootReal, "projections", config.projection);
   const requiredPaths = {
     manifest: path.join(rootReal, "CORPUS_MANIFEST.json"),
     checksums: path.join(rootReal, "SHA256SUMS.txt"),
@@ -264,10 +312,7 @@ export async function loadAndValidateCorpus(
     dossiers: path.join(projectionRoot, "dossiers"),
   };
 
-  const manifestPath = await assertContainedFile(
-    rootReal,
-    requiredPaths.manifest,
-  );
+  const manifestPath = await assertContainedFile(rootReal, requiredPaths.manifest);
   const projectionManifestPath = await assertContainedFile(
     rootReal,
     requiredPaths.projectionManifest,
@@ -313,27 +358,30 @@ export async function loadAndValidateCorpus(
     graphEdgesPath,
     ...dossierPaths,
   ];
+  const selectedRelativePaths = new Set(
+    selectedPaths.map((absolute) => relativeCorpusPath(rootReal, absolute)),
+  );
   const checksumMap = parseChecksumManifest(
     await readFile(checksumsPath, "utf8"),
   );
   const verifiedFiles = new Map<string, string>();
 
-  const pathsToVerify =
-    config.verifyMode === "full"
-      ? [...checksumMap.keys()].map((relative) => path.join(rootReal, relative))
-      : config.verifyMode === "selected"
-        ? selectedPaths
-        : [];
+  const verificationCandidates = new Set<string>();
+  if (config.verifyMode === "selected" || config.verifyMode === "full") {
+    for (const absolute of selectedPaths) verificationCandidates.add(absolute);
+  }
+  if (config.verifyMode === "full") {
+    for (const relative of checksumMap.keys()) {
+      verificationCandidates.add(path.join(rootReal, relative));
+    }
+  }
 
-  for (const candidate of pathsToVerify) {
+  for (const candidate of verificationCandidates) {
     const absolute = await assertContainedFile(rootReal, candidate);
-    const relative = path
-      .relative(rootReal, absolute)
-      .split(path.sep)
-      .join("/");
+    const relative = relativeCorpusPath(rootReal, absolute);
     const expected = checksumMap.get(relative);
     if (!expected) {
-      if (config.strict) {
+      if (selectedRelativePaths.has(relative) || config.strict) {
         throw new Error(
           `Missing checksum entry for selected corpus file: ${relative}`,
         );
@@ -347,17 +395,20 @@ export async function loadAndValidateCorpus(
     verifiedFiles.set(relative, actual);
   }
 
-  const records = parseJsonLines<AliceCorpusRecord>(
+  const records = parseJsonLines(
     await readFile(recordsPath, "utf8"),
     "records.jsonl",
+    validateRecord,
   );
-  const graphNodes = parseJsonLines<AliceCorpusGraphNode>(
+  const graphNodes = parseJsonLines(
     await readFile(graphNodesPath, "utf8"),
     "graph-nodes.jsonl",
+    validateGraphNode,
   );
-  const graphEdges = parseJsonLines<AliceCorpusGraphEdge>(
+  const graphEdges = parseJsonLines(
     await readFile(graphEdgesPath, "utf8"),
     "graph-edges.jsonl",
+    validateGraphEdge,
   );
   assertUnique(records, "record_id", "records.jsonl");
   assertUnique(graphNodes, "node_id", "graph-nodes.jsonl");
@@ -417,10 +468,7 @@ export async function loadAndValidateCorpus(
   for (const absolutePath of dossierPaths) {
     const contained = await assertContainedFile(rootReal, absolutePath);
     dossiers.push({
-      relativePath: path
-        .relative(rootReal, contained)
-        .split(path.sep)
-        .join("/"),
+      relativePath: relativeCorpusPath(rootReal, contained),
       absolutePath: contained,
       text: await readFile(contained, "utf8"),
     });
@@ -437,10 +485,7 @@ export async function loadAndValidateCorpus(
   } else {
     for (const absolute of selectedPaths) {
       const contained = await assertContainedFile(rootReal, absolute);
-      const relative = path
-        .relative(rootReal, contained)
-        .split(path.sep)
-        .join("/");
+      const relative = relativeCorpusPath(rootReal, contained);
       inputHash.update(`${relative}\0${await sha256File(contained)}\n`);
     }
   }

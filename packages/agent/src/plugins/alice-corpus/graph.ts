@@ -25,9 +25,15 @@ export interface AliceCorpusGraphNeighbor {
   direction: "in" | "out";
 }
 
+export interface AliceCorpusGraphPathStep {
+  edge: AliceCorpusGraphEdge;
+  direction: "in" | "out";
+}
+
 export interface AliceCorpusGraphPath {
   nodes: AliceCorpusGraphNode[];
   edges: AliceCorpusGraphEdge[];
+  steps: AliceCorpusGraphPathStep[];
 }
 
 export interface AliceCorpusGraphEvidenceResult {
@@ -119,9 +125,10 @@ export class AliceCorpusGraphIndex {
     return this.nodes.get(nodeId) ?? null;
   }
 
-  neighbors(
+  private collectNeighbors(
     nodeId: string,
-    options: AliceCorpusNeighborOptions = {},
+    options: AliceCorpusNeighborOptions,
+    limit: number,
   ): AliceCorpusGraphNeighbor[] {
     if (!this.nodes.has(nodeId)) return [];
     const direction = options.direction ?? "both";
@@ -155,7 +162,15 @@ export class AliceCorpusGraphIndex {
 
     return rows
       .sort((left, right) => left.edge.edge_id.localeCompare(right.edge.edge_id))
-      .slice(0, Math.min(Math.max(options.limit ?? 50, 1), 100));
+      .slice(0, limit);
+  }
+
+  neighbors(
+    nodeId: string,
+    options: AliceCorpusNeighborOptions = {},
+  ): AliceCorpusGraphNeighbor[] {
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+    return this.collectNeighbors(nodeId, options, limit);
   }
 
   shortestPath(
@@ -165,44 +180,45 @@ export class AliceCorpusGraphIndex {
   ): AliceCorpusGraphPath | null {
     if (!this.nodes.has(source) || !this.nodes.has(target)) return null;
     if (source === target) {
-      return { nodes: [this.nodes.get(source)!], edges: [] };
+      return { nodes: [this.nodes.get(source)!], edges: [], steps: [] };
     }
 
     const maxDepth = Math.min(Math.max(options.maxDepth ?? 6, 1), 8);
-    const allowedEdgeTypes = options.edgeTypes?.length
-      ? new Set(options.edgeTypes)
-      : null;
-    const queue: Array<[string, string[], AliceCorpusGraphEdge[]]> = [
-      [source, [source], []],
-    ];
+    const queue: Array<[
+      string,
+      string[],
+      AliceCorpusGraphPathStep[],
+    ]> = [[source, [source], []]];
     const visited = new Set([source]);
 
     while (queue.length > 0) {
-      const [current, path, pathEdges] = queue.shift()!;
-      if (pathEdges.length >= maxDepth) continue;
+      const [current, path, pathSteps] = queue.shift()!;
+      if (pathSteps.length >= maxDepth) continue;
 
-      for (const neighbor of this.neighbors(current, {
-        direction: "both",
-        limit: 100,
-      })) {
-        if (
-          allowedEdgeTypes &&
-          !allowedEdgeTypes.has(neighbor.edge.edge_type)
-        ) {
-          continue;
-        }
+      for (const neighbor of this.collectNeighbors(
+        current,
+        {
+          direction: "both",
+          edgeTypes: options.edgeTypes,
+        },
+        Number.MAX_SAFE_INTEGER,
+      )) {
         const next = neighbor.node.node_id;
         if (visited.has(next)) continue;
         const nextPath = [...path, next];
-        const nextEdges = [...pathEdges, neighbor.edge];
+        const nextSteps = [
+          ...pathSteps,
+          { edge: neighbor.edge, direction: neighbor.direction },
+        ];
         if (next === target) {
           return {
             nodes: nextPath.map((nodeId) => this.nodes.get(nodeId)!),
-            edges: nextEdges,
+            edges: nextSteps.map((step) => step.edge),
+            steps: nextSteps,
           };
         }
         visited.add(next);
-        queue.push([next, nextPath, nextEdges]);
+        queue.push([next, nextPath, nextSteps]);
       }
     }
 
@@ -227,6 +243,12 @@ export class AliceCorpusGraphIndex {
       };
     }
 
+    const evidenceEdgeTypes = [
+      "ABOUT",
+      "SOURCED_FROM",
+      "EVIDENCES",
+      "SUPPORTS",
+    ];
     const queue: Array<[string, number]> = [[nodeId, 0]];
     const visited = new Set([nodeId]);
     while (queue.length > 0) {
@@ -246,17 +268,11 @@ export class AliceCorpusGraphIndex {
       }
       if (currentDepth >= depth) continue;
 
-      for (const neighbor of this.neighbors(current, {
-        direction: "both",
-        limit: 100,
-      })) {
-        if (
-          !["ABOUT", "SOURCED_FROM", "EVIDENCES", "SUPPORTS"].includes(
-            neighbor.edge.edge_type,
-          )
-        ) {
-          continue;
-        }
+      for (const neighbor of this.collectNeighbors(
+        current,
+        { direction: "both", edgeTypes: evidenceEdgeTypes },
+        Number.MAX_SAFE_INTEGER,
+      )) {
         traversedEdgeIds.add(neighbor.edge.edge_id);
         const next = neighbor.node.node_id;
         if (!visited.has(next)) {

@@ -10,9 +10,9 @@ function corpusContext(runtime: IAgentRuntime) {
   const state = runtimeState(runtime);
   return state
     ? {
-        corpusVersion: state.corpus.manifest.version,
-        projection: state.corpus.config.projection,
-        inputDigest: state.corpus.inputDigest,
+        corpusVersion: state.identity.version,
+        projection: state.identity.projection,
+        inputDigest: state.identity.inputDigest,
       }
     : null;
 }
@@ -252,11 +252,12 @@ export const aliceGraphPathAction: Action = {
     return {
       text: graphPath
         ? graphPath.nodes
-            .map((node, index) =>
-              index === 0
-                ? `${node.label} (${node.node_id})`
-                : `→ ${graphPath.edges[index - 1]?.edge_type} → ${node.label} (${node.node_id})`,
-            )
+            .map((node, index) => {
+              if (index === 0) return `${node.label} (${node.node_id})`;
+              const step = graphPath.steps[index - 1];
+              const direction = step?.direction === "in" ? "←" : "→";
+              return `${direction} ${step?.edge.edge_type} ${direction} ${node.label} (${node.node_id})`;
+            })
             .join("\n")
         : `No projected path found between ${source} and ${target}.`,
       success: true,

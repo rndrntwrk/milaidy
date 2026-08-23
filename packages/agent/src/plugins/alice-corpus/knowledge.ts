@@ -45,6 +45,11 @@ export interface AliceCorpusSeedReport {
   inputDigest: string;
 }
 
+export interface AliceCorpusPurgeReport {
+  prunedDocuments: number;
+  prunedFragments: number;
+}
+
 const ALICE_CORPUS_SOURCE = "alice-corpus";
 const MEMORY_PAGE_SIZE = 100;
 const MAX_FRAGMENT_CHARACTERS = 5_000;
@@ -63,6 +68,11 @@ function stableSlug(value: string): string {
     .replace(/\/+/g, "/");
   const digest = createHash("sha256").update(value).digest("hex").slice(0, 12);
   return `${normalized.slice(0, 100)}:${digest}`;
+}
+
+function opaqueFilename(key: string): string {
+  const digest = createHash("sha256").update(key).digest("hex").slice(0, 24);
+  return `alice-corpus-${digest}.md`;
 }
 
 function splitMarkdown(text: string): string[] {
@@ -87,10 +97,7 @@ function splitMarkdown(text: string): string[] {
 
     if (current.length === 0 && heading) current = [heading];
     const candidate = [...current, line].join("\n");
-    if (
-      candidate.length > MAX_FRAGMENT_CHARACTERS &&
-      current.length > 0
-    ) {
+    if (candidate.length > MAX_FRAGMENT_CHARACTERS && current.length > 0) {
       flush();
       current = heading ? [heading, line] : [line];
     } else {
@@ -156,11 +163,12 @@ export function buildAliceCorpusKnowledgeDocuments(
   for (const dossier of [...corpus.dossiers].sort((left, right) =>
     left.relativePath.localeCompare(right.relativePath),
   )) {
+    const key = `alice-corpus:${corpus.manifest.version}:${corpus.config.projection}:dossier:${stableSlug(dossier.relativePath)}`;
     const fragments = splitMarkdown(dossier.text).map((text) => ({ text }));
     documents.push({
-      key: `alice-corpus:${corpus.manifest.version}:${corpus.config.projection}:dossier:${stableSlug(dossier.relativePath)}`,
+      key,
       version,
-      filename: dossier.relativePath.split("/").at(-1) ?? "dossier.md",
+      filename: opaqueFilename(key),
       contentType: "text/markdown",
       text: dossier.text,
       fragments,
@@ -189,10 +197,11 @@ export function buildAliceCorpusKnowledgeDocuments(
     const fragments = records.map((record) => ({
       text: formatRecordFragment(record),
     }));
+    const key = `alice-corpus:${corpus.manifest.version}:${corpus.config.projection}:records:${stableSlug(recordType)}`;
     documents.push({
-      key: `alice-corpus:${corpus.manifest.version}:${corpus.config.projection}:records:${stableSlug(recordType)}`,
+      key,
       version,
-      filename: `records-${recordType.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`,
+      filename: opaqueFilename(key),
       contentType: "text/markdown",
       text: fragments.map((fragment) => fragment.text).join("\n\n---\n\n"),
       fragments,
@@ -228,6 +237,52 @@ async function listAllMemories(
   return rows;
 }
 
+function isAliceCorpusDocument(memory: any): boolean {
+  const metadata = memory?.metadata as Record<string, unknown> | undefined;
+  const key = metadata?.key ?? metadata?.bundledKnowledgeKey;
+  return (
+    metadata?.source === ALICE_CORPUS_SOURCE ||
+    (typeof key === "string" && key.startsWith("alice-corpus:"))
+  );
+}
+
+export async function purgeAliceCorpusKnowledge(
+  runtime: AliceCorpusMemoryRuntime,
+): Promise<AliceCorpusPurgeReport> {
+  const documentIds = new Set<string>();
+  for (const memory of await listAllMemories(runtime, "documents")) {
+    if (isAliceCorpusDocument(memory) && typeof memory?.id === "string") {
+      documentIds.add(memory.id);
+    }
+  }
+
+  let prunedFragments = 0;
+  if (documentIds.size > 0) {
+    for (const fragment of await listAllMemories(runtime, "knowledge")) {
+      const documentId = (
+        fragment?.metadata as Record<string, unknown> | undefined
+      )?.documentId;
+      if (
+        typeof fragment?.id === "string" &&
+        typeof documentId === "string" &&
+        documentIds.has(documentId)
+      ) {
+        await runtime.deleteMemory(fragment.id);
+        prunedFragments += 1;
+      }
+    }
+  }
+
+  for (const documentId of documentIds) {
+    await runtime.deleteMemory(documentId);
+  }
+
+  return {
+    prunedDocuments: documentIds.size,
+    prunedFragments,
+  };
+}
+
 export async function seedAliceCorpusKnowledge(
   runtime: AliceCorpusMemoryRuntime,
   corpus: Pick<
@@ -247,9 +302,8 @@ export async function seedAliceCorpusKnowledge(
   const staleDocumentIds = new Set<string>();
 
   for (const memory of await listAllMemories(runtime, "documents")) {
-    const metadata = memory?.metadata as Record<string, unknown> | undefined;
     if (
-      metadata?.source === ALICE_CORPUS_SOURCE &&
+      isAliceCorpusDocument(memory) &&
       typeof memory?.id === "string" &&
       !expectedDocumentIds.has(memory.id)
     ) {

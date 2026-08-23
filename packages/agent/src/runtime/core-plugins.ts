@@ -13,17 +13,19 @@ export const DESKTOP_ONLY_PLUGINS: readonly string[] = [
   "@elizaos/plugin-agent-orchestrator",
 ];
 
-/** Core plugins that should always be loaded. collectPluginNames() seeds from this list only. */
+/** Core plugins that should always be pre-registered before runtime construction. */
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql", // database adapter — required
   "@elizaos/plugin-local-embedding", // local embeddings — required for memory
-  "@miladyai/agent/plugins/alice-corpus", // external projected corpus + read-only graph; inert without ALICE_CORPUS_ROOT
   "@elizaos/plugin-form", // form handling for guided user journeys
   "@elizaos/plugin-agent-orchestrator", // task-agent orchestration (PTY, coordinator, workspace provisioning)
   "@elizaos/plugin-agent-skills", // skill execution and marketplace runtime
   "@elizaos/plugin-commands", // slash command handling (skills auto-register as /commands)
   // Native runtime features live inside the runtime now:
   // knowledge, relationships/relationships, trajectories.
+  // The Alice corpus lifecycle is deliberately loaded as a regular awaited
+  // plugin so strict verification failures cannot be swallowed by core-plugin
+  // pre-registration timeout handling.
   // "@elizaos/plugin-secrets-manager", // secrets management — load early, other plugins depend on it
   // "@elizaos/plugin-trust", // trust scoring and policy signals
   // Legacy alpha cron/shell/plugin-manager/personality packages are excluded:

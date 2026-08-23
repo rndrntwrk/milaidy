@@ -30,6 +30,7 @@ import { CORE_PLUGINS } from "./core-plugins.js";
 const PI_AI_PLUGIN_PACKAGE = "@elizaos/plugin-pi-ai";
 const STREAM555_PLUGIN_PACKAGE = "@rndrntwrk/plugin-555stream";
 const FIVE55_GAMES_PLUGIN_PACKAGE = "@miladyai/agent/plugins/five55-games";
+const ALICE_CORPUS_PLUGIN_PACKAGE = "@miladyai/agent/plugins/alice-corpus";
 
 type ConfigEnvRecord = Record<string, unknown> & {
   vars?: Record<string, unknown>;
@@ -85,9 +86,7 @@ export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   telegramAccount: "@elizaos-plugins/client-telegram-account",
   slack: "@elizaos/plugin-slack",
   twitter: "@elizaos/plugin-twitter",
-  // Internal connector built from src/plugins/whatsapp (not an npm package).
   whatsapp: "@elizaos/plugin-whatsapp",
-  // Internal connector built from src/plugins/signal (not an npm package).
   signal: "@elizaos/plugin-signal",
   imessage: "@elizaos/plugin-imessage",
   farcaster: "@elizaos/plugin-farcaster",
@@ -121,28 +120,12 @@ export const PROVIDER_PLUGIN_MAP: Readonly<Record<string, string>> = {
   ZAI_API_KEY: "@homunculuslabs/plugin-zai",
   ELIZA_USE_PI_AI: PI_AI_PLUGIN_PACKAGE,
   MILADY_USE_PI_AI: PI_AI_PLUGIN_PACKAGE,
-  // ElizaCloud — loaded when API key is present OR cloud is explicitly enabled
   ELIZAOS_CLOUD_API_KEY: "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED: "@elizaos/plugin-elizacloud",
 };
 
-/**
- * Optional feature plugins keyed by feature name.
- *
- * Mappings here support short IDs in allow-lists and feature toggles.
- * Keep this map in sync with optional plugin registration and tests.
- */
+/** Optional feature plugins keyed by feature name. */
 export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
-  // ── Wallet plugins ─────────────────────────────────────────────────
-  // These short ids are what plugin-auto-enable.ts writes into
-  // `plugins.allow` when EVM_PRIVATE_KEY / SOLANA_PRIVATE_KEY are
-  // present in process.env. Without entries here, collectPluginNames()
-  // would fall through to loading the short id as a literal package
-  // name (`import("evm")`), which silently fails inside the loader's
-  // error boundary — plugin-evm / plugin-solana never load even when
-  // the keys are set and the wallet page shows addresses. This was a
-  // multi-hour landmine. Keep these in sync with AUTH_PROVIDER_PLUGINS
-  // in packages/agent/src/config/plugin-auto-enable.ts.
   evm: "@elizaos/plugin-evm",
   solana: "@elizaos/plugin-solana",
   browser: "@elizaos/plugin-browser",
@@ -175,34 +158,11 @@ export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   "stream555-canonical": "@rndrntwrk/plugin-555stream",
   "555stream": "@rndrntwrk/plugin-555stream",
   "five55-games": FIVE55_GAMES_PLUGIN_PACKAGE,
-  // Steward wallet plugin — short ID used by auto-enable
   "stwd-eliza-plugin": "@stwd/eliza-plugin",
 };
 
-// ---------------------------------------------------------------------------
-// Main function
-// ---------------------------------------------------------------------------
-
-/**
- * First-winning provenance for each package name in the load set — e.g.
- * `plugins.allow[...]`, `env: SOLANA_PRIVATE_KEY`, `CORE_PLUGINS`.
- * {@link collectPluginNames} fills this when the optional `reasons` map is passed.
- *
- * **Why:** Optional plugins often fail with "Cannot find module"; without the
- * source, operators assume the framework is broken instead of fixing config/env.
- */
 export type PluginLoadReasons = Map<string, string>;
 
-/**
- * Collect plugin package names to load from config, env, feature flags, and
- * connector-derived allow-list mutations.
- *
- * @param reasons - When set, records the **first** reason each name was added
- *   (subsequent adds for the same name are ignored). Used by `resolvePlugins`
- *   to annotate benign optional load failures.
- *
- * @internal Exported for testing.
- */
 export function collectPluginNames(
   config: ElizaConfig,
   reasons?: PluginLoadReasons,
@@ -233,11 +193,6 @@ export function collectPluginNames(
   const cloudEffectivelyEnabled =
     resolveCloudPluginRequirement(cloudTopology, cloudPluginRequestedByEnv) ||
     isCloudContainer;
-  // cloudHandlesInference gates whether the cloud plugin *replaces* direct
-  // provider plugins for model calls.  Cloud containers that go through the
-  // steward proxy (OPENAI_BASE_URL → host.docker.internal) need plugin-openai
-  // to stay loaded, so only claim inference when the topology explicitly says
-  // so OR the container has a direct cloud API key for elizacloud inference.
   const cloudHandlesInference =
     cloudTopology.services.inference ||
     (isCloudContainer && Boolean(process.env.ELIZAOS_CLOUD_API_KEY?.trim()));
@@ -291,25 +246,25 @@ export function collectPluginNames(
     ([, entry]) => entry?.enabled === true,
   );
 
-  // Allow-list entries are additive (extra plugins), not exclusive.
   const allowList = config.plugins?.allow;
   const pluginsToLoad = new Set<string>(CORE_PLUGINS);
   const track = (name: string, reason: string) => {
     if (reasons && !reasons.has(name)) reasons.set(name, reason);
   };
   for (const core of CORE_PLUGINS) track(core, "CORE_PLUGINS");
+
+  // The corpus lifecycle is regular and awaited, not a timeout-swallowed core
+  // pre-registration. It remains loaded without ALICE_CORPUS_ROOT so disabling
+  // the corpus can physically purge previously persisted projected knowledge.
+  pluginsToLoad.add(ALICE_CORPUS_PLUGIN_PACKAGE);
+  track(ALICE_CORPUS_PLUGIN_PACKAGE, "builtin: Alice corpus lifecycle");
+
   if (localEmbeddingsExplicitlyDisabled) {
     pluginsToLoad.delete("@elizaos/plugin-local-embedding");
   }
 
-  // Allow list is additive — extra plugins on top of auto-detection,
-  // not an exclusive whitelist that blocks everything else.
   if (allowList && allowList.length > 0) {
     for (const item of allowList) {
-      // Normalize short IDs (e.g. "openai" → "@elizaos/plugin-openai") the
-      // same way plugins.entries does — addToAllowlist() pushes both the
-      // short ID and the full package name, so bare short IDs must be
-      // expanded to avoid importing the raw SDK package (e.g. "openai").
       const pluginName =
         CHANNEL_PLUGIN_MAP[item] ??
         OPTIONAL_PLUGIN_MAP[item] ??
@@ -332,8 +287,6 @@ export function collectPluginNames(
     );
   }
 
-  // Connector plugins — load when connector has config entries
-  // Prefer config.connectors, fall back to config.channels for backward compatibility
   const connectors =
     config.connectors ??
     ((config as Record<string, unknown>).channels as Record<string, unknown>) ??
@@ -356,10 +309,8 @@ export function collectPluginNames(
     }
   }
 
-  // Model-provider plugins — load when env key is present
   for (const [envKey, pluginName] of Object.entries(PROVIDER_PLUGIN_MAP)) {
     if (envKey === "ELIZA_USE_PI_AI" || envKey === "MILADY_USE_PI_AI") {
-      // pi-ai enablement uses dedicated boolean parsing + precedence logic below.
       continue;
     }
     if (
@@ -392,19 +343,10 @@ export function collectPluginNames(
     piAiEnabled && pluginEntries?.["pi-ai"]?.enabled !== false;
 
   const applyProviderPrecedence = (): void => {
-    // Provider precedence:
-    // 1) ElizaCloud for inference (when enabled AND inferenceMode is "cloud")
-    // 2) pi-ai (when enabled and cloud inference is not active)
-    // 3) direct provider plugins (api-key/env based)
-    //
-    // When inferenceMode is "byok" or "local", cloud stays loaded for
-    // RPC/services but direct AI provider plugins are preserved so the
-    // user's own API keys (e.g. Anthropic) handle model inference.
     if (cloudEffectivelyEnabled) {
       pluginsToLoad.add("@elizaos/plugin-elizacloud");
 
       if (cloudHandlesInference) {
-        // Cloud handles ALL model calls — remove direct AI provider plugins.
         const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
         directProviders.delete("@elizaos/plugin-elizacloud");
         for (const p of directProviders) {
@@ -412,12 +354,8 @@ export function collectPluginNames(
         }
         return;
       }
-      // inferenceMode is "byok" or "local" — keep direct provider plugins.
-      // Cloud plugin stays loaded for non-inference cloud services (RPC, media, etc.)
-      // Pi-ai takes priority over direct providers when cloud inference is disabled.
       if (shouldEnablePiAi) {
         pluginsToLoad.add(PI_AI_PLUGIN_PACKAGE);
-        // Remove direct provider plugins — pi-ai handles inference selection.
         const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
         directProviders.delete(PI_AI_PLUGIN_PACKAGE);
         directProviders.delete("@elizaos/plugin-elizacloud");
@@ -430,9 +368,6 @@ export function collectPluginNames(
 
     if (shouldEnablePiAi) {
       pluginsToLoad.add(PI_AI_PLUGIN_PACKAGE);
-
-      // When pi-ai is active, remove direct provider plugins + cloud plugin.
-      // pi-ai performs the upstream provider selection itself.
       const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
       directProviders.delete(PI_AI_PLUGIN_PACKAGE);
       for (const p of directProviders) {
@@ -442,16 +377,11 @@ export function collectPluginNames(
       return;
     }
 
-    // Cloud is not part of the resolved topology — remove it even though
-    // it is listed in CORE_PLUGINS so stale env/config does not hijack
-    // provider selection after the user switches away.
     pluginsToLoad.delete("@elizaos/plugin-elizacloud");
   };
 
-  // Apply once before additive plugin-entry/feature paths.
   applyProviderPrecedence();
 
-  // Optional feature plugins from config.plugins.entries
   const pluginsConfig = config.plugins as
     | Record<string, Record<string, unknown>>
     | undefined;
@@ -462,8 +392,6 @@ export function collectPluginNames(
         typeof entry === "object" &&
         (entry as Record<string, unknown>).enabled !== false
       ) {
-        // Connector keys (telegram, discord, etc.) must use CHANNEL_PLUGIN_MAP
-        // so the correct variant loads.
         const pluginName =
           CHANNEL_PLUGIN_MAP[key] ??
           OPTIONAL_PLUGIN_MAP[key] ??
@@ -474,7 +402,6 @@ export function collectPluginNames(
     }
   }
 
-  // Feature flags (config.features)
   const features = config.features;
   if (features && typeof features === "object") {
     for (const [featureName, featureValue] of Object.entries(features)) {
@@ -493,22 +420,16 @@ export function collectPluginNames(
     }
   }
 
-  // x402 plugin — auto-load when config section enabled
   if (config.x402?.enabled) {
     pluginsToLoad.add("@elizaos/plugin-x402");
     track("@elizaos/plugin-x402", "config.x402.enabled");
   }
 
-  // Opinion plugin — auto-load when API key is present.
-  // NOT in PROVIDER_PLUGIN_MAP because it is a feature plugin, not a model
-  // provider, and would be incorrectly removed during provider precedence.
   if (process.env.OPINION_API_KEY?.trim()) {
     pluginsToLoad.add("@elizaos/plugin-opinion");
     track("@elizaos/plugin-opinion", "env: OPINION_API_KEY");
   }
 
-  // These are plugins that were installed via the plugin-manager at runtime
-  // and tracked in eliza.json so they persist across restarts.
   const installs = config.plugins?.installs;
   if (installs && typeof installs === "object") {
     for (const [packageName, record] of Object.entries(installs)) {
@@ -519,11 +440,8 @@ export function collectPluginNames(
     }
   }
 
-  // Re-apply provider precedence so later additive paths (entries, features,
-  // installs) cannot accidentally re-introduce suppressed providers.
   applyProviderPrecedence();
 
-  // Enforce feature gating last so allow-list entries cannot bypass it.
   if (shellPluginDisabled) {
     pluginsToLoad.delete("@elizaos/plugin-shell");
   }

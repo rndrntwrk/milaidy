@@ -1,6 +1,9 @@
 import { resolveAliceCorpusConfig } from "./config.js";
 import { AliceCorpusGraphIndex } from "./graph.js";
-import { seedAliceCorpusKnowledge } from "./knowledge.js";
+import {
+  purgeAliceCorpusKnowledge,
+  seedAliceCorpusKnowledge,
+} from "./knowledge.js";
 import { loadAndValidateCorpus } from "./manifest.js";
 
 export interface AliceCorpusRuntimeDependencies {
@@ -9,8 +12,20 @@ export interface AliceCorpusRuntimeDependencies {
   log?(event: string, payload: Record<string, unknown>): void;
 }
 
+export interface AliceCorpusRuntimeIdentity {
+  corpusId: string;
+  version: string;
+  projection: string;
+  inputDigest: string;
+  verificationMode: string;
+  recordCount: number;
+  dossierCount: number;
+  graphNodeCount: number;
+  graphEdgeCount: number;
+}
+
 export interface AliceCorpusRuntimeState {
-  corpus: Awaited<ReturnType<typeof loadAndValidateCorpus>>;
+  identity: AliceCorpusRuntimeIdentity;
   graph: AliceCorpusGraphIndex | null;
   seedReport: Awaited<ReturnType<typeof seedAliceCorpusKnowledge>>;
   initializedAt: string;
@@ -24,7 +39,11 @@ export function getAliceCorpusRuntimeState(
   return runtimeStates.get(agentId) ?? null;
 }
 
-export function clearAliceCorpusRuntimeState(): void {
+export function clearAliceCorpusRuntimeState(agentId?: string): void {
+  if (agentId) {
+    runtimeStates.delete(agentId);
+    return;
+  }
   runtimeStates.clear();
 }
 
@@ -33,8 +52,20 @@ export async function initializeAliceCorpusRuntime(
   env: NodeJS.ProcessEnv = process.env,
   dependencies: AliceCorpusRuntimeDependencies,
 ): Promise<AliceCorpusRuntimeState | null> {
+  const agentId = String(runtime.agentId);
   const config = resolveAliceCorpusConfig(env);
-  if (!config) return null;
+
+  if (!config) {
+    const purgeReport = await purgeAliceCorpusKnowledge(runtime);
+    runtimeStates.delete(agentId);
+    if (purgeReport.prunedDocuments > 0 || purgeReport.prunedFragments > 0) {
+      dependencies.log?.("alice-corpus-purged", {
+        prunedDocuments: purgeReport.prunedDocuments,
+        prunedFragments: purgeReport.prunedFragments,
+      });
+    }
+    return null;
+  }
 
   try {
     const startedAt = Date.now();
@@ -50,32 +81,44 @@ export async function initializeAliceCorpusRuntime(
           projection: config.projection,
         })
       : null;
-    const state: AliceCorpusRuntimeState = {
-      corpus,
-      graph,
-      seedReport,
-      initializedAt: new Date().toISOString(),
-    };
-    runtimeStates.set(String(runtime.agentId), state);
-
-    dependencies.log?.("alice-corpus-ready", {
-      corpusVersion: corpus.manifest.version,
+    const identity: AliceCorpusRuntimeIdentity = {
+      corpusId: corpus.manifest.corpus_id,
+      version: corpus.manifest.version,
       projection: config.projection,
       inputDigest: corpus.inputDigest,
       verificationMode: config.verifyMode,
       recordCount: corpus.records.length,
       dossierCount: corpus.dossiers.length,
+      graphNodeCount: corpus.graphNodes.length,
+      graphEdgeCount: corpus.graphEdges.length,
+    };
+    const state: AliceCorpusRuntimeState = {
+      identity,
+      graph,
+      seedReport,
+      initializedAt: new Date().toISOString(),
+    };
+    runtimeStates.set(agentId, state);
+
+    dependencies.log?.("alice-corpus-ready", {
+      corpusId: identity.corpusId,
+      corpusVersion: identity.version,
+      projection: identity.projection,
+      inputDigest: identity.inputDigest,
+      verificationMode: identity.verificationMode,
+      recordCount: identity.recordCount,
+      dossierCount: identity.dossierCount,
       documentCount: seedReport.documentCount,
       fragmentCount: seedReport.fragmentCount,
       prunedDocuments: seedReport.prunedDocuments,
       prunedFragments: seedReport.prunedFragments,
-      graphNodeCount: corpus.graphNodes.length,
-      graphEdgeCount: corpus.graphEdges.length,
+      graphNodeCount: identity.graphNodeCount,
+      graphEdgeCount: identity.graphEdgeCount,
       elapsedMs: Date.now() - startedAt,
     });
     return state;
   } catch (error) {
-    runtimeStates.delete(String(runtime.agentId));
+    runtimeStates.delete(agentId);
     if (config.strict) throw error;
     dependencies.log?.("alice-corpus-disabled", {
       projection: config.projection,
