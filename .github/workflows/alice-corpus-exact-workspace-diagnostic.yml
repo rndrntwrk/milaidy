@@ -86,34 +86,36 @@ jobs:
             node scripts/apply-eliza-ci-patches.mjs
           fi
 
-      - name: Prepare local private-channel workspaces
+      - name: Prepare private-channel workspace ownership
         shell: bash
         run: |
           set -euo pipefail
           cp package.json "$RUNNER_TEMP/package.before.json"
           cp bun.lock "$RUNNER_TEMP/bun.before.lock"
 
+          test -f plugins/plugin-bluebubbles/typescript/package.json || {
+            echo "::error::Required local BlueBubbles workspace is missing"
+            exit 1
+          }
+          test -f eliza/plugins/plugin-signal/package.json || {
+            echo "::error::Pinned Eliza Signal workspace is missing"
+            exit 1
+          }
+          if [ -f eliza/plugins/plugin-bluebubbles/package.json ]; then
+            echo "::error::Pinned Eliza unexpectedly contains BlueBubbles; workspace ownership must be re-evaluated"
+            exit 1
+          fi
+
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
           const path = "package.json";
           const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
-          const removed = new Set([
-            "!plugins/plugin-bluebubbles/typescript",
-            "!plugins/plugin-signal/typescript",
-          ]);
-          pkg.workspaces = pkg.workspaces.filter((entry) => !removed.has(entry));
+          pkg.workspaces = pkg.workspaces.filter(
+            (entry) => entry !== "!plugins/plugin-bluebubbles/typescript",
+          );
           fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
           NODE
-
-          for manifest in \
-            plugins/plugin-bluebubbles/typescript/package.json \
-            plugins/plugin-signal/typescript/package.json; do
-            test -f "$manifest" || {
-              echo "::error::Required local workspace is missing: $manifest"
-              exit 1
-            }
-          done
 
       - name: Regenerate lock in the exact workspace
         shell: bash
