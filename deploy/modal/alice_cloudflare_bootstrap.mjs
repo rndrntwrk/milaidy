@@ -291,6 +291,19 @@ async function putSentinelIfAbsent({ fetchImpl, apiToken, objectsPath }) {
   return response.status;
 }
 
+export function verifyAliceBootstrapBucket(bucket) {
+  if (
+    bucket?.name !== ALICE_CLOUDFLARE_TARGET.evidenceBucket ||
+    bucket?.jurisdiction !== "default" ||
+    typeof bucket?.location !== "string" ||
+    bucket.location.toLowerCase() !== "enam" ||
+    bucket?.storage_class !== "Standard"
+  ) {
+    invalid();
+  }
+  return bucket;
+}
+
 export async function ensureAliceBootstrapQueue({ fetchImpl, apiToken, name }) {
   let queues = await apiGetAllResults({
     fetchImpl,
@@ -367,14 +380,7 @@ async function ensureBucketAndSentinel({ fetchImpl, apiToken }) {
       pathname: bucketPath,
     });
   }
-  if (
-    bucket?.name !== ALICE_CLOUDFLARE_TARGET.evidenceBucket ||
-    bucket?.jurisdiction !== "default" ||
-    bucket?.location !== "enam" ||
-    bucket?.storage_class !== "Standard"
-  ) {
-    invalid();
-  }
+  verifyAliceBootstrapBucket(bucket);
   const objectsPath = `${bucketPath}/objects`;
   const sentinelObjects = await api({
     fetchImpl,

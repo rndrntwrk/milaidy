@@ -6,6 +6,7 @@ import {
   buildAliceBootstrapControlConfig,
   ensureAliceBootstrapQueue,
   extractAliceBootstrapNamespaceIds,
+  verifyAliceBootstrapBucket,
 } from "./alice_cloudflare_bootstrap.mjs";
 import fs from "node:fs";
 
@@ -264,4 +265,21 @@ test("accepts Cloudflare's observed page-one metadata without total_pages", asyn
   assert.equal(calls[0].options.method, "GET");
   assert.equal(calls[1].options.method, "POST");
   assert.equal(calls[2].options.method, "GET");
+});
+
+test("accepts Cloudflare's canonical uppercase ENAM bucket readback", () => {
+  assert.deepEqual(
+    verifyAliceBootstrapBucket({
+      name: "alice-production-evidence",
+      jurisdiction: "default",
+      location: "ENAM",
+      storage_class: "Standard",
+    }),
+    {
+      name: "alice-production-evidence",
+      jurisdiction: "default",
+      location: "ENAM",
+      storage_class: "Standard",
+    },
+  );
 });
