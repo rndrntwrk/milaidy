@@ -74,7 +74,7 @@ export function aliceTestCloudflareContinuityReadback() {
       settings: {
         delivery_delay: 0,
         delivery_paused: false,
-        message_retention_period: 345600,
+        message_retention_period: 86400,
       },
     },
     deadLetterQueue: {
@@ -87,7 +87,7 @@ export function aliceTestCloudflareContinuityReadback() {
       settings: {
         delivery_delay: 0,
         delivery_paused: true,
-        message_retention_period: 345600,
+        message_retention_period: 86400,
       },
     },
     queueConsumers: [{

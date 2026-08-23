@@ -123,7 +123,7 @@ export function buildAliceEvidenceQueueUpdate(queue, deliveryPaused) {
     queue?.queue_name !== ALICE_CLOUDFLARE_TARGET.evidenceQueue ||
     queue?.settings?.delivery_delay !== 0 ||
     typeof queue?.settings?.delivery_paused !== "boolean" ||
-    queue?.settings?.message_retention_period !== 345_600 ||
+    queue?.settings?.message_retention_period !== 86_400 ||
     typeof deliveryPaused !== "boolean"
   ) {
     releaseInvalid("ALICE_EVIDENCE_QUEUE_STATE_INVALID");
@@ -136,7 +136,7 @@ export function buildAliceEvidenceQueueUpdate(queue, deliveryPaused) {
       settings: {
         delivery_delay: 0,
         delivery_paused: deliveryPaused,
-        message_retention_period: 345_600,
+        message_retention_period: 86_400,
       },
     },
   };
@@ -153,7 +153,7 @@ function buildAliceContinuityQueueUpdate(queue, expectedQueue) {
     ].includes(queue.queue_name) ||
     typeof expectedQueue?.deliveryPaused !== "boolean" ||
     expectedQueue?.settings?.deliveryDelay !== 0 ||
-    expectedQueue?.settings?.messageRetentionPeriod !== 345_600
+    expectedQueue?.settings?.messageRetentionPeriod !== 86_400
   ) {
     releaseInvalid("ALICE_EVIDENCE_QUEUE_STATE_INVALID");
   }

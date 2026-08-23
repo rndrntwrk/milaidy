@@ -311,7 +311,7 @@ export async function ensureAliceBootstrapQueue({ fetchImpl, apiToken, name }) {
         settings: {
           delivery_delay: 0,
           delivery_paused: true,
-          message_retention_period: 345_600,
+          message_retention_period: 86_400,
         },
       },
     });
@@ -328,7 +328,7 @@ export async function ensureAliceBootstrapQueue({ fetchImpl, apiToken, name }) {
     !RESOURCE_ID.test(matches[0]?.queue_id ?? "") ||
     matches[0]?.settings?.delivery_paused !== true ||
     matches[0]?.settings?.delivery_delay !== 0 ||
-    matches[0]?.settings?.message_retention_period !== 345_600
+    matches[0]?.settings?.message_retention_period !== 86_400
   ) {
     invalid();
   }
