@@ -169,6 +169,31 @@ jobs:
           cd "$RUNNER_TEMP/alice-corpus-ci"
           bunx vitest run
 
+      - name: Produce Biome-formatted admission surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/alice-corpus-ci"
+          bunx biome check --write \
+            packages/agent/src/plugins/alice-corpus \
+            packages/agent/src/runtime/core-plugins.ts \
+            packages/agent/src/runtime/core-plugins.alice-corpus.test.ts \
+            packages/agent/src/runtime/plugin-collector.ts \
+            packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts || true
+
+      - name: Upload Biome-formatted admission surface
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-corpus-biome-formatted-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/plugins/alice-corpus
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/runtime/core-plugins.ts
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/runtime/core-plugins.alice-corpus.test.ts
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/runtime/plugin-collector.ts
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Check focused corpus formatting
         shell: bash
         run: |
