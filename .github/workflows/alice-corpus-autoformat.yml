@@ -1,0 +1,68 @@
+name: Alice Corpus One-Shot Formatter
+
+on:
+  push:
+    branches:
+      - feat/alice-corpus-runtime-binding-2026-08-22
+    paths:
+      - ".github/workflows/alice-corpus-autoformat.yml"
+      - "packages/agent/src/plugins/alice-corpus/**"
+      - "packages/agent/src/runtime/core-plugins.ts"
+      - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/plugin-collector.ts"
+      - "packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alice-corpus-one-shot-formatter
+  cancel-in-progress: true
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/alice-corpus-runtime-binding-2026-08-22
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Format the focused corpus surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          bunx @biomejs/biome@2.4.11 check --write \
+            packages/agent/src/plugins/alice-corpus \
+            packages/agent/src/runtime/core-plugins.ts \
+            packages/agent/src/runtime/core-plugins.alice-corpus.test.ts \
+            packages/agent/src/runtime/plugin-collector.ts \
+            packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts || true
+
+      - name: Commit formatter changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No formatter changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            packages/agent/src/plugins/alice-corpus \
+            packages/agent/src/runtime/core-plugins.ts \
+            packages/agent/src/runtime/core-plugins.alice-corpus.test.ts \
+            packages/agent/src/runtime/plugin-collector.ts \
+            packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts
+          git commit -m "style(alice-corpus): apply repository formatting"
+          git push origin HEAD:feat/alice-corpus-runtime-binding-2026-08-22
