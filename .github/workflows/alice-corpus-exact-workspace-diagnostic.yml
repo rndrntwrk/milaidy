@@ -150,7 +150,7 @@ jobs:
           set -euo pipefail
           if [ -f eliza/packages/shared/scripts/generate-keywords.mjs ]; then
             cd eliza
-            node packages/shared/scripts/generate-keywords.mjs --target ts
+            node packages/shared/scripts/generate-keywords.mjs
           fi
 
       - name: Run exact corpus admission regression
