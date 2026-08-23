@@ -13,6 +13,15 @@ describe("Alice proposer-only startup wiring", () => {
     );
   });
 
+  it("disables every default-on native execution surface in proposer-only mode", () => {
+    const construction = source.match(
+      /let runtime = new AgentRuntime\(\{[\s\S]*?\n  \}\);/m,
+    )?.[0] ?? "";
+    expect(construction).toMatch(
+      /\.\.\.\(aliceProduction\s*\?\s*\{[\s\S]*?enableDocuments: false,[\s\S]*?enableRelationships: false,[\s\S]*?enableTrajectories: false,[\s\S]*?\}\s*:\s*\{\}\)/,
+    );
+  });
+
   it("never loads workspace hooks or triggers startup hooks in production mode", () => {
     const hookBlock = source.match(
       /const loadHooksSystem = async \(\): Promise<void> => \{[\s\S]*?\n  \};/m,

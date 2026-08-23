@@ -95,7 +95,7 @@ test("every frozen recovery or deployment install hydrates the exact protected E
       String.raw`git -C eliza checkout --detach "\$eliza_sha"[\s\S]*?` +
       String.raw`git -C eliza rev-parse HEAD[\s\S]*?` +
       String.raw`Install exact (?:release|recovery) dependencies[\s\S]*?` +
-      String.raw`bun install --ignore-scripts --frozen-lockfile`,
+      String.raw`bash scripts\/alice-frozen-install-retry\.sh`,
   );
 
   const deployJob = workflow.match(/  deploy:[\s\S]*?(?=\n  accept:)/)?.[0] ?? "";
