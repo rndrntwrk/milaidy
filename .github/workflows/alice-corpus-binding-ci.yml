@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/alice-corpus-binding-ci.yml"
       - ".env.alice-corpus.example"
+      - "biome.json"
       - "packages/agent/src/plugins/alice-corpus/**"
       - "packages/agent/src/runtime/core-plugins.ts"
       - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
@@ -19,6 +20,7 @@ on:
     paths:
       - ".github/workflows/alice-corpus-binding-ci.yml"
       - ".env.alice-corpus.example"
+      - "biome.json"
       - "packages/agent/src/plugins/alice-corpus/**"
       - "packages/agent/src/runtime/core-plugins.ts"
       - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
@@ -61,6 +63,7 @@ jobs:
             "$ROOT/packages/agent/src/runtime" \
             "$ROOT/stubs"
 
+          cp biome.json "$ROOT/biome.json"
           cp -R packages/agent/src/plugins/alice-corpus \
             "$ROOT/packages/agent/src/plugins/alice-corpus"
           cp packages/agent/src/runtime/core-plugins.ts \
@@ -96,7 +99,7 @@ jobs:
             "private": true,
             "type": "module",
             "devDependencies": {
-              "@biomejs/biome": "2.2.0",
+              "@biomejs/biome": "2.4.11",
               "typescript": "5.9.2",
               "vitest": "2.1.8"
             }
@@ -198,14 +201,14 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-command: bun install --frozen-lockfile --ignore-scripts
           install-native-deps: "false"
           run-postinstall: "false"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
-          disable-local-eliza-workspace: "true"
+          disable-local-eliza-workspace: "false"
           prepare-local-eliza-runtime: "true"
-          skip-cloud-submodule: "true"
+          skip-cloud-submodule: "false"
           skip-local-upstreams-postinstall: "true"
 
       - name: Typecheck agent package
