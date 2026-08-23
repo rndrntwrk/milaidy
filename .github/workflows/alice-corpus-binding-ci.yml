@@ -10,8 +10,9 @@ on:
       - "packages/agent/src/plugins/alice-corpus/**"
       - "packages/agent/src/runtime/core-plugins.ts"
       - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/plugin-collector.ts"
+      - "packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts"
       - "packages/agent/src/runtime/eliza.ts"
-      - "packages/agent/src/runtime/eliza.alice-corpus.test.ts"
       - "scripts/verify-alice-corpus-runtime.ts"
       - "docs/operators/alice-corpus-runtime-binding.md"
       - "docs/superpowers/specs/2026-08-22-alice-corpus-runtime-binding-design.md"
@@ -25,8 +26,9 @@ on:
       - "packages/agent/src/plugins/alice-corpus/**"
       - "packages/agent/src/runtime/core-plugins.ts"
       - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/plugin-collector.ts"
+      - "packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts"
       - "packages/agent/src/runtime/eliza.ts"
-      - "packages/agent/src/runtime/eliza.alice-corpus.test.ts"
       - "scripts/verify-alice-corpus-runtime.ts"
   workflow_dispatch:
 
@@ -66,7 +68,7 @@ jobs:
           no-vision-deps: "true"
           disable-local-eliza-workspace: "false"
           prepare-local-eliza-runtime: "false"
-          skip-cloud-submodule: "false"
+          skip-cloud-submodule: "true"
           skip-local-upstreams-postinstall: "false"
 
       - name: Generate local eliza protobuf types
@@ -115,7 +117,7 @@ jobs:
           bunx vitest run
           packages/agent/src/plugins/alice-corpus/*.test.ts
           packages/agent/src/runtime/core-plugins.alice-corpus.test.ts
-          packages/agent/src/runtime/eliza.alice-corpus.test.ts
+          packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts
 
       - name: Check corpus binding format and lint
         run: >-
@@ -123,8 +125,9 @@ jobs:
           packages/agent/src/plugins/alice-corpus
           packages/agent/src/runtime/core-plugins.ts
           packages/agent/src/runtime/core-plugins.alice-corpus.test.ts
+          packages/agent/src/runtime/plugin-collector.ts
+          packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts
           packages/agent/src/runtime/eliza.ts
-          packages/agent/src/runtime/eliza.alice-corpus.test.ts
           scripts/verify-alice-corpus-runtime.ts
 
       - name: Typecheck agent package
