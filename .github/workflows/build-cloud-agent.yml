@@ -202,7 +202,6 @@ jobs:
             packages/agent/src/runtime/alice-production-plugin-policy.test.ts \
             packages/agent/src/runtime/alice-production-runtime-plugin.test.ts \
             packages/agent/src/runtime/alice-production-startup-guard.test.ts \
-            packages/agent/src/runtime/plugin-resolver.test.ts \
             deploy/modal/alice_production_acceptance.test.ts \
             deploy/modal/verify_alice_program_admission.test.ts \
             workers/alice-access-gateway/test/index.test.ts \
@@ -436,6 +435,9 @@ jobs:
             bun run build:views
             echo "Using verified plugin-wallet runtime JS after declaration-only failure"
           }
+
+      - name: Qualify Alice runtime plugin resolver
+        run: bun test packages/agent/src/runtime/plugin-resolver.test.ts
 
       # ── 6. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)

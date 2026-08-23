@@ -156,9 +156,9 @@ function aiReadback() {
           model: {
             mode: "filter",
             values: [
-              "@cf/baai/bge-m3",
-              "@cf/openai/gpt-oss-120b",
-              "@cf/openai/gpt-oss-20b",
+              "baai/bge-m3",
+              "openai/gpt-oss-120b",
+              "openai/gpt-oss-20b",
             ],
           },
           provider: { mode: "filter", values: ["workers-ai"] },
@@ -317,11 +317,24 @@ test("normalizes every admitted AI Gateway safety and budget setting", () => {
   assert.deepEqual(canonical.dynamicRoutes, { activeRouteCount: 0 });
   assert.equal("fallbackConfigured" in canonical, false);
   assert.deepEqual(canonical.spendLimits.rules[0].models, [
+    "baai/bge-m3",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+  ]);
+  assert.deepEqual(canonical.spendLimits.rules[0].providers, ["workers-ai"]);
+});
+
+test("rejects runtime-prefixed model ids in Cloudflare spend filters", () => {
+  const raw = aiReadback();
+  raw.spend_limits.rules[0].model.values = [
     "@cf/baai/bge-m3",
     "@cf/openai/gpt-oss-120b",
     "@cf/openai/gpt-oss-20b",
-  ]);
-  assert.deepEqual(canonical.spendLimits.rules[0].providers, ["workers-ai"]);
+  ];
+  assert.throws(
+    () => buildAliceAiGatewayProviderConfig(raw),
+    /ALICE_AI_GATEWAY_PROVIDER_CONFIG_INVALID/,
+  );
 });
 
 test("rejects missing, unbounded, retained, or externally exported AI settings", () => {
