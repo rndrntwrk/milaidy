@@ -266,6 +266,46 @@ test("cloud release actions are pinned to immutable revisions", () => {
   );
 });
 
+test("qualifies the plugin resolver after its pinned runtime closure is built", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const earlyQualification = workflow.indexOf(
+    "- name: Qualify Alice production-core contracts",
+  );
+  const coreBuild = workflow.indexOf("- name: Build @elizaos/core");
+  const sharedBuild = workflow.indexOf("- name: Build @elizaos/shared");
+  const skillsBuild = workflow.indexOf("- name: Build @elizaos/skills");
+  const vaultBuild = workflow.indexOf("- name: Build @elizaos/vault");
+  const pluginBuild = workflow.indexOf(
+    "- name: Build @elizaos/plugin-agent-skills",
+  );
+  const closureEnd = workflow.indexOf("- name: Build @elizaos/plugin-wallet");
+  const resolverQualification = workflow.indexOf(
+    "- name: Qualify Alice runtime plugin resolver",
+  );
+  const runtimeBuild = workflow.indexOf("- name: Build runtime (tsdown)");
+  assert.ok(
+    earlyQualification >= 0 &&
+      coreBuild > earlyQualification &&
+      sharedBuild > coreBuild &&
+      skillsBuild > sharedBuild &&
+      vaultBuild > skillsBuild &&
+      pluginBuild > vaultBuild &&
+      closureEnd > pluginBuild &&
+      resolverQualification > closureEnd &&
+      runtimeBuild > resolverQualification,
+  );
+  const earlyBlock = workflow.slice(earlyQualification, coreBuild);
+  assert.doesNotMatch(earlyBlock, /runtime\/plugin-resolver\.test\.ts/);
+  const resolverBlock = workflow.slice(resolverQualification, runtimeBuild);
+  assert.match(
+    resolverBlock,
+    /bun test packages\/agent\/src\/runtime\/plugin-resolver\.test\.ts/,
+  );
+});
+
 test("the exact-image smoke proves Alice's production runtime authority boundary", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

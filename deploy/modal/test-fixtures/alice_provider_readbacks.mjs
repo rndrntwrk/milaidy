@@ -310,9 +310,9 @@ export function aliceTestProviderReadbacks({
             model: {
               mode: "filter",
               values: [
-                "@cf/baai/bge-m3",
-                "@cf/openai/gpt-oss-120b",
-                "@cf/openai/gpt-oss-20b",
+                "baai/bge-m3",
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
               ],
             },
             provider: { mode: "filter", values: ["workers-ai"] },

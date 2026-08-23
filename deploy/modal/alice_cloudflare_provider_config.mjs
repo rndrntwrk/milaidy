@@ -5,10 +5,11 @@ import { canonicalAliceJson } from "../../workers/alice-effective-config.js";
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const OWNER_HASH = /^[A-Za-z0-9_-]{43}$/;
 const GOOGLE_CLIENT_ID = /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/;
+// Spend-limit filters use Cloudflare's author/model form, not runtime @cf IDs.
 const ALICE_AI_MODELS = Object.freeze([
-  "@cf/baai/bge-m3",
-  "@cf/openai/gpt-oss-120b",
-  "@cf/openai/gpt-oss-20b",
+  "baai/bge-m3",
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
 ]);
 const ALICE_AI_PROVIDERS = Object.freeze(["workers-ai"]);
 
