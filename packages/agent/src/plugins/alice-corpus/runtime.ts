@@ -1,13 +1,18 @@
 import { resolveAliceCorpusConfig } from "./config.js";
 import { AliceCorpusGraphIndex } from "./graph.js";
 import {
+  type AliceCorpusKnowledgeDocumentDefinition,
+  type AliceCorpusMemoryRuntime,
   purgeAliceCorpusKnowledge,
   seedAliceCorpusKnowledge,
 } from "./knowledge.js";
 import { loadAndValidateCorpus } from "./manifest.js";
 
 export interface AliceCorpusRuntimeDependencies {
-  seed(runtime: unknown, documents: readonly any[]): Promise<void>;
+  seed(
+    runtime: unknown,
+    documents: readonly AliceCorpusKnowledgeDocumentDefinition[],
+  ): Promise<void>;
   documentIdForKey(agentId: string, key: string): string;
   log?(event: string, payload: Record<string, unknown>): void;
 }
@@ -48,7 +53,7 @@ export function clearAliceCorpusRuntimeState(agentId?: string): void {
 }
 
 export async function initializeAliceCorpusRuntime(
-  runtime: any,
+  runtime: AliceCorpusMemoryRuntime,
   env: NodeJS.ProcessEnv = process.env,
   dependencies: AliceCorpusRuntimeDependencies,
 ): Promise<AliceCorpusRuntimeState | null> {
