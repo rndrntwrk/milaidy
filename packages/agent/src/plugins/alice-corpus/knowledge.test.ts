@@ -37,7 +37,7 @@ function fixtureCorpus(projection = "internal") {
 }
 
 describe("Alice corpus knowledge", () => {
-  it("builds stable dossier and record-group documents", () => {
+  it("builds stable dossier and record-group documents without leaking logical paths through filenames", () => {
     const documents = buildAliceCorpusKnowledgeDocuments(fixtureCorpus());
     const dossier = documents.find(
       (document) => document.metadata?.corpusDocumentKind === "dossier",
@@ -49,6 +49,11 @@ describe("Alice corpus knowledge", () => {
     expect(documents).toHaveLength(2);
     expect(dossier?.key).toMatch(
       /alice-corpus:1\.2\.3:internal:dossier:/,
+    );
+    expect(dossier?.filename).toMatch(/^alice-corpus-[a-f0-9]{24}\.md$/);
+    expect(dossier?.filename).not.toContain("system-test");
+    expect(dossier?.metadata?.corpusLogicalPath).toBe(
+      "projections/internal/dossiers/system-test.md",
     );
     expect(dossier?.fragments.length).toBeGreaterThanOrEqual(2);
     expect(records?.fragments).toHaveLength(1);
