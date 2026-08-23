@@ -200,17 +200,21 @@ jobs:
           let workflow = fs.readFileSync(path, "utf8");
           workflow = workflow.replace("    continue-on-error: true\n", "");
 
-          const oldRegression = `      - name: Run exact corpus admission regression
-        run: >-
-          bunx vitest run
-          packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts
-`;
-          const exactRegression = `      - name: Run exact corpus admission regression
-        working-directory: packages/agent
-        run: >-
-          bunx vitest run
-          src/runtime/eliza.alice-corpus-admission.test.ts
-`;
+          const oldRegression = [
+            "      - name: Run exact corpus admission regression",
+            "        run: >-",
+            "          bunx vitest run",
+            "          packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts",
+            "",
+          ].join("\n");
+          const exactRegression = [
+            "      - name: Run exact corpus admission regression",
+            "        working-directory: packages/agent",
+            "        run: >-",
+            "          bunx vitest run",
+            "          src/runtime/eliza.alice-corpus-admission.test.ts",
+            "",
+          ].join("\n");
 
           if (workflow.includes(oldRegression)) {
             workflow = workflow.replace(oldRegression, exactRegression);
