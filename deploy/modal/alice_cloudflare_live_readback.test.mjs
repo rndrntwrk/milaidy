@@ -667,22 +667,29 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       });
     }
     if (pathname === `/accounts/${accountId}/workers/domains`) {
-      return json({
-        success: true,
-        result: [
-          ...(includeCustomDomain ? [{
-              hostname: "alice.rndrntwrk.com",
-              service: "unadmitted-worker",
-              zone_id: zoneId,
-              zone_name: "rndrntwrk.com",
-            }] : []),
-          ...(includeReleaseCustomDomain ? [{
-            hostname: "alice-release.rndrntwrk.com",
-            service: "unadmitted-release-worker",
+      const domains = [
+        ...(includeCustomDomain ? [{
+            hostname: "alice.rndrntwrk.com",
+            service: "unadmitted-worker",
             zone_id: zoneId,
             zone_name: "rndrntwrk.com",
           }] : []),
-        ],
+        ...(includeReleaseCustomDomain ? [{
+          hostname: "alice-release.rndrntwrk.com",
+          service: "unadmitted-release-worker",
+          zone_id: zoneId,
+          zone_name: "rndrntwrk.com",
+        }] : []),
+      ];
+      return json({
+        success: true,
+        result: domains,
+        result_info: {
+          page: 1,
+          per_page: 100,
+          count: domains.length,
+          total_count: domains.length,
+        },
       });
     }
     if (pathname === `/accounts/${accountId}/queues`) {

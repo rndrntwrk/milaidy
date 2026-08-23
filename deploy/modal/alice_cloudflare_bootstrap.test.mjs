@@ -197,7 +197,6 @@ test("finds the exact paused queue across every provider page without mutating",
         per_page: 100,
         count: page === 1 ? 100 : 1,
         total_count: 101,
-        total_pages: 2,
       },
     });
   };
@@ -211,7 +210,7 @@ test("finds the exact paused queue across every provider page without mutating",
   assert.equal(calls[1].parsed.searchParams.get("page"), "2");
 });
 
-test("accepts Cloudflare's observed page-one empty queue inventory", async () => {
+test("accepts Cloudflare's observed page-one metadata without total_pages", async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {
     const parsed = new URL(url);
@@ -241,7 +240,6 @@ test("accepts Cloudflare's observed page-one empty queue inventory", async () =>
         per_page: 100,
         count: 0,
         total_count: 0,
-        total_pages: 0,
       },
     });
   };
