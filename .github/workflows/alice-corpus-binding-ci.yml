@@ -14,6 +14,7 @@ on:
       - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
       - "packages/agent/src/runtime/plugin-collector.ts"
       - "packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts"
       - "scripts/verify-alice-corpus-runtime.ts"
   pull_request:
     branches:
@@ -28,6 +29,7 @@ on:
       - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
       - "packages/agent/src/runtime/plugin-collector.ts"
       - "packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts"
       - "scripts/verify-alice-corpus-runtime.ts"
   workflow_dispatch:
 
@@ -451,6 +453,11 @@ jobs:
             cd eliza
             node packages/shared/scripts/generate-keywords.mjs --target ts
           fi
+
+      - name: Run exact corpus admission regression
+        run: >-
+          bunx vitest run
+          packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts
 
       - name: Typecheck agent package
         working-directory: packages/agent
