@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildAliceBootstrapCreationCommand,
   buildAliceBootstrapPromotionCommand,
   buildAliceBootstrapControlConfig,
   ensureAliceBootstrapQueue,
   extractAliceBootstrapNamespaceIds,
+  parseAliceWranglerDeployVersionId,
   verifyAliceBootstrapBucket,
 } from "./alice_cloudflare_bootstrap.mjs";
 import fs from "node:fs";
@@ -100,6 +102,26 @@ test("extracts only the exact two provider-assigned Durable Object namespaces", 
 
 test("deploys the unrouted fail-closed bootstrap before attaching one paused consumer", () => {
   assert.deepEqual(
+    buildAliceBootstrapCreationCommand({
+      controlMain: "/release/alice-production-control/index.js",
+      configPath: "/release/control.bootstrap.wrangler.json",
+      sourceCommit: "1".repeat(40),
+      releaseRunId: "123-1",
+    }),
+    [
+      "deploy",
+      "/release/alice-production-control/index.js",
+      "--config",
+      "/release/control.bootstrap.wrangler.json",
+      "--no-bundle",
+      "--strict",
+      "--tag",
+      `alice-continuity-bootstrap-${"1".repeat(40)}-123-1`,
+      "--message",
+      `Alice unrouted fail-closed continuity bootstrap ${"1".repeat(40)}`,
+    ],
+  );
+  assert.deepEqual(
     buildAliceBootstrapPromotionCommand({
       versionId: "11111111-1111-4111-8111-111111111111",
       configPath: "/release/control.bootstrap.wrangler.json",
@@ -127,8 +149,31 @@ test("deploys the unrouted fail-closed bootstrap before attaching one paused con
   assert.ok(main.indexOf("verifyProtectedRefStillExact") >= 0);
   assert.ok(main.indexOf("verifyProtectedRefStillExact") < main.indexOf("ensureAliceBootstrapQueue"));
   assert.ok(main.indexOf("buildAliceBootstrapPromotionCommand") >= 0);
+  assert.ok(main.indexOf("buildAliceBootstrapCreationCommand") >= 0);
+  assert.ok(main.indexOf("buildAliceBootstrapCreationCommand") < main.indexOf("ensureConsumer"));
   assert.ok(main.indexOf("buildAliceBootstrapPromotionCommand") < main.indexOf("ensureConsumer"));
   assert.ok(main.indexOf("ensureConsumer") < main.indexOf("fetchAliceCloudflareContinuityState"));
+});
+
+test("parses only one exact pinned-Wrangler first-deploy version", () => {
+  const versionId = "11111111-1111-4111-8111-111111111111";
+  assert.equal(
+    parseAliceWranglerDeployVersionId(
+      `Uploaded alice-production-control (1.23 sec)\nCurrent Version ID: ${versionId}\n`,
+    ),
+    versionId,
+  );
+  for (const output of [
+    `Worker Version ID: ${versionId}\n`,
+    `Current version ID: ${versionId}\n`,
+    `Current Version ID: not-a-version\n`,
+    `Current Version ID: ${versionId}\nCurrent Version ID: ${versionId}\n`,
+  ]) {
+    assert.throws(
+      () => parseAliceWranglerDeployVersionId(output),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_DEPLOY_VERSION_INVALID/,
+    );
+  }
 });
 
 test("snapshots every Alice provider surface twice before the first mutation", () => {
