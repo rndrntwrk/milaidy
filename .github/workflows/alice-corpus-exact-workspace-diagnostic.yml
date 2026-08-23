@@ -1,0 +1,172 @@
+name: Alice Corpus Exact Workspace Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/alice-corpus-runtime-binding-2026-08-22
+    paths:
+      - ".github/workflows/alice-corpus-exact-workspace-diagnostic.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: alice-corpus-exact-workspace-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: "1.3.14"
+
+jobs:
+  diagnose:
+    name: Rebuild exact workspace without mutating the branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Free disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python build support
+        run: pip install setuptools
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Initialize pinned Eliza workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync -- eliza
+          git submodule update --init eliza
+
+          EXPECTED_SHA="$(git ls-tree HEAD eliza | awk '{print $3}')"
+          ACTUAL_SHA="$(git -C eliza rev-parse HEAD)"
+          if [ -z "$EXPECTED_SHA" ] || [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+            echo "::error::Eliza submodule mismatch: expected $EXPECTED_SHA, got $ACTUAL_SHA"
+            exit 1
+          fi
+
+          git -C eliza submodule sync --recursive
+          git -C eliza submodule update --init --recursive
+          echo "ELIZA_EXACT_SHA=$ACTUAL_SHA" >> "$GITHUB_ENV"
+
+      - name: Apply repository Eliza patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f scripts/apply-eliza-ci-patches.mjs ]; then
+            node scripts/apply-eliza-ci-patches.mjs
+          fi
+
+      - name: Prepare local private-channel workspaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp package.json "$RUNNER_TEMP/package.before.json"
+          cp bun.lock "$RUNNER_TEMP/bun.before.lock"
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const path = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          const removed = new Set([
+            "!plugins/plugin-bluebubbles/typescript",
+            "!plugins/plugin-signal/typescript",
+          ]);
+          pkg.workspaces = pkg.workspaces.filter((entry) => !removed.has(entry));
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+
+          for manifest in \
+            plugins/plugin-bluebubbles/typescript/package.json \
+            plugins/plugin-signal/typescript/package.json; do
+            test -f "$manifest" || {
+              echo "::error::Required local workspace is missing: $manifest"
+              exit 1
+            }
+          done
+
+      - name: Regenerate lock in the exact workspace
+        shell: bash
+        run: bun install --no-frozen-lockfile --ignore-scripts
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
+
+      - name: Record workspace delta
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff -- package.json bun.lock > "$RUNNER_TEMP/exact-workspace.diff" || true
+          git diff --stat -- package.json bun.lock || true
+          git status --short -- package.json bun.lock || true
+
+      - name: Generate local Eliza protobuf types
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d eliza/packages/schemas ] \
+            && [ -f eliza/packages/schemas/buf.gen.yaml ] \
+            && [ ! -f eliza/packages/core/src/types/generated/eliza/v1/agent_pb.ts ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
+      - name: Generate Eliza keyword data
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f eliza/packages/shared/scripts/generate-keywords.mjs ]; then
+            cd eliza
+            node packages/shared/scripts/generate-keywords.mjs --target ts
+          fi
+
+      - name: Run exact corpus admission regression
+        run: >-
+          bunx vitest run
+          packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts
+
+      - name: Typecheck agent package
+        working-directory: packages/agent
+        run: bun run typecheck
+
+      - name: Build agent package
+        working-directory: packages/agent
+        run: bun run build
+
+      - name: Upload exact workspace diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-corpus-exact-workspace-${{ github.sha }}
+          path: |
+            package.json
+            bun.lock
+            ${{ runner.temp }}/package.before.json
+            ${{ runner.temp }}/bun.before.lock
+            ${{ runner.temp }}/exact-workspace.diff
+          if-no-files-found: error
+          retention-days: 3
