@@ -8,6 +8,7 @@ import { seedBundledKnowledge } from "../../runtime/default-knowledge.js";
 import { runtimeKnowledgeEnabled } from "../../runtime/native-runtime-features.js";
 import { aliceCorpusGraphActions } from "./actions.js";
 import { resolveAliceCorpusConfig } from "./config.js";
+import type { AliceCorpusMemoryRuntime } from "./knowledge.js";
 import { initializeAliceCorpusRuntime } from "./runtime.js";
 
 function corpusDocumentId(agentId: string, key: string): string {
@@ -27,18 +28,22 @@ export function createAliceCorpusPlugin(): Plugin {
         );
       }
 
-      await initializeAliceCorpusRuntime(runtime, process.env, {
-        seed: async (targetRuntime, documents) => {
-          await seedBundledKnowledge(
-            targetRuntime as AgentRuntime,
-            documents as Parameters<typeof seedBundledKnowledge>[1],
-          );
+      await initializeAliceCorpusRuntime(
+        runtime as unknown as AliceCorpusMemoryRuntime,
+        process.env,
+        {
+          seed: async (targetRuntime, documents) => {
+            await seedBundledKnowledge(
+              targetRuntime as AgentRuntime,
+              documents as Parameters<typeof seedBundledKnowledge>[1],
+            );
+          },
+          documentIdForKey: corpusDocumentId,
+          log: (event, payload) => {
+            logger.info(`[alice-corpus] ${event} ${JSON.stringify(payload)}`);
+          },
         },
-        documentIdForKey: corpusDocumentId,
-        log: (event, payload) => {
-          logger.info(`[alice-corpus] ${event} ${JSON.stringify(payload)}`);
-        },
-      });
+      );
     },
     actions: aliceCorpusGraphActions,
   };
