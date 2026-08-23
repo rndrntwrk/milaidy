@@ -1,22 +1,35 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { resolveAliceCorpusConfig } from "./config.js";
+import {
+  type AliceCorpusConfig,
+  resolveAliceCorpusConfig,
+} from "./config.js";
 import { loadAndValidateCorpus } from "./manifest.js";
 import {
   createCorpusFixture,
   rewriteCorpusFixtureChecksums,
 } from "./test-fixtures.js";
 
+function fixtureConfig(
+  root: string,
+  overrides: NodeJS.ProcessEnv = {},
+): AliceCorpusConfig {
+  const config = resolveAliceCorpusConfig({
+    ALICE_CORPUS_ROOT: root,
+    ALICE_CORPUS_PROJECTION: "internal",
+    ...overrides,
+  });
+  if (!config) {
+    throw new Error("Expected the Alice corpus fixture to resolve a config");
+  }
+  return config;
+}
+
 describe("loadAndValidateCorpus", () => {
   it("validates a physical projection and reports deterministic counts", async () => {
     const { root } = await createCorpusFixture();
-    const config = resolveAliceCorpusConfig({
-      ALICE_CORPUS_ROOT: root,
-      ALICE_CORPUS_PROJECTION: "internal",
-    });
-
-    const corpus = await loadAndValidateCorpus(config!);
+    const corpus = await loadAndValidateCorpus(fixtureConfig(root));
 
     expect(corpus.manifest.version).toBe("1.0.0");
     expect(corpus.records).toHaveLength(1);
@@ -28,34 +41,24 @@ describe("loadAndValidateCorpus", () => {
 
   it("rejects a graph edge whose endpoint is absent", async () => {
     const { root } = await createCorpusFixture({ badEdge: true });
-    const config = resolveAliceCorpusConfig({
-      ALICE_CORPUS_ROOT: root,
-      ALICE_CORPUS_PROJECTION: "internal",
-    });
 
-    await expect(loadAndValidateCorpus(config!)).rejects.toThrow(
+    await expect(loadAndValidateCorpus(fixtureConfig(root))).rejects.toThrow(
       /missing endpoint/i,
     );
   });
 
   it("rejects a record outside the selected visibility projection", async () => {
     const { root } = await createCorpusFixture({ badVisibility: true });
-    const config = resolveAliceCorpusConfig({
-      ALICE_CORPUS_ROOT: root,
-      ALICE_CORPUS_PROJECTION: "internal",
-    });
 
-    await expect(loadAndValidateCorpus(config!)).rejects.toThrow(/visibility/i);
+    await expect(loadAndValidateCorpus(fixtureConfig(root))).rejects.toThrow(
+      /visibility/i,
+    );
   });
 
   it("rejects a declared record-count mismatch", async () => {
     const { root } = await createCorpusFixture({ declaredRecordCount: 2 });
-    const config = resolveAliceCorpusConfig({
-      ALICE_CORPUS_ROOT: root,
-      ALICE_CORPUS_PROJECTION: "internal",
-    });
 
-    await expect(loadAndValidateCorpus(config!)).rejects.toThrow(
+    await expect(loadAndValidateCorpus(fixtureConfig(root))).rejects.toThrow(
       /record count/i,
     );
   });
@@ -66,12 +69,10 @@ describe("loadAndValidateCorpus", () => {
       path.join(root, "projections/internal/dossiers/system-test.md"),
       "tampered",
     );
-    const config = resolveAliceCorpusConfig({
-      ALICE_CORPUS_ROOT: root,
-      ALICE_CORPUS_PROJECTION: "internal",
-    });
 
-    await expect(loadAndValidateCorpus(config!)).rejects.toThrow(/checksum/i);
+    await expect(loadAndValidateCorpus(fixtureConfig(root))).rejects.toThrow(
+      /checksum/i,
+    );
   });
 
   it("rejects full verification when a required selected input is omitted from the checksum manifest", async () => {
@@ -81,16 +82,15 @@ describe("loadAndValidateCorpus", () => {
       .split(/\r?\n/)
       .filter((line) => line && !line.includes("dossiers/system-test.md"));
     await writeFile(checksumPath, `${checksums.join("\n")}\n`);
-    const config = resolveAliceCorpusConfig({
-      ALICE_CORPUS_ROOT: root,
-      ALICE_CORPUS_PROJECTION: "internal",
-      ALICE_CORPUS_VERIFY: "full",
-      ALICE_CORPUS_STRICT: "0",
-    });
 
-    await expect(loadAndValidateCorpus(config!)).rejects.toThrow(
-      /missing checksum.*dossiers\/system-test\.md/i,
-    );
+    await expect(
+      loadAndValidateCorpus(
+        fixtureConfig(root, {
+          ALICE_CORPUS_VERIFY: "full",
+          ALICE_CORPUS_STRICT: "0",
+        }),
+      ),
+    ).rejects.toThrow(/missing checksum.*dossiers\/system-test\.md/i);
   });
 
   it("rejects malformed record rows before they can enter retrieval", async () => {
@@ -106,12 +106,8 @@ describe("loadAndValidateCorpus", () => {
       })}\n`,
     );
     await rewriteCorpusFixtureChecksums(root, files);
-    const config = resolveAliceCorpusConfig({
-      ALICE_CORPUS_ROOT: root,
-      ALICE_CORPUS_PROJECTION: "internal",
-    });
 
-    await expect(loadAndValidateCorpus(config!)).rejects.toThrow(
+    await expect(loadAndValidateCorpus(fixtureConfig(root))).rejects.toThrow(
       /record.*title/i,
     );
   });
