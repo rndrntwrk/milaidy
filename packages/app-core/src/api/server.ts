@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type AgentRuntime, logger } from "@elizaos/core";
+import { isAliceProductionRuntime } from "@miladyai/agent/api/alice-production-guard";
 import { handleCloudBillingRoute } from "@miladyai/agent/api/cloud-billing-routes";
 import { handleCloudCompatRoute } from "@miladyai/agent/api/cloud-compat-routes";
 import { handleMiscRoutes } from "@miladyai/agent/api/misc-routes";
@@ -174,7 +175,10 @@ import { getMiladyStartupEmbeddingAugmentation } from "../runtime/milady-startup
 import { hydrateWalletKeysFromNodePlatformSecureStore } from "../security/hydrate-wallet-keys-from-platform-store";
 import { deleteWalletSecretsFromOsStore } from "../security/wallet-os-store-actions";
 import { clearCloudSecrets, getCloudSecret } from "./cloud-secrets";
-import { buildKubeHealthResponse } from "./kube-health";
+import {
+  buildKubeHealthResponse,
+  shouldServeCompatKubeHealthRoute,
+} from "./kube-health";
 import { clearPersistedOnboardingConfig } from "./provider-switch-config";
 
 // ---------------------------------------------------------------------------
@@ -1252,10 +1256,11 @@ export function patchHttpCreateServerForMiladyCompat(
 
       const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
       if (
-        req.method === "GET" &&
-        (pathname === "/health" ||
-          pathname === "/health/live" ||
-          pathname === "/health/ready")
+        shouldServeCompatKubeHealthRoute(
+          req.method,
+          pathname,
+          isAliceProductionRuntime(process.env),
+        )
       ) {
         const health = buildKubeHealthResponse(
           pathname,
