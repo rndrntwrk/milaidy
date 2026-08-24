@@ -114,7 +114,8 @@ jobs:
 
           artifact_record="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}/artifacts?per_page=100" \
             --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | [.digest, .expired] | @tsv")"
-          test "$(printf '%s' "$artifact_record" | wc -l | tr -d ' ')" = "1"
+          artifact_record_count="$(printf '%s' "$artifact_record" | awk 'NF { count++ } END { print count + 0 }')"
+          test "$artifact_record_count" = "1"
           test "$(printf '%s' "$artifact_record" | cut -f1)" = "$ARTIFACT_DIGEST"
           test "$(printf '%s' "$artifact_record" | cut -f2)" = "false"
 
