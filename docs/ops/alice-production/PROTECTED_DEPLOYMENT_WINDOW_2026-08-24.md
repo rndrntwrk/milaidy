@@ -2,7 +2,7 @@
 
 - Owner: Alice production deployment worker
 - Opened: `2026-08-24T16:45:44Z`
-- Expires: `2026-08-24T20:45:44Z`
+- Dispatch cutoff: `2026-08-24T18:15:44Z`
 - Protected base before this record: `ef1eb4eec7a96857c1a28fcd20ddba73239e1656`
 - Qualified runtime tree: `8bafb6473d920ae746321521fd11cc6e0cadba56`
 - Canonical Eliza pin: `a21d401bf7429bc8c794698b20832512b5315187`
@@ -15,8 +15,10 @@ streaming, trading, funds movement, custody, and signing remain disabled.
 
 No staging infrastructure is provisioned. GitHub owns the ephemeral build and
 smoke runners; their workflow cleanup removes candidate containers and local
-artifacts. The independent recovery watchdog terminates at its four-hour
-timeout if the deployment does not select it.
+artifacts. Each independent recovery job stops selecting a parent after 360
+15-second attempts (about 90 minutes) and retains a 240-minute hard timeout
+only after the matching deployment is selected. Dispatch after the recorded
+cutoff is invalid and requires a new protected production window.
 
 The window is complete only when the exact protected source has one immutable
 image and Worker-bundle build, the signed release binds the effective Worker
