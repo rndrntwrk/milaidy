@@ -412,10 +412,16 @@ function validateCloudflarePolicy(
       !["expires_on", "id", "not_before", "status"].includes(key)) ||
     !CLOUDFLARE_TOKEN_ID.test(providerReadback.result.id ?? "") ||
     providerReadback.result.status !== "active" ||
-    optionalTimestamp(providerReadback.result.not_before) !==
-      optionalTimestamp(providerPolicyReadback?.token?.result?.not_before) ||
-    optionalTimestamp(providerReadback.result.expires_on) !==
-      optionalTimestamp(providerPolicyReadback?.token?.result?.expires_on) ||
+    (Object.prototype.hasOwnProperty.call(
+      providerReadback.result,
+      "not_before",
+    ) && optionalTimestamp(providerReadback.result.not_before) !==
+      optionalTimestamp(providerPolicyReadback?.token?.result?.not_before)) ||
+    (Object.prototype.hasOwnProperty.call(
+      providerReadback.result,
+      "expires_on",
+    ) && optionalTimestamp(providerReadback.result.expires_on) !==
+      optionalTimestamp(providerPolicyReadback?.token?.result?.expires_on)) ||
     sha256(providerReadback.result.id) !== policy.tokenIdSha256
   ) {
     invalid();

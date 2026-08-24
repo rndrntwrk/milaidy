@@ -281,6 +281,35 @@ test("binds the standard Cloudflare v4 verify response envelope", () => {
   }));
 });
 
+test("binds verify identity when token validity is only in policy detail", () => {
+  const tokenId = "0123456789abcdef0123456789abcdef";
+  const provider = cloudflareProviderFixture({
+    tokenId,
+    expiresOn: "2099-01-01T00:00:00Z",
+  });
+  const policy = cloudflarePolicy(tokenId, provider.policy);
+  const encodedPolicy = encodeAliceRecoveryCredentialPolicy(policy);
+
+  assert.doesNotThrow(() => buildAliceRecoveryCredentialReadiness({
+    ...common(),
+    provider: "cloudflare",
+    encodedPolicy,
+    expectedPolicySha256: digest(Buffer.from(encodedPolicy, "base64url")),
+    providerReadback: {
+      success: true,
+      errors: [],
+      messages: [{
+        code: 10000,
+        message: "This API Token is valid and active",
+        type: null,
+      }],
+      result: { id: tokenId, status: "active" },
+    },
+    providerPolicyReadback: provider.policy,
+    observedAtMs,
+  }));
+});
+
 test("rejects unrecognized recovery readback fields and Cloudflare errors", () => {
   const modalCredentialId = "ak-test-modal-recovery-token-id";
   const modalPolicy = {
