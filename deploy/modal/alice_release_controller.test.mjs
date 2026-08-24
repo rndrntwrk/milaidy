@@ -40,7 +40,7 @@ function ownerToken(now, overrides = {}) {
     iss: "https://rndrntwrk.cloudflareaccess.com",
     aud: "alice-access-audience",
     sub: "owner-subject",
-    email: "owner@example.test",
+    email: "alice-owner@rndrntwrk.com",
     iat: now - 10,
     nbf: now - 10,
     exp: now + 300,
@@ -52,7 +52,7 @@ test("validates a fresh owner authorization tuple before protected use", async (
   const now = 1_787_400_000;
   const ownerEmailSha256 = crypto
     .createHash("sha256")
-    .update("owner@example.test")
+    .update("alice-owner@rndrntwrk.com")
     .digest("base64url");
   const result = await validateAliceOwnerAuthorization(ownerToken(now), {
     issuer: "https://rndrntwrk.cloudflareaccess.com",
@@ -77,7 +77,7 @@ test("accepts the configured 24-hour Access session but rejects a longer owner t
   const now = 1_787_400_000;
   const ownerEmailSha256 = crypto
     .createHash("sha256")
-    .update("owner@example.test")
+    .update("alice-owner@rndrntwrk.com")
     .digest("base64url");
   const options = {
     issuer: "https://rndrntwrk.cloudflareaccess.com",

@@ -20,7 +20,7 @@ const envelope: ProgramEnvelope = {
     runtimeImage: "ghcr.io/rndrntwrk/milaidy-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     runtimeBuildManifestSha256: `sha256:${"c".repeat(64)}`,
     deploymentManifestSha256: `sha256:${"d".repeat(64)}`,
-    elizaCommit: "e219c232e21d8b61017129647130830d811ee45a",
+    elizaCommit: "a21d401bf7429bc8c794698b20832512b5315187",
     modalRevision: 49,
     policyHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     rollbackBoundary: "modal:alice-runtime:v49",

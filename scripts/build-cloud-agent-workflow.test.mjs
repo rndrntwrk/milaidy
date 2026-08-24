@@ -134,7 +134,7 @@ test("cloud builds hydrate and validate Alice's runtime avatar assets before Vit
   );
 });
 
-test("cloud builds hydrate the tracked Eliza commit from the protected Alice fork", () => {
+test("cloud builds hydrate the tracked Eliza commit from the exact reviewed PR head", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -146,12 +146,17 @@ test("cloud builds hydrate the tracked Eliza commit from the protected Alice for
     /git clone --no-checkout --filter=blob:none https:\/\/github\.com\/rndrntwrk\/eliza\.git eliza/,
   );
   assert.match(workflow, /git -C eliza fetch --depth=1 origin "\$eliza_sha"/);
-  assert.match(workflow, /expected_eliza_sha="e219c232e21d8b61017129647130830d811ee45a"/);
+  assert.match(workflow, /expected_eliza_sha="a21d401bf7429bc8c794698b20832512b5315187"/);
   assert.match(
     workflow,
-    /git -C eliza fetch --depth=1 origin refs\/heads\/alice\/runtime-stable-2026-08-22:refs\/remotes\/origin\/alice\/runtime-stable-2026-08-22/,
+    /reviewed_eliza_ref="refs\/pull\/5\/head"/,
   );
-  assert.match(workflow, /test "\$eliza_sha" = "\$protected_eliza_sha"/);
+  assert.match(
+    workflow,
+    /git -C eliza fetch --depth=1 origin "\$reviewed_eliza_ref:refs\/remotes\/origin\/alice-reviewed-pr-5"/,
+  );
+  assert.match(workflow, /test "\$reviewed_eliza_sha" = "\$expected_eliza_sha"/);
+  assert.match(workflow, /test "\$eliza_sha" = "\$reviewed_eliza_sha"/);
   assert.match(workflow, /git -C eliza checkout --detach "\$eliza_sha"/);
   assert.match(workflow, /test "\$\(git -C eliza rev-parse HEAD\)" = "\$eliza_sha"/);
   assert.match(workflow, /alice\/runtime-stable-2026-08-22/);

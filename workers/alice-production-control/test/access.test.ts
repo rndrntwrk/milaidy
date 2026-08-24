@@ -129,7 +129,7 @@ describe("Cloudflare Access owner verification", () => {
 
   test("accepts a signed, unexpired JWT for the exact Access audience and owner", async () => {
     const now = 1_787_400_000;
-    const ownerEmail = "owner@example.test";
+    const ownerEmail = "alice-owner@rndrntwrk.com";
     const ownerEmailSha256 = await sha256Base64Url(ownerEmail.toLowerCase());
     const { token, jwks } = await signedJwt({
       iss: "https://rndrntwrk.cloudflareaccess.com",
@@ -165,7 +165,7 @@ describe("Cloudflare Access owner verification", () => {
 
   test("fails closed for a bad signature, issuer, audience, owner, or time window", async () => {
     const now = 1_787_400_000;
-    const ownerEmail = "owner@example.test";
+    const ownerEmail = "alice-owner@rndrntwrk.com";
     const config = {
       issuer: "https://rndrntwrk.cloudflareaccess.com",
       audience: "alice-access-audience",
@@ -206,7 +206,7 @@ describe("Cloudflare Access owner verification", () => {
 
   test("fails closed when key discovery is unavailable, invalid, or missing the signing key", async () => {
     const now = 1_787_400_000;
-    const ownerEmail = "owner@example.test";
+    const ownerEmail = "alice-owner@rndrntwrk.com";
     const ownerEmailSha256 = await sha256Base64Url(ownerEmail);
     const { token } = await signedJwt({
       iss: "https://rndrntwrk.cloudflareaccess.com",
@@ -239,7 +239,7 @@ describe("Cloudflare Access owner verification", () => {
     const config = {
       issuer: "https://rndrntwrk.cloudflareaccess.com",
       audience: "alice-access-audience",
-      ownerEmailSha256: await sha256Base64Url("owner@example.test"),
+      ownerEmailSha256: await sha256Base64Url("alice-owner@rndrntwrk.com"),
     };
     let keyLoads = 0;
     const loadJwks = async () => {

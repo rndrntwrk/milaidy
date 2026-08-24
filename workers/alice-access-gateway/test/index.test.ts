@@ -21,7 +21,7 @@ import { handleRequest } from "../src/index";
 
 const encoder = new TextEncoder();
 const now = 1_787_400_000;
-const ownerEmail = "owner@example.test";
+const ownerEmail = "alice-owner@rndrntwrk.com";
 const ownerEmailSha256 = await sha256Base64Url(ownerEmail);
 const providerReadbacks = aliceTestProviderReadbacks({
   accessAudience: "alice-access-audience",
@@ -121,9 +121,11 @@ function runtimeProof(overrides: Record<string, unknown> = {}) {
       "@elizaos/plugin-openai",
     ],
     runtimePluginNames: [
-      "@elizaos/plugin-openai",
-      "@elizaos/plugin-sql",
       "alice-production-response-only",
+      "basic-capabilities",
+      "core-security-hooks",
+      "openai",
+      "sql",
     ],
     actionNames: [],
     evaluatorNames: [],
@@ -1087,6 +1089,43 @@ describe("Alice Access gateway", () => {
         },
         { runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"0".repeat(64)}` },
       ),
+      now,
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "RUNTIME_RELEASE_MISMATCH",
+    });
+    expect(ownerPathCalls).toBe(0);
+  });
+
+  test("fails closed before owner traffic when Modal omits an inert framework plugin", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+    let ownerPathCalls = 0;
+    const response = await handleRequest(
+      new Request("https://alice.rndrntwrk.com/api/health", {
+        headers: { "cf-access-jwt-assertion": token },
+      }),
+      env,
+      async (request) => {
+        if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+          return Response.json(jwks);
+        }
+        if (new URL(request.url).pathname === "/api/alice-production/proof") {
+          return Response.json({
+            ...runtimeProof(),
+            runtimePluginNames: [
+              "alice-production-response-only",
+              "basic-capabilities",
+              "openai",
+              "sql",
+            ],
+          });
+        }
+        ownerPathCalls += 1;
+        return Response.json({ unsafe: true });
+      },
       now,
     );
     expect(response.status).toBe(503);

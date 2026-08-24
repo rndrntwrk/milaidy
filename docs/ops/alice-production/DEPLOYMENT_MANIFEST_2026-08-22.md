@@ -15,14 +15,19 @@ other.
 - Candidate implementation branch: `feat/alice-production-core-2026-08-22`
 - Candidate base: `521c1697089e43e10158acad0582f2b000514520`
 - Eliza fork: `rndrntwrk/eliza`
-- Protected Eliza branch: `alice/runtime-stable-2026-08-22`
-- Exact Eliza gitlink: `e219c232e21d8b61017129647130830d811ee45a`
+- Intended protected Eliza merge target: `alice/runtime-stable-2026-08-22`
+- Canonical reviewed Eliza source ref: `refs/pull/5/head` (PR #5; remote and
+  independently reviewed, but unmerged because the one-account fork's branch
+  rule requires approval from someone other than the last pusher)
+- Exact Eliza gitlink: `a21d401bf7429bc8c794698b20832512b5315187`
 - Stream source evidence only: `d0d227d6`; Stream is not deployed or changed by
   this release.
 
 The parent gitlink is authoritative. Neither Milady nor Eliza `develop` floats
-into this release. The build workflow checks out the exact parent commit and
-hydrates the exact Eliza gitlink from the protected organization fork.
+into this release. The build workflow checks out the exact parent commit,
+fetches the reviewed PR ref from the organization fork, requires it to resolve
+to the exact gitlink above, and checks out that commit detached. Any PR-head
+drift fails the build before dependencies or credentials are used.
 The image build also pins the reviewed linux/amd64 manifests for Bun 1.3.14
 (`sha256:50317d83...`) and Node 24.19.0 bookworm-slim
 (`sha256:65932751...`); mutable base-image tags are not release inputs.
@@ -135,7 +140,8 @@ non-versioned observability settings from Cloudflare. The provider verifier
 must reproduce the signed Access, control, or AI Worker config digest and must
 reject extra/substituted bindings, split traffic, route drift, preview drift,
 or observability drift. Separately, normalize and hash the live zone-scoped
-Access application/policy order, 555ID rule, required device-posture rules, and
+Access application/policy order, exact-owner One-time PIN rule, required
+device-posture rules, and
 AI Gateway `alice-production` settings; both hashes must equal the signed
 manifest. The post-live attestation records only hashes, version IDs, script
 etags, and release provenance, never owner email or secret values.

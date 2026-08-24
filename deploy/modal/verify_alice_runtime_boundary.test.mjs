@@ -14,7 +14,13 @@ const safeProof = {
     "@elizaos/plugin-sql",
     "@elizaos/plugin-openai",
   ],
-  runtimePluginNames: ["alice-production-response-only", "openai", "sql"],
+  runtimePluginNames: [
+    "alice-production-response-only",
+    "basic-capabilities",
+    "core-security-hooks",
+    "openai",
+    "sql",
+  ],
   actionNames: [],
   evaluatorNames: [],
   serviceTypes: [],
@@ -43,7 +49,7 @@ test("accepts only the exact post-init response-only closure", () => {
     elizaCommit: safeProof.release.elizaCommit,
   }), {
     ok: true,
-    pluginCount: 3,
+    pluginCount: 5,
     actionCount: 0,
     evaluatorCount: 0,
     serviceTypeCount: 0,
@@ -55,6 +61,16 @@ test("accepts only the exact post-init response-only closure", () => {
 test("rejects every unexpected plugin, action, worker, service, or release identity", () => {
   for (const candidate of [
     { ...safeProof, runtimePluginNames: [...safeProof.runtimePluginNames, "innocent-looking"] },
+    {
+      ...safeProof,
+      runtimePluginNames: [
+        "alice-production-response-only",
+        "basic-capabilities",
+        "basic-capabilities",
+        "openai",
+        "sql",
+      ],
+    },
     { ...safeProof, actionNames: ["REPLY"] },
     { ...safeProof, evaluatorNames: ["BACKGROUND_EVALUATOR"] },
     { ...safeProof, serviceTypes: ["AUTONOMY"] },

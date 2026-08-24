@@ -4,7 +4,6 @@ import { canonicalAliceJson } from "../../workers/alice-effective-config.js";
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const OWNER_HASH = /^[A-Za-z0-9_-]{43}$/;
-const GOOGLE_CLIENT_ID = /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/;
 // Spend-limit filters use Cloudflare's author/model form, not runtime @cf IDs.
 const ALICE_AI_MODELS = Object.freeze([
   "baai/bge-m3",
@@ -197,34 +196,13 @@ export async function buildAliceAccessPolicyProviderConfig(readback) {
     if (
       !UUID.test(identityProviderId) ||
       matchingProviders.length !== 1 ||
-      identityProvider?.name !== "555ID" ||
-      identityProvider?.type !== "google-apps" ||
-      !exactKeys(identityProvider?.config, [
-        "apps_domain",
-        "claims",
-        "client_id",
-        "client_secret",
-        "email_claim_name",
-      ]) ||
-      identityProvider.config.apps_domain !== "sw4p.io" ||
-      !Array.isArray(identityProvider.config.claims) ||
-      identityProvider.config.claims.some(
-        (claim) => typeof claim !== "string" || claim.length === 0,
-      ) ||
-      new Set(identityProvider.config.claims).size !==
-        identityProvider.config.claims.length ||
-      !GOOGLE_CLIENT_ID.test(identityProvider.config.client_id ?? "") ||
-      identityProvider.config.client_secret !== "[REDACTED]" ||
-      identityProvider.config.email_claim_name !== "email"
+      identityProvider?.name !== "One-time PIN" ||
+      identityProvider?.type !== "onetimepin" ||
+      !exactKeys(identityProvider?.config, [])
     ) {
       accessInvalid();
     }
-    const identityProviderNonSecretConfig = {
-      appsDomain: identityProvider.config.apps_domain,
-      claims: [...identityProvider.config.claims].sort(),
-      clientId: identityProvider.config.client_id,
-      emailClaimName: identityProvider.config.email_claim_name,
-    };
+    const identityProviderNonSecretConfig = {};
 
     const policy = policies[0];
     const policyDuration = durationSeconds(policy?.session_duration);
@@ -401,7 +379,6 @@ export async function buildAliceAccessPolicyProviderConfig(readback) {
         id: identityProvider.id,
         name: identityProvider.name,
         type: identityProvider.type,
-        clientSecretState: "present-redacted",
         nonSecretConfigSha256: sha256Canonical(
           identityProviderNonSecretConfig,
         ),

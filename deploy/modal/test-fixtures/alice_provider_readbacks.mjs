@@ -172,9 +172,11 @@ export function aliceTestWorkflowVersions() {
 
 export function aliceTestProviderReadbacks({
   accessAudience,
-  ownerEmail = "owner@example.test",
+  ownerEmail = "alice-owner@rndrntwrk.com",
 }) {
   const identityProviderId = "11111111-1111-4111-8111-111111111111";
+  const staleGoogleIdentityProviderId =
+    "88888888-8888-4888-8888-888888888888";
   const postureRuleId = "22222222-2222-4222-8222-222222222222";
   const releaseApplicationId = "55555555-5555-4555-8555-555555555555";
   const releasePolicyId = "66666666-6666-4666-8666-666666666666";
@@ -248,6 +250,12 @@ export function aliceTestProviderReadbacks({
       identityProviders: [
         {
           id: identityProviderId,
+          name: "One-time PIN",
+          type: "onetimepin",
+          config: {},
+        },
+        {
+          id: staleGoogleIdentityProviderId,
           name: "555ID",
           type: "google-apps",
           config: {
