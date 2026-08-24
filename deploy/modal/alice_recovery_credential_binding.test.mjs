@@ -1,17 +1,22 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { canonicalAliceJson } from "../../workers/alice-effective-config.js";
 
 import {
   ALICE_CLOUDFLARE_RECOVERY_CAPABILITIES,
+  ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES,
   ALICE_CLOUDFLARE_RECOVERY_PERMISSION_GROUPS,
   ALICE_RECOVERY_CREDENTIAL_MIN_VALIDITY_MS,
   ALICE_MODAL_RECOVERY_OPERATIONS,
   buildAliceRecoveryCredentialReadiness,
   encodeAliceRecoveryCredentialPolicy,
   normalizeAliceCloudflareRecoveryTokenPolicy,
+  readAliceCloudflareRecoveryPolicyReadback,
 } from "./alice_recovery_credential_binding.mjs";
 
 const sourceSha = "a".repeat(40);
@@ -489,4 +494,60 @@ test("rejects a recovery token that expires inside the watchdog window", () => {
     }),
     /ALICE_RECOVERY_CREDENTIAL_BINDING_INVALID/,
   );
+});
+
+test("reads a live-scale Cloudflare policy catalog within its dedicated bound", () => {
+  const temporaryRoot = fs.mkdtempSync(path.join(
+    os.tmpdir(),
+    "alice-cloudflare-policy-readback-",
+  ));
+  try {
+    const policyPath = path.join(temporaryRoot, "policy.json");
+    const liveScalePolicy = {
+      permissionGroups: {
+        errors: [],
+        messages: [],
+        success: true,
+        result: Array.from({ length: 395 }, (_, index) => ({
+          id: index.toString(16).padStart(32, "0"),
+          category: "developer_platform",
+          name: `Permission Group ${index.toString().padStart(3, "0")}`,
+          scopes: ["com.cloudflare.api.account"],
+          description: "x".repeat(96),
+        })),
+      },
+      token: {
+        errors: [],
+        messages: [],
+        success: true,
+        result: { id: "f".repeat(32), status: "active", policies: [] },
+      },
+    };
+    const policyBytes = `${JSON.stringify(liveScalePolicy)}\n`;
+    assert.ok(Buffer.byteLength(policyBytes) > 64 * 1024);
+    assert.ok(
+      Buffer.byteLength(policyBytes) <
+        ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES,
+    );
+    fs.writeFileSync(policyPath, policyBytes, { mode: 0o600 });
+    assert.deepEqual(
+      readAliceCloudflareRecoveryPolicyReadback(policyPath),
+      liveScalePolicy,
+    );
+
+    const oversizedPath = path.join(temporaryRoot, "oversized.json");
+    fs.writeFileSync(
+      oversizedPath,
+      JSON.stringify({
+        padding: "x".repeat(ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES),
+      }),
+      { mode: 0o600 },
+    );
+    assert.throws(
+      () => readAliceCloudflareRecoveryPolicyReadback(oversizedPath),
+      /ALICE_RECOVERY_CREDENTIAL_BINDING_INVALID/,
+    );
+  } finally {
+    fs.rmSync(temporaryRoot, { force: true, recursive: true });
+  }
 });
