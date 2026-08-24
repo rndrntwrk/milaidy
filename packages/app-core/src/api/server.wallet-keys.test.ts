@@ -11,6 +11,11 @@ vi.mock("../services/mcp-marketplace", () => ({
   getMcpServerDetails: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("../runtime/eliza", () => ({
+  buildCharacterFromConfig: vi.fn(),
+  ensureMiladyTextToSpeechHandler: vi.fn(),
+}));
+
 async function cleanupTempDir(dir: string): Promise<void> {
   try {
     await fs.rm(dir, {
@@ -51,7 +56,9 @@ const ENV_KEYS_TO_SAVE = [
   "MILADY_CONFIG_PATH",
   "ELIZA_API_TOKEN",
   "MILADY_API_TOKEN",
+  "MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET",
   "MILADY_DEV_AUTH_BYPASS",
+  "ALICE_RUNTIME_AUTHORITY_MODE",
   "EVM_PRIVATE_KEY",
   "SOLANA_PRIVATE_KEY",
 ] as const;
@@ -209,6 +216,39 @@ describe("GET /api/wallet/keys", () => {
       );
       expect(status).toBe(200);
       expect(typeof data.evmPrivateKey).toBe("string");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("denies authenticated key export in Alice proposer-only production", async () => {
+    await fs.writeFile(
+      path.join(tempDir, "eliza.json"),
+      JSON.stringify({
+        meta: { onboardingComplete: false },
+        logging: { level: "error" },
+      }),
+    );
+    process.env.ELIZA_API_TOKEN = "alice-runtime-token";
+    process.env.MILADY_API_TOKEN = "alice-runtime-token";
+    process.env.MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET = "alice-proxy-secret";
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+
+    const server = await startApiServer({ port: 0, runtime: RUNTIME_STUB });
+    try {
+      const { status, data } = await req(
+        server.port,
+        "GET",
+        "/api/wallet/keys",
+        undefined,
+        {
+          authorization: "Bearer alice-runtime-token",
+          "cf-access-authenticated-user-email": "alice-owner-verified.invalid",
+          "x-milady-cloudflare-access-secret": "alice-proxy-secret",
+        },
+      );
+      expect(status).toBe(403);
+      expect(data.code).toBe("ALICE_PRODUCTION_MUTATION_DENIED");
     } finally {
       await server.close();
     }
