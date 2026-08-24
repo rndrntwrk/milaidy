@@ -22,6 +22,16 @@ describe("Alice proposer-only startup wiring", () => {
     );
   });
 
+  it("disables the character-level advanced memory plugin before runtime construction", () => {
+    const characterBoundary = source.match(
+      /const character = buildCharacterFromConfig\(config\);[\s\S]*?\n  }/m,
+    )?.[0] ?? "";
+    expect(characterBoundary).toContain("character.advancedMemory = false;");
+    expect(source.indexOf("character.advancedMemory = false;")).toBeLessThan(
+      source.indexOf("let runtime = new AgentRuntime"),
+    );
+  });
+
   it("constrains admitted plugin surfaces before SQL pre-registration", () => {
     const constraint = source.indexOf("constrainAliceProductionPluginSurface(");
     const sqlRegistration = source.indexOf("() => registerSqlPluginWithRecovery(");
