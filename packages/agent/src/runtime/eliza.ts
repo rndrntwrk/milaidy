@@ -3588,6 +3588,7 @@ export async function startEliza(
   // 3. Build elizaOS Character from Eliza config
   const character = buildCharacterFromConfig(config);
   if (aliceProduction) {
+    character.advancedMemory = false;
     character.secrets = {};
     character.settings = {
       DISABLE_BASIC_CAPABILITIES: true,
