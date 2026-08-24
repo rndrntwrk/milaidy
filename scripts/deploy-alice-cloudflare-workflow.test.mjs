@@ -36,6 +36,14 @@ test("protected Alice deployment consumes only the exact successful build artifa
     /actions\/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53[\s\S]*?run-id: \$\{\{ inputs\.build_run_id \}\}[\s\S]*?name: \$\{\{ inputs\.worker_artifact_name \}\}/,
   );
   assert.match(workflow, /ARTIFACT_DIGEST[\s\S]*?artifact_record/);
+  assert.match(
+    workflow,
+    /artifact_record_count="\$\(printf '%s' "\$artifact_record" \| awk 'NF \{ count\+\+ \} END \{ print count \+ 0 \}'\)"[\s\S]*?test "\$artifact_record_count" = "1"/,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /printf '%s' "\$artifact_record" \| wc -l/,
+  );
 });
 
 test("every secret-bearing job executes only the workflow ref after validating the protected source", () => {
