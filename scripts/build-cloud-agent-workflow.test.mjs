@@ -391,6 +391,11 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
   assert.match(workflow, /alice_smoke_model_server\.mjs/);
   assert.match(workflow, /ALICE_PRODUCTION_MUTATION_DENIED/);
   assert.match(workflow, /ALICE_DURABLE_CHAT_INGRESS_REQUIRED/);
+  assert.match(
+    workflow,
+    /--env MILADY_TRUST_CLOUDFLARE_ACCESS=1[\s\S]*?--env MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET=alice-cloud-smoke-access-proxy-secret/,
+    "the exact-image smoke must explicitly trust its bounded Access proxy proof before expecting durable chat ingress",
+  );
   for (const forbiddenPath of [
     "/api/plugins/install",
     "/api/wallet/import",
