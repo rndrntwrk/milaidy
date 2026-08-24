@@ -118,25 +118,26 @@ jobs:
           test "$(printf '%s' "$artifact_record" | cut -f1)" = "$ARTIFACT_DIGEST"
           test "$(printf '%s' "$artifact_record" | cut -f2)" = "false"
 
-      - name: Hydrate exact protected Eliza workspace
+      - name: Hydrate exact reviewed Eliza PR head
         env:
-          EXPECTED_ELIZA_SHA: e219c232e21d8b61017129647130830d811ee45a
+          EXPECTED_ELIZA_SHA: a21d401bf7429bc8c794698b20832512b5315187
         run: |
           set -euo pipefail
           test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
             "https://github.com/rndrntwrk/eliza.git"
           test "$(git config -f .gitmodules --get submodule.eliza.branch)" = \
             "alice/runtime-stable-2026-08-22"
+          reviewed_eliza_ref="refs/pull/5/head"
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "$eliza_sha" = "$EXPECTED_ELIZA_SHA"
           git clone --no-checkout --filter=blob:none \
             https://github.com/rndrntwrk/eliza.git eliza
           git -C eliza fetch --depth=1 origin \
-            refs/heads/alice/runtime-stable-2026-08-22:refs/remotes/origin/alice/runtime-stable-2026-08-22
-          protected_eliza_sha="$(git -C eliza rev-parse \
-            refs/remotes/origin/alice/runtime-stable-2026-08-22)"
-          test "$protected_eliza_sha" = "$EXPECTED_ELIZA_SHA"
-          test "$eliza_sha" = "$protected_eliza_sha"
+            "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-5"
+          reviewed_eliza_sha="$(git -C eliza rev-parse \
+            refs/remotes/origin/alice-reviewed-pr-5)"
+          test "$reviewed_eliza_sha" = "$EXPECTED_ELIZA_SHA"
+          test "$eliza_sha" = "$reviewed_eliza_sha"
           git -C eliza fetch --depth=1 origin "$eliza_sha"
           git -C eliza checkout --detach "$eliza_sha"
           test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
@@ -197,7 +198,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_IMAGE: ${{ inputs.runtime_image }}
-          ELIZA_SHA: e219c232e21d8b61017129647130830d811ee45a
+          ELIZA_SHA: a21d401bf7429bc8c794698b20832512b5315187
         run: |
           set -euo pipefail
           printf '%s' "$RUNTIME_IMAGE" | grep -Eq '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$'
@@ -373,7 +374,7 @@ jobs:
           ALICE_SOURCE_ROOT: ${{ github.workspace }}
           ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
           ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.SOURCE_SHA }}
-          ALICE_ELIZA_COMMIT: e219c232e21d8b61017129647130830d811ee45a
+          ALICE_ELIZA_COMMIT: a21d401bf7429bc8c794698b20832512b5315187
           ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
           ALICE_RELEASE_EPOCH: ${{ inputs.release_epoch }}
           ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
@@ -1217,25 +1218,26 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
-      - name: Hydrate exact protected Eliza workspace
+      - name: Hydrate exact reviewed Eliza PR head
         env:
-          EXPECTED_ELIZA_SHA: e219c232e21d8b61017129647130830d811ee45a
+          EXPECTED_ELIZA_SHA: a21d401bf7429bc8c794698b20832512b5315187
         run: |
           set -euo pipefail
           test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
             "https://github.com/rndrntwrk/eliza.git"
           test "$(git config -f .gitmodules --get submodule.eliza.branch)" = \
             "alice/runtime-stable-2026-08-22"
+          reviewed_eliza_ref="refs/pull/5/head"
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "$eliza_sha" = "$EXPECTED_ELIZA_SHA"
           git clone --no-checkout --filter=blob:none \
             https://github.com/rndrntwrk/eliza.git eliza
           git -C eliza fetch --depth=1 origin \
-            refs/heads/alice/runtime-stable-2026-08-22:refs/remotes/origin/alice/runtime-stable-2026-08-22
-          protected_eliza_sha="$(git -C eliza rev-parse \
-            refs/remotes/origin/alice/runtime-stable-2026-08-22)"
-          test "$protected_eliza_sha" = "$EXPECTED_ELIZA_SHA"
-          test "$eliza_sha" = "$protected_eliza_sha"
+            "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-5"
+          reviewed_eliza_sha="$(git -C eliza rev-parse \
+            refs/remotes/origin/alice-reviewed-pr-5)"
+          test "$reviewed_eliza_sha" = "$EXPECTED_ELIZA_SHA"
+          test "$eliza_sha" = "$reviewed_eliza_sha"
           git -C eliza fetch --depth=1 origin "$eliza_sha"
           git -C eliza checkout --detach "$eliza_sha"
           test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"

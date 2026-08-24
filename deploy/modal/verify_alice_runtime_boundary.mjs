@@ -17,15 +17,23 @@ function exactArray(actual, expected) {
 }
 
 function exactRuntimePluginClosure(names) {
-  if (!Array.isArray(names) || names.length !== 3) return false;
+  if (
+    !Array.isArray(names) ||
+    names.length !== 5 ||
+    names.some((name) => typeof name !== "string")
+  ) {
+    return false;
+  }
   const unique = [...new Set(names)];
   const sql = unique.filter((name) => name === "sql" || name === "@elizaos/plugin-sql");
   const openai = unique.filter(
     (name) => name === "openai" || name === "@elizaos/plugin-openai",
   );
   return (
-    unique.length === 3 &&
+    unique.length === 5 &&
     unique.includes("alice-production-response-only") &&
+    unique.includes("basic-capabilities") &&
+    unique.includes("core-security-hooks") &&
     sql.length === 1 &&
     openai.length === 1
   );

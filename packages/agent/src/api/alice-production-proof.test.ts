@@ -5,14 +5,35 @@ import {
   stampAliceProductionRuntimeBoundary,
 } from "./alice-production-proof";
 
+function inertRuntimePlugins(
+  basicOverrides: Record<string, unknown> = {},
+): Array<Record<string, unknown>> {
+  return [
+    {
+      name: "basic-capabilities",
+      actions: [],
+      providers: [],
+      evaluators: [],
+      services: [],
+      routes: [],
+      events: {},
+      ...basicOverrides,
+    },
+    { name: "core-security-hooks" },
+    { name: "alice-production-response-only" },
+    { name: "sql" },
+    { name: "openai" },
+  ];
+}
+
 describe("Alice sanitized runtime-boundary proof", () => {
   it("returns only bounded identifiers and release metadata", () => {
     const runtime = {
-      plugins: [
-        { name: "alice-production-response-only", secret: "must-not-leak" },
-        { name: "sql" },
-        { name: "openai" },
-      ],
+      plugins: inertRuntimePlugins().map((plugin) =>
+        plugin.name === "alice-production-response-only"
+          ? { ...plugin, secret: "must-not-leak" }
+          : plugin,
+      ),
       actions: [],
       evaluators: [],
       services: new Map(),
@@ -47,7 +68,13 @@ describe("Alice sanitized runtime-boundary proof", () => {
         "@elizaos/plugin-sql",
         "@elizaos/plugin-openai",
       ],
-      runtimePluginNames: ["alice-production-response-only", "openai", "sql"],
+      runtimePluginNames: [
+        "alice-production-response-only",
+        "basic-capabilities",
+        "core-security-hooks",
+        "openai",
+        "sql",
+      ],
       actionNames: [],
       evaluatorNames: [],
       serviceTypes: [],
@@ -60,15 +87,23 @@ describe("Alice sanitized runtime-boundary proof", () => {
   });
 
   it("fails closed without an exact production stamp and release identity", () => {
-    expect(() => buildAliceProductionProof({ plugins: [], actions: [], evaluators: [] }, {})).toThrow(
-      "ALICE_PRODUCTION_PROOF_UNAVAILABLE",
-    );
+    expect(() =>
+      buildAliceProductionProof(
+        { plugins: [], actions: [], evaluators: [] },
+        {},
+      ),
+    ).toThrow("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
   });
 
   it("refuses to stamp a post-init runtime with any executable surface", () => {
     expect(() =>
       stampAliceProductionRuntimeBoundary(
-        { plugins: [], actions: [{ name: "SEND_MESSAGE" }], evaluators: [], services: new Map() },
+        {
+          plugins: [],
+          actions: [{ name: "SEND_MESSAGE" }],
+          evaluators: [],
+          services: new Map(),
+        },
         [
           "alice-production-response-only",
           "@elizaos/plugin-sql",
@@ -79,12 +114,7 @@ describe("Alice sanitized runtime-boundary proof", () => {
     expect(() =>
       stampAliceProductionRuntimeBoundary(
         {
-          plugins: [
-            { name: "alice-production-response-only" },
-            { name: "sql" },
-            { name: "openai" },
-            { name: "unexpected-plugin" },
-          ],
+          plugins: [...inertRuntimePlugins(), { name: "unexpected-plugin" }],
           actions: [],
           evaluators: [],
           services: new Map(),
@@ -99,11 +129,7 @@ describe("Alice sanitized runtime-boundary proof", () => {
     expect(() =>
       stampAliceProductionRuntimeBoundary(
         {
-          plugins: [
-            { name: "alice-production-response-only" },
-            { name: "sql" },
-            { name: "openai" },
-          ],
+          plugins: inertRuntimePlugins(),
           actions: [],
           evaluators: [],
           services: new Map([["AUTONOMY", [{}]]]),
@@ -115,5 +141,29 @@ describe("Alice sanitized runtime-boundary proof", () => {
         ],
       ),
     ).toThrow("ALICE_PRODUCTION_EXECUTION_SURFACE_PRESENT");
+  });
+
+  it("refuses disabled basic capabilities with declared routes or events", () => {
+    for (const basicOverrides of [
+      { routes: [{ path: "/api/turns/:turnId/abort" }] },
+      { events: { MESSAGE_RECEIVED: [() => undefined] } },
+      { events: new Map() },
+    ]) {
+      expect(() =>
+        stampAliceProductionRuntimeBoundary(
+          {
+            plugins: inertRuntimePlugins(basicOverrides),
+            actions: [],
+            evaluators: [],
+            services: new Map(),
+          },
+          [
+            "alice-production-response-only",
+            "@elizaos/plugin-sql",
+            "@elizaos/plugin-openai",
+          ],
+        ),
+      ).toThrow("ALICE_PRODUCTION_EXECUTION_SURFACE_PRESENT");
+    }
   });
 });

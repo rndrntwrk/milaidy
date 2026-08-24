@@ -8,6 +8,7 @@ import {
 } from "./alice_cloudflare_provider_config.mjs";
 
 const idpId = "11111111-1111-4111-8111-111111111111";
+const staleGoogleIdpId = "88888888-8888-4888-8888-888888888888";
 const postureId = "22222222-2222-4222-8222-222222222222";
 const appId = "33333333-3333-4333-8333-333333333333";
 const policyId = "44444444-4444-4444-8444-444444444444";
@@ -19,7 +20,7 @@ const serviceClientIdSha256 = crypto
   .createHash("sha256")
   .update(serviceClientId)
   .digest("base64url");
-const ownerEmail = "owner@example.test";
+const ownerEmail = "alice-owner@rndrntwrk.com";
 const ownerEmailSha256 = crypto
   .createHash("sha256")
   .update(ownerEmail.toLowerCase())
@@ -93,6 +94,12 @@ function accessReadback() {
     identityProviders: [
       {
         id: idpId,
+        name: "One-time PIN",
+        type: "onetimepin",
+        config: {},
+      },
+      {
+        id: staleGoogleIdpId,
         name: "555ID",
         type: "google-apps",
         config: {
@@ -174,36 +181,36 @@ function aiReadback() {
   };
 }
 
-test("normalizes one exact owner-only 555ID and device-posture Access policy", async () => {
+test("normalizes exact owner-only One-time PIN and device-posture Access policy", async () => {
   const canonical = await buildAliceAccessPolicyProviderConfig(accessReadback());
   assert.equal(canonical.schemaVersion, "alice.access-policy-config.v1");
   assert.deepEqual(canonical.application.allowedIdentityProviderIds, [idpId]);
-  assert.equal(canonical.identityProvider.name, "555ID");
+  assert.equal(canonical.identityProvider.name, "One-time PIN");
+  assert.equal(canonical.identityProvider.type, "onetimepin");
   assert.match(
     canonical.identityProvider.nonSecretConfigSha256,
     /^sha256:[a-f0-9]{64}$/,
   );
-  assert.equal(canonical.identityProvider.clientSecretState, "present-redacted");
+  assert.equal("clientSecretState" in canonical.identityProvider, false);
   assert.equal(canonical.policies[0].ownerEmailSha256, ownerEmailSha256);
   assert.deepEqual(canonical.policies[0].requiredDevicePostureRuleIds, [postureId]);
   assert.equal(canonical.devicePostureRules[0].enabled, true);
   assert.match(canonical.devicePostureRules[0].inputSha256, /^sha256:[a-f0-9]{64}$/);
   assert.equal(JSON.stringify(canonical).includes(ownerEmail), false);
-  assert.equal(JSON.stringify(canonical).includes("alice-555id"), false);
+  assert.equal(JSON.stringify(canonical).includes("sw4p.io"), false);
+  assert.equal(JSON.stringify(canonical).includes(staleGoogleIdpId), false);
   assert.equal(JSON.stringify(canonical).includes("[REDACTED]"), false);
 });
 
-test("binds exact 555ID config and rejects a non-owner assertion", async () => {
-  const first = accessReadback();
-  const firstCanonical = await buildAliceAccessPolicyProviderConfig(first);
+test("binds exact One-time PIN config and rejects stale Google or non-owner activation", async () => {
   const substituted = accessReadback();
-  substituted.identityProviders[0].config.client_id =
-    "substituted-555id.apps.googleusercontent.com";
-  const substitutedCanonical =
-    await buildAliceAccessPolicyProviderConfig(substituted);
-  assert.notEqual(
-    substitutedCanonical.identityProvider.nonSecretConfigSha256,
-    firstCanonical.identityProvider.nonSecretConfigSha256,
+  substituted.application.allowed_idps = [staleGoogleIdpId];
+  substituted.policies[0].require[0] = {
+    login_method: { id: staleGoogleIdpId },
+  };
+  await assert.rejects(
+    () => buildAliceAccessPolicyProviderConfig(substituted),
+    /ALICE_ACCESS_POLICY_PROVIDER_CONFIG_INVALID/,
   );
 
   const nonOwner = accessReadback();

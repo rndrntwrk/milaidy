@@ -62,7 +62,9 @@ function providerApi(calls) {
         success: true,
         result: fixtures.accessPolicyReadback.identityProviders.map((idp) => ({
           ...idp,
-          config: { ...idp.config, client_secret: "provider-masked-value" },
+          config: idp.type === "google-apps"
+            ? { ...idp.config, client_secret: "provider-masked-value" }
+            : idp.config,
         })),
       });
     }
@@ -160,7 +162,7 @@ function continuityApi(calls) {
   };
 }
 
-test("fetches and sanitizes the exact live Access, 555ID, posture, AI, and route state", async () => {
+test("fetches and sanitizes the exact live Access, OTP, posture, AI, and route state", async () => {
   const calls = [];
   const state = await fetchAliceCloudflareProviderState({
     fetchImpl: providerApi(calls),
@@ -178,14 +180,20 @@ test("fetches and sanitizes the exact live Access, 555ID, posture, AI, and route
   });
   assert.equal(state.accessPolicyReadback.application.domain, "alice.rndrntwrk.com");
   assert.equal(
-    state.accessPolicyReadback.identityProviders[0].config.client_secret,
+    state.accessPolicyReadback.identityProviders[1].config.client_secret,
     "[REDACTED]",
   );
-  assert.equal(state.sanitized.accessPolicyConfig.identityProvider.name, "555ID");
+  assert.equal(
+    state.sanitized.accessPolicyConfig.identityProvider.name,
+    "One-time PIN",
+  );
   assert.deepEqual(state.sanitized.aiGatewayProviderConfig.dynamicRoutes, {
     activeRouteCount: 0,
   });
-  assert.equal(JSON.stringify(state.sanitized).includes("owner@example.test"), false);
+  assert.equal(
+    JSON.stringify(state.sanitized).includes("alice-owner@rndrntwrk.com"),
+    false,
+  );
   assert.equal(JSON.stringify(state.sanitized).includes("provider-masked-value"), false);
   assert.equal(calls.length, 11);
   for (const call of calls) {

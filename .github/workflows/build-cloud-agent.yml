@@ -143,16 +143,17 @@ jobs:
         id: eliza_revision
         run: |
           # The parent gitlink is the release authority. Hydrate that exact
-          # commit from the protected Alice runtime branch in the canonical
+          # commit from the independently reviewed PR head in the canonical
           # organization fork; never float on either develop branch.
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "${#eliza_sha}" -eq 40
-          expected_eliza_sha="e219c232e21d8b61017129647130830d811ee45a"
+          expected_eliza_sha="a21d401bf7429bc8c794698b20832512b5315187"
+          reviewed_eliza_ref="refs/pull/5/head"
           git clone --no-checkout --filter=blob:none https://github.com/rndrntwrk/eliza.git eliza
-          git -C eliza fetch --depth=1 origin refs/heads/alice/runtime-stable-2026-08-22:refs/remotes/origin/alice/runtime-stable-2026-08-22
-          protected_eliza_sha="$(git -C eliza rev-parse refs/remotes/origin/alice/runtime-stable-2026-08-22)"
-          test "$protected_eliza_sha" = "$expected_eliza_sha"
-          test "$eliza_sha" = "$protected_eliza_sha"
+          git -C eliza fetch --depth=1 origin "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-5"
+          reviewed_eliza_sha="$(git -C eliza rev-parse refs/remotes/origin/alice-reviewed-pr-5)"
+          test "$reviewed_eliza_sha" = "$expected_eliza_sha"
+          test "$eliza_sha" = "$reviewed_eliza_sha"
           git -C eliza fetch --depth=1 origin "$eliza_sha"
           git -C eliza checkout --detach "$eliza_sha"
           test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"

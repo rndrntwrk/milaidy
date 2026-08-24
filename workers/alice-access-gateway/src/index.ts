@@ -341,6 +341,31 @@ function sameRuntimeAdmission(
   );
 }
 
+function exactRuntimePluginClosure(names: unknown): boolean {
+  if (
+    !Array.isArray(names) ||
+    names.length !== 5 ||
+    names.some((name) => typeof name !== "string")
+  ) {
+    return false;
+  }
+  const unique = [...new Set(names)];
+  const sql = unique.filter(
+    (name) => name === "sql" || name === "@elizaos/plugin-sql",
+  );
+  const openai = unique.filter(
+    (name) => name === "openai" || name === "@elizaos/plugin-openai",
+  );
+  return (
+    unique.length === 5 &&
+    unique.includes("alice-production-response-only") &&
+    unique.includes("basic-capabilities") &&
+    unique.includes("core-security-hooks") &&
+    sql.length === 1 &&
+    openai.length === 1
+  );
+}
+
 async function readBoundedBytes(
   body: Request | Response,
   maxBytes: number,
@@ -386,15 +411,7 @@ function runtimeReleaseMatches(
           "@elizaos/plugin-sql",
           "@elizaos/plugin-openai",
         ]) &&
-      Array.isArray(proof.runtimePluginNames) &&
-      proof.runtimePluginNames.length === 3 &&
-      proof.runtimePluginNames.includes("alice-production-response-only") &&
-      proof.runtimePluginNames.some(
-        (name: unknown) => name === "sql" || name === "@elizaos/plugin-sql",
-      ) &&
-      proof.runtimePluginNames.some(
-        (name: unknown) => name === "openai" || name === "@elizaos/plugin-openai",
-      ) &&
+      exactRuntimePluginClosure(proof.runtimePluginNames) &&
       ["actionNames", "evaluatorNames", "serviceTypes", "taskWorkerNames"].every(
         (key) => Array.isArray(proof[key]) && proof[key].length === 0,
       ) &&

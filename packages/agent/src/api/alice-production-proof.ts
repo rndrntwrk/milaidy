@@ -59,7 +59,10 @@ function registryKeys(value: unknown): string[] {
   if (value === undefined || value === null) return [];
   if (value instanceof Map) {
     const keys = [...value.keys()].map(String);
-    if (keys.length > 64 || keys.some((key) => !/^[a-zA-Z0-9@/._:-]{1,128}$/.test(key))) {
+    if (
+      keys.length > 64 ||
+      keys.some((key) => !/^[a-zA-Z0-9@/._:-]{1,128}$/.test(key))
+    ) {
       throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
     }
     return [...new Set(keys)].sort();
@@ -69,22 +72,73 @@ function registryKeys(value: unknown): string[] {
 }
 
 function taskWorkerNames(runtime: RuntimeLike): string[] {
-  return [...new Set([
-    ...registryKeys(runtime.taskWorkers),
-    ...registryKeys(runtime.taskWorkerRegistry),
-  ])].sort();
+  return [
+    ...new Set([
+      ...registryKeys(runtime.taskWorkers),
+      ...registryKeys(runtime.taskWorkerRegistry),
+    ]),
+  ].sort();
 }
 
-function exactRuntimePluginClosure(names: string[]): boolean {
-  const sql = names.filter((name) => name === "sql" || name === "@elizaos/plugin-sql");
+function hasNoDeclaredExecutionSurface(plugin: object): boolean {
+  const record = plugin as Record<string, unknown>;
+  const arrayFields = [
+    "actions",
+    "providers",
+    "evaluators",
+    "services",
+    "routes",
+  ] as const;
+  if (
+    arrayFields.some(
+      (field) =>
+        record[field] !== undefined &&
+        (!Array.isArray(record[field]) || record[field].length !== 0),
+    )
+  ) {
+    return false;
+  }
+  const events = record.events;
+  if (events === undefined) return true;
+  if (events === null || typeof events !== "object" || Array.isArray(events)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(events);
+  return (
+    (prototype === Object.prototype || prototype === null) &&
+    Reflect.ownKeys(events).length === 0
+  );
+}
+
+function exactRuntimePluginClosure(plugins: unknown[] | undefined): boolean {
+  if (!Array.isArray(plugins)) return false;
+  const names = inventory(plugins);
+  const sql = names.filter(
+    (name) => name === "sql" || name === "@elizaos/plugin-sql",
+  );
   const openai = names.filter(
     (name) => name === "openai" || name === "@elizaos/plugin-openai",
   );
+  const inertFrameworkPlugins = new Set([
+    "alice-production-response-only",
+    "basic-capabilities",
+    "core-security-hooks",
+  ]);
   return (
-    names.length === 3 &&
+    plugins.length === 5 &&
+    names.length === 5 &&
     names.includes("alice-production-response-only") &&
+    names.includes("basic-capabilities") &&
+    names.includes("core-security-hooks") &&
     sql.length === 1 &&
-    openai.length === 1
+    openai.length === 1 &&
+    plugins.every((plugin) => {
+      const name = (plugin as { name: string }).name;
+      return (
+        !inertFrameworkPlugins.has(name) ||
+        hasNoDeclaredExecutionSurface(plugin as object)
+      );
+    })
   );
 }
 
@@ -97,11 +151,10 @@ export function stampAliceProductionRuntimeBoundary(
   }
   const actionNames = inventory(runtime.actions);
   const evaluatorNames = inventory(runtime.evaluators);
-  const pluginNames = inventory(runtime.plugins);
   const workers = taskWorkerNames(runtime);
   const serviceTypes = registryKeys(runtime.services);
   if (
-    !exactRuntimePluginClosure(pluginNames) ||
+    !exactRuntimePluginClosure(runtime.plugins) ||
     actionNames.length > 0 ||
     evaluatorNames.length > 0 ||
     serviceTypes.length > 0 ||
@@ -111,7 +164,9 @@ export function stampAliceProductionRuntimeBoundary(
   }
   const stamp: BoundaryStamp = Object.freeze({
     schemaVersion: "alice.runtime-boundary-stamp.v1",
-    configuredPluginPackages: Object.freeze([...configuredPluginPackages]) as unknown as string[],
+    configuredPluginPackages: Object.freeze([
+      ...configuredPluginPackages,
+    ]) as unknown as string[],
     actionPlanning: false,
     backgroundAuthorityWorkers: "absent",
     observedServiceTypes: Object.freeze([]) as unknown as string[],
@@ -138,7 +193,7 @@ export function buildAliceProductionProof(
     stamp.actionPlanning !== false ||
     stamp.backgroundAuthorityWorkers !== "absent" ||
     !exactStrings(registryKeys(runtime.services), stamp.observedServiceTypes) ||
-    !exactRuntimePluginClosure(inventory(runtime.plugins)) ||
+    !exactRuntimePluginClosure(runtime.plugins) ||
     inventory(runtime.actions).length !== 0 ||
     inventory(runtime.evaluators).length !== 0 ||
     taskWorkerNames(runtime).length !== 0 ||

@@ -32,7 +32,7 @@ async function fixture() {
   const ownerEmailSha256 = base64Url(
     await crypto.subtle.digest(
       "SHA-256",
-      new TextEncoder().encode("owner@example.test"),
+      new TextEncoder().encode("alice-owner@rndrntwrk.com"),
     ),
   );
   const releaseSource = {
@@ -40,11 +40,11 @@ async function fixture() {
     deploymentControllerCommit: "6".repeat(40),
     runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"a".repeat(64)}`,
     runtimeBuildManifestSha256: `sha256:${"c".repeat(64)}`,
-    elizaCommit: "e219c232e21d8b61017129647130830d811ee45a",
+    elizaCommit: "a21d401bf7429bc8c794698b20832512b5315187",
   };
   const providerReadbacks = aliceTestProviderReadbacks({
     accessAudience: "access-audience",
-    ownerEmail: "owner@example.test",
+    ownerEmail: "alice-owner@rndrntwrk.com",
   });
   expect(providerReadbacks.accessPolicyReadback.ownerEmailSha256).toBe(
     ownerEmailSha256,

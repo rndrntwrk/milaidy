@@ -144,7 +144,7 @@ function fixture() {
       candidateGraphSha256: `sha256:${"b".repeat(64)}`,
     },
   };
-  const ownerEmail = "owner@example.test";
+  const ownerEmail = "alice-owner@rndrntwrk.com";
   const ownerEmailSha256 = crypto.createHash("sha256")
     .update(ownerEmail).digest("base64url");
   const ownerAuthorization = `${b64({ alg: "RS256", kid: "test" })}.${b64({

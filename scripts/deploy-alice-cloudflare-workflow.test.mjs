@@ -79,19 +79,19 @@ test("every secret-bearing job executes only the workflow ref after validating t
   }
 });
 
-test("every frozen recovery or deployment install hydrates the exact protected Eliza workspace first", () => {
-  const expectedElizaSha = "e219c232e21d8b61017129647130830d811ee45a";
-  const protectedBranch = "alice/runtime-stable-2026-08-22";
+test("every frozen recovery or deployment install hydrates the exact reviewed Eliza PR head first", () => {
+  const expectedElizaSha = "a21d401bf7429bc8c794698b20832512b5315187";
+  const reviewedRef = String.raw`refs\/pull\/5\/head`;
   const exactHydration = new RegExp(
-    String.raw`Hydrate exact protected Eliza workspace[\s\S]*?` +
+    String.raw`Hydrate exact reviewed Eliza PR head[\s\S]*?` +
       String.raw`EXPECTED_ELIZA_SHA: ${expectedElizaSha}[\s\S]*?` +
       String.raw`https:\/\/github\.com\/rndrntwrk\/eliza\.git[\s\S]*?` +
-      protectedBranch.replace("/", String.raw`\/`) +
+      reviewedRef +
       String.raw`[\s\S]*?git ls-tree HEAD eliza[\s\S]*?` +
       String.raw`git clone --no-checkout --filter=blob:none[\s\S]*?` +
-      String.raw`git -C eliza fetch --depth=1 origin[\s\S]*?refs\/heads\/alice\/runtime-stable-2026-08-22[\s\S]*?` +
-      String.raw`test "\$protected_eliza_sha" = "\$EXPECTED_ELIZA_SHA"[\s\S]*?` +
-      String.raw`test "\$eliza_sha" = "\$protected_eliza_sha"[\s\S]*?` +
+      String.raw`git -C eliza fetch --depth=1 origin[\s\S]*?\$reviewed_eliza_ref:refs\/remotes\/origin\/alice-reviewed-pr-5[\s\S]*?` +
+      String.raw`test "\$reviewed_eliza_sha" = "\$EXPECTED_ELIZA_SHA"[\s\S]*?` +
+      String.raw`test "\$eliza_sha" = "\$reviewed_eliza_sha"[\s\S]*?` +
       String.raw`git -C eliza checkout --detach "\$eliza_sha"[\s\S]*?` +
       String.raw`git -C eliza rev-parse HEAD[\s\S]*?` +
       String.raw`Install exact (?:release|recovery) dependencies[\s\S]*?` +

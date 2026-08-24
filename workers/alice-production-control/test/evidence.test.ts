@@ -45,7 +45,7 @@ describe("Alice immutable evidence records", () => {
       { ...record, occurredAt: "not-a-time" },
       { ...record, binding: { ...record.binding, releaseDigest: "latest" } },
       { ...record, details: { value: "x".repeat(9000) } },
-      { ...record, actor: "owner@example.test" },
+      { ...record, actor: "alice-owner@rndrntwrk.com" },
       { ...record, authorization: "Bearer must-not-persist" },
       {
         ...record,
@@ -74,7 +74,7 @@ describe("Alice immutable evidence records", () => {
     expect(() =>
       createEvidenceRecord({
         ...record,
-        actor: "owner@example.test",
+        actor: "alice-owner@rndrntwrk.com",
       }),
     ).toThrow("EVIDENCE_RECORD_INVALID");
   });
