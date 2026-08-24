@@ -248,7 +248,11 @@ export function normalizeAliceCloudflareRecoveryTokenPolicy({
     Array.isArray(token) ||
     token.id !== tokenId ||
     token.status !== "active" ||
-    token.condition !== undefined && token.condition !== null ||
+    !(
+      token.condition === undefined ||
+      token.condition === null ||
+      exactKeys(token.condition, [])
+    ) ||
     !Array.isArray(token.policies) ||
     token.policies.length !== 2
   ) {

@@ -253,6 +253,27 @@ test("binds an active Cloudflare token to the exact reviewed recovery policy", (
   );
 });
 
+test("binds a no-filter token when Cloudflare serializes condition as an empty object", () => {
+  const tokenId = "0123456789abcdef0123456789abcdef";
+  const provider = cloudflareProviderFixture({
+    tokenId,
+    expiresOn: "2099-01-01T00:00:00Z",
+  });
+  const policy = cloudflarePolicy(tokenId, provider.policy);
+  provider.policy.token.result.condition = {};
+  const encodedPolicy = encodeAliceRecoveryCredentialPolicy(policy);
+
+  assert.doesNotThrow(() => buildAliceRecoveryCredentialReadiness({
+    ...common(),
+    provider: "cloudflare",
+    encodedPolicy,
+    expectedPolicySha256: digest(Buffer.from(encodedPolicy, "base64url")),
+    providerReadback: provider.verify,
+    providerPolicyReadback: provider.policy,
+    observedAtMs,
+  }));
+});
+
 test("binds the standard Cloudflare v4 verify response envelope", () => {
   const tokenId = "0123456789abcdef0123456789abcdef";
   const provider = cloudflareProviderFixture({
