@@ -82,7 +82,13 @@ function applicationCanAffectHost(application, hostname) {
 function canonicalIsoTimestamp(value) {
   if (typeof value !== "string") return null;
   const milliseconds = Date.parse(value);
-  if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== value) {
+  const canonical = Number.isFinite(milliseconds)
+    ? new Date(milliseconds).toISOString()
+    : "";
+  if (
+    !Number.isFinite(milliseconds) ||
+    (canonical !== value && canonical.replace(/\.000Z$/, "Z") !== value)
+  ) {
     return null;
   }
   return milliseconds;
@@ -431,7 +437,7 @@ export async function buildAliceAccessPolicyProviderConfig(readback) {
           name: serviceToken.name,
           clientIdSha256: derivedClientIdSha256,
           enabled: true,
-          expiresAt: serviceToken.expires_at,
+          expiresAt: new Date(expiresAtMs).toISOString(),
         },
       },
     };
