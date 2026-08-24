@@ -329,6 +329,18 @@ test("binds one enabled, short-lived Service Auth token and exact policy order",
   }
 });
 
+test("normalizes Cloudflare whole-second UTC service-token expiry", async () => {
+  const providerReadback = accessReadback();
+  providerReadback.serviceTokens[0].expires_at = "2026-08-23T12:00:00Z";
+
+  const canonical = await buildAliceAccessPolicyProviderConfig(providerReadback);
+
+  assert.equal(
+    canonical.deploymentController.serviceToken.expiresAt,
+    "2026-08-23T12:00:00.000Z",
+  );
+});
+
 test("normalizes every admitted AI Gateway safety and budget setting", () => {
   const canonical = buildAliceAiGatewayProviderConfig(aiReadback());
   assert.deepEqual(canonical.cache, {
