@@ -15,10 +15,11 @@ streaming, trading, funds movement, custody, and signing remain disabled.
 
 No staging infrastructure is provisioned. GitHub owns the ephemeral build and
 smoke runners; their workflow cleanup removes candidate containers and local
-artifacts. Each independent recovery job stops selecting a parent after 360
-15-second attempts (about 90 minutes) and retains a 240-minute hard timeout
-only after the matching deployment is selected. Dispatch after the recorded
-cutoff is invalid and requires a new protected production window.
+artifacts. Each independent recovery job has a 240-minute total hard timeout,
+including setup and up to 360 15-second parent-selection attempts (about 90
+minutes). Only the remaining job time is available after selection. Dispatch
+after the recorded cutoff is invalid and requires a new protected production
+window.
 
 The window is complete only when the exact protected source has one immutable
 image and Worker-bundle build, the signed release binds the effective Worker
