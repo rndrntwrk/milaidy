@@ -5,7 +5,10 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type AgentRuntime, logger } from "@elizaos/core";
-import { isAliceProductionRuntime } from "@miladyai/agent/api/alice-production-guard";
+import {
+  evaluateAliceProductionRequest,
+  isAliceProductionRuntime,
+} from "@miladyai/agent/api/alice-production-guard";
 import { handleCloudBillingRoute } from "@miladyai/agent/api/cloud-billing-routes";
 import { handleCloudCompatRoute } from "@miladyai/agent/api/cloud-compat-routes";
 import { handleMiscRoutes } from "@miladyai/agent/api/misc-routes";
@@ -1268,6 +1271,23 @@ export function patchHttpCreateServerForMiladyCompat(
           Math.floor(process.uptime()),
         );
         sendJsonResponse(res, health.statusCode, health.payload);
+        return;
+      }
+
+      const aliceProductionDecision = evaluateAliceProductionRequest(
+        req.method ?? "GET",
+        pathname,
+        process.env,
+      );
+      if (!aliceProductionDecision.allowed) {
+        if (!isAuthorized(req)) {
+          sendJsonResponse(res, 401, { error: "Unauthorized" });
+          return;
+        }
+        sendJsonResponse(res, 403, {
+          error: "Alice production runtime capability is disabled",
+          code: aliceProductionDecision.code,
+        });
         return;
       }
 
