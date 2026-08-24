@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ALICE_PRODUCTION_PLUGIN_ALLOWLIST,
+  constrainAliceProductionPluginSurface,
   enforceAliceProductionPluginPolicy,
 } from "./alice-production-plugin-policy";
 
@@ -28,5 +29,52 @@ describe("Alice production plugin policy", () => {
     const plugins = new Set(["@acme/custom-plugin"]);
     expect(enforceAliceProductionPluginPolicy(plugins, {})).toEqual([]);
     expect([...plugins]).toEqual(["@acme/custom-plugin"]);
+  });
+
+  it("removes SQL service and route surfaces before Alice registration", () => {
+    const sqlPlugin = {
+      name: "@elizaos/plugin-sql",
+      description: "fixture",
+      services: [{ serviceType: "memoryStorage" }],
+      routes: [{ path: "/identity/person-link" }],
+      dispose: () => undefined,
+      schema: { memories: {} },
+      init: () => undefined,
+    };
+
+    const constrained = constrainAliceProductionPluginSurface(
+      "@elizaos/plugin-sql",
+      sqlPlugin,
+      { ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only" },
+    );
+
+    expect(constrained).not.toBe(sqlPlugin);
+    expect(constrained.services).toEqual([]);
+    expect(constrained.routes).toEqual([]);
+    expect(constrained.dispose).toBeUndefined();
+    expect(constrained.schema).toBe(sqlPlugin.schema);
+    expect(constrained.init).toBe(sqlPlugin.init);
+  });
+
+  it("does not rewrite ordinary Milady or the bounded OpenAI model plugin", () => {
+    const sqlPlugin = {
+      name: "@elizaos/plugin-sql",
+      services: [{ serviceType: "memoryStorage" }],
+    };
+    expect(
+      constrainAliceProductionPluginSurface("@elizaos/plugin-sql", sqlPlugin, {}),
+    ).toBe(sqlPlugin);
+
+    const openaiPlugin = {
+      name: "openai",
+      models: { TEXT_LARGE: () => "ok" },
+    };
+    expect(
+      constrainAliceProductionPluginSurface(
+        "@elizaos/plugin-openai",
+        openaiPlugin,
+        { ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only" },
+      ),
+    ).toBe(openaiPlugin);
   });
 });

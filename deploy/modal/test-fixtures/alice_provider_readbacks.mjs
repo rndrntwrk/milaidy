@@ -252,7 +252,10 @@ export function aliceTestProviderReadbacks({
           id: identityProviderId,
           name: "One-time PIN",
           type: "onetimepin",
-          config: {},
+          config: {
+            redirect_url:
+              "https://rndrntwrk.cloudflareaccess.com/cdn-cgi/access/callback",
+          },
         },
         {
           id: staleGoogleIdentityProviderId,

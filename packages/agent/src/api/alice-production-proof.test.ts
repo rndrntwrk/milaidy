@@ -166,4 +166,31 @@ describe("Alice sanitized runtime-boundary proof", () => {
       ).toThrow("ALICE_PRODUCTION_EXECUTION_SURFACE_PRESENT");
     }
   });
+
+  it("refuses declared execution surfaces on admitted SQL and model plugins", () => {
+    for (const [pluginName, declaredSurface] of [
+      ["sql", { services: [{ serviceType: "memoryStorage" }] }],
+      ["sql", { routes: [{ path: "/identity/person-link" }] }],
+      ["openai", { actions: [{ name: "UNBOUNDED_MODEL_ACTION" }] }],
+    ] as const) {
+      const plugins = inertRuntimePlugins().map((plugin) =>
+        plugin.name === pluginName ? { ...plugin, ...declaredSurface } : plugin,
+      );
+      expect(() =>
+        stampAliceProductionRuntimeBoundary(
+          {
+            plugins,
+            actions: [],
+            evaluators: [],
+            services: new Map(),
+          },
+          [
+            "alice-production-response-only",
+            "@elizaos/plugin-sql",
+            "@elizaos/plugin-openai",
+          ],
+        ),
+      ).toThrow("ALICE_PRODUCTION_EXECUTION_SURFACE_PRESENT");
+    }
+  });
 });

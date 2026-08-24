@@ -11,6 +11,8 @@ const ALICE_AI_MODELS = Object.freeze([
   "openai/gpt-oss-20b",
 ]);
 const ALICE_AI_PROVIDERS = Object.freeze(["workers-ai"]);
+const ALICE_OTP_REDIRECT_URL =
+  "https://rndrntwrk.cloudflareaccess.com/cdn-cgi/access/callback";
 
 function sha256Canonical(value) {
   return `sha256:${crypto
@@ -198,11 +200,14 @@ export async function buildAliceAccessPolicyProviderConfig(readback) {
       matchingProviders.length !== 1 ||
       identityProvider?.name !== "One-time PIN" ||
       identityProvider?.type !== "onetimepin" ||
-      !exactKeys(identityProvider?.config, [])
+      !exactKeys(identityProvider?.config, ["redirect_url"]) ||
+      identityProvider.config.redirect_url !== ALICE_OTP_REDIRECT_URL
     ) {
       accessInvalid();
     }
-    const identityProviderNonSecretConfig = {};
+    const identityProviderNonSecretConfig = {
+      redirectUrl: identityProvider.config.redirect_url,
+    };
 
     const policy = policies[0];
     const policyDuration = durationSeconds(policy?.session_duration);

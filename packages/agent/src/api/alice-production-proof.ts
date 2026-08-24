@@ -119,11 +119,6 @@ function exactRuntimePluginClosure(plugins: unknown[] | undefined): boolean {
   const openai = names.filter(
     (name) => name === "openai" || name === "@elizaos/plugin-openai",
   );
-  const inertFrameworkPlugins = new Set([
-    "alice-production-response-only",
-    "basic-capabilities",
-    "core-security-hooks",
-  ]);
   return (
     plugins.length === 5 &&
     names.length === 5 &&
@@ -132,13 +127,7 @@ function exactRuntimePluginClosure(plugins: unknown[] | undefined): boolean {
     names.includes("core-security-hooks") &&
     sql.length === 1 &&
     openai.length === 1 &&
-    plugins.every((plugin) => {
-      const name = (plugin as { name: string }).name;
-      return (
-        !inertFrameworkPlugins.has(name) ||
-        hasNoDeclaredExecutionSurface(plugin as object)
-      );
-    })
+    plugins.every((plugin) => hasNoDeclaredExecutionSurface(plugin as object))
   );
 }
 

@@ -96,7 +96,10 @@ function accessReadback() {
         id: idpId,
         name: "One-time PIN",
         type: "onetimepin",
-        config: {},
+        config: {
+          redirect_url:
+            "https://rndrntwrk.cloudflareaccess.com/cdn-cgi/access/callback",
+        },
       },
       {
         id: staleGoogleIdpId,
@@ -219,6 +222,27 @@ test("binds exact One-time PIN config and rejects stale Google or non-owner acti
     () => buildAliceAccessPolicyProviderConfig(nonOwner),
     /ALICE_ACCESS_POLICY_PROVIDER_CONFIG_INVALID/,
   );
+});
+
+test("rejects substituted or expanded One-time PIN provider-owned config", async () => {
+  for (const config of [
+    {
+      redirect_url:
+        "https://attacker.example.test/cdn-cgi/access/callback",
+    },
+    {
+      redirect_url:
+        "https://rndrntwrk.cloudflareaccess.com/cdn-cgi/access/callback",
+      client_secret: "must-not-be-admitted",
+    },
+  ]) {
+    const substituted = accessReadback();
+    substituted.identityProviders[0].config = config;
+    await assert.rejects(
+      () => buildAliceAccessPolicyProviderConfig(substituted),
+      /ALICE_ACCESS_POLICY_PROVIDER_CONFIG_INVALID/,
+    );
+  }
 });
 
 test("rejects missing, broad, unknown, or disabled Access controls", async () => {
