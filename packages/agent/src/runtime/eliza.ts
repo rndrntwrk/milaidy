@@ -124,6 +124,7 @@ import discordLocalPlugin from "./discord-local-plugin.js";
 import { stampAliceProductionRuntimeBoundary } from "../api/alice-production-proof.js";
 import {
   ALICE_PRODUCTION_PLUGIN_ALLOWLIST,
+  constrainAliceProductionPluginSurface,
   isAliceProductionPluginPolicyEnabled,
 } from "./alice-production-plugin-policy.js";
 import { createAliceProductionRuntimePlugin } from "./alice-production-runtime-plugin.js";
@@ -3630,6 +3631,15 @@ export async function startEliza(
   const resolvedPlugins = await resolvePlugins(config, {
     quiet: preOnboarding,
   });
+  if (aliceProduction) {
+    for (const resolved of resolvedPlugins) {
+      resolved.plugin = constrainAliceProductionPluginSurface(
+        resolved.name,
+        resolved.plugin,
+        process.env,
+      );
+    }
+  }
 
   if (resolvedPlugins.length === 0) {
     if (preOnboarding) {
