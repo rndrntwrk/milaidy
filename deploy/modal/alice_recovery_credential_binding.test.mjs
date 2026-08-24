@@ -161,6 +161,58 @@ test("binds an exact non-granular Modal credential and provider workspace", () =
   assert.equal(JSON.stringify(readiness).includes(credentialId), false);
 });
 
+test("binds the full sanitized Modal capture emitted by the watchdog", () => {
+  const credentialId = "ak-test-modal-recovery-token-id";
+  const policy = {
+    schemaVersion: "alice.modal-recovery-credential-policy.v1",
+    provider: "modal",
+    tokenIdSha256: digest(credentialId),
+    authorityModel: "workspace-token-non-granular",
+    environment: "main",
+    appId: "ap-oFaCNy2jJDFalZienNB2Ht",
+    appName: "alice-runtime",
+    requiredOperations: [...ALICE_MODAL_RECOVERY_OPERATIONS],
+  };
+  const encodedPolicy = encodeAliceRecoveryCredentialPolicy(policy);
+  const readiness = buildAliceRecoveryCredentialReadiness({
+    ...common(),
+    provider: "modal",
+    credentialId,
+    encodedPolicy,
+    expectedPolicySha256: digest(Buffer.from(encodedPolicy, "base64url")),
+    providerReadback: {
+      appId: policy.appId,
+      environment: "main",
+      providerVersion: 48,
+      providerHistory: [{
+        providerVersion: 48,
+        rollbackVersion: 47,
+        clientVersion: "1.5.4",
+        deployedBy: "ci",
+        commitHash: sourceSha,
+        dirty: false,
+      }],
+      functionIds: { alice_web: "fu-1234567890123456789012" },
+      function: {
+        name: "alice_web",
+        id: "fu-1234567890123456789012",
+        webUrl: "https://rndrntwrk--alice.modal.run",
+        inputFormats: ["DATA_FORMAT_PICKLE"],
+      },
+      mountedSecretObjects: [],
+      mountedVolumeIds: [],
+      imageObjectIds: ["im-1234567890123456789012"],
+      autoscalerEnforcement: { status: "provider-unverifiable" },
+    },
+  });
+
+  assert.deepEqual(readiness.providerIdentity, {
+    appId: policy.appId,
+    environment: "main",
+    providerVersion: 48,
+  });
+});
+
 test("binds an active Cloudflare token to the exact reviewed recovery policy", () => {
   const tokenId = "0123456789abcdef0123456789abcdef";
   const provider = cloudflareProviderFixture({
@@ -199,6 +251,89 @@ test("binds an active Cloudflare token to the exact reviewed recovery policy", (
     readiness.providerPolicySha256,
     policy.expectedProviderPolicySha256,
   );
+});
+
+test("binds the standard Cloudflare v4 verify response envelope", () => {
+  const tokenId = "0123456789abcdef0123456789abcdef";
+  const provider = cloudflareProviderFixture({
+    tokenId,
+    expiresOn: "2099-01-01T00:00:00Z",
+  });
+  const policy = cloudflarePolicy(tokenId, provider.policy);
+  const encodedPolicy = encodeAliceRecoveryCredentialPolicy(policy);
+
+  assert.doesNotThrow(() => buildAliceRecoveryCredentialReadiness({
+    ...common(),
+    provider: "cloudflare",
+    encodedPolicy,
+    expectedPolicySha256: digest(Buffer.from(encodedPolicy, "base64url")),
+    providerReadback: {
+      ...provider.verify,
+      errors: [],
+      messages: [{
+        code: 10000,
+        message: "This API Token is valid and active",
+        type: null,
+      }],
+    },
+    providerPolicyReadback: provider.policy,
+    observedAtMs,
+  }));
+});
+
+test("rejects unrecognized recovery readback fields and Cloudflare errors", () => {
+  const modalCredentialId = "ak-test-modal-recovery-token-id";
+  const modalPolicy = {
+    schemaVersion: "alice.modal-recovery-credential-policy.v1",
+    provider: "modal",
+    tokenIdSha256: digest(modalCredentialId),
+    authorityModel: "workspace-token-non-granular",
+    environment: "main",
+    appId: "ap-oFaCNy2jJDFalZienNB2Ht",
+    appName: "alice-runtime",
+    requiredOperations: [...ALICE_MODAL_RECOVERY_OPERATIONS],
+  };
+  const encodedModalPolicy = encodeAliceRecoveryCredentialPolicy(modalPolicy);
+  assert.throws(() => buildAliceRecoveryCredentialReadiness({
+    ...common(),
+    provider: "modal",
+    credentialId: modalCredentialId,
+    encodedPolicy: encodedModalPolicy,
+    expectedPolicySha256: digest(
+      Buffer.from(encodedModalPolicy, "base64url"),
+    ),
+    providerReadback: {
+      appId: modalPolicy.appId,
+      environment: "main",
+      providerVersion: 48,
+      unexpected: true,
+    },
+  }), /ALICE_RECOVERY_CREDENTIAL_BINDING_INVALID/);
+
+  const cloudflareTokenId = "0123456789abcdef0123456789abcdef";
+  const provider = cloudflareProviderFixture({ tokenId: cloudflareTokenId });
+  const cloudflareRecoveryPolicy = cloudflarePolicy(
+    cloudflareTokenId,
+    provider.policy,
+  );
+  const encodedCloudflarePolicy = encodeAliceRecoveryCredentialPolicy(
+    cloudflareRecoveryPolicy,
+  );
+  assert.throws(() => buildAliceRecoveryCredentialReadiness({
+    ...common(),
+    provider: "cloudflare",
+    encodedPolicy: encodedCloudflarePolicy,
+    expectedPolicySha256: digest(
+      Buffer.from(encodedCloudflarePolicy, "base64url"),
+    ),
+    providerReadback: {
+      ...provider.verify,
+      errors: [{ code: 1000, message: "provider error" }],
+      messages: [],
+    },
+    providerPolicyReadback: provider.policy,
+    observedAtMs,
+  }), /ALICE_RECOVERY_CREDENTIAL_BINDING_INVALID/);
 });
 
 test("rejects stale attempts, token drift, and broadened recovery policy", () => {

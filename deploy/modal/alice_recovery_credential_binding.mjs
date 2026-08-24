@@ -12,6 +12,21 @@ const COMMIT = /^[a-f0-9]{40}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const CLOUDFLARE_TOKEN_ID = /^[a-f0-9]{32}$/;
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
+const MODAL_PROVIDER_IDENTITY_KEYS = Object.freeze([
+  "appId",
+  "environment",
+  "providerVersion",
+]);
+const MODAL_PROVIDER_CAPTURE_KEYS = Object.freeze([
+  ...MODAL_PROVIDER_IDENTITY_KEYS,
+  "providerHistory",
+  "functionIds",
+  "function",
+  "mountedSecretObjects",
+  "mountedVolumeIds",
+  "imageObjectIds",
+  "autoscalerEnforcement",
+]);
 export const ALICE_RECOVERY_CREDENTIAL_MIN_VALIDITY_MS = 5 * 60 * 60 * 1000;
 
 export const ALICE_CLOUDFLARE_RECOVERY_CAPABILITIES = Object.freeze([
@@ -144,11 +159,10 @@ function validateModalPolicy(policy, credentialId, providerReadback) {
     credentialId.length < 16 ||
     credentialId.length > 256 ||
     sha256(credentialId) !== policy.tokenIdSha256 ||
-    !exactKeys(providerReadback, [
-      "appId",
-      "environment",
-      "providerVersion",
-    ]) ||
+    !(
+      exactKeys(providerReadback, MODAL_PROVIDER_IDENTITY_KEYS) ||
+      exactKeys(providerReadback, MODAL_PROVIDER_CAPTURE_KEYS)
+    ) ||
     providerReadback.appId !== policy.appId ||
     providerReadback.environment !== policy.environment ||
     !Number.isSafeInteger(providerReadback.providerVersion) ||
@@ -180,6 +194,24 @@ function exactEnvelopeResult(envelope) {
     invalid();
   }
   return envelope.result;
+}
+
+function exactCloudflareVerifyEnvelope(envelope) {
+  const hasCompactShape = exactKeys(envelope, ["result", "success"]);
+  const hasStandardShape = exactKeys(envelope, [
+    "errors",
+    "messages",
+    "result",
+    "success",
+  ]);
+  return Boolean(
+    (hasCompactShape || hasStandardShape) &&
+      (!hasStandardShape || (
+        Array.isArray(envelope.errors) &&
+        envelope.errors.length === 0 &&
+        Array.isArray(envelope.messages)
+      )),
+  );
 }
 
 function normalizeResources(resources) {
@@ -371,7 +403,7 @@ function validateCloudflarePolicy(
     }) ||
     canonicalAliceJson(policy.capabilities) !==
       canonicalAliceJson(ALICE_CLOUDFLARE_RECOVERY_CAPABILITIES) ||
-    !exactKeys(providerReadback, ["result", "success"]) ||
+    !exactCloudflareVerifyEnvelope(providerReadback) ||
     providerReadback.success !== true ||
     !providerReadback.result ||
     typeof providerReadback.result !== "object" ||
