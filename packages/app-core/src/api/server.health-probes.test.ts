@@ -2,12 +2,37 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { buildKubeHealthResponse } from "./kube-health";
+import {
+  buildKubeHealthResponse,
+  shouldServeCompatKubeHealthRoute,
+} from "./kube-health";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverSource = readFileSync(path.join(dirname, "server.ts"), "utf8");
 
 describe("Kubernetes health probes", () => {
+  it("leaves detailed Alice production health behind runtime authentication", () => {
+    expect(shouldServeCompatKubeHealthRoute("GET", "/health/live", true)).toBe(
+      true,
+    );
+    expect(shouldServeCompatKubeHealthRoute("GET", "/health", true)).toBe(
+      false,
+    );
+    expect(shouldServeCompatKubeHealthRoute("GET", "/health/ready", true)).toBe(
+      false,
+    );
+
+    for (const pathname of [
+      "/health",
+      "/health/live",
+      "/health/ready",
+    ] as const) {
+      expect(shouldServeCompatKubeHealthRoute("GET", pathname, false)).toBe(
+        true,
+      );
+    }
+  });
+
   it("keeps /health unready until the runtime is attached", () => {
     expect(buildKubeHealthResponse("/health", false, 7)).toEqual({
       statusCode: 503,

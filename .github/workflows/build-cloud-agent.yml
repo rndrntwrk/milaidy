@@ -195,6 +195,7 @@ jobs:
           ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
         run: |
           bun test \
+            packages/app-core/src/api/server.health-probes.test.ts \
             packages/agent/src/api/alice-production-auth-boundary.test.ts \
             packages/agent/src/api/alice-production-chat.test.ts \
             packages/agent/src/api/alice-production-guard.test.ts \

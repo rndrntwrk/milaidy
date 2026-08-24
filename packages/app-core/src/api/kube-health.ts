@@ -8,8 +8,21 @@ export interface KubeHealthResponse {
   };
 }
 
+export type KubeHealthPathname = "/health" | "/health/live" | "/health/ready";
+
+export function shouldServeCompatKubeHealthRoute(
+  method: string | undefined,
+  pathname: string,
+  aliceProduction: boolean,
+): pathname is KubeHealthPathname {
+  if (method !== "GET") return false;
+  if (pathname === "/health/live") return true;
+  if (aliceProduction) return false;
+  return pathname === "/health" || pathname === "/health/ready";
+}
+
 export function buildKubeHealthResponse(
-  pathname: "/health" | "/health/live" | "/health/ready",
+  pathname: KubeHealthPathname,
   hasRuntime: boolean,
   uptimeSeconds: number,
 ): KubeHealthResponse {
