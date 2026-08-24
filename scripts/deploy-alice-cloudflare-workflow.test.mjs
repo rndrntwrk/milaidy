@@ -21,6 +21,34 @@ const deadlineSource = fs.readFileSync(
   "utf8",
 );
 
+function namedWorkflowSteps(source) {
+  const headings = [...source.matchAll(/^      - name: (.+)$/gm)];
+  return headings.map((heading, index) => {
+    const end = headings[index + 1]?.index ?? source.length;
+    const block = source.slice(heading.index, end);
+    const runStart = block.search(/^        run:/m);
+    return {
+      name: heading[1],
+      block,
+      run: runStart === -1 ? "" : block.slice(runStart),
+    };
+  });
+}
+
+function invokedRepositoryEntrypoints(run) {
+  return [
+    ...run.matchAll(
+      /(?:\bnode|\bbun|\bbash|"\$\{[A-Z0-9_]+\}")\s+((?:deploy|scripts)\/[A-Za-z0-9_./-]+\.(?:js|mjs|ts|sh))\b/g,
+    ),
+  ].map((match) => match[1]);
+}
+
+function sourceInvokesGh(source) {
+  return /(?:spawnSync|spawn|execFileSync|execFile|execSync|run)\s*\(\s*["']gh["']/.test(
+    source,
+  );
+}
+
 test("protected Alice deployment consumes only the exact successful build artifact", () => {
   assert.match(workflow, /environment: alice-production/);
   assert.match(
@@ -43,6 +71,40 @@ test("protected Alice deployment consumes only the exact successful build artifa
   assert.doesNotMatch(
     workflow,
     /printf '%s' "\$artifact_record" \| wc -l/,
+  );
+});
+
+test("every workflow gh boundary receives only a step-local GitHub token", () => {
+  const requirements = [];
+  for (const step of namedWorkflowSteps(workflow)) {
+    if (/\bgh\s+[a-z][a-z-]*\b/.test(step.run)) {
+      requirements.push({ step, reason: "direct gh command" });
+    }
+    for (const entrypoint of new Set(invokedRepositoryEntrypoints(step.run))) {
+      const sourcePath = path.join(repoRoot, entrypoint);
+      if (
+        fs.existsSync(sourcePath) &&
+        sourceInvokesGh(fs.readFileSync(sourcePath, "utf8"))
+      ) {
+        requirements.push({ step, reason: `internal gh in ${entrypoint}` });
+      }
+    }
+  }
+
+  assert.ok(requirements.length > 0, "workflow gh boundary enumeration is empty");
+  const missing = requirements
+    .filter(({ step }) =>
+      !/^          GH_TOKEN: \$\{\{ github\.token \}\}$/m.test(step.block))
+    .map(({ step, reason }) => `${step.name} (${reason})`);
+  assert.deepEqual(
+    missing,
+    [],
+    `workflow steps missing step-local GH_TOKEN:\n${missing.join("\n")}`,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /^    env:\n(?:^      .*\n)*^      GH_TOKEN:/m,
+    "GH_TOKEN must not be job-global",
   );
 });
 
