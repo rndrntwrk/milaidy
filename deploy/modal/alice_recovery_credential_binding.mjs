@@ -28,6 +28,7 @@ const MODAL_PROVIDER_CAPTURE_KEYS = Object.freeze([
   "autoscalerEnforcement",
 ]);
 export const ALICE_RECOVERY_CREDENTIAL_MIN_VALIDITY_MS = 5 * 60 * 60 * 1000;
+export const ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES = 128 * 1024;
 
 export const ALICE_CLOUDFLARE_RECOVERY_CAPABILITIES = Object.freeze([
   "account.queues.read-write",
@@ -488,10 +489,15 @@ export function buildAliceRecoveryCredentialReadiness(input) {
   };
 }
 
-function readJson(filePath) {
+function readJson(filePath, maxBytes = 64 * 1024) {
   try {
     const stat = fs.lstatSync(filePath);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 2 || stat.size > 64 * 1024) {
+    if (
+      !stat.isFile() ||
+      stat.isSymbolicLink() ||
+      stat.size < 2 ||
+      stat.size > maxBytes
+    ) {
       invalid();
     }
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -500,6 +506,10 @@ function readJson(filePath) {
       "ALICE_RECOVERY_CREDENTIAL_BINDING_INVALID") throw error;
     invalid();
   }
+}
+
+export function readAliceCloudflareRecoveryPolicyReadback(filePath) {
+  return readJson(filePath, ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES);
 }
 
 function positiveInteger(value) {
@@ -537,7 +547,9 @@ async function main() {
       process.env.ALICE_RECOVERY_PROVIDER_READBACK_PATH,
     ),
     providerPolicyReadback: provider === "cloudflare"
-      ? readJson(process.env.ALICE_RECOVERY_PROVIDER_POLICY_READBACK_PATH)
+      ? readAliceCloudflareRecoveryPolicyReadback(
+        process.env.ALICE_RECOVERY_PROVIDER_POLICY_READBACK_PATH,
+      )
       : undefined,
     observedAtMs: provider === "cloudflare" ? Date.now() : undefined,
   };
