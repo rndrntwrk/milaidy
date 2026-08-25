@@ -26,6 +26,12 @@ import {
   authorizeInternalService,
   requiredInternalService,
 } from "./internal-auth";
+import {
+  ALICE_DEPLOYMENT_PAUSE_V2_PATH,
+  buildAliceDeploymentEdgeReadiness,
+  executeAliceDeploymentPauseV2,
+  validAliceDeploymentEdgeNonce,
+} from "./deployment-edge";
 
 export { AliceAuthority, AliceSession } from "./durable";
 export { AlicePlanWorkflow } from "./workflow";
@@ -336,6 +342,14 @@ async function handleDeploymentController(
     path === "/control/internal/v1/deployment/status" &&
     request.method === "GET"
   ) {
+    const edgeNonce =
+      request.headers.get("x-alice-deployment-edge-nonce") ?? "";
+    if (!validAliceDeploymentEdgeNonce(edgeNonce)) {
+      return jsonResponse(
+        { ok: false, code: "DEPLOYMENT_EDGE_READINESS_REQUIRED" },
+        400,
+      );
+    }
     const snapshotResult = await callDurable(authority, "/snapshot");
     const authoritySnapshot = snapshotResult.response.ok
       ? sanitizedDeploymentAuthoritySnapshot(snapshotResult.value)
@@ -386,17 +400,41 @@ async function handleDeploymentController(
       code: "DEPLOYMENT_STATUS_READ",
       authority: authoritySnapshot,
       candidateAdmission,
+      edgeReadiness: config
+        ? buildAliceDeploymentEdgeReadiness({
+            config,
+            workerVersion: env.ALICE_VERSION,
+            nonce: edgeNonce,
+          })
+        : null,
     });
   }
   if (
-    path === "/control/internal/v1/deployment/pause-all" &&
+    path === ALICE_DEPLOYMENT_PAUSE_V2_PATH &&
     request.method === "POST"
   ) {
-    const { response, value } = await callDurable(authority, "/pause", {
-      scope: "all",
-      subject: "deployment-controller:pause-only",
-      pauseId: `pause-${crypto.randomUUID()}`,
+    if (!config) {
+      return jsonResponse(
+        { ok: false, code: "DEPLOYMENT_EDGE_READINESS_MISMATCH" },
+        409,
+      );
+    }
+    const guarded = await executeAliceDeploymentPauseV2({
+      path,
+      method: request.method,
+      headerNonce:
+        request.headers.get("x-alice-deployment-edge-nonce") ?? "",
+      body: await readBoundedJson(request),
+      config,
+      workerVersion: env.ALICE_VERSION,
+      mutate: () => callDurable(authority, "/pause", {
+        scope: "all",
+        subject: "deployment-controller:pause-only",
+        pauseId: `pause-${crypto.randomUUID()}`,
+      }),
     });
+    if (!guarded.ok) return jsonResponse(guarded, 409);
+    const { response, value } = guarded.mutation;
     return jsonResponse(value, response.status);
   }
   return jsonResponse({ ok: false, code: "NOT_FOUND" }, 404);

@@ -105,9 +105,14 @@ function fixture() {
   };
   const deploymentPauseEvidence = {
     schemaVersion: "alice.deployment-pause-evidence.v1",
+    prepareControlVersionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     active: unadmitted,
     candidateExpected: expected,
-    result: { pause: initialPause },
+    result: {
+      pause: initialPause,
+      controlVersionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      edgeReadinessConfirmed: true,
+    },
   };
   const rollbackAnchor = {
     schemaVersion: "alice.cloudflare-rollback-anchor.v6",

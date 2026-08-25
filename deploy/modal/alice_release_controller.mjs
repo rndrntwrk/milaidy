@@ -4,6 +4,13 @@ const OWNER_ORIGIN = "https://alice.rndrntwrk.com";
 const RELEASE_ORIGIN = "https://alice-release.rndrntwrk.com";
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
+const VERSION_ID =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const EDGE_NONCE = /^[A-Za-z0-9_-]{43}$/;
+const DEPLOYMENT_STATUS_PATH =
+  "/control/internal/v1/deployment/status";
+const DEPLOYMENT_PAUSE_V2_PATH =
+  "/control/internal/v1/deployment/pause-all-v2";
 
 function invalid(code = "ALICE_RELEASE_CONTROLLER_INVALID") {
   throw new Error(code);
@@ -11,6 +18,13 @@ function invalid(code = "ALICE_RELEASE_CONTROLLER_INVALID") {
 
 function object(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function exactKeys(value, keys) {
+  return (
+    object(value) &&
+    Object.keys(value).sort().join(",") === [...keys].sort().join(",")
+  );
 }
 
 function canonical(value) {
@@ -282,6 +296,12 @@ export async function pauseAliceReleaseMachine({
   deploymentPauseToken,
   active,
   candidateExpected,
+  expectedControlVersionId,
+  readinessAttempts = 24,
+  readinessDelayMs = 5_000,
+  nonceFactory = () => crypto.randomBytes(32).toString("base64url"),
+  sleepImpl = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
 }) {
   if (
     typeof fetchImpl !== "function" ||
@@ -291,6 +311,15 @@ export async function pauseAliceReleaseMachine({
     !validAuthorityTuple(active) ||
     !exactBinding(candidateExpected?.binding, candidateExpected?.binding) ||
     !exactRelease(candidateExpected?.release, candidateExpected?.release) ||
+    !VERSION_ID.test(expectedControlVersionId ?? "") ||
+    !Number.isSafeInteger(readinessAttempts) ||
+    readinessAttempts < 1 ||
+    readinessAttempts > 60 ||
+    !Number.isSafeInteger(readinessDelayMs) ||
+    readinessDelayMs < 0 ||
+    readinessDelayMs > 30_000 ||
+    typeof nonceFactory !== "function" ||
+    typeof sleepImpl !== "function" ||
     candidateExpected.rollbackBoundary !==
       `modal:alice-runtime:v${candidateExpected.release.modalRevision}`
   ) {
@@ -303,9 +332,99 @@ export async function pauseAliceReleaseMachine({
     "cf-access-client-secret": serviceClientSecret,
     "x-alice-deployment-pause-token": deploymentPauseToken,
   };
+
+  const authorityMatches = (authority) => Boolean(
+    object(authority) &&
+    exactBinding(authority.binding, active.binding) &&
+    authority.deploymentManifestSha256 === active.deploymentManifestSha256 &&
+    authority.activeReleaseEpoch === active.releaseEpoch &&
+    authority.rollbackBoundary === active.rollbackBoundary &&
+    Number.isSafeInteger(authority.admissionGeneration) &&
+    authority.admissionGeneration >= 1,
+  );
+  const edgeMatches = (status, nonce) => Boolean(
+    exactKeys(status?.edgeReadiness, [
+      "nonce",
+      "schemaVersion",
+      "servingCandidate",
+      "workerVersionId",
+    ]) &&
+    status.edgeReadiness.schemaVersion ===
+      "alice.deployment-edge-readiness.v1" &&
+    status.edgeReadiness.nonce === nonce &&
+    status.edgeReadiness.workerVersionId === expectedControlVersionId &&
+    object(status.edgeReadiness.servingCandidate) &&
+    exactBinding(
+      status.edgeReadiness.servingCandidate.binding,
+      candidateExpected.binding,
+    ) &&
+    exactRelease(
+      status.edgeReadiness.servingCandidate.release,
+      candidateExpected.release,
+    ) &&
+    status.edgeReadiness.servingCandidate.rollbackBoundary ===
+      candidateExpected.rollbackBoundary
+  );
+  const readStatus = async (nonce) => {
+    const response = await fetchImpl(
+      `${RELEASE_ORIGIN}${DEPLOYMENT_STATUS_PATH}`,
+      {
+        method: "GET",
+        headers: {
+          ...headers,
+          "x-alice-deployment-edge-nonce": nonce,
+        },
+        redirect: "manual",
+      },
+    );
+    const status = await boundedJson(
+      response,
+      "ALICE_DEPLOYMENT_PAUSE_INVALID",
+    );
+    return { response, status };
+  };
+  const awaitStatus = async (verify) => {
+    for (let attempt = 0; attempt < readinessAttempts; attempt += 1) {
+      const nonce = nonceFactory();
+      if (!EDGE_NONCE.test(nonce ?? "")) invalid();
+      try {
+        const observed = await readStatus(nonce);
+        if (
+          observed.response.ok &&
+          observed.status.ok === true &&
+          observed.status.code === "DEPLOYMENT_STATUS_READ" &&
+          authorityMatches(observed.status.authority) &&
+          edgeMatches(observed.status, nonce) &&
+          verify(observed.status)
+        ) {
+          return { ...observed, nonce };
+        }
+      } catch {
+        // A not-yet-propagated route may fail as an HTTP response or a
+        // transport error. Both remain mutation-free and are bounded by the
+        // same readiness-attempt ceiling.
+      }
+      if (attempt + 1 < readinessAttempts) await sleepImpl(readinessDelayMs);
+    }
+    invalid("ALICE_DEPLOYMENT_PAUSE_INVALID");
+  };
+
+  const ready = await awaitStatus(() => true);
   const pauseResponse = await fetchImpl(
-    `${RELEASE_ORIGIN}/control/internal/v1/deployment/pause-all`,
-    { method: "POST", headers, redirect: "manual" },
+    `${RELEASE_ORIGIN}${DEPLOYMENT_PAUSE_V2_PATH}`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        "content-type": "application/json",
+        "x-alice-deployment-edge-nonce": ready.nonce,
+      },
+      body: JSON.stringify({
+        schemaVersion: "alice.deployment-pause-request.v2",
+        edgeReadiness: ready.status.edgeReadiness,
+      }),
+      redirect: "manual",
+    },
   );
   const paused = await boundedJson(pauseResponse, "ALICE_DEPLOYMENT_PAUSE_INVALID");
   if (
@@ -319,11 +438,30 @@ export async function pauseAliceReleaseMachine({
   ) {
     invalid("ALICE_DEPLOYMENT_PAUSE_INVALID");
   }
-  const statusResponse = await fetchImpl(
-    `${RELEASE_ORIGIN}/control/internal/v1/deployment/status`,
-    { method: "GET", headers, redirect: "manual" },
-  );
-  const status = await boundedJson(statusResponse, "ALICE_DEPLOYMENT_PAUSE_INVALID");
+  const confirmed = await awaitStatus((status) => {
+    const authority = status.authority;
+    return Boolean(
+      Array.isArray(authority.pausedScopes) &&
+      authority.pausedScopes.includes("all") &&
+      object(authority.activePauses) &&
+      canonical(authority.activePauses.all) === canonical(paused.result.pause) &&
+      object(status.candidateAdmission) &&
+      status.candidateAdmission.ok === false &&
+      status.candidateAdmission.allowed === false &&
+      status.candidateAdmission.code === "RUNTIME_PAUSED" &&
+      canonical(status.candidateAdmission.blockingScopes) === canonical(["all"]) &&
+      exactBinding(
+        status.candidateAdmission.binding,
+        candidateExpected.binding,
+      ) &&
+      exactRelease(
+        status.candidateAdmission.release,
+        candidateExpected.release,
+      )
+    );
+  });
+  const statusResponse = confirmed.response;
+  const status = confirmed.status;
   const authority = status.authority;
   if (
     !statusResponse.ok ||
@@ -352,7 +490,8 @@ export async function pauseAliceReleaseMachine({
     !exactRelease(
       status.candidateAdmission.release,
       candidateExpected.release,
-    )
+    ) ||
+    !edgeMatches(status, confirmed.nonce)
   ) {
     invalid("ALICE_DEPLOYMENT_PAUSE_INVALID");
   }
@@ -361,6 +500,8 @@ export async function pauseAliceReleaseMachine({
     admissionGeneration: authority.admissionGeneration,
     evidenceQueued: true,
     confirmedByStatusRead: true,
+    edgeReadinessConfirmed: true,
+    controlVersionId: expectedControlVersionId,
   };
 }
 
@@ -420,7 +561,9 @@ export function verifyAliceDeploymentPauseEvidence(
     !Number.isSafeInteger(value.result.admissionGeneration) ||
     value.result.admissionGeneration < 1 ||
     value.result.evidenceQueued !== true ||
-    value.result.confirmedByStatusRead !== true
+    value.result.confirmedByStatusRead !== true ||
+    value.result.edgeReadinessConfirmed !== true ||
+    value.result.controlVersionId !== prepareControlVersionId
   ) {
     invalid("ALICE_DEPLOYMENT_PAUSE_EVIDENCE_INVALID");
   }

@@ -29,6 +29,22 @@ const release = {
   modalRevision: 49,
   deploymentManifestSha256: `sha256:${"9".repeat(64)}`,
 };
+const controlVersionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const candidateExpected = {
+  binding,
+  release,
+  rollbackBoundary: "modal:alice-runtime:v49",
+};
+
+function edgeReadiness(nonce, overrides = {}) {
+  return {
+    schemaVersion: "alice.deployment-edge-readiness.v1",
+    nonce,
+    workerVersionId: controlVersionId,
+    servingCandidate: candidateExpected,
+    ...overrides,
+  };
+}
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 
@@ -109,6 +125,7 @@ test("machine PAUSE_ALL is confirmed by a second signed status read", async () =
     rollbackBoundary: "modal:alice-runtime:v49",
   };
   const seen = [];
+  const nonces = ["p".repeat(43), "q".repeat(43)];
   const fetchImpl = async (url, init) => {
     seen.push({ url: String(url), init });
     if (init.method === "POST") {
@@ -118,6 +135,8 @@ test("machine PAUSE_ALL is confirmed by a second signed status read", async () =
         evidenceQueued: true,
       });
     }
+    const paused = seen.some((entry) => entry.init.method === "POST");
+    const nonce = init.headers["x-alice-deployment-edge-nonce"];
     return Response.json({
       ok: true,
       code: "DEPLOYMENT_STATUS_READ",
@@ -128,17 +147,27 @@ test("machine PAUSE_ALL is confirmed by a second signed status read", async () =
         activeReleaseEpoch: 1,
         highestReleaseEpoch: 1,
         rollbackBoundary: "modal:alice-runtime:v49",
-        pausedScopes: ["all"],
-        activePauses: { all: pause },
+        pausedScopes: paused ? ["all"] : [],
+        activePauses: paused ? { all: pause } : {},
       },
-      candidateAdmission: {
-        ok: false,
-        allowed: false,
-        code: "RUNTIME_PAUSED",
-        blockingScopes: ["all"],
-        binding,
-        release,
-      },
+      candidateAdmission: paused
+        ? {
+            ok: false,
+            allowed: false,
+            code: "RUNTIME_PAUSED",
+            blockingScopes: ["all"],
+            binding,
+            release,
+          }
+        : {
+            ok: true,
+            allowed: true,
+            code: "RUNTIME_ADMITTED",
+            blockingScopes: [],
+            binding,
+            release,
+          },
+      edgeReadiness: edgeReadiness(nonce),
     });
   };
   const result = await pauseAliceReleaseMachine({
@@ -152,19 +181,84 @@ test("machine PAUSE_ALL is confirmed by a second signed status read", async () =
       releaseEpoch: release.releaseEpoch,
       rollbackBoundary: "modal:alice-runtime:v49",
     },
-    candidateExpected: {
-      binding,
-      release,
-      rollbackBoundary: "modal:alice-runtime:v49",
-    },
+    candidateExpected,
+    expectedControlVersionId: controlVersionId,
+    readinessAttempts: 1,
+    readinessDelayMs: 0,
+    nonceFactory: () => nonces.shift(),
+    sleepImpl: async () => {},
   });
   assert.deepEqual(result.pause, pause);
-  assert.equal(seen.length, 2);
+  assert.equal(seen.length, 3);
+  assert.deepEqual(seen.map((entry) => entry.init.method), ["GET", "POST", "GET"]);
+  assert.match(seen[1].url, /\/pause-all-v2$/);
+  assert.deepEqual(JSON.parse(seen[1].init.body), {
+    schemaVersion: "alice.deployment-pause-request.v2",
+    edgeReadiness: edgeReadiness("p".repeat(43)),
+  });
   assert.equal(seen[0].init.headers["cf-access-client-id"], "release-client-id");
   assert.equal(
     seen[0].init.headers["x-alice-deployment-pause-token"],
     "deployment-pause-token-at-least-32-bytes",
   );
+});
+
+test("refuses a stale edge status before any PAUSE_ALL mutation", async () => {
+  let pauseMutations = 0;
+  const methods = [];
+  await assert.rejects(
+    () => pauseAliceReleaseMachine({
+      fetchImpl: async (_url, init) => {
+        methods.push(init.method);
+        if (init.method === "POST") pauseMutations += 1;
+        return Response.json({
+          ok: true,
+          code: "DEPLOYMENT_STATUS_READ",
+          authority: {
+            binding,
+            deploymentManifestSha256: release.deploymentManifestSha256,
+            admissionGeneration: 3,
+            activeReleaseEpoch: 1,
+            highestReleaseEpoch: 1,
+            rollbackBoundary: "modal:alice-runtime:v49",
+            pausedScopes: [],
+            activePauses: {},
+          },
+          candidateAdmission: {
+            ok: false,
+            allowed: false,
+            code: "RELEASE_NOT_ADMITTED",
+            blockingScopes: [],
+            binding: null,
+            release: null,
+          },
+          // This is the production-shaped stale edge: the prior Worker does
+          // not expose the candidate/version readiness challenge.
+        });
+      },
+      serviceClientId: "release-client-id",
+      serviceClientSecret: "release-client-secret-at-least-32-bytes",
+      deploymentPauseToken: "deployment-pause-token-at-least-32-bytes",
+      active: {
+        binding,
+        deploymentManifestSha256: release.deploymentManifestSha256,
+        releaseEpoch: release.releaseEpoch,
+        rollbackBoundary: "modal:alice-runtime:v49",
+      },
+      candidateExpected: {
+        binding,
+        release,
+        rollbackBoundary: "modal:alice-runtime:v49",
+      },
+      expectedControlVersionId: controlVersionId,
+      readinessAttempts: 1,
+      nonceFactory: () => "n".repeat(43),
+      sleepImpl: async () => {},
+    }),
+    /ALICE_DEPLOYMENT_PAUSE_INVALID/,
+  );
+  assert.equal(pauseMutations, 0);
+  assert.deepEqual(methods, ["GET"]);
 });
 
 test("first release pauses the exact unadmitted tuple while checking the signed candidate", async () => {
@@ -187,14 +281,27 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
     pausedScopes: ["all"],
     admissionGeneration: 2,
   });
+  const unpausedCandidate = buildAliceReleaseCheckResponse({
+    binding,
+    release,
+    releaseIsActive: false,
+    pausedScopes: [],
+    admissionGeneration: 2,
+  });
+  const nonces = ["r".repeat(43), "s".repeat(43)];
+  let paused = false;
   const result = await pauseAliceReleaseMachine({
-    fetchImpl: async (_url, init) => init.method === "POST"
-      ? Response.json({
+    fetchImpl: async (_url, init) => {
+      if (init.method === "POST") {
+        paused = true;
+        return Response.json({
           ok: true,
           result: { ok: true, code: "SCOPE_PAUSED", pause },
           evidenceQueued: true,
-        })
-      : Response.json({
+        });
+      }
+      const nonce = init.headers["x-alice-deployment-edge-nonce"];
+      return Response.json({
           ok: true,
           code: "DEPLOYMENT_STATUS_READ",
           authority: {
@@ -204,11 +311,13 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
             activeReleaseEpoch: 0,
             highestReleaseEpoch: 0,
             rollbackBoundary: "release:unadmitted",
-            pausedScopes: ["all"],
-            activePauses: { all: pause },
+            pausedScopes: paused ? ["all"] : [],
+            activePauses: paused ? { all: pause } : {},
           },
-          candidateAdmission: pausedCandidate,
-        }),
+          candidateAdmission: paused ? pausedCandidate : unpausedCandidate,
+          edgeReadiness: edgeReadiness(nonce),
+        });
+    },
     serviceClientId: "release-client-id",
     serviceClientSecret: "release-client-secret-at-least-32-bytes",
     deploymentPauseToken: "deployment-pause-token-at-least-32-bytes",
@@ -218,11 +327,12 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
       releaseEpoch: 0,
       rollbackBoundary: "release:unadmitted",
     },
-    candidateExpected: {
-      binding,
-      release,
-      rollbackBoundary: "modal:alice-runtime:v49",
-    },
+    candidateExpected,
+    expectedControlVersionId: controlVersionId,
+    readinessAttempts: 1,
+    readinessDelayMs: 0,
+    nonceFactory: () => nonces.shift(),
+    sleepImpl: async () => {},
   });
   assert.deepEqual(result.pause, pause);
   const evidence = {
