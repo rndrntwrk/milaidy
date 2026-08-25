@@ -71,10 +71,18 @@ describe("Alice durable mutation evidence outbox wiring", () => {
     expect(machine).not.toContain("authorizeEmergencyRecovery");
     expect(machine).not.toContain("ALICE_CONTROL_RECOVERY_TOKEN");
     expect(machine).toContain('path === "/control/internal/v1/deployment/status"');
-    expect(machine).toContain('path === "/control/internal/v1/deployment/pause-all"');
+    expect(machine).toContain("ALICE_DEPLOYMENT_PAUSE_V2_PATH");
+    expect(machine).not.toContain(
+      'path === "/control/internal/v1/deployment/pause-all"',
+    );
     expect(machine).toContain('callDurable(authority, "/snapshot")');
     expect(machine).toContain("candidateAdmission");
+    expect(machine).toContain("buildAliceDeploymentEdgeReadiness");
+    expect(machine).toContain("executeAliceDeploymentPauseV2");
     expect(machine).toContain('callDurable(authority, "/pause"');
+    expect(machine.indexOf("executeAliceDeploymentPauseV2")).toBeLessThan(
+      machine.indexOf('callDurable(authority, "/pause"'),
+    );
     expect(machine).not.toContain('"/release/activate"');
     expect(machine).not.toContain('"/resume"');
     expect(machine).not.toContain("loadRuntimeConfig(env)");

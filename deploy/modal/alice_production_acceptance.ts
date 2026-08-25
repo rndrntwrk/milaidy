@@ -22,6 +22,8 @@ const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const RUN_ID = /^[1-9][0-9]*$/;
+const VERSION_ID =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const EVIDENCE_CURSOR = /^[A-Za-z0-9._~=-]{1,1024}$/;
 const REQUIRED_EVIDENCE_KINDS = Object.freeze({
   "control.pause": 1,
@@ -458,6 +460,10 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     deploymentPauseEvidence.schemaVersion !==
       "alice.deployment-pause-evidence.v1" ||
     !exact(deploymentPauseEvidence.candidateExpected, expected) ||
+    !VERSION_ID.test(deploymentPauseEvidence.prepareControlVersionId ?? "") ||
+    deploymentPauseEvidence.result?.controlVersionId !==
+      deploymentPauseEvidence.prepareControlVersionId ||
+    deploymentPauseEvidence.result?.edgeReadinessConfirmed !== true ||
     !object(deploymentPauseEvidence.active) ||
     !object(deploymentPauseEvidence.result?.pause) ||
     rollbackAnchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v6"
@@ -956,6 +962,8 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
             deploymentPauseToken,
             active: expected,
             candidateExpected: expected,
+            expectedControlVersionId:
+              deploymentPauseEvidence.prepareControlVersionId,
           });
         } catch (machinePauseError) {
           throw new AggregateError(

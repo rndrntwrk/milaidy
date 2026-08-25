@@ -193,6 +193,7 @@ async function main() {
     deploymentPauseToken: process.env.ALICE_DEPLOYMENT_PAUSE_TOKEN,
     active,
     candidateExpected,
+    expectedControlVersionId: prepareEvidence.controlVersionId,
   });
   const evidence = buildAliceFirstReleasePauseEvidence({
     admission,
