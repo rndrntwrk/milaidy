@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { buildAliceReleaseCheckResponse } from "../../workers/alice-production-control/src/release-check.ts";
 import {
   admitAliceReleaseOwner,
   pauseAliceReleaseMachine,
@@ -179,6 +180,13 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
     deploymentManifestSha256: `sha256:${"0".repeat(64)}`,
     rollbackBoundary: "release:unadmitted",
   };
+  const pausedCandidate = buildAliceReleaseCheckResponse({
+    binding,
+    release,
+    releaseIsActive: false,
+    pausedScopes: ["all"],
+    admissionGeneration: 2,
+  });
   const result = await pauseAliceReleaseMachine({
     fetchImpl: async (_url, init) => init.method === "POST"
       ? Response.json({
@@ -199,14 +207,7 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
             pausedScopes: ["all"],
             activePauses: { all: pause },
           },
-          candidateAdmission: {
-            ok: false,
-            allowed: false,
-            code: "RUNTIME_PAUSED",
-            blockingScopes: ["all"],
-            binding,
-            release,
-          },
+          candidateAdmission: pausedCandidate,
         }),
     serviceClientId: "release-client-id",
     serviceClientSecret: "release-client-secret-at-least-32-bytes",

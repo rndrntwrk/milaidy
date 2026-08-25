@@ -44,6 +44,7 @@ import {
   verifyReleaseRollbackReceipt,
 } from "./recovery";
 import { validatePlan, type AlicePlan } from "./plan";
+import { buildAliceReleaseCheckResponse } from "./release-check";
 
 function validBinding(value: unknown): value is ReleaseBinding {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -245,26 +246,16 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
         const config = await loadRuntimeConfig(this.aliceEnv);
         const candidate = releaseCandidate(config);
         const snapshot = this.ledger.snapshot();
-        const blockingScopes = ["all", "modal", "release"].filter((scope) =>
-          snapshot.pausedScopes.includes(scope),
-        );
-        const allowed =
-          this.ledger.releaseIsActive(candidate) && blockingScopes.length === 0;
+        const releaseCheck = buildAliceReleaseCheckResponse({
+          binding: config.binding,
+          release: releaseDetails(config),
+          releaseIsActive: this.ledger.releaseIsActive(candidate),
+          pausedScopes: snapshot.pausedScopes,
+          admissionGeneration: snapshot.admissionGeneration,
+        });
         return jsonResponse(
-          {
-            ok: allowed,
-            allowed,
-            code: allowed
-              ? "RUNTIME_ADMITTED"
-              : blockingScopes.length > 0
-                ? "RUNTIME_PAUSED"
-                : "RELEASE_NOT_ADMITTED",
-            blockingScopes,
-            admissionGeneration: snapshot.admissionGeneration,
-            binding: allowed ? config.binding : null,
-            release: allowed ? releaseDetails(config) : null,
-          },
-          allowed ? 200 : 503,
+          releaseCheck,
+          releaseCheck.allowed ? 200 : 503,
         );
       }
       if (request.method !== "POST") return jsonResponse({ ok: false, code: "METHOD_NOT_ALLOWED" }, 405);
