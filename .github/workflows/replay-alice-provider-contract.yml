@@ -67,7 +67,7 @@ jobs:
       ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
       ALICE_REPLAY_TOOLING_ROOT: ${{ github.workspace }}/replay-tooling
       ALICE_REPLAY_RELEASE_ROOT: ${{ github.workspace }}/alice-release
-      ALICE_REPLAY_ROOT: ${{ runner.temp }}/alice-modal-before
+      ALICE_REPLAY_ROOT: ${{ github.workspace }}/alice-modal-before
 
     steps:
       - name: Validate exact one-use replay tag and immutable source identity
@@ -200,18 +200,18 @@ jobs:
       ALICE_POLICY_HASH: ${{ inputs.policy_hash }}
       ALICE_REPLAY_TOOLING_ROOT: ${{ github.workspace }}/replay-tooling
       ALICE_REPLAY_RELEASE_ROOT: ${{ github.workspace }}/alice-release
-      ALICE_REPLAY_ROOT: ${{ runner.temp }}/alice-provider-replay
-      ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-provider-replay/worker-artifact
-      ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-provider-replay/worker-artifact/alice-worker-bundles.json
-      ALICE_REPLAY_ARTIFACT_RECORD_PATH: ${{ runner.temp }}/alice-provider-replay/artifact-record.json
-      ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-provider-replay/release/alice-deployment-manifest.json
-      ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH: ${{ runner.temp }}/alice-provider-replay/release/provider-readback.json
-      ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-provider-replay/release/durable-object-namespace-ids.json
-      ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-provider-replay/release/wrangler
-      ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-provider-replay/release/program-admission.json
-      ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-provider-replay/release/.alice-runtime-release-token
-      ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-provider-replay/release/.alice-runtime-release-token-sha256
-      ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-provider-replay/release/.alice-evidence-queue-hmac-key
+      ALICE_REPLAY_ROOT: ${{ github.workspace }}/alice-provider-replay
+      ALICE_WORKER_BUNDLE_ROOT: ${{ github.workspace }}/alice-provider-replay/worker-artifact
+      ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ github.workspace }}/alice-provider-replay/worker-artifact/alice-worker-bundles.json
+      ALICE_REPLAY_ARTIFACT_RECORD_PATH: ${{ github.workspace }}/alice-provider-replay/artifact-record.json
+      ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ github.workspace }}/alice-provider-replay/release/alice-deployment-manifest.json
+      ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH: ${{ github.workspace }}/alice-provider-replay/release/provider-readback.json
+      ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ github.workspace }}/alice-provider-replay/release/durable-object-namespace-ids.json
+      ALICE_WRANGLER_OUTPUT_DIR: ${{ github.workspace }}/alice-provider-replay/release/wrangler
+      ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ github.workspace }}/alice-provider-replay/release/program-admission.json
+      ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ github.workspace }}/alice-provider-replay/release/.alice-runtime-release-token
+      ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ github.workspace }}/alice-provider-replay/release/.alice-runtime-release-token-sha256
+      ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ github.workspace }}/alice-provider-replay/release/.alice-evidence-queue-hmac-key
 
     steps:
       - name: Validate immutable release, build, and artifact identities
@@ -256,7 +256,7 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/actions/runs/${ALICE_BUILD_RUN_ID}/artifacts?per_page=100")"
           matches="$(printf '%s' "$artifacts_json" | jq \
             --arg name "$ALICE_WORKER_ARTIFACT_NAME" \
-            '[.[].artifacts[] | select(.name == $name)])'"
+            '[.[].artifacts[] | select(.name == $name)])')"
           test "$(printf '%s' "$matches" | jq 'length')" = "1"
           test "$(printf '%s' "$matches" | jq -r '.[0].digest')" = \
             "$ALICE_WORKER_ARTIFACT_DIGEST"
@@ -507,7 +507,7 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/actions/runs/${ALICE_BUILD_RUN_ID}/artifacts?per_page=100")"
           matches="$(printf '%s' "$artifacts_json" | jq \
             --arg name "$ALICE_WORKER_ARTIFACT_NAME" \
-            '[.[].artifacts[] | select(.name == $name)])'"
+            '[.[].artifacts[] | select(.name == $name)])')"
           count="$(printf '%s' "$matches" | jq 'length')"
           test "$count" = "1"
           digest="$(printf '%s' "$matches" | jq -r '.[0].digest')"
@@ -558,7 +558,8 @@ jobs:
         run: |
           set -euo pipefail
           output="$ALICE_REPLAY_ROOT/evidence-upload"
-          mkdir -p -m 0700 "$output"
+          mkdir -p "$output"
+          chmod 0700 "$output"
           for candidate in \
             "$ALICE_REPLAY_ROOT/evidence/replay-evidence.json" \
             "$ALICE_REPLAY_ROOT/before.json" \
@@ -616,7 +617,7 @@ jobs:
       ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
       ALICE_REPLAY_TOOLING_ROOT: ${{ github.workspace }}/replay-tooling
       ALICE_REPLAY_RELEASE_ROOT: ${{ github.workspace }}/alice-release
-      ALICE_REPLAY_ROOT: ${{ runner.temp }}/alice-modal-after
+      ALICE_REPLAY_ROOT: ${{ github.workspace }}/alice-modal-after
 
     steps:
       - name: Validate exact one-use replay tag and immutable source identity
@@ -740,7 +741,7 @@ jobs:
       ALICE_REPLAY_TOOLING_SHA: ${{ inputs.tooling_sha }}
       ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
       ALICE_REPLAY_TOOLING_ROOT: ${{ github.workspace }}/replay-tooling
-      ALICE_REPLAY_ROOT: ${{ runner.temp }}/alice-provider-replay-final
+      ALICE_REPLAY_ROOT: ${{ github.workspace }}/alice-provider-replay-final
 
     steps:
       - name: Validate exact one-use replay tag
@@ -781,7 +782,8 @@ jobs:
       - name: Prove fresh Modal before and after canonical states identical
         run: |
           set -euo pipefail
-          mkdir -p -m 0700 "$ALICE_REPLAY_ROOT/final"
+          mkdir -p "$ALICE_REPLAY_ROOT/final"
+          chmod 0700 "$ALICE_REPLAY_ROOT/final"
           test "${{ needs.replay.result }}" = "success"
           jq -e \
             '.status == "success" and .mutationDisabled == true and
