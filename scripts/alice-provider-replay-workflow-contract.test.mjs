@@ -272,3 +272,70 @@ test("Modal recovery credentials bracket the credential-free core replay in sepa
   assert.match(finalize, /needs:\s+\[modal_before, replay, modal_after\]/u);
   assert.doesNotMatch(source, /ALICE_MODAL_REPLAY_TOKEN/u);
 });
+
+test("CI pins the Linux x86_64 ShellCheck asset used by the replay gate", () => {
+  const ci = fs.readFileSync(path.join(workflowsDir, "ci.yml"), "utf8");
+  assert.match(ci, /SHELLCHECK_VERSION:\s+v0\.11\.0/u);
+  assert.match(
+    ci,
+    /SHELLCHECK_SHA256:\s+8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198/u,
+  );
+  assert.match(ci, /shellcheck-\$\{SHELLCHECK_VERSION\}\.linux\.x86_64\.tar\.xz/u);
+});
+
+test("real actionlint validates the complete replay workflow", () => {
+  const shellcheck = process.env.ALICE_SHELLCHECK_BIN ?? "shellcheck";
+  const shellcheckVersion = childProcess.spawnSync(shellcheck, ["--version"], {
+    encoding: "utf8",
+    env: process.env,
+  });
+  assert.equal(
+    shellcheckVersion.status,
+    0,
+    shellcheckVersion.error?.message ?? shellcheckVersion.stderr,
+  );
+  assert.match(shellcheckVersion.stdout, /\nversion: 0\.11\.0\n/u);
+
+  const lintRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "alice-provider-replay-actionlint-"),
+  );
+  const configPath = path.join(lintRoot, "actionlint.yaml");
+  fs.writeFileSync(
+    configPath,
+    [
+      "self-hosted-runner:",
+      "  labels:",
+      "    - blacksmith-4vcpu-ubuntu-2404",
+      "",
+    ].join("\n"),
+    { mode: 0o600 },
+  );
+  const result = childProcess.spawnSync(
+    "go",
+    [
+      "run",
+      "github.com/rhysd/actionlint/cmd/actionlint@v1.7.12",
+      "-no-color",
+      `-shellcheck=${shellcheck}`,
+      "-pyflakes=",
+      "-config-file",
+      configPath,
+      path.join(workflowsDir, "replay-alice-provider-contract.yml"),
+      path.join(workflowsDir, "ci.yml"),
+    ],
+    { encoding: "utf8", env: process.env },
+  );
+  try {
+    assert.equal(
+      result.status,
+      0,
+      [result.error?.message, result.stdout, result.stderr]
+        .filter(Boolean)
+        .join("\n"),
+    );
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /^(?:go: downloading [^\n]+\n)*$/u);
+  } finally {
+    fs.rmSync(lintRoot, { force: true, recursive: true });
+  }
+});

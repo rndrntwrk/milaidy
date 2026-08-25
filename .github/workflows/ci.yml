@@ -28,6 +28,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Setup Go for pinned workflow validation
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.25.3"
+
       - name: Setup Python (for node-gyp when native prebuilds missing)
         uses: actions/setup-python@v5
         with:
@@ -38,6 +43,30 @@ jobs:
 
       - name: Install native dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev libpixman-1-dev librsvg2-dev
+
+      - name: Install pinned ShellCheck for workflow validation
+        env:
+          SHELLCHECK_VERSION: v0.11.0
+          SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+          SHELLCHECK_ROOT: ${{ runner.temp }}/alice-actionlint-tools
+        run: |
+          set -euo pipefail
+          archive="shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          mkdir -p "$SHELLCHECK_ROOT/bin"
+          curl -fsSL \
+            "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${archive}" \
+            --output "$SHELLCHECK_ROOT/$archive"
+          printf '%s  %s\n' "$SHELLCHECK_SHA256" "$SHELLCHECK_ROOT/$archive" |
+            sha256sum --check --strict
+          tar -xJf "$SHELLCHECK_ROOT/$archive" -C "$SHELLCHECK_ROOT"
+          install -m 0755 \
+            "$SHELLCHECK_ROOT/shellcheck-${SHELLCHECK_VERSION}/shellcheck" \
+            "$SHELLCHECK_ROOT/bin/shellcheck"
+
+      - name: Validate complete Alice provider replay workflow
+        env:
+          ALICE_SHELLCHECK_BIN: ${{ runner.temp }}/alice-actionlint-tools/bin/shellcheck
+        run: node --test scripts/alice-provider-replay-workflow-contract.test.mjs
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
