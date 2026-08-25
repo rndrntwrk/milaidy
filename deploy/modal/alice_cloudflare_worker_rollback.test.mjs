@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import * as rollback from "./alice_cloudflare_worker_rollback.mjs";
 import {
+  aliceTestLiveWorkerRollbackReadbacks,
+} from "./test-fixtures/alice_provider_readbacks.mjs";
+
+const {
   captureAliceCloudflareWorkerRollbackState,
   normalizeAliceCloudflareScriptSettings,
-  normalizeAliceCloudflareVersionSettings,
   restoreAliceCloudflareWorkerRollbackState,
-} from "./alice_cloudflare_worker_rollback.mjs";
+} = rollback;
 
 test("normalizes every persistent script setting with explicit defaults", () => {
   assert.deepEqual(normalizeAliceCloudflareScriptSettings({}), {
@@ -15,6 +19,7 @@ test("normalizes every persistent script setting with explicit defaults", () => 
       enabled: false,
       head_sampling_rate: null,
       logs: null,
+      redact_query_string: false,
       traces: null,
     },
     tags: [],
@@ -26,6 +31,7 @@ test("normalizes every persistent script setting with explicit defaults", () => 
       observability: {
         enabled: true,
         head_sampling_rate: 1,
+        redact_query_string: false,
         logs: {
           enabled: true,
           invocation_logs: true,
@@ -49,6 +55,7 @@ test("normalizes every persistent script setting with explicit defaults", () => 
       observability: {
         enabled: true,
         head_sampling_rate: 1,
+        redact_query_string: false,
         logs: {
           enabled: true,
           invocation_logs: true,
@@ -74,85 +81,126 @@ test("normalizes every persistent script setting with explicit defaults", () => 
   );
 });
 
-test("captures version settings without secret payloads or server annotations", () => {
-  assert.deepEqual(
-    normalizeAliceCloudflareVersionSettings({
-      annotations: {
-        "workers/message": "prior",
-        "workers/tag": "prior-tag",
-        "workers/triggered_by": "upload",
-      },
-      bindings: [
-        { name: "PUBLIC", text: "visible", type: "plain_text" },
-        { name: "SECRET", type: "secret_text" },
-        {
-          name: "ALICE_CONTROL",
-          service: "alice-production-control",
-          type: "service",
-        },
-      ],
-      cache_options: { enabled: false },
-      compatibility_date: "2026-08-22",
-      compatibility_flags: [],
-      exports: { default: { state: "created", type: "worker" } },
-    }),
-    {
-      bindings: [
-        {
-          name: "ALICE_CONTROL",
-          service: "alice-production-control",
-          type: "service",
-        },
-        { name: "PUBLIC", text: "visible", type: "plain_text" },
-        { name: "SECRET", type: "secret_text" },
-      ],
-      cache_options: { cross_version_cache: null, enabled: false },
-      compatibility_date: "2026-08-22",
-      compatibility_flags: [],
-      exports: { default: { cache: null, state: "created", type: "worker" } },
-      limits: null,
-      logpush: false,
-      migrations: null,
-      observability: {
-        enabled: false,
-        head_sampling_rate: null,
-        logs: null,
-        traces: null,
-      },
-      placement: null,
-      tags: [],
-      tail_consumers: [],
-      usage_model: null,
-    },
+test("normalizes immutable version resources and exact provider-owned binding values", () => {
+  assert.equal(typeof rollback.normalizeAliceCloudflareVersionResources, "function");
+  const fixtures = aliceTestLiveWorkerRollbackReadbacks();
+  const access = rollback.normalizeAliceCloudflareVersionResources(
+    fixtures.access.version.resources,
   );
-  assert.throws(
-    () => normalizeAliceCloudflareVersionSettings({
-      bindings: [{ name: "SECRET", text: "must-not-be-read", type: "secret_text" }],
-    }),
-    /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+  assert.deepEqual(access.script, { etag: "access-live-etag" });
+  assert.deepEqual(access.script_runtime, {
+    cache_options: null,
+    compatibility_date: "2026-02-18",
+    compatibility_flags: [],
+    exports: {},
+    limits: null,
+    migration_tag: null,
+    usage_model: "standard",
+  });
+  for (const name of ["UPSTREAM_HOST_HEADER", "UPSTREAM_ORIGIN"]) {
+    assert.equal(access.bindings.find((binding) => binding.name === name).text, "");
+  }
+  const ai = rollback.normalizeAliceCloudflareVersionResources(
+    fixtures.aiGateway.version.resources,
   );
+  assert.equal(ai.bindings.find(({ name }) => name === "AI").project, "alice-production");
 });
 
-test("rejects unknown script, version, binding, and export fields", () => {
-  assert.throws(
-    () => normalizeAliceCloudflareScriptSettings({ unknown: true }),
-    /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+test("rejects malformed immutable resources and provider additions", () => {
+  for (const observability of [
+    { enabled: true, redact_query_string: null },
+    { enabled: true, redact_query_string: "false" },
+  ]) {
+    assert.throws(
+      () => normalizeAliceCloudflareScriptSettings({ observability }),
+      /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+    );
+  }
+  assert.equal(typeof rollback.normalizeAliceCloudflareVersionResources, "function");
+  const fixtures = aliceTestLiveWorkerRollbackReadbacks();
+  const invalidBindings = [
+    { name: "", text: "", type: "plain_text" },
+    { name: "EMPTY", text: "", type: "" },
+    { name: "CRLF", text: "bad\nvalue", type: "plain_text" },
+    { name: "QUEUE", queue_name: "", type: "queue" },
+    { name: "SERVICE", service: "", type: "service" },
+    { bucket_name: "", name: "BUCKET", type: "r2_bucket" },
+  ];
+  for (const binding of invalidBindings) {
+    assert.throws(
+      () => rollback.normalizeAliceCloudflareVersionResources({
+        ...fixtures.access.version.resources,
+        bindings: [binding],
+      }),
+      /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+    );
+  }
+  for (const project of ["", "bad\nproject", false]) {
+    assert.throws(
+      () => rollback.normalizeAliceCloudflareVersionResources({
+        ...fixtures.aiGateway.version.resources,
+        bindings: [{ name: "AI", project, type: "ai" }],
+      }),
+      /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+    );
+  }
+  for (const resources of [
+    { ...fixtures.access.version.resources, unknown: true },
+    { ...fixtures.access.version.resources, script: {} },
+    { ...fixtures.access.version.resources, script_runtime: { placement: {} } },
+  ]) {
+    assert.throws(
+      () => rollback.normalizeAliceCloudflareVersionResources(resources),
+      /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+    );
+  }
+});
+
+test("captures the production-shaped current response for every Alice Worker", async () => {
+  const fixtures = aliceTestLiveWorkerRollbackReadbacks();
+  const json = (result) => new Response(
+    JSON.stringify({ success: true, result }),
+    { status: 200, headers: { "content-type": "application/json" } },
   );
-  assert.throws(
-    () => normalizeAliceCloudflareVersionSettings({ unknown: true }),
-    /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+  const fetchImpl = async (input, init) => {
+    assert.equal(init?.method, "GET");
+    const url = new URL(input);
+    const match = url.pathname.match(/\/workers\/scripts\/([^/]+)(.*)$/);
+    assert.ok(match);
+    const fixture = Object.values(fixtures).find(({ worker }) => worker === match[1]);
+    assert.ok(fixture);
+    const suffix = match[2];
+    if (suffix === "/deployments") return json(fixture.deployment);
+    if (suffix === `/versions/${fixture.version.id}`) return json(fixture.version);
+    if (suffix === "/script-settings") return json(fixture.scriptSettings);
+    throw new Error(`unexpected ${url}`);
+  };
+
+  const captured = await captureAliceCloudflareWorkerRollbackState({
+    fetchImpl,
+    apiToken: "test-api-token",
+    baseUrl: "https://api.cloudflare.test/client/v4",
+  });
+  assert.deepEqual(Object.keys(captured), ["access", "control", "aiGateway"]);
+  assert.deepEqual(captured.access.scriptSettings, {
+    logpush: false,
+    observability: null,
+    tags: null,
+    tail_consumers: null,
+  });
+  assert.equal(captured.access.versionResources.script.etag, "access-live-etag");
+  assert.equal(
+    captured.access.versionResources.bindings.find(
+      ({ name }) => name === "UPSTREAM_ORIGIN",
+    ).text,
+    "",
   );
-  assert.throws(
-    () => normalizeAliceCloudflareVersionSettings({
-      bindings: [{ name: "AI", type: "ai", ambient_authority: true }],
-    }),
-    /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
-  );
-  assert.throws(
-    () => normalizeAliceCloudflareVersionSettings({
-      exports: { default: { type: "worker", unknown: true } },
-    }),
-    /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+  for (const role of ["control", "aiGateway"]) {
+    assert.equal(captured[role].scriptSettings.observability.redact_query_string, false);
+  }
+  assert.equal(
+    captured.aiGateway.versionResources.bindings.find(({ name }) => name === "AI").project,
+    "alice-production",
   );
 });
 
@@ -215,28 +263,17 @@ test("restores persistent settings and proves the prior serving version twice", 
     if (suffix === `/versions/${versionId}`) {
       return json({
         id: versionId,
-        resources: { script: { etag: `etag-${worker}` } },
-      });
-    }
-    if (suffix === "/content/v2") {
-      return new Response(`export default ${JSON.stringify(worker)};\n`, {
-        status: 200,
-        headers: {
-          "content-type": "application/javascript",
-          etag: `"etag-${worker}"`,
+        resources: {
+          bindings: [{ name: "SECRET", type: "secret_text" }],
+          script: { etag: `etag-${worker}` },
+          script_runtime: {
+            compatibility_date: "2026-08-22",
+            usage_model: "standard",
+          },
         },
       });
     }
     if (suffix === "/script-settings") return json(scriptSettings[worker]);
-    if (suffix === "/settings") {
-      return json({
-        bindings: [{ name: "SECRET", type: "secret_text" }],
-        cache_options: { enabled: false },
-        compatibility_date: "2026-08-22",
-        compatibility_flags: [],
-        exports: { default: { state: "created", type: "worker" } },
-      });
-    }
     throw new Error(`unexpected ${url}`);
   };
 
@@ -298,7 +335,7 @@ test("restores persistent settings and proves the prior serving version twice", 
   for (const patch of patches) {
     assert.deepEqual(patch.body, {
       logpush: false,
-      observability: { enabled: false },
+      observability: { enabled: false, redact_query_string: false },
       tags: [],
       tail_consumers: [],
     });

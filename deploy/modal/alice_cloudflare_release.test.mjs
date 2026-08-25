@@ -83,6 +83,15 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     "aiGateway",
     "control",
   ]);
+  for (const command of commands.rollbacks) {
+    assert.deepEqual(command.argv.slice(0, 2), ["versions", "deploy"]);
+    assert.equal(
+      command.argv[command.argv.indexOf("--percentage") + 1],
+      "100",
+    );
+    assert.ok(command.argv.includes("--version-id"));
+    assert.equal(command.argv.includes("rollback"), false);
+  }
   assert.equal("triggers" in commands, false);
 });
 
@@ -261,43 +270,33 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
       enabled: false,
       head_sampling_rate: null,
       logs: null,
+      redact_query_string: false,
       traces: null,
     },
     tags: [],
     tail_consumers: [],
   };
-  const versionSettings = {
+  const versionResources = {
     bindings: [],
-    cache_options: { cross_version_cache: null, enabled: false },
-    compatibility_date: "2026-08-22",
-    compatibility_flags: [],
-    exports: {
-      default: { cache: null, state: "created", type: "worker" },
+    script: { etag: "placeholder-etag" },
+    script_runtime: {
+      cache_options: null,
+      compatibility_date: "2026-08-22",
+      compatibility_flags: [],
+      exports: {},
+      limits: null,
+      migration_tag: null,
+      usage_model: "standard",
     },
-    limits: null,
-    logpush: false,
-    migrations: null,
-    observability: {
-      enabled: false,
-      head_sampling_rate: null,
-      logs: null,
-      traces: null,
-    },
-    placement: null,
-    tags: [],
-    tail_consumers: [],
-    usage_model: null,
   };
-  const worker = (name, deploymentId, versionId, character) => ({
+  const worker = (name, deploymentId, versionId) => ({
     worker: name,
-    serving: {
-      deploymentId,
-      versionId,
-      scriptEtag: `etag-${name}`,
-      mainModuleSha256: `sha256:${character.repeat(64)}`,
-    },
+    serving: { deploymentId, versionId },
     scriptSettings,
-    versionSettings,
+    versionResources: {
+      ...versionResources,
+      script: { etag: `etag-${name}` },
+    },
   });
   const continuityConfig = buildAliceCloudflareContinuityConfig(
     aliceTestCloudflareContinuityReadback(),
@@ -318,7 +317,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     limits: { steps: version.limits.steps },
   }));
   const anchor = {
-    schemaVersion: "alice.cloudflare-rollback-anchor.v5",
+    schemaVersion: "alice.cloudflare-rollback-anchor.v6",
     accountId: "036df6c823669b8fa2f66cf4c16eeb29",
     candidate: { sourceCommit, deploymentManifestSha256 },
     previous: {
@@ -344,19 +343,16 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
           "alice-access-gateway",
           "11111111-1111-4111-8111-111111111111",
           "11111111-1111-4111-8111-111111111112",
-          "a",
         ),
         control: worker(
           "alice-production-control",
           "22222222-2222-4222-8222-222222222221",
           "22222222-2222-4222-8222-222222222222",
-          "b",
         ),
         aiGateway: worker(
           "alice-ai-gateway",
           "33333333-3333-4333-8333-333333333331",
           "33333333-3333-4333-8333-333333333333",
-          "c",
         ),
       },
     },

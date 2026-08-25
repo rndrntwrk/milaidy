@@ -294,10 +294,14 @@ export function buildAliceProtectedCloudflareCommands({
     return [{
       role,
       argv: [
-        "rollback",
-        versionId,
+        "versions",
+        "deploy",
         "--config",
         configPath(configDir, role),
+        "--version-id",
+        versionId,
+        "--percentage",
+        "100",
         "--message",
         `Alice rollback from ${sourceCommit}`,
         "--yes",
@@ -704,7 +708,7 @@ async function createRollbackAnchor({
     releaseInvalid("ALICE_ROLLBACK_ANCHOR_INVALID");
   }
   const anchor = {
-    schemaVersion: "alice.cloudflare-rollback-anchor.v5",
+    schemaVersion: "alice.cloudflare-rollback-anchor.v6",
     accountId: ALICE_CLOUDFLARE_TARGET.accountId,
     candidate: { sourceCommit, deploymentManifestSha256 },
     previous: {
@@ -737,7 +741,7 @@ export function verifyAliceCloudflareRollbackAnchor(
       "previous",
       "schemaVersion",
     ]) ||
-    anchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v5" ||
+    anchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v6" ||
     anchor.accountId !== ALICE_CLOUDFLARE_TARGET.accountId ||
     !exactKeys(anchor.candidate, [
       "deploymentManifestSha256",

@@ -110,7 +110,7 @@ function fixture() {
     result: { pause: initialPause },
   };
   const rollbackAnchor = {
-    schemaVersion: "alice.cloudflare-rollback-anchor.v5",
+    schemaVersion: "alice.cloudflare-rollback-anchor.v6",
     previous: { workflowVersions: [previousWorkflow] },
   };
   const cloudflareRollbackProof = {
