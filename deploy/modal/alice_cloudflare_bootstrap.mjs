@@ -27,6 +27,9 @@ const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const NAMESPACE_ID = /^[a-f0-9]{32}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const RELEASE_RUN_ID = /^[1-9][0-9]*-[1-9][0-9]*$/;
+const BOOTSTRAP_VERSION_TAG =
+  /^alice-continuity-bootstrap-[a-f0-9]{40}-[1-9][0-9]*-[1-9][0-9]*$/;
+const RECOVERY_VERSION_TAG = /^alice-recovery-boundary-[a-f0-9]{40}$/;
 const RESOURCE_ID = /^[A-Za-z0-9_-]{16,64}$/;
 const VERSION_ID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -868,7 +871,7 @@ export function verifyAliceBootstrapQueueConsumer(consumer) {
   return consumer;
 }
 
-async function activeControlVersionId({ fetchImpl, apiToken }) {
+export async function fetchAliceActiveControlVersionId({ fetchImpl, apiToken }) {
   const deployments = await api({
     fetchImpl,
     apiToken,
@@ -891,35 +894,26 @@ async function activeControlVersionId({ fetchImpl, apiToken }) {
   return active.versions[0].version_id;
 }
 
-export function extractAliceLatestUploadedControlVersionId(value) {
-  const items = Array.isArray(value)
-    ? value
-    : value &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        canonicalAliceJson(Object.keys(value).sort()) ===
-          canonicalAliceJson(["items"])
-      ? value.items
-      : null;
+export function verifyAliceBootstrapReentryBoundary({
+  activeVersionId,
+  expectedVersionId,
+  version,
+}) {
+  const versionTag = version?.annotations?.["workers/tag"];
   if (
-    !Array.isArray(items) ||
-    items.length !== 1 ||
-    !VERSION_ID.test(items[0]?.id ?? "")
+    !VERSION_ID.test(activeVersionId ?? "") ||
+    activeVersionId !== expectedVersionId ||
+    version?.id !== expectedVersionId ||
+    typeof versionTag !== "string" ||
+    (!BOOTSTRAP_VERSION_TAG.test(versionTag) &&
+      !RECOVERY_VERSION_TAG.test(versionTag))
   ) {
     invalid();
   }
-  return items[0].id;
-}
-
-async function latestUploadedControlVersionId({ fetchImpl, apiToken }) {
-  const versions = await api({
-    fetchImpl,
-    apiToken,
-    method: "GET",
-    pathname:
-      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/versions?page=1&per_page=1`,
-  });
-  return extractAliceLatestUploadedControlVersionId(versions);
+  return {
+    versionId: expectedVersionId,
+    namespaceIds: extractAliceBootstrapNamespaceIds(version),
+  };
 }
 
 function writeReadonly(filePath, value) {
@@ -996,7 +990,7 @@ async function main() {
     invalid("ALICE_CLOUDFLARE_BOOTSTRAP_PREFLIGHT_DRIFT");
   }
   writeReadonly(bootstrapPreflightPath, preflightSecond);
-  const priorVersionId = await activeControlVersionId({
+  const priorVersionId = await fetchAliceActiveControlVersionId({
     fetchImpl: globalThis.fetch,
     apiToken,
   });
@@ -1077,7 +1071,7 @@ async function main() {
         errorCode: "ALICE_CLOUDFLARE_BOOTSTRAP_PROMOTION_FAILED",
       },
     );
-    const deployedVersionId = await activeControlVersionId({
+    const deployedVersionId = await fetchAliceActiveControlVersionId({
       fetchImpl: globalThis.fetch,
       apiToken,
     });
@@ -1105,14 +1099,14 @@ async function main() {
       createdByRun.evidenceBucket = evidenceStore.bucketCreated;
       createdByRun.evidenceSentinel = evidenceStore.sentinelCreated;
     }
-    if (
-      (await latestUploadedControlVersionId({
+    verifyAliceBootstrapReentryBoundary({
+      activeVersionId: await fetchAliceActiveControlVersionId({
         fetchImpl: globalThis.fetch,
         apiToken,
-      })) !== versionId
-    ) {
-      invalid();
-    }
+      }),
+      expectedVersionId: versionId,
+      version,
+    });
     const consumer = await ensureConsumer({
       fetchImpl: globalThis.fetch,
       apiToken,
