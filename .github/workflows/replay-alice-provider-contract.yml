@@ -1,0 +1,492 @@
+name: Replay Alice Provider Contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Exact protected Alice release commit"
+        required: true
+        type: string
+      build_run_id:
+        description: "Successful immutable Alice build run ID"
+        required: true
+        type: string
+      worker_artifact_name:
+        description: "Exact immutable Worker artifact name"
+        required: true
+        type: string
+      worker_artifact_digest:
+        description: "Server-reported Worker artifact sha256"
+        required: true
+        type: string
+      runtime_image:
+        description: "Exact attested runtime image digest"
+        required: true
+        type: string
+      runtime_build_manifest_sha256:
+        description: "Exact runtime build-manifest sha256"
+        required: true
+        type: string
+      release_epoch:
+        description: "Exact signed Program release epoch"
+        required: true
+        type: number
+      modal_revision:
+        description: "Exact admitted Modal revision"
+        required: true
+        type: number
+      policy_hash:
+        description: "Exact signed Alice policy sha256"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  attestations: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: alice-provider-replay
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    name: Mutation-disabled provider contract replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: alice-production
+    env:
+      ALICE_PROVIDER_REPLAY_CONTRACT: v1
+      ALICE_REPLAY_MUTATION_DISABLED: "1"
+      ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
+      ALICE_BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      ALICE_WORKER_ARTIFACT_NAME: ${{ inputs.worker_artifact_name }}
+      ALICE_WORKER_ARTIFACT_DIGEST: ${{ inputs.worker_artifact_digest }}
+      ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+      ALICE_RUNTIME_BUILD_MANIFEST_SHA256: ${{ inputs.runtime_build_manifest_sha256 }}
+      ALICE_RELEASE_EPOCH: ${{ inputs.release_epoch }}
+      ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
+      ALICE_POLICY_HASH: ${{ inputs.policy_hash }}
+      ALICE_REPLAY_TOOLING_ROOT: ${{ github.workspace }}/replay-tooling
+      ALICE_REPLAY_RELEASE_ROOT: ${{ github.workspace }}/alice-release
+      ALICE_REPLAY_ROOT: ${{ runner.temp }}/alice-provider-replay
+      ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-provider-replay/worker-artifact
+      ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-provider-replay/worker-artifact/alice-worker-bundles.json
+      ALICE_REPLAY_ARTIFACT_RECORD_PATH: ${{ runner.temp }}/alice-provider-replay/artifact-record.json
+      ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-provider-replay/release/alice-deployment-manifest.json
+      ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH: ${{ runner.temp }}/alice-provider-replay/release/provider-readback.json
+      ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-provider-replay/release/durable-object-namespace-ids.json
+      ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-provider-replay/release/wrangler
+      ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-provider-replay/release/program-admission.json
+      ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-provider-replay/release/.alice-runtime-release-token
+      ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-provider-replay/release/.alice-runtime-release-token-sha256
+      ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-provider-replay/release/.alice-evidence-queue-hmac-key
+
+    steps:
+      - name: Validate immutable release, build, and artifact identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          printf '%s' "$ALICE_SOURCE_COMMIT" | grep -Eq '^[a-f0-9]{40}$'
+          printf '%s' "$ALICE_BUILD_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$ALICE_WORKER_ARTIFACT_DIGEST" |
+            grep -Eq '^sha256:[a-f0-9]{64}$'
+          printf '%s' "$ALICE_WORKER_ARTIFACT_NAME" |
+            grep -Eq "^alice-worker-bundles-${ALICE_SOURCE_COMMIT}-${ALICE_BUILD_RUN_ID}-[1-9][0-9]*$"
+          printf '%s' "$ALICE_RUNTIME_IMAGE" |
+            grep -Eq '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$'
+          printf '%s' "$ALICE_RUNTIME_BUILD_MANIFEST_SHA256" |
+            grep -Eq '^sha256:[a-f0-9]{64}$'
+          printf '%s' "$ALICE_POLICY_HASH" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          printf '%s' "$ALICE_RELEASE_EPOCH" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$ALICE_MODAL_REVISION" | grep -Eq '^[1-9][0-9]*$'
+
+          protected_sha="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" \
+            --jq .object.sha)"
+          test "$protected_sha" = "$ALICE_SOURCE_COMMIT"
+          run_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${ALICE_BUILD_RUN_ID}")"
+          test "$(printf '%s' "$run_json" | jq -r .head_sha)" = "$ALICE_SOURCE_COMMIT"
+          test "$(printf '%s' "$run_json" | jq -r .head_branch)" = \
+            "release/alice-production-core-2026-08-22"
+          test "$(printf '%s' "$run_json" | jq -r .event)" = "workflow_dispatch"
+          test "$(printf '%s' "$run_json" | jq -r .conclusion)" = "success"
+          test "$(printf '%s' "$run_json" | jq -r .path)" = \
+            ".github/workflows/build-cloud-agent.yml"
+
+          artifacts_json="$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${ALICE_BUILD_RUN_ID}/artifacts?per_page=100")"
+          matches="$(printf '%s' "$artifacts_json" | jq \
+            --arg name "$ALICE_WORKER_ARTIFACT_NAME" \
+            '[.[].artifacts[] | select(.name == $name)])'"
+          test "$(printf '%s' "$matches" | jq 'length')" = "1"
+          test "$(printf '%s' "$matches" | jq -r '.[0].digest')" = \
+            "$ALICE_WORKER_ARTIFACT_DIGEST"
+          test "$(printf '%s' "$matches" | jq -r '.[0].expired')" = "false"
+
+      - name: Checkout replay tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          path: replay-tooling
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Checkout exact Alice release
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: alice-release
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Bind exact protected release checkout
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ALICE_SOURCE_COMMIT"
+          git switch -c release/alice-production-core-2026-08-22
+          test "$(git branch --show-current)" = \
+            "release/alice-production-core-2026-08-22"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Setup Node.js 24.19.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.19.0"
+
+      - name: Setup Bun 1.3.14
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Setup Python 3.13.14
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Install exact release and Modal readback dependencies
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        run: |
+          set -euo pipefail
+          mkdir -m 0700 "$ALICE_REPLAY_ROOT"
+          mkdir -m 0700 "$ALICE_WORKER_BUNDLE_ROOT"
+          mkdir -m 0700 "$ALICE_REPLAY_ROOT/release"
+          mkdir -m 0700 "$ALICE_REPLAY_ROOT/evidence"
+          bash scripts/alice-frozen-install-retry.sh
+          python -m venv "$ALICE_REPLAY_ROOT/modal-client"
+          "$ALICE_REPLAY_ROOT/modal-client/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            --only-binary=:all: \
+            --requirement deploy/modal/requirements-modal-1.5.4.lock
+          test "$("$ALICE_REPLAY_ROOT/modal-client/bin/python" --version)" = \
+            "Python 3.13.14"
+          test "$("$ALICE_REPLAY_ROOT/modal-client/bin/modal" --version)" = \
+            "modal client version: 1.5.4"
+          test "$(bun --version)" = "1.3.14"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Download immutable Worker artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.build_run_id }}
+          name: ${{ inputs.worker_artifact_name }}
+          path: ${{ env.ALICE_WORKER_BUNDLE_ROOT }}
+
+      - name: Verify immutable Worker artifact and attestations
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import {
+            verifyAliceWorkerBundleArtifact,
+          } from "./deploy/modal/alice_worker_bundle_artifact.mjs";
+          verifyAliceWorkerBundleArtifact(
+            fs.readFileSync(process.env.ALICE_WORKER_BUNDLE_ARTIFACT_PATH, "utf8"),
+            {
+              root: process.env.ALICE_WORKER_BUNDLE_ROOT,
+              expectedSourceCommit: process.env.ALICE_SOURCE_COMMIT,
+            },
+          );
+          NODE
+          for subject in \
+            "$ALICE_WORKER_BUNDLE_ARTIFACT_PATH" \
+            "$ALICE_WORKER_BUNDLE_ROOT/alice-access-gateway/index.js" \
+            "$ALICE_WORKER_BUNDLE_ROOT/alice-production-control/index.js" \
+            "$ALICE_WORKER_BUNDLE_ROOT/alice-ai-gateway/index.js"
+          do
+            gh attestation verify "$subject" \
+              --repo rndrntwrk/milaidy \
+              --signer-workflow rndrntwrk/milaidy/.github/workflows/build-cloud-agent.yml \
+              --source-digest "$ALICE_SOURCE_COMMIT" \
+              --source-ref refs/heads/release/alice-production-core-2026-08-22 \
+              --deny-self-hosted-runners
+          done
+          gh attestation verify "oci://${ALICE_RUNTIME_IMAGE}" \
+            --repo rndrntwrk/milaidy \
+            --signer-workflow rndrntwrk/milaidy/.github/workflows/build-cloud-agent.yml \
+            --source-digest "$ALICE_SOURCE_COMMIT" \
+            --source-ref refs/heads/release/alice-production-core-2026-08-22 \
+            --deny-self-hosted-runners
+
+      - name: Derive canonical Alice owner identity
+        id: owner
+        working-directory: ${{ env.ALICE_REPLAY_TOOLING_ROOT }}
+        run: |
+          set -euo pipefail
+          owner_hash="$(node --input-type=module -e \
+            'import { canonicalOwnerHash } from "./scripts/alice-provider-replay-evidence.mjs"; process.stdout.write(canonicalOwnerHash("alice-owner@rndrntwrk.com"));')"
+          printf '%s' "$owner_hash" | grep -Eq '^[A-Za-z0-9_-]{43}$'
+          echo "owner_hash=$owner_hash" >> "$GITHUB_OUTPUT"
+
+      - name: Capture full sanitized provider state before replay
+        working-directory: ${{ env.ALICE_REPLAY_TOOLING_ROOT }}
+        env:
+          ALICE_REPLAY_CAPTURE_OUTPUT: ${{ env.ALICE_REPLAY_ROOT }}/before.json
+          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_REPLAY_ROOT }}/modal-client/bin/python
+          ALICE_OWNER_EMAIL_SHA256: ${{ steps.owner.outputs.owner_hash }}
+          ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
+          CLOUDFLARE_TOKEN_POLICY_READ_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
+          MODAL_TOKEN_ID: ${{ secrets.ALICE_MODAL_REPLAY_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.ALICE_MODAL_REPLAY_TOKEN_SECRET }}
+        run: |
+          set -euo pipefail
+          node scripts/alice-provider-replay-capture.mjs
+
+      - name: Normalize and fingerprint provider DTO
+        working-directory: ${{ env.ALICE_REPLAY_TOOLING_ROOT }}
+        run: |
+          set -euo pipefail
+          node scripts/alice-provider-replay-fingerprint.mjs \
+            "$ALICE_REPLAY_ROOT/before.json" \
+            "$ALICE_REPLAY_ROOT/before-fingerprint.json"
+          jq -e \
+            '.schemaVersion == "alice.provider-replay-fingerprint.v1" and
+             (.providerStateSha256 | test("^sha256:[a-f0-9]{64}$")) and
+             (.rawEvidence.cloudflarePermissionCatalog.bytes > 65536) and
+             (.rawEvidence.cloudflarePermissionCatalog.sha256 |
+               test("^sha256:[a-f0-9]{64}$")) and
+             (.rawEvidence.modal.bytes > 0)' \
+            "$ALICE_REPLAY_ROOT/before-fingerprint.json" >/dev/null
+
+      - name: Bind provider fingerprints through recovery contracts
+        run: |
+          set -euo pipefail
+          jq -e \
+            '.schemaVersion == "alice.provider-replay-snapshot.v1" and
+             .cloudflare.credential.status == "active" and
+             (.cloudflare.credential.tokenIdSha256 |
+               test("^sha256:[a-f0-9]{64}$")) and
+             ([.cloudflare.credential.permissionGroups[].name |
+               test("(Write|Edit)$"; "i")] | any | not) and
+             .modal.appName == "alice-runtime" and
+             .modal.environment == "main" and
+             (.modal.providerVersion | type == "number")' \
+            "$ALICE_REPLAY_ROOT/before.json" >/dev/null
+          cp -- "$ALICE_REPLAY_ROOT/before.json" \
+            "$ALICE_REPLAY_ROOT/bound-provider-dto.json"
+          cmp --silent "$ALICE_REPLAY_ROOT/before.json" \
+            "$ALICE_REPLAY_ROOT/bound-provider-dto.json"
+          chmod 0444 "$ALICE_REPLAY_ROOT/bound-provider-dto.json"
+
+      - name: Materialize canonical owner Access config and signed manifest bytes
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
+          ALICE_SOURCE_ROOT: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+          ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ inputs.source_sha }}
+          ALICE_ELIZA_COMMIT: e219c232e21d8b61017129647130830d811ee45a
+          ALICE_ACCESS_ISSUER: https://rndrntwrk.cloudflareaccess.com
+          ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
+          ALICE_OWNER_EMAIL_SHA256: ${{ steps.owner.outputs.owner_hash }}
+          ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
+          ALICE_UPSTREAM_ORIGIN: https://rndrntwrk--alice.modal.run
+          ALICE_MODEL_DAILY_BUDGET_UNITS: "10000"
+          ALICE_ROLLBACK_BOUNDARY: modal:alice-runtime:v${{ inputs.modal_revision }}
+          ALICE_PROGRAM_ENVELOPE_B64: ${{ secrets.ALICE_PROGRAM_ENVELOPE_B64 }}
+          ALICE_PROGRAM_SIGNATURE_B64: ${{ secrets.ALICE_PROGRAM_SIGNATURE_B64 }}
+          ALICE_PROGRAM_PUBLIC_JWK_B64: ${{ secrets.ALICE_PROGRAM_PUBLIC_JWK_B64 }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const snapshot = JSON.parse(
+            fs.readFileSync(`${process.env.ALICE_REPLAY_ROOT}/before.json`, "utf8"),
+          );
+          fs.writeFileSync(
+            process.env.ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH,
+            `${JSON.stringify(snapshot.cloudflare.fullProvider.durableObjectNamespaceIds)}\n`,
+            { encoding: "utf8", flag: "wx", mode: 0o444 },
+          );
+          NODE
+          node deploy/modal/alice_deployment_manifest.mjs
+          node deploy/modal/alice_cloudflare_config.mjs
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          const snapshot = JSON.parse(
+            fs.readFileSync(`${process.env.ALICE_REPLAY_ROOT}/before.json`, "utf8"),
+          );
+          const materialized = JSON.parse(
+            fs.readFileSync(process.env.ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH, "utf8"),
+          );
+          assert.deepEqual(materialized.provider, snapshot.cloudflare.provider);
+          NODE
+
+      - name: Run Program and deploy admission without mutation
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
+          ALICE_SOURCE_ROOT: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+          ALICE_WRANGLER_BIN: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}/node_modules/.bin/wrangler
+          ALICE_BUN_BIN: /home/runner/.bun/bin/bun
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_CLOUDFLARE_RELEASE_PHASE: capture
+          ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH: ${{ env.ALICE_REPLAY_ROOT }}/release/cloudflare-rollback-anchor.json
+          ALICE_CLOUDFLARE_READBACK_PATH: ${{ env.ALICE_REPLAY_ROOT }}/release/cloudflare-readback.json
+          ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH: ${{ env.ALICE_REPLAY_ROOT }}/release/cloudflare-rollback-proof.json
+          ALICE_CLOUDFLARE_PREPARE_EVIDENCE_PATH: ${{ env.ALICE_REPLAY_ROOT }}/release/cloudflare-prepare-evidence.json
+          ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH: ${{ env.ALICE_REPLAY_ROOT }}/release/deployment-pause-evidence.json
+          ALICE_ACCESS_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_CONTROL_SERVICE_TOKEN }}
+          ALICE_ACCESS_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN }}
+          ALICE_AI_CONTROL_SERVICE_TOKEN: ${{ secrets.ALICE_AI_CONTROL_SERVICE_TOKEN }}
+          ALICE_AI_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN }}
+          ALICE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
+          ALICE_MODAL_PROXY_KEY: ${{ secrets.ALICE_MODAL_PROXY_KEY }}
+          ALICE_MODAL_PROXY_SECRET: ${{ secrets.ALICE_MODAL_PROXY_SECRET }}
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+          ALICE_RUNTIME_RELEASE_TOKEN_ROOT: ${{ secrets.ALICE_RUNTIME_RELEASE_TOKEN_ROOT }}
+          MILADY_API_TOKEN: ${{ secrets.MILADY_API_TOKEN }}
+          ELIZA_VAULT_PASSPHRASE: ${{ secrets.ELIZA_VAULT_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          bun deploy/modal/verify_alice_program_admission.ts
+          manifest_sha256="sha256:$(sha256sum "$ALICE_DEPLOYMENT_MANIFEST_PATH" |
+            cut -d' ' -f1)"
+          export ALICE_PRODUCTION_RELEASE_CONFIRM="${ALICE_SOURCE_COMMIT}:${manifest_sha256}"
+          env -u GITHUB_REF -u GITHUB_SHA \
+            node deploy/modal/alice_cloudflare_release.mjs
+
+      - name: Prove exact-one-artifact shell behavior
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifacts_json="$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${ALICE_BUILD_RUN_ID}/artifacts?per_page=100")"
+          matches="$(printf '%s' "$artifacts_json" | jq \
+            --arg name "$ALICE_WORKER_ARTIFACT_NAME" \
+            '[.[].artifacts[] | select(.name == $name)])'"
+          count="$(printf '%s' "$matches" | jq 'length')"
+          test "$count" = "1"
+          digest="$(printf '%s' "$matches" | jq -r '.[0].digest')"
+          expired="$(printf '%s' "$matches" | jq -r '.[0].expired')"
+          test "$digest" = "$ALICE_WORKER_ARTIFACT_DIGEST"
+          test "$expired" = "false"
+          jq -cn \
+            --arg name "$ALICE_WORKER_ARTIFACT_NAME" \
+            --arg digest "$digest" \
+            --argjson expired "$expired" \
+            --argjson count "$count" \
+            '{name: $name, digest: $digest, expired: $expired, count: $count}' \
+            > "$ALICE_REPLAY_ARTIFACT_RECORD_PATH"
+          chmod 0444 "$ALICE_REPLAY_ARTIFACT_RECORD_PATH"
+
+      - name: Capture full sanitized provider state after replay
+        working-directory: ${{ env.ALICE_REPLAY_TOOLING_ROOT }}
+        env:
+          ALICE_REPLAY_CAPTURE_OUTPUT: ${{ env.ALICE_REPLAY_ROOT }}/after.json
+          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_REPLAY_ROOT }}/modal-client/bin/python
+          ALICE_OWNER_EMAIL_SHA256: ${{ steps.owner.outputs.owner_hash }}
+          ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
+          CLOUDFLARE_TOKEN_POLICY_READ_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
+          MODAL_TOKEN_ID: ${{ secrets.ALICE_MODAL_REPLAY_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.ALICE_MODAL_REPLAY_TOKEN_SECRET }}
+        run: |
+          set -euo pipefail
+          node scripts/alice-provider-replay-capture.mjs
+
+      - name: Prove before and after provider state identical
+        working-directory: ${{ env.ALICE_REPLAY_TOOLING_ROOT }}
+        env:
+          ALICE_REPLAY_BEFORE_PATH: ${{ env.ALICE_REPLAY_ROOT }}/before.json
+          ALICE_REPLAY_AFTER_PATH: ${{ env.ALICE_REPLAY_ROOT }}/after.json
+          ALICE_REPLAY_EVIDENCE_OUTPUT: ${{ env.ALICE_REPLAY_ROOT }}/evidence/replay-evidence.json
+        run: |
+          set -euo pipefail
+          node scripts/alice-provider-replay-finalize.mjs
+          jq -e \
+            '.ok == true and .mutationDisabled == true and
+             .workerArtifact.exactOne == true and
+             .providerState.identical == true and
+             (.providerState.sha256 | test("^sha256:[a-f0-9]{64}$"))' \
+            "$ALICE_REPLAY_ROOT/evidence/replay-evidence.json" >/dev/null
+
+      - name: Prepare sanitized replay artifact on every exit
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          output="$ALICE_REPLAY_ROOT/evidence-upload"
+          mkdir -p -m 0700 "$output"
+          for candidate in \
+            "$ALICE_REPLAY_ROOT/evidence/replay-evidence.json" \
+            "$ALICE_REPLAY_ROOT/before.json" \
+            "$ALICE_REPLAY_ROOT/after.json" \
+            "$ALICE_REPLAY_ROOT/before-fingerprint.json" \
+            "$ALICE_REPLAY_ARTIFACT_RECORD_PATH" \
+            "$ALICE_DEPLOYMENT_MANIFEST_PATH" \
+            "$ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH" \
+            "$ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH"
+          do
+            if test -f "$candidate"
+            then
+              install -m 0444 "$candidate" "$output/$(basename "$candidate")"
+            fi
+          done
+          jq -cn \
+            --arg status "${{ job.status }}" \
+            --arg source "$ALICE_SOURCE_COMMIT" \
+            --arg run "$GITHUB_RUN_ID" \
+            '{schemaVersion: "alice.provider-replay-terminal.v1",
+              status: $status, sourceSha: $source, runId: $run,
+              mutationDisabled: true}' > "$output/terminal.json"
+          chmod 0444 "$output/terminal.json"
+
+      - name: Upload sanitized replay evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-provider-replay-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ALICE_REPLAY_ROOT }}/evidence-upload
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: false
+
+      - name: Cleanup replay state on every exit
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          rm -rf -- \
+            "$ALICE_REPLAY_ROOT" \
+            "$ALICE_REPLAY_RELEASE_ROOT" \
+            "$ALICE_REPLAY_TOOLING_ROOT"
