@@ -6,9 +6,10 @@ import {
   buildAliceBootstrapPromotionCommand,
   buildAliceBootstrapControlConfig,
   ensureAliceBootstrapQueue,
-  extractAliceLatestUploadedControlVersionId,
   extractAliceBootstrapNamespaceIds,
+  fetchAliceActiveControlVersionId,
   parseAliceWranglerDeployVersionId,
+  verifyAliceBootstrapReentryBoundary,
   verifyAliceBootstrapBucket,
   verifyAliceBootstrapQueueConsumer,
 } from "./alice_cloudflare_bootstrap.mjs";
@@ -178,28 +179,168 @@ test("parses only one exact pinned-Wrangler first-deploy version", () => {
   }
 });
 
-test("accepts Cloudflare's exact object-wrapped latest-version list", () => {
-  const versionId = "11111111-1111-4111-8111-111111111111";
-  assert.equal(
-    extractAliceLatestUploadedControlVersionId({ items: [{ id: versionId }] }),
-    versionId,
+const activeRecoveryVersionId = "12567b75-bc0e-4451-9e8c-52295ec7af2b";
+const newerInactiveVersionId = "193bed86-48b7-4924-8d23-e123fa86ee9a";
+const activeRecoveryVersion = {
+  id: activeRecoveryVersionId,
+  annotations: {
+    "workers/tag": `alice-recovery-boundary-${"a".repeat(40)}`,
+  },
+  resources: {
+    bindings: [
+      {
+        type: "durable_object_namespace",
+        name: "ALICE_AUTHORITY",
+        class_name: "AliceAuthority",
+        namespace_id: "1".repeat(32),
+      },
+      {
+        type: "durable_object_namespace",
+        name: "ALICE_SESSIONS",
+        class_name: "AliceSession",
+        namespace_id: "2".repeat(32),
+      },
+    ],
+  },
+};
+
+function activeDeployments(versions = [{
+  percentage: 100,
+  version_id: activeRecoveryVersionId,
+}]) {
+  return {
+    deployments: [{
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      versions,
+    }],
+  };
+}
+
+function deploymentFetch(result, calls = []) {
+  return async (url, options) => {
+    const parsed = new URL(url);
+    calls.push(parsed);
+    assert.equal(options.method, "GET");
+    if (parsed.pathname.endsWith("/deployments")) {
+      return Response.json({ success: true, result });
+    }
+    if (
+      parsed.pathname.endsWith("/versions") &&
+      parsed.searchParams.get("per_page") === "1"
+    ) {
+      return Response.json({
+        success: true,
+        result: { items: [{ id: newerInactiveVersionId }] },
+      });
+    }
+    assert.fail(`unexpected provider request: ${parsed.pathname}${parsed.search}`);
+  };
+}
+
+test("accepts the exact active recovery boundary when a newer upload is inactive", async () => {
+  const calls = [];
+  const activeVersionId = await fetchAliceActiveControlVersionId({
+    fetchImpl: deploymentFetch(activeDeployments(), calls),
+    apiToken: "provider-token-value",
+  });
+  assert.equal(activeVersionId, activeRecoveryVersionId);
+  assert.deepEqual(
+    verifyAliceBootstrapReentryBoundary({
+      activeVersionId,
+      expectedVersionId: activeRecoveryVersionId,
+      version: activeRecoveryVersion,
+    }),
+    {
+      versionId: activeRecoveryVersionId,
+      namespaceIds: {
+        access: [],
+        aiGateway: [],
+        control: [
+          {
+            className: "AliceAuthority",
+            name: "ALICE_AUTHORITY",
+            namespaceId: "1".repeat(32),
+          },
+          {
+            className: "AliceSession",
+            name: "ALICE_SESSIONS",
+            namespaceId: "2".repeat(32),
+          },
+        ],
+      },
+    },
   );
-  assert.equal(
-    extractAliceLatestUploadedControlVersionId([{ id: versionId }]),
-    versionId,
-  );
-  for (const value of [
-    { items: [{ id: versionId }], unexpected: true },
-    { items: [] },
-    { items: [{ id: versionId }, { id: versionId }] },
-    { items: [{ id: "invalid" }] },
-    { items: { id: versionId } },
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].pathname.endsWith("/deployments"));
+  const main = fs.readFileSync(
+    new URL("./alice_cloudflare_bootstrap.mjs", import.meta.url),
+    "utf8",
+  ).slice(fs.readFileSync(
+    new URL("./alice_cloudflare_bootstrap.mjs", import.meta.url),
+    "utf8",
+  ).indexOf("async function main()"));
+  assert.doesNotMatch(main, /latestUploadedControlVersionId/);
+});
+
+test("rejects multiple or malformed active control versions", async () => {
+  for (const deployments of [
+    activeDeployments([
+      { percentage: 50, version_id: activeRecoveryVersionId },
+      { percentage: 50, version_id: newerInactiveVersionId },
+    ]),
+    activeDeployments([{
+      percentage: 99,
+      version_id: activeRecoveryVersionId,
+    }]),
+    activeDeployments([{
+      percentage: 100,
+      version_id: "not-a-version",
+    }]),
   ]) {
-    assert.throws(
-      () => extractAliceLatestUploadedControlVersionId(value),
+    await assert.rejects(
+      fetchAliceActiveControlVersionId({
+        fetchImpl: deploymentFetch(deployments),
+        apiToken: "provider-token-value",
+      }),
       /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
     );
   }
+});
+
+test("rejects malformed recovery/bootstrap tags and Durable Object bindings", () => {
+  for (const tag of [
+    "alice-recovery-boundary-main",
+    `alice-continuity-bootstrap-${"a".repeat(40)}-123`,
+  ]) {
+    assert.throws(
+      () => verifyAliceBootstrapReentryBoundary({
+        activeVersionId: activeRecoveryVersionId,
+        expectedVersionId: activeRecoveryVersionId,
+        version: {
+          ...activeRecoveryVersion,
+          annotations: { "workers/tag": tag },
+        },
+      }),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
+    );
+  }
+  assert.throws(
+    () => verifyAliceBootstrapReentryBoundary({
+      activeVersionId: activeRecoveryVersionId,
+      expectedVersionId: activeRecoveryVersionId,
+      version: {
+        ...activeRecoveryVersion,
+        resources: {
+          bindings: activeRecoveryVersion.resources.bindings.map((binding) =>
+            binding.name === "ALICE_SESSIONS"
+              ? { ...binding, class_name: "WrongSession" }
+              : binding
+          ),
+        },
+      },
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
+  );
 });
 
 test("accepts only Cloudflare's unambiguous Queue consumer script field", () => {
