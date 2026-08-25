@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { compareProviderSnapshots } from "./alice-provider-replay-evidence.mjs";
+import { compareCloudflareReplaySnapshots } from "./alice-provider-replay-evidence.mjs";
 
 function invalid(code) {
   throw new Error(code);
@@ -20,7 +20,7 @@ try {
     invalid("ALICE_REPLAY_FINGERPRINT_INVALID");
   }
   const snapshot = JSON.parse(fs.readFileSync(inputPath, "utf8"));
-  const comparison = compareProviderSnapshots(snapshot, snapshot);
+  const comparison = compareCloudflareReplaySnapshots(snapshot, snapshot);
   fs.writeFileSync(
     outputPath,
     `${JSON.stringify({

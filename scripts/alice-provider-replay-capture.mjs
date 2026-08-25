@@ -1,9 +1,8 @@
-import childProcess from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { buildProviderSnapshot } from "./alice-provider-replay-evidence.mjs";
+import { buildCloudflareReplaySnapshot } from "./alice-provider-replay-evidence.mjs";
 
 const ACCOUNT_ID = "036df6c823669b8fa2f66cf4c16eeb29";
 const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
@@ -71,63 +70,15 @@ async function cloudflareEnvelope(pathname, bearer) {
   return { body, responseBytes };
 }
 
-function modalCapture(sourceRoot, pythonBin) {
-  const result = childProcess.spawnSync(
-    pythonBin,
-    [
-      path.join(sourceRoot, "deploy/modal/alice_modal_provider_readback.py"),
-      "--capture-current",
-    ],
-    {
-      cwd: sourceRoot,
-      env: {
-        PATH: process.env.PATH,
-        HOME: process.env.HOME,
-        LANG: process.env.LANG,
-        LC_ALL: process.env.LC_ALL,
-        MODAL_ENVIRONMENT: "main",
-        MODAL_TOKEN_ID: required(
-          process.env.MODAL_TOKEN_ID,
-          "ALICE_REPLAY_MODAL_CREDENTIAL_INVALID",
-        ),
-        MODAL_TOKEN_SECRET: required(
-          process.env.MODAL_TOKEN_SECRET,
-          "ALICE_REPLAY_MODAL_CREDENTIAL_INVALID",
-        ),
-      },
-      encoding: "utf8",
-      maxBuffer: 2 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  if (
-    result.status !== 0 ||
-    result.signal !== null ||
-    typeof result.stdout !== "string" ||
-    Buffer.byteLength(result.stdout) < 2 ||
-    Buffer.byteLength(result.stdout) > 2 * 1024 * 1024
-  ) {
-    invalid("ALICE_REPLAY_MODAL_CAPTURE_INVALID");
-  }
-  try {
-    JSON.parse(result.stdout);
-  } catch {
-    invalid("ALICE_REPLAY_MODAL_CAPTURE_INVALID");
-  }
-  return Buffer.from(result.stdout, "utf8");
-}
-
 async function main() {
   if (process.env.ALICE_REPLAY_MUTATION_DISABLED !== "1") {
     invalid("ALICE_REPLAY_MUTATION_CUTOFF_REQUIRED");
   }
   const sourceRoot = process.env.ALICE_REPLAY_RELEASE_ROOT;
   const outputPath = process.env.ALICE_REPLAY_CAPTURE_OUTPUT;
-  const pythonBin = process.env.ALICE_MODAL_PYTHON_BIN;
   if (
     !absolute(sourceRoot) ||
     !absolute(outputPath) ||
-    !absolute(pythonBin) ||
     !fs.statSync(sourceRoot).isDirectory() ||
     !fs.statSync(path.dirname(outputPath)).isDirectory() ||
     fs.existsSync(outputPath)
@@ -261,8 +212,7 @@ async function main() {
       workflowVersions,
     },
   };
-  const modalBytes = modalCapture(sourceRoot, pythonBin);
-  const snapshot = buildProviderSnapshot({
+  const snapshot = buildCloudflareReplaySnapshot({
     cloudflareMaterializerBytes: Buffer.from(
       `${JSON.stringify(cloudflareCapture)}\n`,
       "utf8",
@@ -275,7 +225,6 @@ async function main() {
       })}\n`,
       "utf8",
     ),
-    modalBytes,
   });
   fs.writeFileSync(outputPath, `${JSON.stringify(snapshot)}\n`, {
     encoding: "utf8",
@@ -286,7 +235,6 @@ async function main() {
     ok: true,
     outputPath,
     cloudflarePermissionCatalogBytes: permissionGroups.responseBytes.byteLength,
-    modalBytes: modalBytes.byteLength,
   })}\n`);
 }
 

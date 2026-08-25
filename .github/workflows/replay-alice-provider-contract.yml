@@ -3,6 +3,10 @@ name: Replay Alice Provider Contract
 on:
   workflow_dispatch:
     inputs:
+      tooling_sha:
+        description: "Exact reviewed replay tooling commit"
+        required: true
+        type: string
       source_sha:
         description: "Exact protected Alice release commit"
         required: true
@@ -51,14 +55,140 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  modal_before:
+    name: Capture Modal state before core replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: alice-production-modal-recovery
+    env:
+      ALICE_PROVIDER_REPLAY_CONTRACT: v1
+      ALICE_REPLAY_MUTATION_DISABLED: "1"
+      ALICE_REPLAY_TOOLING_SHA: ${{ inputs.tooling_sha }}
+      ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
+      ALICE_REPLAY_TOOLING_ROOT: ${{ github.workspace }}/replay-tooling
+      ALICE_REPLAY_RELEASE_ROOT: ${{ github.workspace }}/alice-release
+      ALICE_REPLAY_ROOT: ${{ runner.temp }}/alice-modal-before
+
+    steps:
+      - name: Validate exact one-use replay tag and immutable source identity
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          printf '%s' "$ALICE_REPLAY_TOOLING_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          printf '%s' "$ALICE_SOURCE_COMMIT" | grep -Eq '^[a-f0-9]{40}$'
+          test "$GITHUB_SHA" = "$ALICE_REPLAY_TOOLING_SHA"
+          test "$GITHUB_REF" = \
+            "refs/tags/alice-provider-replay-${ALICE_REPLAY_TOOLING_SHA}"
+
+      - name: Checkout exact replay tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.tooling_sha }}
+          path: replay-tooling
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Checkout exact Alice release
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: alice-release
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Bind exact replay tooling and Alice release checkouts
+        run: |
+          set -euo pipefail
+          test "$(git -C "$ALICE_REPLAY_TOOLING_ROOT" rev-parse HEAD)" = \
+            "$ALICE_REPLAY_TOOLING_SHA"
+          test "$(git -C "$ALICE_REPLAY_RELEASE_ROOT" rev-parse HEAD)" = \
+            "$ALICE_SOURCE_COMMIT"
+          test -z "$(git -C "$ALICE_REPLAY_TOOLING_ROOT" status \
+            --porcelain=v1 --untracked-files=all)"
+          test -z "$(git -C "$ALICE_REPLAY_RELEASE_ROOT" status \
+            --porcelain=v1 --untracked-files=all)"
+
+      - name: Setup Node.js 24.19.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.19.0"
+
+      - name: Setup Python 3.13.14
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Install exact pinned Modal readback client
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        run: |
+          set -euo pipefail
+          mkdir -m 0700 "$ALICE_REPLAY_ROOT"
+          python -m venv "$ALICE_REPLAY_ROOT/modal-client"
+          "$ALICE_REPLAY_ROOT/modal-client/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            --only-binary=:all: \
+            --requirement deploy/modal/requirements-modal-1.5.4.lock
+          test "$("$ALICE_REPLAY_ROOT/modal-client/bin/python" --version)" = \
+            "Python 3.13.14"
+          test "$("$ALICE_REPLAY_ROOT/modal-client/bin/modal" --version)" = \
+            "modal client version: 1.5.4"
+
+      - name: Capture pinned Modal state before replay
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        env:
+          MODAL_ENVIRONMENT: main
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          set -euo pipefail
+          raw="$ALICE_REPLAY_ROOT/modal-before-raw.json"
+          output="$ALICE_REPLAY_ROOT/modal-before.json"
+          "$ALICE_REPLAY_ROOT/modal-client/bin/python" \
+            deploy/modal/alice_modal_provider_readback.py \
+            "--capture-current" > "$raw"
+          node "$ALICE_REPLAY_TOOLING_ROOT/scripts/alice-provider-replay-modal-snapshot.mjs" \
+            snapshot "$raw" "$output"
+          rm -f -- "$raw"
+          jq -e \
+            '.schemaVersion == "alice.modal-replay-snapshot.v1" and
+             .modal.appName == "alice-runtime" and
+             .modal.environment == "main" and
+             (.modal.providerVersion | type == "number") and
+             (.rawEvidence.modal.bytes > 0) and
+             (.rawEvidence.modal.sha256 | test("^sha256:[a-f0-9]{64}$"))' \
+            "$output" >/dev/null
+
+      - name: Upload sanitized Modal before snapshot and hash
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-modal-before-${{ inputs.tooling_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ALICE_REPLAY_ROOT }}/modal-before.json
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: false
+
+      - name: Cleanup Modal before state on every exit
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          rm -rf -- \
+            "$ALICE_REPLAY_ROOT" \
+            "$ALICE_REPLAY_RELEASE_ROOT" \
+            "$ALICE_REPLAY_TOOLING_ROOT"
+
   replay:
     name: Mutation-disabled provider contract replay
+    needs: modal_before
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: alice-production
     env:
       ALICE_PROVIDER_REPLAY_CONTRACT: v1
       ALICE_REPLAY_MUTATION_DISABLED: "1"
+      ALICE_REPLAY_TOOLING_SHA: ${{ inputs.tooling_sha }}
       ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
       ALICE_BUILD_RUN_ID: ${{ inputs.build_run_id }}
       ALICE_WORKER_ARTIFACT_NAME: ${{ inputs.worker_artifact_name }}
@@ -90,7 +220,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = "1"
+          printf '%s' "$ALICE_REPLAY_TOOLING_SHA" | grep -Eq '^[a-f0-9]{40}$'
           printf '%s' "$ALICE_SOURCE_COMMIT" | grep -Eq '^[a-f0-9]{40}$'
+          test "$GITHUB_SHA" = "$ALICE_REPLAY_TOOLING_SHA"
+          test "$GITHUB_REF" = \
+            "refs/tags/alice-provider-replay-${ALICE_REPLAY_TOOLING_SHA}"
           printf '%s' "$ALICE_BUILD_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
           printf '%s' "$ALICE_WORKER_ARTIFACT_DIGEST" |
             grep -Eq '^sha256:[a-f0-9]{64}$'
@@ -131,7 +265,7 @@ jobs:
       - name: Checkout replay tooling
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.tooling_sha }}
           path: replay-tooling
           fetch-depth: 1
           submodules: false
@@ -150,6 +284,8 @@ jobs:
         working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
         run: |
           set -euo pipefail
+          test "$(git -C "$ALICE_REPLAY_TOOLING_ROOT" rev-parse HEAD)" = \
+            "$ALICE_REPLAY_TOOLING_SHA"
           test "$(git rev-parse HEAD)" = "$ALICE_SOURCE_COMMIT"
           git switch -c release/alice-production-core-2026-08-22
           test "$(git branch --show-current)" = \
@@ -166,12 +302,7 @@ jobs:
         with:
           bun-version: "1.3.14"
 
-      - name: Setup Python 3.13.14
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.13.14"
-
-      - name: Install exact release and Modal readback dependencies
+      - name: Install exact release dependencies
         working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
         run: |
           set -euo pipefail
@@ -180,16 +311,6 @@ jobs:
           mkdir -m 0700 "$ALICE_REPLAY_ROOT/release"
           mkdir -m 0700 "$ALICE_REPLAY_ROOT/evidence"
           bash scripts/alice-frozen-install-retry.sh
-          python -m venv "$ALICE_REPLAY_ROOT/modal-client"
-          "$ALICE_REPLAY_ROOT/modal-client/bin/python" -m pip install \
-            --disable-pip-version-check \
-            --require-hashes \
-            --only-binary=:all: \
-            --requirement deploy/modal/requirements-modal-1.5.4.lock
-          test "$("$ALICE_REPLAY_ROOT/modal-client/bin/python" --version)" = \
-            "Python 3.13.14"
-          test "$("$ALICE_REPLAY_ROOT/modal-client/bin/modal" --version)" = \
-            "modal client version: 1.5.4"
           test "$(bun --version)" = "1.3.14"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
@@ -250,19 +371,16 @@ jobs:
           printf '%s' "$owner_hash" | grep -Eq '^[A-Za-z0-9_-]{43}$'
           echo "owner_hash=$owner_hash" >> "$GITHUB_OUTPUT"
 
-      - name: Capture full sanitized provider state before replay
+      - name: Capture full sanitized Cloudflare state before replay
         working-directory: ${{ env.ALICE_REPLAY_TOOLING_ROOT }}
         env:
           ALICE_REPLAY_CAPTURE_OUTPUT: ${{ env.ALICE_REPLAY_ROOT }}/before.json
-          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_REPLAY_ROOT }}/modal-client/bin/python
           ALICE_OWNER_EMAIL_SHA256: ${{ steps.owner.outputs.owner_hash }}
           ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
           ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
           ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
           CLOUDFLARE_TOKEN_POLICY_READ_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
-          MODAL_TOKEN_ID: ${{ secrets.ALICE_MODAL_REPLAY_TOKEN_ID }}
-          MODAL_TOKEN_SECRET: ${{ secrets.ALICE_MODAL_REPLAY_TOKEN_SECRET }}
         run: |
           set -euo pipefail
           node scripts/alice-provider-replay-capture.mjs
@@ -279,23 +397,19 @@ jobs:
              (.providerStateSha256 | test("^sha256:[a-f0-9]{64}$")) and
              (.rawEvidence.cloudflarePermissionCatalog.bytes > 65536) and
              (.rawEvidence.cloudflarePermissionCatalog.sha256 |
-               test("^sha256:[a-f0-9]{64}$")) and
-             (.rawEvidence.modal.bytes > 0)' \
+               test("^sha256:[a-f0-9]{64}$"))' \
             "$ALICE_REPLAY_ROOT/before-fingerprint.json" >/dev/null
 
       - name: Bind provider fingerprints through recovery contracts
         run: |
           set -euo pipefail
           jq -e \
-            '.schemaVersion == "alice.provider-replay-snapshot.v1" and
+            '.schemaVersion == "alice.cloudflare-replay-snapshot.v1" and
              .cloudflare.credential.status == "active" and
              (.cloudflare.credential.tokenIdSha256 |
                test("^sha256:[a-f0-9]{64}$")) and
              ([.cloudflare.credential.permissionGroups[].name |
-               test("(Write|Edit)$"; "i")] | any | not) and
-             .modal.appName == "alice-runtime" and
-             .modal.environment == "main" and
-             (.modal.providerVersion | type == "number")' \
+               test("(Write|Edit)$"; "i")] | any | not)' \
             "$ALICE_REPLAY_ROOT/before.json" >/dev/null
           cp -- "$ALICE_REPLAY_ROOT/before.json" \
             "$ALICE_REPLAY_ROOT/bound-provider-dto.json"
@@ -409,24 +523,21 @@ jobs:
             > "$ALICE_REPLAY_ARTIFACT_RECORD_PATH"
           chmod 0444 "$ALICE_REPLAY_ARTIFACT_RECORD_PATH"
 
-      - name: Capture full sanitized provider state after replay
+      - name: Capture full sanitized Cloudflare state after replay
         working-directory: ${{ env.ALICE_REPLAY_TOOLING_ROOT }}
         env:
           ALICE_REPLAY_CAPTURE_OUTPUT: ${{ env.ALICE_REPLAY_ROOT }}/after.json
-          ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_REPLAY_ROOT }}/modal-client/bin/python
           ALICE_OWNER_EMAIL_SHA256: ${{ steps.owner.outputs.owner_hash }}
           ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
           ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
           ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
           CLOUDFLARE_TOKEN_POLICY_READ_TOKEN: ${{ secrets.ALICE_CLOUDFLARE_REPLAY_READ_TOKEN }}
-          MODAL_TOKEN_ID: ${{ secrets.ALICE_MODAL_REPLAY_TOKEN_ID }}
-          MODAL_TOKEN_SECRET: ${{ secrets.ALICE_MODAL_REPLAY_TOKEN_SECRET }}
         run: |
           set -euo pipefail
           node scripts/alice-provider-replay-capture.mjs
 
-      - name: Prove before and after provider state identical
+      - name: Prove before and after Cloudflare state identical
         working-directory: ${{ env.ALICE_REPLAY_TOOLING_ROOT }}
         env:
           ALICE_REPLAY_BEFORE_PATH: ${{ env.ALICE_REPLAY_ROOT }}/before.json
@@ -489,4 +600,239 @@ jobs:
           rm -rf -- \
             "$ALICE_REPLAY_ROOT" \
             "$ALICE_REPLAY_RELEASE_ROOT" \
+            "$ALICE_REPLAY_TOOLING_ROOT"
+
+  modal_after:
+    name: Capture Modal state after core replay
+    needs: [modal_before, replay]
+    if: ${{ always() && needs.modal_before.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: alice-production-modal-recovery
+    env:
+      ALICE_PROVIDER_REPLAY_CONTRACT: v1
+      ALICE_REPLAY_MUTATION_DISABLED: "1"
+      ALICE_REPLAY_TOOLING_SHA: ${{ inputs.tooling_sha }}
+      ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
+      ALICE_REPLAY_TOOLING_ROOT: ${{ github.workspace }}/replay-tooling
+      ALICE_REPLAY_RELEASE_ROOT: ${{ github.workspace }}/alice-release
+      ALICE_REPLAY_ROOT: ${{ runner.temp }}/alice-modal-after
+
+    steps:
+      - name: Validate exact one-use replay tag and immutable source identity
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          printf '%s' "$ALICE_REPLAY_TOOLING_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          printf '%s' "$ALICE_SOURCE_COMMIT" | grep -Eq '^[a-f0-9]{40}$'
+          test "$GITHUB_SHA" = "$ALICE_REPLAY_TOOLING_SHA"
+          test "$GITHUB_REF" = \
+            "refs/tags/alice-provider-replay-${ALICE_REPLAY_TOOLING_SHA}"
+
+      - name: Checkout exact replay tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.tooling_sha }}
+          path: replay-tooling
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Checkout exact Alice release
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: alice-release
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Bind exact replay tooling and Alice release checkouts
+        run: |
+          set -euo pipefail
+          test "$(git -C "$ALICE_REPLAY_TOOLING_ROOT" rev-parse HEAD)" = \
+            "$ALICE_REPLAY_TOOLING_SHA"
+          test "$(git -C "$ALICE_REPLAY_RELEASE_ROOT" rev-parse HEAD)" = \
+            "$ALICE_SOURCE_COMMIT"
+          test -z "$(git -C "$ALICE_REPLAY_TOOLING_ROOT" status \
+            --porcelain=v1 --untracked-files=all)"
+          test -z "$(git -C "$ALICE_REPLAY_RELEASE_ROOT" status \
+            --porcelain=v1 --untracked-files=all)"
+
+      - name: Setup Node.js 24.19.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.19.0"
+
+      - name: Setup Python 3.13.14
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Install exact pinned Modal readback client
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        run: |
+          set -euo pipefail
+          mkdir -m 0700 "$ALICE_REPLAY_ROOT"
+          python -m venv "$ALICE_REPLAY_ROOT/modal-client"
+          "$ALICE_REPLAY_ROOT/modal-client/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            --only-binary=:all: \
+            --requirement deploy/modal/requirements-modal-1.5.4.lock
+          test "$("$ALICE_REPLAY_ROOT/modal-client/bin/python" --version)" = \
+            "Python 3.13.14"
+          test "$("$ALICE_REPLAY_ROOT/modal-client/bin/modal" --version)" = \
+            "modal client version: 1.5.4"
+
+      - name: Capture pinned Modal state after replay
+        working-directory: ${{ env.ALICE_REPLAY_RELEASE_ROOT }}
+        env:
+          MODAL_ENVIRONMENT: main
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          set -euo pipefail
+          raw="$ALICE_REPLAY_ROOT/modal-after-raw.json"
+          output="$ALICE_REPLAY_ROOT/modal-after.json"
+          "$ALICE_REPLAY_ROOT/modal-client/bin/python" \
+            deploy/modal/alice_modal_provider_readback.py \
+            "--capture-current" > "$raw"
+          node "$ALICE_REPLAY_TOOLING_ROOT/scripts/alice-provider-replay-modal-snapshot.mjs" \
+            snapshot "$raw" "$output"
+          rm -f -- "$raw"
+          jq -e \
+            '.schemaVersion == "alice.modal-replay-snapshot.v1" and
+             .modal.appName == "alice-runtime" and
+             .modal.environment == "main" and
+             (.modal.providerVersion | type == "number") and
+             (.rawEvidence.modal.bytes > 0) and
+             (.rawEvidence.modal.sha256 | test("^sha256:[a-f0-9]{64}$"))' \
+            "$output" >/dev/null
+
+      - name: Upload sanitized Modal after snapshot and hash
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-modal-after-${{ inputs.tooling_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ALICE_REPLAY_ROOT }}/modal-after.json
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: false
+
+      - name: Cleanup Modal after state on every exit
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          rm -rf -- \
+            "$ALICE_REPLAY_ROOT" \
+            "$ALICE_REPLAY_RELEASE_ROOT" \
+            "$ALICE_REPLAY_TOOLING_ROOT"
+
+  finalize:
+    name: Finalize credential-isolated provider replay
+    needs: [modal_before, replay, modal_after]
+    if: ${{ always() && needs.modal_before.result == 'success' && needs.modal_after.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      ALICE_PROVIDER_REPLAY_CONTRACT: v1
+      ALICE_REPLAY_MUTATION_DISABLED: "1"
+      ALICE_REPLAY_TOOLING_SHA: ${{ inputs.tooling_sha }}
+      ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
+      ALICE_REPLAY_TOOLING_ROOT: ${{ github.workspace }}/replay-tooling
+      ALICE_REPLAY_ROOT: ${{ runner.temp }}/alice-provider-replay-final
+
+    steps:
+      - name: Validate exact one-use replay tag
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$GITHUB_SHA" = "$ALICE_REPLAY_TOOLING_SHA"
+          test "$GITHUB_REF" = \
+            "refs/tags/alice-provider-replay-${ALICE_REPLAY_TOOLING_SHA}"
+
+      - name: Checkout exact replay tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.tooling_sha }}
+          path: replay-tooling
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Download sanitized Modal before snapshot
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: alice-modal-before-${{ inputs.tooling_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ALICE_REPLAY_ROOT }}/modal-before
+
+      - name: Download sanitized core replay evidence
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: alice-provider-replay-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ALICE_REPLAY_ROOT }}/core
+
+      - name: Download sanitized Modal after snapshot
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: alice-modal-after-${{ inputs.tooling_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ALICE_REPLAY_ROOT }}/modal-after
+
+      - name: Prove fresh Modal before and after canonical states identical
+        run: |
+          set -euo pipefail
+          mkdir -p -m 0700 "$ALICE_REPLAY_ROOT/final"
+          test "${{ needs.replay.result }}" = "success"
+          jq -e \
+            '.status == "success" and .mutationDisabled == true and
+             .sourceSha == env.ALICE_SOURCE_COMMIT' \
+            "$ALICE_REPLAY_ROOT/core/terminal.json" >/dev/null
+          jq -e \
+            '.ok == true and .mutationDisabled == true and
+             .workerArtifact.exactOne == true and
+             .providerState.identical == true' \
+            "$ALICE_REPLAY_ROOT/core/replay-evidence.json" >/dev/null
+          node "$ALICE_REPLAY_TOOLING_ROOT/scripts/alice-provider-replay-modal-snapshot.mjs" \
+            compare \
+            "$ALICE_REPLAY_ROOT/modal-before/modal-before.json" \
+            "$ALICE_REPLAY_ROOT/modal-after/modal-after.json" \
+            "$ALICE_REPLAY_ROOT/final/modal-comparison.json"
+          jq -e \
+            '.schemaVersion == "alice.modal-replay-comparison.v1" and
+             .identical == true and
+             (.stateSha256 | test("^sha256:[a-f0-9]{64}$"))' \
+            "$ALICE_REPLAY_ROOT/final/modal-comparison.json" >/dev/null
+          jq -cn \
+            --arg tooling "$ALICE_REPLAY_TOOLING_SHA" \
+            --arg source "$ALICE_SOURCE_COMMIT" \
+            --arg run "$GITHUB_RUN_ID" \
+            --slurpfile modal \
+              "$ALICE_REPLAY_ROOT/final/modal-comparison.json" \
+            --slurpfile core \
+              "$ALICE_REPLAY_ROOT/core/replay-evidence.json" \
+            '{schemaVersion: "alice.provider-replay-final.v1",
+              ok: true, mutationDisabled: true,
+              toolingSha: $tooling, sourceSha: $source, runId: $run,
+              cloudflare: $core[0].providerState,
+              modal: $modal[0]}' \
+            > "$ALICE_REPLAY_ROOT/final/replay-final.json"
+          chmod 0444 \
+            "$ALICE_REPLAY_ROOT/final/modal-comparison.json" \
+            "$ALICE_REPLAY_ROOT/final/replay-final.json"
+
+      - name: Upload terminal credential-isolated replay evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-provider-replay-final-${{ inputs.tooling_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ALICE_REPLAY_ROOT }}/final
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: false
+
+      - name: Cleanup final replay state on every exit
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          rm -rf -- \
+            "$ALICE_REPLAY_ROOT" \
             "$ALICE_REPLAY_TOOLING_ROOT"
