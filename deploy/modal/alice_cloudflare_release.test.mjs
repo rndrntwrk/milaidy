@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -16,6 +19,19 @@ import {
   verifyAliceCloudflareRollbackAnchor,
   verifyAliceWorkflowRollbackContinuity,
 } from "./alice_cloudflare_release.mjs";
+import * as aliceCloudflareRelease from "./alice_cloudflare_release.mjs";
+import {
+  aliceEffectiveConfigFromWrangler,
+  bindAliceWranglerDeploymentEntrypoint,
+  materializeAliceWranglerConfig,
+} from "./alice_cloudflare_config.mjs";
+import {
+  aliceWorkerBundleDigests,
+  assertAliceWorkerBundleArtifactMatchesDeploymentManifest,
+  buildAliceWorkerBundleArtifact,
+  serializeAliceWorkerBundleArtifact,
+  verifyAliceWorkerBundleArtifact,
+} from "./alice_worker_bundle_artifact.mjs";
 import {
   buildAliceCloudflareContinuityConfig,
 } from "./alice_cloudflare_continuity.mjs";
@@ -94,6 +110,394 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   }
   assert.equal("triggers" in commands, false);
 });
+
+test("rejects the exact failed single-outfile serialization and admits only exact module bytes", () => {
+  assert.equal(
+    typeof aliceCloudflareRelease.verifyAliceWorkerUploadBytes,
+    "function",
+    "the release controller must expose the byte admission used by its real upload preflight",
+  );
+  assert.throws(
+    () =>
+      aliceCloudflareRelease.verifyAliceWorkerUploadBytes({
+        signedSha256:
+          "sha256:99916b96f8a9ce86da629cda13d3511b5613a545ebfaf570ce37c8296629f61b",
+        signedSize: 109_604,
+        uploadSha256:
+          "sha256:2fb7be440fcb679dcaf68a8195cc76da462e128d57775c089b1f7eac9fdc149a",
+        uploadSize: 466_244,
+      }),
+    /ALICE_WORKER_DRY_RUN_INVALID/,
+  );
+  assert.deepEqual(
+    aliceCloudflareRelease.verifyAliceWorkerUploadBytes({
+      signedSha256:
+        "sha256:99916b96f8a9ce86da629cda13d3511b5613a545ebfaf570ce37c8296629f61b",
+      signedSize: 109_604,
+      uploadSha256:
+        "sha256:99916b96f8a9ce86da629cda13d3511b5613a545ebfaf570ce37c8296629f61b",
+      uploadSize: 109_604,
+    }),
+    {
+      sha256:
+        "sha256:99916b96f8a9ce86da629cda13d3511b5613a545ebfaf570ce37c8296629f61b",
+      size: 109_604,
+    },
+  );
+});
+
+test("admits only the signed index.js from a Wrangler outdir", () => {
+  assert.equal(
+    typeof aliceCloudflareRelease.verifyAliceWorkerDryRunDirectory,
+    "function",
+  );
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "alice-worker-outdir."));
+  const signedBundlePath = path.join(root, "signed-index.js");
+  const outdir = path.join(root, "outdir");
+  const bytes = Buffer.from("export default { fetch() { return new Response('ok') } };\n");
+  const expectedSha256 = `sha256:${crypto
+    .createHash("sha256")
+    .update(bytes)
+    .digest("hex")}`;
+  try {
+    fs.mkdirSync(outdir);
+    fs.writeFileSync(signedBundlePath, bytes);
+    fs.writeFileSync(path.join(outdir, "index.js"), bytes);
+    fs.writeFileSync(path.join(outdir, "index.js.map"), "{}\n");
+    assert.deepEqual(
+      aliceCloudflareRelease.verifyAliceWorkerDryRunDirectory({
+        signedBundlePath,
+        outdir,
+        expectedSha256,
+      }),
+      { sha256: expectedSha256, size: bytes.length },
+    );
+
+    fs.writeFileSync(path.join(outdir, "second.mjs"), "export default {};\n");
+    assert.throws(
+      () =>
+        aliceCloudflareRelease.verifyAliceWorkerDryRunDirectory({
+          signedBundlePath,
+          outdir,
+          expectedSha256,
+        }),
+      /ALICE_WORKER_DRY_RUN_INVALID/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test(
+  "replays signed Worker bytes and recovery from a relocated fresh-runner root",
+  { skip: process.env.ALICE_WORKER_CONTRACT_REPLAY !== "1" },
+  () => {
+    const wranglerBin = process.env.ALICE_WRANGLER_BIN;
+    const sourceCommit = process.env.ALICE_REPLAY_SOURCE_COMMIT;
+    assert.equal(typeof wranglerBin, "string");
+    assert.equal(path.isAbsolute(wranglerBin), true);
+    assert.match(sourceCommit ?? "", /^[a-f0-9]{40}$/);
+
+    const roles = ["access", "control", "aiGateway"];
+    const workers = {
+      access: "alice-access-gateway",
+      control: "alice-production-control",
+      aiGateway: "alice-ai-gateway",
+    };
+    const runnerA = fs.mkdtempSync(
+      path.join(os.tmpdir(), "alice-contract-runner-a."),
+    );
+    const runnerB = `${runnerA}.relocated`;
+    const runWrangler = (argv, root) => {
+      const home = path.join(root, "home");
+      fs.mkdirSync(home, { recursive: true });
+      const execution = spawnSync(wranglerBin, argv, {
+        cwd: repoRoot,
+        encoding: "utf8",
+        env: {
+          PATH: process.env.PATH,
+          HOME: home,
+          CI: "true",
+          NO_COLOR: "1",
+          WRANGLER_SEND_METRICS: "false",
+        },
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: 5 * 60 * 1000,
+      });
+      assert.equal(
+        execution.status,
+        0,
+        [execution.stdout, execution.stderr].filter(Boolean).join("\n"),
+      );
+      return execution.stdout;
+    };
+    const values = (role, deploymentManifestSha256, deploymentManifestB64) => {
+      const common = {
+        accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+        accessAudience:
+          "1f65441271f72eee92c371c42306885595ae71f950d2ed5aaa1ac354788410e4",
+        ownerEmailSha256: "A".repeat(43),
+        deploymentManifestSha256,
+        deploymentManifestB64,
+      };
+      if (role === "access") {
+        return {
+          ...common,
+          upstreamOrigin: "https://rndrntwrk--alice.modal.run",
+        };
+      }
+      if (role === "control") {
+        return {
+          ...common,
+          releaseAccessAudience: "alice-release-controller-audience",
+          releaseServiceTokenIdSha256: "R".repeat(43),
+          modelDailyBudgetUnits: 10_000,
+          modalRevision: 49,
+          programEnvelopeB64: "program-envelope-fixture",
+          programSignatureB64: "program-signature-fixture",
+          programPublicJwkB64: "program-public-jwk-fixture",
+        };
+      }
+      return common;
+    };
+    const materialize = ({ root, artifactRoot, configDir, manifestSha256,
+      manifestB64 }) => {
+      fs.mkdirSync(configDir, { recursive: true });
+      const effective = {};
+      for (const role of roles) {
+        const sourceConfig = JSON.parse(
+          fs.readFileSync(
+            path.join(
+              repoRoot,
+              "workers",
+              workers[role],
+              "wrangler.jsonc",
+            ),
+            "utf8",
+          ),
+        );
+        const configPath = path.join(configDir, `${role}.wrangler.json`);
+        const bundle = path.join(artifactRoot, workers[role], "index.js");
+        const config = bindAliceWranglerDeploymentEntrypoint(
+          role,
+          materializeAliceWranglerConfig(
+            role,
+            sourceConfig,
+            values(role, manifestSha256, manifestB64),
+          ),
+          bundle,
+          { artifactRoot, configPath },
+        );
+        fs.writeFileSync(configPath, `${JSON.stringify(config)}\n`);
+        effective[role] = aliceEffectiveConfigFromWrangler(role, config, {
+          artifactRoot,
+          configPath,
+        });
+      }
+      const secretsRoot = path.join(root, "worker-secrets");
+      fs.mkdirSync(secretsRoot);
+      const secretPaths = {};
+      for (const role of roles) {
+        const config = JSON.parse(
+          fs.readFileSync(path.join(configDir, `${role}.wrangler.json`), "utf8"),
+        );
+        const secrets = Object.fromEntries(
+          config.secrets.required.map((name) => [
+            name,
+            `fixture-${role}-${name}-0123456789abcdef`,
+          ]),
+        );
+        const secretPath = path.join(secretsRoot, `${role}.json`);
+        fs.writeFileSync(secretPath, JSON.stringify(secrets), { mode: 0o600 });
+        secretPaths[role] = secretPath;
+      }
+      return { effective, secretPaths };
+    };
+    const replayUploads = ({ root, artifactRoot, configDir, secretPaths,
+      digests, suffix }) => {
+      const commands = buildAliceProtectedCloudflareCommands({
+        wranglerBin,
+        configDir,
+        bundleRoot: artifactRoot,
+        sourceCommit,
+        releaseRunId: "1-1",
+        rollbackVersions: {},
+      });
+      const output = {};
+      for (const command of commands.uploads) {
+        const outdir = path.join(root, suffix, command.role);
+        runWrangler([
+          ...command.argv,
+          "--secrets-file",
+          secretPaths[command.role],
+          "--dry-run",
+          "--outdir",
+          outdir,
+        ], root);
+        output[command.role] =
+          aliceCloudflareRelease.verifyAliceWorkerDryRunDirectory({
+            signedBundlePath: command.bundlePath,
+            outdir,
+            expectedSha256: digests[command.role],
+          });
+      }
+      return output;
+    };
+
+    try {
+      assert.match(runWrangler(["--version"], runnerA), /\b4\.122\.0\b/);
+      const artifactRootA = path.join(runnerA, "alice-worker-bundles");
+      for (const worker of Object.values(workers)) {
+        runWrangler([
+          "deploy",
+          "--dry-run",
+          "--outdir",
+          path.join(artifactRootA, worker),
+          "--config",
+          path.join(repoRoot, "workers", worker, "wrangler.jsonc"),
+        ], runnerA);
+      }
+      const artifact = buildAliceWorkerBundleArtifact({
+        root: artifactRootA,
+        sourceCommit,
+        wranglerVersion: "4.122.0",
+      });
+      const serializedArtifact = serializeAliceWorkerBundleArtifact(artifact);
+      const artifactPathA = path.join(
+        artifactRootA,
+        "alice-worker-bundles.json",
+      );
+      fs.writeFileSync(artifactPathA, serializedArtifact);
+      const verified = verifyAliceWorkerBundleArtifact(serializedArtifact, {
+        root: artifactRootA,
+        expectedSourceCommit: sourceCommit,
+      });
+      const digests = aliceWorkerBundleDigests(verified);
+      assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
+        serializedArtifact,
+        artifactRoot: artifactRootA,
+        manifest: {
+          source: { sourceCommit },
+          cloudflare: {
+            accessWorkerBundleSha256: digests.access,
+            controlWorkerBundleSha256: digests.control,
+            aiGatewayWorkerBundleSha256: digests.aiGateway,
+          },
+        },
+      });
+      const artifactSha256 = `sha256:${crypto
+        .createHash("sha256")
+        .update(serializedArtifact)
+        .digest("hex")}`;
+      const keyPair = crypto.generateKeyPairSync("rsa", {
+        modulusLength: 3072,
+      });
+      const signature = crypto.sign("sha256", Buffer.from(serializedArtifact), {
+        key: keyPair.privateKey,
+        padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+        saltLength: 32,
+      });
+      assert.equal(
+        crypto.verify(
+          "sha256",
+          Buffer.from(serializedArtifact),
+          {
+            key: keyPair.publicKey,
+            padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+            saltLength: 32,
+          },
+          signature,
+        ),
+        true,
+      );
+      const manifestB64 = Buffer.from(serializedArtifact).toString("base64url");
+      const configDirA = path.join(runnerA, "alice-release", "wrangler");
+      const initial = materialize({
+        root: runnerA,
+        artifactRoot: artifactRootA,
+        configDir: configDirA,
+        manifestSha256: artifactSha256,
+        manifestB64,
+      });
+      const firstUpload = replayUploads({
+        root: runnerA,
+        artifactRoot: artifactRootA,
+        configDir: configDirA,
+        secretPaths: initial.secretPaths,
+        digests,
+        suffix: "upload-preflight",
+      });
+
+      fs.renameSync(runnerA, runnerB);
+      const artifactRootB = path.join(runnerB, "alice-worker-bundles");
+      const configDirB = path.join(runnerB, "alice-release", "wrangler");
+      const relocatedArtifact = fs.readFileSync(
+        path.join(artifactRootB, "alice-worker-bundles.json"),
+        "utf8",
+      );
+      assert.equal(relocatedArtifact, serializedArtifact);
+      assert.equal(
+        crypto.verify(
+          "sha256",
+          Buffer.from(relocatedArtifact),
+          {
+            key: keyPair.publicKey,
+            padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+            saltLength: 32,
+          },
+          signature,
+        ),
+        true,
+      );
+      verifyAliceWorkerBundleArtifact(relocatedArtifact, {
+        root: artifactRootB,
+        expectedSourceCommit: sourceCommit,
+      });
+      for (const role of roles) {
+        const configPath = path.join(configDirB, `${role}.wrangler.json`);
+        const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+        assert.equal(path.isAbsolute(config.main), false);
+        assert.deepEqual(
+          aliceEffectiveConfigFromWrangler(role, config, {
+            artifactRoot: artifactRootB,
+            configPath,
+          }),
+          initial.effective[role],
+        );
+      }
+      const relocatedSecretPaths = Object.fromEntries(
+        roles.map((role) => [
+          role,
+          path.join(runnerB, "worker-secrets", `${role}.json`),
+        ]),
+      );
+      const recoveredUpload = replayUploads({
+        root: runnerB,
+        artifactRoot: artifactRootB,
+        configDir: configDirB,
+        secretPaths: relocatedSecretPaths,
+        digests,
+        suffix: "recovery-dry-run",
+      });
+      assert.deepEqual(recoveredUpload, firstUpload);
+      process.stdout.write(
+        `ALICE_WORKER_CONTRACT_REPLAY ${JSON.stringify({
+          schemaVersion: "alice.worker-release-contract-replay.v1",
+          sourceCommit,
+          wranglerVersion: "4.122.0",
+          artifactSha256,
+          bundles: recoveredUpload,
+          signatureVerified: true,
+          runnerRootRelocated: true,
+          providerMutation: false,
+        })}\n`,
+      );
+    } finally {
+      fs.rmSync(runnerA, { recursive: true, force: true });
+      fs.rmSync(runnerB, { recursive: true, force: true });
+    }
+  },
+);
 
 test("parses one exact uploaded version and remains retry-safe", () => {
   const first = "11111111-1111-4111-8111-111111111111";
@@ -220,6 +624,8 @@ test("the protected command requires attested bundles and terminal live readback
     source,
     /verifyProtectedRefStillExact\(\{ sourceRoot, sourceCommit \}\);[\s\S]*const promotionCommands/,
   );
+  assert.doesNotMatch(source, /"--outfile"/);
+  assert.match(source, /"--outdir"/);
   assert.match(source, /git\/ref\/heads\/\$\{PROTECTED_BRANCH\}/);
   assert.match(
     source,
@@ -238,10 +644,16 @@ test("the protected command requires attested bundles and terminal live readback
     preparePhase,
   );
   const firstMutation = source.indexOf("rollbackRequired = true;", preparePhase);
+  const bytePreflight = source.indexOf("dryRunExactBundles({", preparePhase);
   assert.ok(preparePhase >= 0);
   assert.ok(driftPreflight >= 0);
   assert.ok(firstMutation >= 0);
+  assert.ok(bytePreflight >= 0);
   assert.ok(driftPreflight < firstMutation);
+  assert.ok(
+    bytePreflight < firstMutation,
+    "exact upload bytes must be admitted before the first provider mutation",
+  );
   assert.match(
     source,
     /rollbackRequired = true;[\s\S]*ALICE_WORKER_UPLOAD_FAILED/,

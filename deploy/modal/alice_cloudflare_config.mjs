@@ -27,6 +27,21 @@ const WORKER_DIRECTORIES = Object.freeze({
   control: "alice-production-control",
   aiGateway: "alice-ai-gateway",
 });
+const SOURCE_MAIN = Object.freeze({
+  access: "src/index.ts",
+  control: "src/index.ts",
+  aiGateway: "src/index.mjs",
+});
+
+function canonicalArtifactMain(role) {
+  return path.join(
+    "..",
+    "..",
+    "alice-worker-bundles",
+    WORKER_DIRECTORIES[role],
+    "index.js",
+  );
+}
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -86,11 +101,15 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
     throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
   }
   let identityConfig = config;
-  if (options.deploymentMainPath !== undefined) {
+  if (options.artifactRoot !== undefined || options.configPath !== undefined) {
+    resolveAliceWranglerDeploymentEntrypoint(role, config, options);
+    identityConfig = { ...config, main: CANONICAL_MAIN[role] };
+  } else if (options.deploymentMainPath !== undefined) {
     if (
       typeof options.deploymentMainPath !== "string" ||
-      !path.isAbsolute(options.deploymentMainPath) ||
-      config.main !== options.deploymentMainPath
+      config.main !== options.deploymentMainPath ||
+      (!path.isAbsolute(options.deploymentMainPath) &&
+        options.deploymentMainPath !== canonicalArtifactMain(role))
     ) {
       throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
     }
@@ -184,30 +203,94 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
   };
 }
 
+export function resolveAliceWranglerDeploymentEntrypoint(
+  role,
+  config,
+  { artifactRoot, configPath } = {},
+) {
+  if (
+    !ROLES.includes(role) ||
+    !config ||
+    typeof config !== "object" ||
+    typeof config.main !== "string" ||
+    config.main.length === 0 ||
+    path.isAbsolute(config.main) ||
+    typeof artifactRoot !== "string" ||
+    !path.isAbsolute(artifactRoot) ||
+    typeof configPath !== "string" ||
+    !path.isAbsolute(configPath)
+  ) {
+    throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+  }
+  const resolved = path.resolve(path.dirname(configPath), config.main);
+  const relative = path.relative(artifactRoot, resolved);
+  const allowed = new Set([
+    path.join(WORKER_DIRECTORIES[role], "index.js"),
+    path.join(WORKER_DIRECTORIES[role], SOURCE_MAIN[role]),
+  ]);
+  if (
+    config.main !== path.relative(path.dirname(configPath), resolved) ||
+    path.isAbsolute(relative) ||
+    !allowed.has(relative) ||
+    (relative === path.join(WORKER_DIRECTORIES[role], "index.js") &&
+      config.main !== canonicalArtifactMain(role))
+  ) {
+    throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+  }
+  let rootReal;
+  let resolvedReal;
+  let stat;
+  try {
+    rootReal = fs.realpathSync(artifactRoot);
+    resolvedReal = fs.realpathSync(resolved);
+    stat = fs.lstatSync(resolved);
+  } catch {
+    throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+  }
+  const realRelative = path.relative(rootReal, resolvedReal);
+  if (
+    !stat.isFile() ||
+    stat.isSymbolicLink() ||
+    path.isAbsolute(realRelative) ||
+    !allowed.has(realRelative)
+  ) {
+    throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+  }
+  return resolved;
+}
+
 export function bindAliceWranglerDeploymentEntrypoint(
   role,
   config,
   deploymentMainPath,
+  options = {},
 ) {
   if (
     !ROLES.includes(role) ||
     !config ||
     typeof config !== "object" ||
     typeof deploymentMainPath !== "string" ||
-    !path.isAbsolute(deploymentMainPath)
+    !path.isAbsolute(deploymentMainPath) ||
+    typeof options.configPath !== "string" ||
+    !path.isAbsolute(options.configPath) ||
+    typeof options.artifactRoot !== "string" ||
+    !path.isAbsolute(options.artifactRoot)
   ) {
     throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
   }
-  let stat;
-  try {
-    stat = fs.lstatSync(deploymentMainPath);
-  } catch {
+  const rendered = {
+    ...clone(config),
+    main: path.relative(path.dirname(options.configPath), deploymentMainPath),
+  };
+  const resolved = resolveAliceWranglerDeploymentEntrypoint(
+    role,
+    rendered,
+    options,
+  );
+  if (resolved !== deploymentMainPath) {
     throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
   }
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
-  }
-  return { ...clone(config), main: deploymentMainPath };
+  return rendered;
 }
 
 export function materializeAliceWranglerConfig(role, sourceConfig, values) {
@@ -378,26 +461,27 @@ if (invokedPath === import.meta.url) {
       const deploymentMainPath = workerBundleRoot
         ? path.join(deploymentRoot, "index.js")
         : path.resolve(deploymentRoot, renderedIdentity.main);
-      const relativeDeploymentMain = path.relative(
-        deploymentRoot,
-        deploymentMainPath,
+      const renderedConfigPath = path.join(
+        outputDir,
+        `${role}.wrangler.json`,
       );
-      if (
-        relativeDeploymentMain.startsWith("..") ||
-        path.isAbsolute(relativeDeploymentMain)
-      ) {
-        throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
-      }
       const rendered = bindAliceWranglerDeploymentEntrypoint(
         role,
         renderedIdentity,
         deploymentMainPath,
+        {
+          artifactRoot: workerBundleRoot ?? path.join(sourceRoot, "workers"),
+          configPath: renderedConfigPath,
+        },
       );
       const effective = assertAliceWranglerMatchesEffectiveConfig(
         role,
         rendered,
         expected[role],
-        { deploymentMainPath },
+        {
+          artifactRoot: workerBundleRoot ?? path.join(sourceRoot, "workers"),
+          configPath: renderedConfigPath,
+        },
       );
       await verifyAliceEffectiveConfigBinding({
         encodedManifest: deploymentManifestB64,
@@ -406,7 +490,7 @@ if (invokedPath === import.meta.url) {
         effectiveConfig: effective,
       });
       fs.writeFileSync(
-        path.join(outputDir, `${role}.wrangler.json`),
+        renderedConfigPath,
         `${JSON.stringify(rendered)}\n`,
         { encoding: "utf8", mode: 0o444 },
       );
