@@ -59,6 +59,166 @@ export function aliceTestOwnerEmailSha256(ownerEmail) {
     .digest("base64url");
 }
 
+export function aliceTestLiveWorkerRollbackReadbacks() {
+  const observability = (tracesEnabled) => ({
+    enabled: true,
+    head_sampling_rate: 1,
+    redact_query_string: false,
+    logs: {
+      enabled: true,
+      head_sampling_rate: 1,
+      persist: true,
+      invocation_logs: true,
+    },
+    traces: {
+      enabled: tracesEnabled,
+      persist: true,
+      head_sampling_rate: 1,
+    },
+  });
+  const fixture = ({
+    worker,
+    deploymentId,
+    versionId,
+    script,
+    bindings,
+    scriptRuntime,
+    scriptSettings,
+  }) => ({
+    worker,
+    deployment: {
+      deployments: [{
+        id: deploymentId,
+        versions: [{ percentage: 100, version_id: versionId }],
+      }],
+    },
+    version: {
+      id: versionId,
+      resources: {
+        bindings,
+        script,
+        script_runtime: scriptRuntime,
+      },
+    },
+    scriptSettings,
+  });
+  return {
+    access: fixture({
+      worker: "alice-access-gateway",
+      deploymentId: "11111111-1111-4111-8111-111111111111",
+      versionId: "11111111-1111-4111-8111-111111111112",
+      script: {
+        etag: "access-live-etag",
+        handlers: ["fetch"],
+        last_deployed_from: "wrangler",
+      },
+      bindings: [
+        { name: "ASSET_BUST_TAG", text: "prod-live", type: "plain_text" },
+        { name: "UPSTREAM_API_TOKEN", type: "secret_text" },
+        { name: "UPSTREAM_HOST_HEADER", text: "", type: "plain_text" },
+        { name: "UPSTREAM_ORIGIN", text: "", type: "plain_text" },
+      ],
+      scriptRuntime: {
+        compatibility_date: "2026-02-18",
+        usage_model: "standard",
+      },
+      scriptSettings: {
+        logpush: false,
+        tags: null,
+        tail_consumers: null,
+        observability: null,
+      },
+    }),
+    control: fixture({
+      worker: "alice-production-control",
+      deploymentId: "22222222-2222-4222-8222-222222222221",
+      versionId: "22222222-2222-4222-8222-222222222222",
+      script: {
+        etag: "control-live-etag",
+        handlers: ["fetch", "queue"],
+        last_deployed_from: "wrangler",
+        named_handlers: [
+          { name: "AliceAuthority", handlers: ["class"] },
+          { name: "AliceSession", handlers: ["class"] },
+          {
+            name: "AlicePlanWorkflow",
+            handlers: ["__workflow_entrypoint", "run"],
+          },
+        ],
+      },
+      scriptRuntime: {
+        compatibility_date: "2026-08-22",
+        migration_tag: "alice-production-core-v1",
+        usage_model: "standard",
+      },
+      scriptSettings: {
+        logpush: false,
+        tags: null,
+        tail_consumers: null,
+        observability: observability(true),
+      },
+      bindings: [
+          {
+            class_name: "AliceAuthority",
+            name: "ALICE_AUTHORITY",
+            namespace_id: "b8e8471d24e043e4a0114fecabab913c",
+            type: "durable_object_namespace",
+          },
+          { name: "ALICE_CONTROL_RECOVERY_TOKEN", type: "secret_text" },
+          {
+            bucket_name: "alice-production-evidence",
+            name: "ALICE_EVIDENCE",
+            type: "r2_bucket",
+          },
+          {
+            name: "ALICE_EVIDENCE_QUEUE",
+            queue_name: "alice-production-evidence-v1",
+            type: "queue",
+          },
+          {
+            class_name: "AlicePlanWorkflow",
+            name: "ALICE_PLANS",
+            type: "workflow",
+            workflow_name: "alice-production-plans",
+          },
+          {
+            class_name: "AliceSession",
+            name: "ALICE_SESSIONS",
+            namespace_id: "0ecdd7fb1aa94d6c912a4b12790586bb",
+            type: "durable_object_namespace",
+          },
+          { name: "ALICE_VERSION", type: "version_metadata" },
+      ],
+    }),
+    aiGateway: fixture({
+      worker: "alice-ai-gateway",
+      deploymentId: "33333333-3333-4333-8333-333333333331",
+      versionId: "33333333-3333-4333-8333-333333333333",
+      script: {
+        etag: "ai-gateway-live-etag",
+        handlers: ["fetch"],
+        last_deployed_from: "wrangler",
+        named_handlers: [{ name: "fetch", handlers: ["class"] }],
+      },
+      scriptRuntime: {
+        compatibility_date: "2026-08-14",
+        compatibility_flags: ["nodejs_compat"],
+        usage_model: "standard",
+      },
+      scriptSettings: {
+        logpush: false,
+        tags: null,
+        tail_consumers: null,
+        observability: observability(false),
+      },
+      bindings: [
+        { name: "AI", project: "alice-production", type: "ai" },
+        { name: "ALICE_GATEWAY_TOKEN", type: "secret_text" },
+      ],
+    }),
+  };
+}
+
 export function aliceTestCloudflareContinuityReadback() {
   const timestamp = "2026-08-22T12:00:00.000Z";
   const sentinelBytes = aliceCloudflareContinuitySentinelBytes();

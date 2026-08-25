@@ -460,7 +460,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     !exact(deploymentPauseEvidence.candidateExpected, expected) ||
     !object(deploymentPauseEvidence.active) ||
     !object(deploymentPauseEvidence.result?.pause) ||
-    rollbackAnchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v5"
+    rollbackAnchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v6"
   ) invalid();
 
   const manifestBytes = `${canonicalAliceJson(manifest)}\n`;

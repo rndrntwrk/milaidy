@@ -1,10 +1,7 @@
-import crypto from "node:crypto";
-
 import {
   ALICE_CLOUDFLARE_TARGET,
   canonicalAliceJson,
 } from "../../workers/alice-effective-config.js";
-import { readAliceWorkerMainModule } from "./alice_cloudflare_provider_readback.mjs";
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 const ROLES = ["access", "control", "aiGateway"];
@@ -15,7 +12,6 @@ const WORKERS = Object.freeze({
 });
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const NAME = /^[A-Za-z_][A-Za-z0-9_-]{0,127}$/;
 
 function invalid() {
@@ -120,19 +116,27 @@ function normalizeObservability(value) {
       enabled: false,
       head_sampling_rate: null,
       logs: null,
+      redact_query_string: false,
       traces: null,
     };
   }
   exactKeys(
     value,
-    ["enabled", "head_sampling_rate", "logs", "traces"],
+    ["enabled", "head_sampling_rate", "logs", "redact_query_string", "traces"],
     ["enabled"],
   );
-  if (typeof value.enabled !== "boolean") invalid();
+  if (
+    typeof value.enabled !== "boolean" ||
+    (Object.hasOwn(value, "redact_query_string") &&
+      typeof value.redact_query_string !== "boolean")
+  ) {
+    invalid();
+  }
   return {
     enabled: value.enabled,
     head_sampling_rate: samplingRate(value.head_sampling_rate),
     logs: normalizeLogs(value.logs),
+    redact_query_string: value.redact_query_string ?? false,
     traces: normalizeTraces(value.traces),
   };
 }
@@ -164,14 +168,18 @@ export function normalizeAliceCloudflareScriptSettings(value) {
   if (value.logpush !== undefined && typeof value.logpush !== "boolean") invalid();
   return {
     logpush: value.logpush ?? false,
-    observability: normalizeObservability(value.observability),
-    tags: stringArray(value.tags),
-    tail_consumers: normalizeTailConsumers(value.tail_consumers),
+    observability: value.observability === null
+      ? null
+      : normalizeObservability(value.observability),
+    tags: value.tags === null ? null : stringArray(value.tags),
+    tail_consumers: value.tail_consumers === null
+      ? null
+      : normalizeTailConsumers(value.tail_consumers),
   };
 }
 
 const BINDING_KEYS = Object.freeze({
-  ai: { required: ["name", "type"], optional: [] },
+  ai: { required: ["name", "type"], optional: ["project"] },
   durable_object_namespace: {
     required: ["name", "type"],
     optional: [
@@ -214,7 +222,10 @@ function normalizeBinding(binding) {
   const normalized = {};
   for (const key of Object.keys(binding).sort()) {
     const value = binding[key];
-    if (key === "usages") {
+    if (binding.type === "plain_text" && key === "text") {
+      if (typeof value !== "string" || /[\r\n]/.test(value)) invalid();
+      normalized[key] = value;
+    } else if (key === "usages") {
       normalized[key] = stringArray(value);
     } else if (key === "algorithm") {
       if (!plainObject(value) && typeof value !== "string") invalid();
@@ -240,6 +251,70 @@ function normalizeBindings(value) {
     invalid();
   }
   return bindings;
+}
+
+function normalizeScriptResource(value) {
+  exactKeys(
+    value,
+    ["etag", "handlers", "last_deployed_from", "named_handlers"],
+    ["etag"],
+  );
+  if (value.handlers !== undefined) stringArray(value.handlers);
+  if (value.last_deployed_from !== undefined) {
+    stringValue(value.last_deployed_from);
+  }
+  if (value.named_handlers !== undefined) {
+    if (!Array.isArray(value.named_handlers)) invalid();
+    const names = [];
+    for (const handler of value.named_handlers) {
+      exactKeys(handler, ["handlers", "name"], ["handlers", "name"]);
+      names.push(stringValue(handler.name));
+      stringArray(handler.handlers);
+    }
+    if (new Set(names).size !== names.length) invalid();
+  }
+  return { etag: normalizedEtag(value.etag) };
+}
+
+function normalizeScriptRuntime(value) {
+  exactKeys(value, [
+    "cache_options",
+    "compatibility_date",
+    "compatibility_flags",
+    "exports",
+    "limits",
+    "migration_tag",
+    "usage_model",
+  ]);
+  if (
+    value.usage_model !== undefined &&
+    value.usage_model !== null &&
+    !["bundled", "standard", "unbound"].includes(value.usage_model)
+  ) {
+    invalid();
+  }
+  return {
+    cache_options: normalizeCacheOptions(value.cache_options),
+    compatibility_date: stringValue(value.compatibility_date, true),
+    compatibility_flags: stringArray(value.compatibility_flags),
+    exports: normalizeExports(value.exports),
+    limits: normalizeLimits(value.limits),
+    migration_tag: stringValue(value.migration_tag, true),
+    usage_model: value.usage_model ?? null,
+  };
+}
+
+export function normalizeAliceCloudflareVersionResources(value) {
+  exactKeys(value, ["bindings", "script", "script_runtime"], [
+    "bindings",
+    "script",
+    "script_runtime",
+  ]);
+  return {
+    bindings: normalizeBindings(value.bindings),
+    script: normalizeScriptResource(value.script),
+    script_runtime: normalizeScriptRuntime(value.script_runtime),
+  };
 }
 
 function normalizeCacheOptions(value) {
@@ -456,9 +531,13 @@ function withoutNulls(value) {
 function scriptSettingsPatch(value) {
   return {
     logpush: value.logpush,
-    observability: withoutNulls(value.observability),
+    observability: value.observability === null
+      ? null
+      : withoutNulls(value.observability),
     tags: value.tags,
-    tail_consumers: value.tail_consumers.map(withoutNulls),
+    tail_consumers: value.tail_consumers === null
+      ? null
+      : value.tail_consumers.map(withoutNulls),
   };
 }
 
@@ -499,19 +578,6 @@ async function apiRequest(client, method, pathname, body) {
   return envelope.result;
 }
 
-async function apiContent(client, pathname) {
-  const response = await client.fetchImpl(`${client.baseUrl}${pathname}`, {
-    method: "GET",
-    headers: {
-      authorization: `Bearer ${client.apiToken}`,
-      accept: "multipart/form-data, application/javascript",
-      "cache-control": "no-cache",
-    },
-  });
-  if (!(response instanceof Response) || !response.ok) invalid();
-  return response;
-}
-
 function deploymentIdentity(value) {
   const deployment = value?.deployments?.[0];
   if (
@@ -550,31 +616,13 @@ async function captureWorker(client, role) {
     `${root}/versions/${serving.versionId}`,
   );
   if (version?.id !== serving.versionId) invalid();
-  const scriptEtag = normalizedEtag(version?.resources?.script?.etag);
-  const content = await apiContent(client, `${root}/content/v2`);
-  if (normalizedEtag(content.headers.get("etag")) !== scriptEtag) invalid();
-  let mainModule;
-  try {
-    mainModule = await readAliceWorkerMainModule(content);
-  } catch {
-    invalid();
-  }
   const snapshot = {
     worker,
-    serving: {
-      ...serving,
-      scriptEtag,
-      mainModuleSha256: `sha256:${crypto
-        .createHash("sha256")
-        .update(mainModule)
-        .digest("hex")}`,
-    },
+    serving,
     scriptSettings: normalizeAliceCloudflareScriptSettings(
       await apiRequest(client, "GET", `${root}/script-settings`),
     ),
-    versionSettings: normalizeAliceCloudflareVersionSettings(
-      await apiRequest(client, "GET", `${root}/settings`),
-    ),
+    versionResources: normalizeAliceCloudflareVersionResources(version.resources),
   };
   const servingAfter = deploymentIdentity(
     await apiRequest(client, "GET", `${root}/deployments`),
@@ -586,31 +634,30 @@ async function captureWorker(client, role) {
 }
 
 function verifyWorkerSnapshot(value, role) {
-  exactKeys(value, ["scriptSettings", "serving", "versionSettings", "worker"], [
+  exactKeys(value, ["scriptSettings", "serving", "versionResources", "worker"], [
     "scriptSettings",
     "serving",
-    "versionSettings",
+    "versionResources",
     "worker",
   ]);
   if (value.worker !== WORKERS[role]) invalid();
   exactKeys(
     value.serving,
-    ["deploymentId", "mainModuleSha256", "scriptEtag", "versionId"],
-    ["deploymentId", "mainModuleSha256", "scriptEtag", "versionId"],
+    ["deploymentId", "versionId"],
+    ["deploymentId", "versionId"],
   );
   if (
     !UUID.test(value.serving.deploymentId ?? "") ||
-    !UUID.test(value.serving.versionId ?? "") ||
-    !DIGEST.test(value.serving.mainModuleSha256 ?? "")
+    !UUID.test(value.serving.versionId ?? "")
   ) {
     invalid();
   }
-  normalizedEtag(value.serving.scriptEtag);
   if (
     canonicalAliceJson(normalizeAliceCloudflareScriptSettings(value.scriptSettings)) !==
       canonicalAliceJson(value.scriptSettings) ||
-    canonicalAliceJson(normalizeAliceCloudflareVersionSettings(value.versionSettings)) !==
-      canonicalAliceJson(value.versionSettings)
+    canonicalAliceJson(
+      normalizeAliceCloudflareVersionResources(value.versionResources),
+    ) !== canonicalAliceJson(value.versionResources)
   ) {
     invalid();
   }
