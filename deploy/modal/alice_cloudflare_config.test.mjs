@@ -204,38 +204,86 @@ test("rejects a deployment-time observability substitution", () => {
   );
 });
 
-test("binds each rendered config to an explicit absolute deployment entrypoint", () => {
-  const entrypoints = {
-    access: path.join(repoRoot, "workers/alice-access-gateway/src/index.ts"),
-    control: path.join(repoRoot, "workers/alice-production-control/src/index.ts"),
-    aiGateway: path.join(repoRoot, "workers/alice-ai-gateway/src/index.mjs"),
+test("binds deploy configs to relocatable artifact-relative entrypoints", () => {
+  const runnerA = fs.mkdtempSync(path.join(os.tmpdir(), "alice-runner-a."));
+  const runnerB = `${runnerA}.relocated`;
+  const workerNames = {
+    access: "alice-access-gateway",
+    control: "alice-production-control",
+    aiGateway: "alice-ai-gateway",
   };
-  for (const role of ["access", "control", "aiGateway"]) {
-    const deployable = bindAliceWranglerDeploymentEntrypoint(
-      role,
-      rendered(role),
-      entrypoints[role],
-    );
-    assert.equal(deployable.main, entrypoints[role]);
-    assert.deepEqual(
-      assertAliceWranglerMatchesEffectiveConfig(
+  try {
+    const artifactRoot = path.join(runnerA, "alice-worker-bundles");
+    const configDir = path.join(runnerA, "alice-release", "wrangler");
+    fs.mkdirSync(configDir, { recursive: true });
+    for (const role of ["access", "control", "aiGateway"]) {
+      const deploymentMainPath = path.join(
+        artifactRoot,
+        workerNames[role],
+        "index.js",
+      );
+      fs.mkdirSync(path.dirname(deploymentMainPath), { recursive: true });
+      fs.writeFileSync(deploymentMainPath, `${role}\n`);
+      const configPath = path.join(configDir, `${role}.wrangler.json`);
+      const deployable = bindAliceWranglerDeploymentEntrypoint(
         role,
-        deployable,
-        expected[role],
-        { deploymentMainPath: entrypoints[role] },
-      ),
-      expected[role],
-    );
-    assert.throws(
-      () =>
+        rendered(role),
+        deploymentMainPath,
+        { artifactRoot, configPath },
+      );
+      assert.equal(path.isAbsolute(deployable.main), false);
+      assert.equal(
+        deployable.main,
+        path.join(
+          "..",
+          "..",
+          "alice-worker-bundles",
+          workerNames[role],
+          "index.js",
+        ),
+      );
+      fs.writeFileSync(configPath, `${JSON.stringify(deployable)}\n`);
+    }
+
+    fs.renameSync(runnerA, runnerB);
+    for (const role of ["access", "control", "aiGateway"]) {
+      const relocatedArtifactRoot = path.join(runnerB, "alice-worker-bundles");
+      const relocatedConfigPath = path.join(
+        runnerB,
+        "alice-release",
+        "wrangler",
+        `${role}.wrangler.json`,
+      );
+      const relocated = JSON.parse(fs.readFileSync(relocatedConfigPath, "utf8"));
+      assert.deepEqual(
         assertAliceWranglerMatchesEffectiveConfig(
           role,
-          { ...deployable, main: path.join(repoRoot, "other.js") },
+          relocated,
           expected[role],
-          { deploymentMainPath: entrypoints[role] },
+          {
+            artifactRoot: relocatedArtifactRoot,
+            configPath: relocatedConfigPath,
+          },
         ),
-      /ALICE_WRANGLER_EFFECTIVE_CONFIG_MISMATCH/,
-    );
+        expected[role],
+      );
+      assert.throws(
+        () =>
+          assertAliceWranglerMatchesEffectiveConfig(
+            role,
+            { ...relocated, main: "../../other/index.js" },
+            expected[role],
+            {
+              artifactRoot: relocatedArtifactRoot,
+              configPath: relocatedConfigPath,
+            },
+          ),
+        /ALICE_WRANGLER_EFFECTIVE_CONFIG_MISMATCH/,
+      );
+    }
+  } finally {
+    fs.rmSync(runnerA, { recursive: true, force: true });
+    fs.rmSync(runnerB, { recursive: true, force: true });
   }
 });
 
@@ -265,6 +313,7 @@ test(
           workerNames[role],
           source[role].main,
         );
+        const configPath = path.join(tempRoot, `${role}.wrangler.json`);
         const config = bindAliceWranglerDeploymentEntrypoint(
           role,
           materializeAliceWranglerConfig(
@@ -273,8 +322,11 @@ test(
             valuesForRole(role),
           ),
           entrypoint,
+          {
+            artifactRoot: path.join(repoRoot, "workers"),
+            configPath,
+          },
         );
-        const configPath = path.join(tempRoot, `${role}.wrangler.json`);
         const outdir = path.join(tempRoot, `${role}.bundle`);
         fs.writeFileSync(configPath, `${JSON.stringify(config)}\n`);
         const dryRun = spawnSync(

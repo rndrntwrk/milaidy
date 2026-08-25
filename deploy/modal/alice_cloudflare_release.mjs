@@ -201,6 +201,101 @@ function sha256File(filePath) {
     .digest("hex")}`;
 }
 
+export function verifyAliceWorkerUploadBytes({
+  signedSha256,
+  signedSize,
+  uploadSha256,
+  uploadSize,
+}) {
+  if (
+    !DIGEST.test(signedSha256 ?? "") ||
+    !Number.isSafeInteger(signedSize) ||
+    signedSize <= 0 ||
+    !DIGEST.test(uploadSha256 ?? "") ||
+    !Number.isSafeInteger(uploadSize) ||
+    uploadSize <= 0 ||
+    signedSha256 !== uploadSha256 ||
+    signedSize !== uploadSize
+  ) {
+    releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+  }
+  return { sha256: uploadSha256, size: uploadSize };
+}
+
+function aliceDryRunFiles(root, relative = "") {
+  let entries;
+  try {
+    entries = fs.readdirSync(path.join(root, relative), {
+      withFileTypes: true,
+    });
+  } catch {
+    releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+  }
+  return entries.flatMap((entry) => {
+    const child = path.join(relative, entry.name);
+    if (entry.isSymbolicLink()) {
+      releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+    }
+    if (entry.isDirectory()) return aliceDryRunFiles(root, child);
+    if (!entry.isFile()) releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+    return [child];
+  });
+}
+
+export function verifyAliceWorkerDryRunDirectory({
+  signedBundlePath,
+  outdir,
+  expectedSha256,
+}) {
+  if (
+    !absolute(signedBundlePath) ||
+    !absolute(outdir) ||
+    !DIGEST.test(expectedSha256 ?? "")
+  ) {
+    releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+  }
+  let signedStat;
+  let outdirStat;
+  try {
+    signedStat = fs.lstatSync(signedBundlePath);
+    outdirStat = fs.lstatSync(outdir);
+  } catch {
+    releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+  }
+  if (
+    !signedStat.isFile() ||
+    signedStat.isSymbolicLink() ||
+    signedStat.size <= 0 ||
+    !outdirStat.isDirectory() ||
+    outdirStat.isSymbolicLink()
+  ) {
+    releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+  }
+  const files = aliceDryRunFiles(outdir);
+  if (
+    !files.includes("index.js") ||
+    files.some(
+      (file) => file !== "index.js" && /\.(?:[cm]?js|wasm)$/i.test(file),
+    )
+  ) {
+    releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+  }
+  const uploadPath = path.join(outdir, "index.js");
+  const signedBytes = fs.readFileSync(signedBundlePath);
+  const uploadBytes = fs.readFileSync(uploadPath);
+  const signedSha256 = sha256File(signedBundlePath);
+  const uploadSha256 = sha256File(uploadPath);
+  if (signedSha256 !== expectedSha256 || !signedBytes.equals(uploadBytes)) {
+    releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
+  }
+  return verifyAliceWorkerUploadBytes({
+    signedSha256,
+    signedSize: signedBytes.byteLength,
+    uploadSha256,
+    uploadSize: uploadBytes.byteLength,
+  });
+}
+
 function readJson(filePath) {
   try {
     const stat = fs.lstatSync(filePath);
@@ -257,6 +352,7 @@ export function buildAliceProtectedCloudflareCommands({
   const tag = `alice-${sourceCommit}-${releaseRunId}`;
   const uploads = UPLOAD_ORDER.map((role) => ({
     role,
+    bundlePath: bundlePath(bundleRoot, role),
     argv: [
       "versions",
       "upload",
@@ -482,14 +578,19 @@ async function verifyReleaseArtifacts({
   const configs = {};
   const effectiveConfigs = {};
   for (const role of ROLES) {
-    const config = readJson(configPath(configDir, role));
+    const roleConfigPath = configPath(configDir, role);
+    const config = readJson(roleConfigPath);
     const expectedMain = bundlePath(artifactRoot, role);
-    if (config.name !== WORKERS[role] || config.main !== expectedMain) {
+    if (config.name !== WORKERS[role]) {
       releaseInvalid("ALICE_RELEASE_CONFIG_INVALID");
     }
     const effectiveConfig = aliceEffectiveConfigFromWrangler(role, config, {
-      deploymentMainPath: expectedMain,
+      artifactRoot,
+      configPath: roleConfigPath,
     });
+    if (path.resolve(path.dirname(roleConfigPath), config.main) !== expectedMain) {
+      releaseInvalid("ALICE_RELEASE_CONFIG_INVALID");
+    }
     await verifyAliceEffectiveConfigBinding({
       encodedManifest: config.vars?.ALICE_DEPLOYMENT_MANIFEST_B64,
       expectedManifestSha256: deploymentManifestSha256,
@@ -1001,7 +1102,7 @@ function dryRunExactBundles({
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "alice-worker-dry-run."));
   try {
     for (const command of commands.uploads) {
-      const outputPath = path.join(root, `${command.role}.js`);
+      const outdir = path.join(root, command.role);
       run(
         wranglerBin,
         [
@@ -1009,8 +1110,8 @@ function dryRunExactBundles({
           "--secrets-file",
           secretPaths[command.role],
           "--dry-run",
-          "--outfile",
-          outputPath,
+          "--outdir",
+          outdir,
         ],
         {
           cwd: sourceRoot,
@@ -1023,9 +1124,11 @@ function dryRunExactBundles({
         control: "controlWorkerBundleSha256",
         aiGateway: "aiGatewayWorkerBundleSha256",
       }[command.role];
-      if (sha256File(outputPath) !== manifest.cloudflare[digestField]) {
-        releaseInvalid("ALICE_WORKER_DRY_RUN_INVALID");
-      }
+      verifyAliceWorkerDryRunDirectory({
+        signedBundlePath: command.bundlePath,
+        outdir,
+        expectedSha256: manifest.cloudflare[digestField],
+      });
     }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -1506,14 +1609,6 @@ async function main() {
         continuityConfig: freshContinuity.sanitized,
         workflowVersions: freshWorkflowVersions,
       });
-      rollbackRequired = true;
-      await setAliceEvidenceQueueDeliveryPaused({
-        apiToken,
-        expectedDurableObjectNamespaceIds,
-        expectedContinuityDigest:
-          release.manifest.cloudflare.continuityConfigSha256,
-        deliveryPaused: true,
-      });
       dryRunExactBundles({
         wranglerBin,
         sourceRoot,
@@ -1523,6 +1618,14 @@ async function main() {
         commandEnv,
       });
       verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+      rollbackRequired = true;
+      await setAliceEvidenceQueueDeliveryPaused({
+        apiToken,
+        expectedDurableObjectNamespaceIds,
+        expectedContinuityDigest:
+          release.manifest.cloudflare.continuityConfigSha256,
+        deliveryPaused: true,
+      });
       const uploadedVersions = {};
       for (const command of commands.uploads) {
         const output = run(wranglerBin, [
