@@ -230,6 +230,82 @@ export function canonicalOwnerHash(email) {
   return crypto.createHash("sha256").update(email, "utf8").digest("base64url");
 }
 
+export function buildCloudflareReplaySnapshot({
+  cloudflareMaterializerBytes,
+  cloudflareCredentialBytes,
+}) {
+  const materializer = jsonBytes(
+    cloudflareMaterializerBytes,
+    "ALICE_REPLAY_CLOUDFLARE_SNAPSHOT_INVALID",
+  );
+  const credential = jsonBytes(
+    cloudflareCredentialBytes,
+    "ALICE_REPLAY_PROVIDER_CREDENTIAL_INVALID",
+  );
+  const permissionCatalog = envelope(
+    credential.value?.permissionGroups,
+    "ALICE_REPLAY_PROVIDER_CREDENTIAL_INVALID",
+  );
+  const normalizedCredential = normalizeCloudflareCredential(credential.value);
+  return {
+    schemaVersion: "alice.cloudflare-replay-snapshot.v1",
+    cloudflare: {
+      ...normalizeCloudflareMaterializer(materializer.value),
+      credential: normalizedCredential,
+    },
+    rawEvidence: {
+      cloudflareMaterializer: evidenceMetric(materializer.value),
+      cloudflarePermissionCatalog: evidenceMetric(permissionCatalog),
+      cloudflareCredential: evidenceMetric(normalizedCredential),
+    },
+  };
+}
+
+export function buildModalReplaySnapshot(modalBytes) {
+  const modal = jsonBytes(modalBytes, "ALICE_REPLAY_MODAL_SNAPSHOT_INVALID");
+  return {
+    schemaVersion: "alice.modal-replay-snapshot.v1",
+    modal: normalizeModal(modal.value),
+    rawEvidence: { modal: evidenceMetric(modal.value) },
+  };
+}
+
+function cloudflareState(snapshot) {
+  if (
+    snapshot?.schemaVersion !== "alice.cloudflare-replay-snapshot.v1" ||
+    !plainObject(snapshot.cloudflare)
+  ) {
+    invalid("ALICE_REPLAY_CLOUDFLARE_STATE_INVALID");
+  }
+  return canonicalJson(snapshot.cloudflare);
+}
+
+function modalState(snapshot) {
+  if (
+    snapshot?.schemaVersion !== "alice.modal-replay-snapshot.v1" ||
+    !plainObject(snapshot.modal)
+  ) {
+    invalid("ALICE_REPLAY_MODAL_STATE_INVALID");
+  }
+  return canonicalJson(snapshot.modal);
+}
+
+export function compareCloudflareReplaySnapshots(before, after) {
+  const beforeState = cloudflareState(before);
+  if (beforeState !== cloudflareState(after)) {
+    invalid("ALICE_REPLAY_CLOUDFLARE_STATE_CHANGED");
+  }
+  return { identical: true, stateSha256: sha256(beforeState) };
+}
+
+export function compareModalReplaySnapshots(before, after) {
+  const beforeState = modalState(before);
+  if (beforeState !== modalState(after)) {
+    invalid("ALICE_REPLAY_MODAL_STATE_CHANGED");
+  }
+  return { identical: true, stateSha256: sha256(beforeState) };
+}
+
 export function buildProviderSnapshot({
   cloudflareMaterializerBytes,
   cloudflareCredentialBytes,

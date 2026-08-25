@@ -10,6 +10,7 @@ import {
   canonicalOwnerHash,
   compareProviderSnapshots,
 } from "./alice-provider-replay-evidence.mjs";
+import * as replayEvidence from "./alice-provider-replay-evidence.mjs";
 
 const SOURCE_SHA = "52093d513e4ebe936c57cf021143b196d94e4874";
 const BUILD_RUN_ID = "32789475047";
@@ -161,6 +162,45 @@ test("before and after comparison is exact after deterministic normalization", (
   assert.throws(
     () => compareProviderSnapshots(before, changed),
     /ALICE_REPLAY_PROVIDER_STATE_CHANGED/u,
+  );
+});
+
+test("Cloudflare core and Modal recovery snapshots remain separately comparable", () => {
+  assert.equal(typeof replayEvidence.buildCloudflareReplaySnapshot, "function");
+  assert.equal(typeof replayEvidence.buildModalReplaySnapshot, "function");
+  assert.equal(typeof replayEvidence.compareCloudflareReplaySnapshots, "function");
+  assert.equal(typeof replayEvidence.compareModalReplaySnapshots, "function");
+
+  const input = snapshotInput();
+  const cloudflare = replayEvidence.buildCloudflareReplaySnapshot({
+    cloudflareMaterializerBytes: input.cloudflareMaterializerBytes,
+    cloudflareCredentialBytes: input.cloudflareCredentialBytes,
+  });
+  assert.equal(cloudflare.schemaVersion, "alice.cloudflare-replay-snapshot.v1");
+  assert.equal(Object.hasOwn(cloudflare, "modal"), false);
+  assert.equal(
+    replayEvidence.compareCloudflareReplaySnapshots(cloudflare, cloudflare)
+      .identical,
+    true,
+  );
+
+  const modalBefore = replayEvidence.buildModalReplaySnapshot(input.modalBytes);
+  const modalAfterInput = JSON.parse(input.modalBytes.toString("utf8"));
+  modalAfterInput.observedAt = "2026-08-25T05:00:00.000Z";
+  const modalAfter = replayEvidence.buildModalReplaySnapshot(
+    Buffer.from(`${JSON.stringify(modalAfterInput)}\n`),
+  );
+  assert.equal(modalBefore.schemaVersion, "alice.modal-replay-snapshot.v1");
+  assert.equal(Object.hasOwn(modalBefore, "cloudflare"), false);
+  assert.equal(
+    replayEvidence.compareModalReplaySnapshots(modalBefore, modalAfter).identical,
+    true,
+  );
+
+  modalAfter.modal.providerVersion = 49;
+  assert.throws(
+    () => replayEvidence.compareModalReplaySnapshots(modalBefore, modalAfter),
+    /ALICE_REPLAY_MODAL_STATE_CHANGED/u,
   );
 });
 

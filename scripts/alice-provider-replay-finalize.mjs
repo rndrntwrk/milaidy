@@ -5,7 +5,7 @@ import path from "node:path";
 import {
   assertReplayAdmission,
   canonicalOwnerHash,
-  compareProviderSnapshots,
+  compareCloudflareReplaySnapshots,
 } from "./alice-provider-replay-evidence.mjs";
 
 function invalid(code) {
@@ -83,7 +83,7 @@ function main() {
   }
   const before = readJson(beforePath);
   const after = readJson(afterPath);
-  const providerComparison = compareProviderSnapshots(before, after);
+  const providerComparison = compareCloudflareReplaySnapshots(before, after);
   const ownerHash = canonicalOwnerHash("alice-owner@rndrntwrk.com");
   const configPaths = ["access", "control", "aiGateway"].map((role) =>
     path.join(configDir, `${role}.wrangler.json`),
