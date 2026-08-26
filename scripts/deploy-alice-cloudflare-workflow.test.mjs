@@ -367,10 +367,11 @@ test("unsafe Modal v48 can only transition through an externally journaled stop 
   assert.match(legacyPersist, /modal-legacy-transition\.json/);
   assert.match(legacyPersist, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/);
   const stop = workflow.match(
-    /- name: Stop unsafe Modal transition when no safe anchor was persisted[\s\S]*?(?=\n      - name:)/,
+    /- name: Recover Modal from verified artifacts or prove pre-mutation no-op[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
   assert.match(stop, /if: failure\(\) \|\| cancelled\(\)/);
-  assert.match(stop, /ALICE_MODAL_SAFE_BOOTSTRAP_PHASE: stop-if-unanchored/);
+  assert.match(stop, /ALICE_MODAL_SAFE_BOOTSTRAP_PHASE: recover/);
+  assert.match(stop, /ALICE_MODAL_MUTATION_JOURNAL_PATH:/);
   assert.match(stop, /alice_modal_safe_bootstrap_cli\.mjs/);
   assert.doesNotMatch(stop, /app rollback|alice_modal_emergency_rollback/);
   assert.match(
@@ -390,6 +391,9 @@ test("runner loss invokes provider-isolated recovery from external journals", ()
   assert.match(modalRecovery, /alice-modal-legacy-transition-/);
   assert.match(modalRecovery, /alice_modal_safe_bootstrap_cli\.mjs/);
   assert.match(modalRecovery, /alice_modal_emergency_rollback\.mjs/);
+  assert.match(modalRecovery, /ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=recover/);
+  assert.doesNotMatch(modalRecovery, /ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=stop-if-unanchored/);
+  assert.match(modalRecovery, /modal-safe-bootstrap-evidence\.json/);
   assert.match(
     workflow,
     /recover-cloudflare:[\s\S]*?needs: \[deploy, accept\][\s\S]*?needs\.deploy\.result != 'success'[\s\S]*?needs\.accept\.result != 'success'[\s\S]*?environment: alice-production-cloudflare-recovery[\s\S]*?alice-cloudflare-anchor-[\s\S]*?ALICE_CLOUDFLARE_RELEASE_PHASE=rollback[\s\S]*?alice_cloudflare_release\.mjs/,
@@ -434,6 +438,9 @@ test("a protected push prestarts cancellation-safe provider recovery before disp
   assert.match(watchdog, /environment: alice-production-cloudflare-recovery/);
   assert.doesNotMatch(watchdog, /environment: alice-production-recovery/);
   assert.match(watchdog, /alice_modal_emergency_rollback\.mjs/);
+  assert.match(watchdog, /ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=recover/);
+  assert.doesNotMatch(watchdog, /ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=stop-if-unanchored/);
+  assert.match(watchdog, /modal-safe-bootstrap-evidence\.json/);
   assert.match(watchdog, /ALICE_CLOUDFLARE_RELEASE_PHASE=rollback/);
 });
 

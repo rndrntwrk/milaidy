@@ -13,6 +13,7 @@ import {
   buildAliceModalLegacyTransitionJournal,
   buildAliceModalSafeBootstrapResult,
   orchestrateAliceModalSafeBootstrap,
+  resolveAliceModalSafeRecovery,
   verifyAliceModalLegacyTransitionJournal,
   verifyAliceModalSafeBootstrapHttp,
   verifyAliceModalSafeRollbackAnchor,
@@ -188,10 +189,11 @@ async function main() {
   const transitionPath = process.env.ALICE_MODAL_LEGACY_TRANSITION_PATH;
   const anchorPath = process.env.ALICE_MODAL_ROLLBACK_ANCHOR_PATH;
   const evidencePath = process.env.ALICE_MODAL_SAFE_BOOTSTRAP_EVIDENCE_PATH;
+  const mutationJournalPath = process.env.ALICE_MODAL_MUTATION_JOURNAL_PATH;
   const modalBin = process.env.ALICE_MODAL_BIN;
   const pythonBin = process.env.ALICE_MODAL_PYTHON_BIN;
   if (
-    !["capture", "deploy", "stop-if-unanchored"].includes(phase) ||
+    !["capture", "deploy", "recover"].includes(phase) ||
     ![
       sourceRoot,
       manifestPath,
@@ -201,7 +203,8 @@ async function main() {
       evidencePath,
       modalBin,
       pythonBin,
-    ].every(absolute)
+    ].every(absolute) ||
+    (phase === "recover" && !absolute(mutationJournalPath))
   ) {
     invalid();
   }
@@ -215,6 +218,40 @@ async function main() {
     manifestSha256,
   );
   verifySource({ sourceRoot, sourceCommit: release.sourceCommit });
+  let recoveryDecision = null;
+  if (phase === "recover") {
+    recoveryDecision = resolveAliceModalSafeRecovery({
+      release,
+      transition: fs.existsSync(transitionPath) ? readJson(transitionPath) : null,
+      anchor: fs.existsSync(anchorPath) ? readJson(anchorPath) : null,
+      mutationJournalPresent: fs.existsSync(mutationJournalPath),
+    });
+    if (recoveryDecision.action === "pre-modal-noop") {
+      if (fs.existsSync(evidencePath)) {
+        invalid("ALICE_MODAL_RECOVERY_STATE_INVALID");
+      }
+      writeReadonly(evidencePath, recoveryDecision);
+      process.stdout.write(`${JSON.stringify({
+        ok: true,
+        phase,
+        action: recoveryDecision.action,
+        stopped: false,
+      })}\n`);
+      return;
+    }
+    if (recoveryDecision.action === "safe-anchor") {
+      process.stdout.write(`${JSON.stringify({
+        ok: true,
+        phase,
+        action: recoveryDecision.action,
+        stopped: false,
+      })}\n`);
+      return;
+    }
+    if (recoveryDecision.action !== "stop-if-unanchored") {
+      invalid("ALICE_MODAL_RECOVERY_STATE_INVALID");
+    }
+  }
   const commandEnv = aliceModalCommandEnv(process.env);
   const commands = buildAliceModalReleaseCommands({
     modalBin,
@@ -376,6 +413,18 @@ async function main() {
     }
   }
 
+  if (phase === "recover") {
+    await stopApp();
+    await verifyStopped();
+    process.stdout.write(`${JSON.stringify({
+      ok: true,
+      phase,
+      action: recoveryDecision.action,
+      stopped: true,
+    })}\n`);
+    return;
+  }
+
   if (fs.existsSync(anchorPath)) {
     const anchor = verifyAliceModalSafeRollbackAnchor(readJson(anchorPath), {
       release,
@@ -393,13 +442,6 @@ async function main() {
   if (canonicalAliceJson(journal.release) !== canonicalAliceJson(release)) {
     invalid("ALICE_MODAL_LEGACY_TRANSITION_INVALID");
   }
-  if (phase === "stop-if-unanchored") {
-    await stopApp();
-    await verifyStopped();
-    process.stdout.write(`${JSON.stringify({ ok: true, phase, stopped: true })}\n`);
-    return;
-  }
-
   const safeEnv = releaseCommandEnv(commandEnv, release);
   const result = await orchestrateAliceModalSafeBootstrap({
     journal,

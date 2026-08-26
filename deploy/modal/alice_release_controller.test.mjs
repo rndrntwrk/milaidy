@@ -279,14 +279,14 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
     release,
     releaseIsActive: false,
     pausedScopes: ["all"],
-    admissionGeneration: 2,
+    admissionGeneration: 0,
   });
   const unpausedCandidate = buildAliceReleaseCheckResponse({
     binding,
     release,
     releaseIsActive: false,
     pausedScopes: [],
-    admissionGeneration: 2,
+    admissionGeneration: 0,
   });
   const nonces = ["r".repeat(43), "s".repeat(43)];
   let paused = false;
@@ -307,7 +307,7 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
           authority: {
             binding: zeroBinding,
             deploymentManifestSha256: `sha256:${"0".repeat(64)}`,
-            admissionGeneration: 2,
+            admissionGeneration: 0,
             activeReleaseEpoch: 0,
             highestReleaseEpoch: 0,
             rollbackBoundary: "release:unadmitted",
@@ -374,6 +374,92 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
     }),
     /ALICE_DEPLOYMENT_PAUSE_EVIDENCE_INVALID/,
   );
+});
+
+test("admission generation is zero only for the exact unadmitted authority tuple", async () => {
+  const zero = `sha256:${"0".repeat(64)}`;
+  const zeroBinding = {
+    programDigest: zero,
+    releaseDigest: zero,
+    policyHash: zero,
+  };
+  const cases = [
+    {
+      name: "nonzero generation on the unadmitted tuple",
+      active: {
+        binding: zeroBinding,
+        deploymentManifestSha256: zero,
+        releaseEpoch: 0,
+        rollbackBoundary: "release:unadmitted",
+      },
+      authority: {
+        binding: zeroBinding,
+        deploymentManifestSha256: zero,
+        admissionGeneration: 1,
+        activeReleaseEpoch: 0,
+        highestReleaseEpoch: 0,
+        rollbackBoundary: "release:unadmitted",
+        pausedScopes: [],
+        activePauses: {},
+      },
+    },
+    {
+      name: "zero generation on an admitted tuple",
+      active: {
+        binding,
+        deploymentManifestSha256: release.deploymentManifestSha256,
+        releaseEpoch: release.releaseEpoch,
+        rollbackBoundary: "modal:alice-runtime:v49",
+      },
+      authority: {
+        binding,
+        deploymentManifestSha256: release.deploymentManifestSha256,
+        admissionGeneration: 0,
+        activeReleaseEpoch: release.releaseEpoch,
+        highestReleaseEpoch: release.releaseEpoch,
+        rollbackBoundary: "modal:alice-runtime:v49",
+        pausedScopes: [],
+        activePauses: {},
+      },
+    },
+  ];
+  for (const fixture of cases) {
+    let pauseMutations = 0;
+    await assert.rejects(
+      () => pauseAliceReleaseMachine({
+        fetchImpl: async (_url, init) => {
+          if (init.method === "POST") pauseMutations += 1;
+          const nonce = init.headers["x-alice-deployment-edge-nonce"];
+          return Response.json({
+            ok: true,
+            code: "DEPLOYMENT_STATUS_READ",
+            authority: fixture.authority,
+            candidateAdmission: buildAliceReleaseCheckResponse({
+              binding,
+              release,
+              releaseIsActive: false,
+              pausedScopes: [],
+              admissionGeneration: fixture.authority.admissionGeneration,
+            }),
+            edgeReadiness: edgeReadiness(nonce),
+          });
+        },
+        serviceClientId: "release-client-id",
+        serviceClientSecret: "release-client-secret-at-least-32-bytes",
+        deploymentPauseToken: "deployment-pause-token-at-least-32-bytes",
+        active: fixture.active,
+        candidateExpected,
+        expectedControlVersionId: controlVersionId,
+        readinessAttempts: 1,
+        readinessDelayMs: 0,
+        nonceFactory: () => "t".repeat(43),
+        sleepImpl: async () => {},
+      }),
+      /ALICE_DEPLOYMENT_PAUSE_INVALID/,
+      fixture.name,
+    );
+    assert.equal(pauseMutations, 0, fixture.name);
+  }
 });
 
 test("deployment pause CLI validates exact persisted journals before PAUSE_ALL mutation", () => {
