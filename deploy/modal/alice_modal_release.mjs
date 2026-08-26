@@ -286,6 +286,10 @@ export function buildAliceModalReleaseCommands({
       path.join(sourceRoot, "deploy/modal/alice_modal_provider_readback.py"),
       "--capture-current",
     ],
+    providerCaptureStoppedReentry: [
+      path.join(sourceRoot, "deploy/modal/alice_modal_provider_readback.py"),
+      "--capture-stopped-reentry",
+    ],
     providerEnforceCurrent: [
       path.join(sourceRoot, "deploy/modal/alice_modal_provider_readback.py"),
       "--enforce-current",
@@ -408,7 +412,6 @@ function verifyProviderLayout(layout) {
     JSON.stringify(layout.function.inputFormats) !==
       JSON.stringify(["DATA_FORMAT_ASGI"]) ||
     !Array.isArray(layout.mountedSecretObjects) ||
-    layout.mountedSecretObjects.length < 1 ||
     layout.mountedSecretObjects.some((entry) =>
       !exactKeys(entry, ["id", "name"]) ||
       !SECRET_ID.test(entry.id ?? "") ||
@@ -483,6 +486,23 @@ export function verifyAliceModalRollbackAnchorLayout(layout) {
   return layout;
 }
 
+export function verifyAliceModalStoppedRecoveryLayout(layout) {
+  verifyProviderLayout(layout);
+  const head = providerHistoryHead(layout);
+  if (
+    layout.appId !== ALICE_APP_ID ||
+    head.dirty !== false ||
+    head.clientVersion !== MODAL_VERSION ||
+    head.rollbackVersion !== 0 ||
+    layout.autoscalerEnforcement.status !== "provider-unverifiable" ||
+    layout.mountedSecretObjects.length !== 0 ||
+    layout.mountedVolumeIds.length !== 0
+  ) {
+    invalid("ALICE_MODAL_STOPPED_REENTRY_INVALID");
+  }
+  return layout;
+}
+
 export function verifyAliceModalSafeBootstrapReadback(value, {
   release,
   expectedProviderVersion,
@@ -526,7 +546,7 @@ export function verifyAliceModalSafeBootstrapReadback(value, {
     head.rollbackVersion !== 0 ||
     head.commitHash !== release.sourceCommit ||
     JSON.stringify(layout.mountedSecretObjects.map((item) => item.name)) !==
-      JSON.stringify(["alice-ghcr-registry"]) ||
+      JSON.stringify([]) ||
     layout.mountedVolumeIds.length !== 0
   ) {
     invalid("ALICE_MODAL_SAFE_BOOTSTRAP_INVALID");

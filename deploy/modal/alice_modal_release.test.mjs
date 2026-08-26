@@ -179,6 +179,9 @@ test("keeps signed Alice revision separate from Modal provider deployment versio
   assert.deepEqual(commands.providerSecretInventory.slice(-1), [
     "--secret-inventory",
   ]);
+  assert.deepEqual(commands.providerCaptureStoppedReentry.slice(-1), [
+    "--capture-stopped-reentry",
+  ]);
   assert.deepEqual(commands.deploy.slice(0, 5), [
     "deploy", "--env", "main", "--name", "alice-runtime",
   ]);
@@ -247,7 +250,7 @@ function providerValue({
         inputFormats: ["DATA_FORMAT_ASGI"],
       },
       mountedSecretObjects: safeBootstrap
-        ? [{ id: "st-em904Ts5jgkuESl7afKErN", name: "alice-ghcr-registry" }]
+        ? []
         : [
             { id: "st-em904Ts5jgkuESl7afKErN", name: "alice-ghcr-registry" },
             { id: "st-TU930BfNl1jK3wZ9ZcYtEn", name: releaseSecret },
@@ -295,9 +298,7 @@ test("admits only the release-bound, registry-only safe bootstrap", () => {
   });
   assert.equal(readback.safeBootstrap, true);
   assert.equal(readback.providerVersion, 49);
-  assert.deepEqual(readback.mountedSecretObjects, [
-    { id: "st-em904Ts5jgkuESl7afKErN", name: "alice-ghcr-registry" },
-  ]);
+  assert.deepEqual(readback.mountedSecretObjects, []);
   assert.throws(
     () => verifyAliceModalSafeBootstrapReadback(providerValue(), {
       release,
@@ -511,12 +512,16 @@ test("keeps capture-current strictly read-only and enforcement explicit", () => 
   );
   assert.match(
     source,
-    /read_only_capture = capture_mode in \{[\s\S]*?"--capture-current"[\s\S]*?"--capture-recovery-readiness"[\s\S]*?\}/,
+    /read_only_capture = capture_mode in \{[\s\S]*?"--capture-current"[\s\S]*?"--capture-recovery-readiness"[\s\S]*?"--capture-stopped-reentry"[\s\S]*?\}/,
   );
-  assert.match(source, /enforce_autoscaler=not read_only_capture/);
+  assert.match(source, /"enforce_autoscaler": not read_only_capture/);
   assert.match(
     source,
-    /allow_stopped_recovery=capture_mode == "--capture-recovery-readiness"/,
+    /"allow_stopped_recovery": capture_mode[\s\S]*?in \{"--capture-recovery-readiness", "--capture-stopped-reentry"\}/,
+  );
+  assert.match(
+    source,
+    /capture_mode == "--capture-stopped-reentry"[\s\S]*?options\["require_stopped_recovery"\] = True/,
   );
 });
 

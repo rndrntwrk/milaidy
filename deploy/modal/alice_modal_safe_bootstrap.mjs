@@ -3,6 +3,7 @@ import {
   digestAliceModalProviderGraph,
   verifyAliceModalRollbackAnchorLayout,
   verifyAliceModalSafeBootstrapReadback,
+  verifyAliceModalStoppedRecoveryLayout,
 } from "./alice_modal_release.mjs";
 
 const COMMIT = /^[a-f0-9]{40}$/;
@@ -198,6 +199,130 @@ export function verifyAliceModalLegacyTransitionJournal(value) {
   return value;
 }
 
+function verifyStoppedSafeBootstrapLayout(previous) {
+  let verified;
+  try {
+    verified = verifyAliceModalStoppedRecoveryLayout(previous);
+  } catch {
+    invalid("ALICE_MODAL_STOPPED_REENTRY_INVALID");
+  }
+  const head = verified.providerHistory[0];
+  if (
+    verified.appId !== APP_ID ||
+    verified.environment !== "main" ||
+    verified.providerVersion < LEGACY_PROVIDER_VERSION + 1 ||
+    head.providerVersion !== verified.providerVersion ||
+    head.rollbackVersion !== 0 ||
+    verified.mountedSecretObjects.length !== 0 ||
+    verified.mountedVolumeIds.length !== 0 ||
+    verified.autoscalerEnforcement.status !== "provider-unverifiable"
+  ) {
+    invalid("ALICE_MODAL_STOPPED_REENTRY_INVALID");
+  }
+  return verified;
+}
+
+export function buildAliceModalStoppedReentryJournal({
+  previous,
+  release,
+  observedAt = new Date().toISOString(),
+}) {
+  const verified = verifyStoppedSafeBootstrapLayout(previous);
+  if (!validRelease(release) || !canonicalIsoTimestamp(observedAt)) {
+    invalid("ALICE_MODAL_STOPPED_REENTRY_INVALID");
+  }
+  return {
+    schemaVersion: "alice.modal-stopped-reentry.v1",
+    observedAt,
+    failureBoundary: "restart-stopped-safe-bootstrap",
+    release,
+    appId: APP_ID,
+    previousProviderVersion: verified.providerVersion,
+    previousGraphSha256: digestAliceModalProviderGraph(verified),
+    previous: verified,
+  };
+}
+
+export function verifyAliceModalStoppedReentryJournal(value) {
+  if (
+    !exactKeys(value, [
+      "schemaVersion",
+      "observedAt",
+      "failureBoundary",
+      "release",
+      "appId",
+      "previousProviderVersion",
+      "previousGraphSha256",
+      "previous",
+    ]) ||
+    value.schemaVersion !== "alice.modal-stopped-reentry.v1" ||
+    !canonicalIsoTimestamp(value.observedAt) ||
+    value.failureBoundary !== "restart-stopped-safe-bootstrap" ||
+    !validRelease(value.release) ||
+    value.appId !== APP_ID ||
+    !Number.isSafeInteger(value.previousProviderVersion) ||
+    value.previousProviderVersion < LEGACY_PROVIDER_VERSION + 1
+  ) {
+    invalid("ALICE_MODAL_STOPPED_REENTRY_INVALID");
+  }
+  const previous = verifyStoppedSafeBootstrapLayout(value.previous);
+  if (
+    value.previousProviderVersion !== previous.providerVersion ||
+    value.previousGraphSha256 !== digestAliceModalProviderGraph(previous)
+  ) {
+    invalid("ALICE_MODAL_STOPPED_REENTRY_INVALID");
+  }
+  return value;
+}
+
+export function verifyAliceModalTransitionJournal(value) {
+  return value?.schemaVersion === "alice.modal-stopped-reentry.v1"
+    ? verifyAliceModalStoppedReentryJournal(value)
+    : verifyAliceModalLegacyTransitionJournal(value);
+}
+
+export async function captureAliceModalStopBoundary({
+  release,
+  captureCurrent,
+  captureStopped,
+  observedAt = new Date().toISOString(),
+}) {
+  if (
+    !validRelease(release) ||
+    typeof captureCurrent !== "function" ||
+    typeof captureStopped !== "function" ||
+    !canonicalIsoTimestamp(observedAt)
+  ) {
+    invalid("ALICE_MODAL_STOPPED_REENTRY_INVALID");
+  }
+  let current;
+  try {
+    current = await captureCurrent();
+  } catch {
+    return {
+      action: "transition",
+      journal: buildAliceModalStoppedReentryJournal({
+        previous: await captureStopped(),
+        release,
+        observedAt,
+      }),
+    };
+  }
+  try {
+    return {
+      action: "transition",
+      journal: buildAliceModalLegacyTransitionJournal({
+        previous: current,
+        release,
+        observedAt,
+      }),
+    };
+  } catch (error) {
+    if (error?.message !== "ALICE_MODAL_LEGACY_TRANSITION_INVALID") throw error;
+    return { action: "active-safe-reentry" };
+  }
+}
+
 export function verifyAliceModalSafeRollbackAnchor(value, { release }) {
   if (
     !validRelease(release) ||
@@ -303,7 +428,7 @@ export function resolveAliceModalSafeRecovery({
     invalid("ALICE_MODAL_RECOVERY_STATE_INVALID");
   }
   if (transition !== null) {
-    const verifiedTransition = verifyAliceModalLegacyTransitionJournal(transition);
+    const verifiedTransition = verifyAliceModalTransitionJournal(transition);
     if (
       canonicalAliceJson(verifiedTransition.release) !==
         canonicalAliceJson(release)
@@ -572,12 +697,13 @@ export function buildAliceModalSafeBootstrapResult({
   release,
   state,
   runtime,
+  expectedProviderVersion = LEGACY_PROVIDER_VERSION + 1,
   observedAt = new Date().toISOString(),
 }) {
   if (!validRelease(release) || !canonicalIsoTimestamp(observedAt)) invalid();
   const provider = verifyAliceModalSafeBootstrapReadback(state, {
     release,
-    expectedProviderVersion: LEGACY_PROVIDER_VERSION + 1,
+    expectedProviderVersion,
   });
   const verifiedRuntime = verifyRuntimeEvidence(runtime, release);
   const previous = verifyAliceModalRollbackAnchorLayout(state.layout);
@@ -610,28 +736,44 @@ export async function orchestrateAliceModalSafeBootstrap({
   operations,
   observedAt = new Date().toISOString(),
 }) {
-  const verifiedJournal = verifyAliceModalLegacyTransitionJournal(journal);
+  const verifiedJournal = verifyAliceModalTransitionJournal(journal);
+  const stoppedReentry =
+    verifiedJournal.schemaVersion === "alice.modal-stopped-reentry.v1";
+  const capturePrevious = stoppedReentry
+    ? operations?.captureStopped
+    : operations?.captureLegacy;
   if (
     !validRelease(release) ||
     canonicalAliceJson(release) !== canonicalAliceJson(verifiedJournal.release) ||
     !canonicalIsoTimestamp(observedAt) ||
     !object(operations) ||
     ![
-      "captureLegacy",
       "verifyProtectedRef",
       "deploySafeBootstrap",
       "readSafeBootstrapState",
       "verifySafeBootstrapRuntime",
       "stopIfUnanchored",
-    ].every((name) => typeof operations[name] === "function")
+    ].every((name) => typeof operations[name] === "function") ||
+    typeof capturePrevious !== "function"
   ) {
     invalid();
   }
 
-  const freshLegacy = await operations.captureLegacy();
-  verifyExactLegacyLayout(freshLegacy);
-  if (canonicalAliceJson(freshLegacy) !== canonicalAliceJson(verifiedJournal.previous)) {
-    invalid("ALICE_MODAL_LEGACY_TRANSITION_CHANGED");
+  const freshPrevious = await capturePrevious();
+  if (stoppedReentry) {
+    verifyStoppedSafeBootstrapLayout(freshPrevious);
+  } else {
+    verifyExactLegacyLayout(freshPrevious);
+  }
+  if (
+    canonicalAliceJson(freshPrevious) !==
+      canonicalAliceJson(verifiedJournal.previous)
+  ) {
+    invalid(
+      stoppedReentry
+        ? "ALICE_MODAL_STOPPED_REENTRY_CHANGED"
+        : "ALICE_MODAL_LEGACY_TRANSITION_CHANGED",
+    );
   }
 
   let failureStage = "protected-ref";
@@ -648,6 +790,7 @@ export async function orchestrateAliceModalSafeBootstrap({
       release,
       state,
       runtime,
+      expectedProviderVersion: verifiedJournal.previousProviderVersion + 1,
       observedAt,
     });
   } catch (error) {

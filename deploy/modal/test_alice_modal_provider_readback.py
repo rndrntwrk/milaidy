@@ -106,6 +106,24 @@ class ModalProviderSecretResolutionTests(unittest.TestCase):
                 "ap-oFaCNy2jJDFalZienNB2Ht",
             )
 
+    def test_stopped_fallback_admits_provider_retention_after_app_list_row_expires(self):
+        stopped_at = 1_787_773_283.001954
+        app = types.SimpleNamespace(
+            app_id="",
+            previous_app_id="ap-oFaCNy2jJDFalZienNB2Ht",
+            environment_name="main",
+            lifecycle=types.SimpleNamespace(
+                app_state=5,
+                version=49,
+                stopped_at=stopped_at,
+            ),
+        )
+        with patch.object(MODULE.api_pb2, "APP_STATE_STOPPED", 5, create=True):
+            self.assertEqual(
+                MODULE._resolve_stopped_app_identity(app, [], []),
+                "ap-oFaCNy2jJDFalZienNB2Ht",
+            )
+
     def test_stopped_fallback_rejects_active_ambiguous_or_malformed_identity(self):
         stopped_at = 1_787_780_400.0
         app = types.SimpleNamespace(
@@ -297,6 +315,25 @@ class ModalProviderSecretResolutionTests(unittest.TestCase):
             None,
             enforce_autoscaler=False,
             allow_stopped_recovery=True,
+        )
+
+    def test_stopped_reentry_capture_requires_the_exact_stopped_fallback(self):
+        readback = AsyncMock(return_value={"mode": "stopped-reentry"})
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [str(MODULE_PATH), "--capture-stopped-reentry"],
+            ),
+            patch.object(MODULE, "_readback", readback),
+            redirect_stdout(StringIO()),
+        ):
+            MODULE.main()
+        readback.assert_awaited_once_with(
+            None,
+            enforce_autoscaler=False,
+            allow_stopped_recovery=True,
+            require_stopped_recovery=True,
         )
 
     def test_non_recovery_modes_do_not_admit_the_stopped_fallback(self):
