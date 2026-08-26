@@ -286,7 +286,8 @@ function validState(value: unknown): value is AuthorityLedgerState {
     : isUnadmittedBinding(state.binding)
     ? state.activeReleaseEpoch === 0 &&
       state.deploymentManifestSha256 === ZERO_DIGEST &&
-      state.admissionGeneration === 0 &&
+      Number.isSafeInteger(state.admissionGeneration) &&
+      state.admissionGeneration >= 0 &&
       state.highestReleaseEpoch === 0 &&
       state.activeProgramIssuedAt === 0 &&
       state.latestProgramIssuedAt === 0 &&
