@@ -24,6 +24,9 @@ import {
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
+const API_OPERATION = /^[A-Z][A-Z0-9_]{2,63}$/;
+const CLOUDFLARE_TOKEN_ID = /^[a-f0-9]{32}$/;
+const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const NAMESPACE_ID = /^[a-f0-9]{32}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const RELEASE_RUN_ID = /^[1-9][0-9]*-[1-9][0-9]*$/;
@@ -107,8 +110,19 @@ function run(binary, argv, { cwd, env, errorCode }) {
 }
 
 async function apiEnvelope(
-  { fetchImpl, apiToken, method, pathname, body, headers = {} },
+  {
+    fetchImpl,
+    apiToken,
+    method,
+    operation,
+    pathname,
+    body,
+    headers = {},
+    allowNotFound = false,
+    requireResult = true,
+  },
 ) {
+  if (!API_OPERATION.test(operation ?? "")) invalid();
   const response = await fetchImpl(`${API_BASE}${pathname}`, {
     method,
     headers: {
@@ -122,49 +136,94 @@ async function apiEnvelope(
       ? {}
       : { body: typeof body === "string" ? body : JSON.stringify(body) }),
   });
-  if (!(response instanceof Response)) invalid();
-  if (response.status === 404 && method === "GET") return null;
-  if (!response.ok) invalid();
+  if (!(response instanceof Response)) {
+    providerApiInvalid(operation, null, null);
+  }
+  if (response.status === 404 && method === "GET" && allowNotFound) return null;
   let value;
   try {
     value = await response.json();
   } catch {
-    invalid();
+    providerApiInvalid(operation, response.status, null);
   }
-  if (value?.success !== true || !("result" in value)) invalid();
+  if (!response.ok) {
+    providerApiInvalid(operation, response.status, value);
+  }
+  if (
+    value?.success !== true ||
+    (requireResult && !("result" in value))
+  ) {
+    providerApiInvalid(operation, response.status, value);
+  }
   return value;
 }
 
+function providerApiInvalid(operation, status, value) {
+  if (!API_OPERATION.test(operation ?? "")) invalid();
+  const code = Array.isArray(value?.errors)
+    ? value.errors
+      .map((entry) => entry?.code)
+      .find((entry) => Number.isSafeInteger(entry) && entry >= 0)
+    : undefined;
+  const httpStatus = Number.isSafeInteger(status) && status >= 100 && status <= 599
+    ? status
+    : "NONE";
+  invalid(
+    `ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:${operation}:HTTP_${httpStatus}:CF_${code ?? "NONE"}`,
+  );
+}
+
 async function api(options) {
-  const envelope = await apiEnvelope(options);
+  const envelope = await apiEnvelope({
+    ...options,
+    allowNotFound: options.allowNotFound ?? options.method === "GET",
+  });
   return envelope === null ? null : envelope.result;
 }
 
-async function apiSuccessBody({ fetchImpl, apiToken, pathname }) {
-  const response = await fetchImpl(`${API_BASE}${pathname}`, {
+export async function verifyAliceBootstrapDeployToken({ fetchImpl, apiToken }) {
+  const result = await api({
+    fetchImpl,
+    apiToken,
     method: "GET",
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      accept: "application/json",
-      "cache-control": "no-cache",
-    },
+    operation: "VERIFY_DEPLOY_TOKEN",
+    pathname: "/user/tokens/verify",
+    allowNotFound: false,
   });
-  if (!(response instanceof Response)) invalid();
-  if (response.status === 404) return null;
-  if (!response.ok) invalid();
-  let body;
-  try {
-    body = await response.json();
-  } catch {
-    invalid();
+  if (
+    !result ||
+    typeof result !== "object" ||
+    Array.isArray(result) ||
+    Object.keys(result).some((key) =>
+      !["expires_on", "id", "not_before", "status"].includes(key)
+    ) ||
+    !CLOUDFLARE_TOKEN_ID.test(result.id ?? "") ||
+    result.status !== "active" ||
+    [result.not_before, result.expires_on].some((value) =>
+      value !== undefined && value !== null &&
+      (typeof value !== "string" || !Number.isFinite(Date.parse(value)))
+    )
+  ) {
+    invalid("ALICE_CLOUDFLARE_BOOTSTRAP_DEPLOY_TOKEN_INVALID");
   }
-  if (body?.success !== true) invalid();
-  return body;
+  return `sha256:${crypto.createHash("sha256").update(result.id).digest("hex")}`;
+}
+
+async function apiSuccessBody({ fetchImpl, apiToken, operation, pathname }) {
+  return apiEnvelope({
+    fetchImpl,
+    apiToken,
+    method: "GET",
+    operation,
+    pathname,
+    requireResult: false,
+  });
 }
 
 async function apiGetAllResults({
   fetchImpl,
   apiToken,
+  operation,
   pathname,
 }) {
   const values = [];
@@ -176,9 +235,12 @@ async function apiGetAllResults({
       fetchImpl,
       apiToken,
       method: "GET",
+      operation,
       pathname: `${pathname}${separator}page=${page}&per_page=100`,
     });
-    if (envelope === null || !Array.isArray(envelope.result)) invalid();
+    if (envelope === null || !Array.isArray(envelope.result)) {
+      providerApiInvalid(operation, 200, envelope);
+    }
     values.push(...envelope.result);
     if (envelope.result_info === undefined) {
       if (envelope.result.length >= 100) invalid();
@@ -310,6 +372,7 @@ export async function ensureAliceBootstrapQueue({ fetchImpl, apiToken, name }) {
   let queues = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_QUEUES",
     pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues`,
   });
   let matches = queues.filter((queue) => queue?.queue_name === name);
@@ -320,6 +383,7 @@ export async function ensureAliceBootstrapQueue({ fetchImpl, apiToken, name }) {
       fetchImpl,
       apiToken,
       method: "POST",
+      operation: "CREATE_QUEUE",
       pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues`,
       body: {
         queue_name: name,
@@ -334,6 +398,7 @@ export async function ensureAliceBootstrapQueue({ fetchImpl, apiToken, name }) {
     queues = await apiGetAllResults({
       fetchImpl,
       apiToken,
+      operation: "LIST_QUEUES",
       pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues`,
     });
     matches = queues.filter((queue) => queue?.queue_name === name);
@@ -357,6 +422,7 @@ async function ensureBucketAndSentinel({ fetchImpl, apiToken }) {
     fetchImpl,
     apiToken,
     method: "GET",
+    operation: "GET_EVIDENCE_BUCKET",
     pathname: bucketPath,
   });
   let bucketCreated = false;
@@ -366,6 +432,7 @@ async function ensureBucketAndSentinel({ fetchImpl, apiToken }) {
       fetchImpl,
       apiToken,
       method: "POST",
+      operation: "CREATE_EVIDENCE_BUCKET",
       pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/r2/buckets`,
       headers: { "cf-r2-jurisdiction": "default" },
       body: {
@@ -379,6 +446,7 @@ async function ensureBucketAndSentinel({ fetchImpl, apiToken }) {
       fetchImpl,
       apiToken,
       method: "GET",
+      operation: "GET_EVIDENCE_BUCKET",
       pathname: bucketPath,
     });
   }
@@ -388,6 +456,7 @@ async function ensureBucketAndSentinel({ fetchImpl, apiToken }) {
     fetchImpl,
     apiToken,
     method: "GET",
+    operation: "LIST_EVIDENCE_SENTINELS",
     pathname: `${objectsPath}?prefix=${ALICE_CONTINUITY_SENTINEL_KEY}&per_page=2`,
   });
   if (!Array.isArray(sentinelObjects) || sentinelObjects.length > 1) invalid();
@@ -407,7 +476,9 @@ async function ensureBucketAndSentinel({ fetchImpl, apiToken }) {
 export async function fetchAliceBootstrapResourceSnapshot({
   fetchImpl,
   apiToken,
+  deployCredentialIdSha256,
 }) {
+  if (!DIGEST.test(deployCredentialIdSha256 ?? "")) invalid();
   const inventorySha256 = (value) => `sha256:${crypto
     .createHash("sha256")
     .update(canonicalAliceJson(value))
@@ -434,6 +505,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
   const queues = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_QUEUES",
     pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues`,
   });
   const namedQueues = {};
@@ -450,6 +522,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
       : await apiGetAllResults({
           fetchImpl,
           apiToken,
+          operation: "LIST_QUEUE_CONSUMERS",
           pathname:
             `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/queues/${matches[0].queue_id}/consumers`,
         });
@@ -462,6 +535,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
   const allEventSubscriptions = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_QUEUE_EVENT_SUBSCRIPTIONS",
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/event_subscriptions/subscriptions`,
   });
@@ -472,11 +546,13 @@ export async function fetchAliceBootstrapResourceSnapshot({
   const zoneApplications = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_ZONE_ACCESS_APPS",
     pathname: `/zones/${ZONE_ID}/access/apps`,
   });
   const accountApplications = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_ACCOUNT_ACCESS_APPS",
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/access/apps`,
   });
@@ -498,6 +574,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
     const policies = await apiGetAllResults({
       fetchImpl,
       apiToken,
+      operation: "LIST_ZONE_ACCESS_POLICIES",
       pathname: `/zones/${ZONE_ID}/access/apps/${application.id}/policies`,
     });
     accessPolicies[application.id] = inventoryIdentity(policies, {
@@ -508,12 +585,14 @@ export async function fetchAliceBootstrapResourceSnapshot({
   const identityProviders = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_ACCESS_IDENTITY_PROVIDERS",
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/access/identity_providers`,
   });
   const postureRules = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_DEVICE_POSTURE_RULES",
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/devices/posture`,
   });
@@ -524,6 +603,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
     fetchImpl,
     apiToken,
     method: "GET",
+    operation: "GET_AI_GATEWAY",
     pathname: gatewayPath,
   });
   const aiGatewayRoutes = aiGateway === null
@@ -531,17 +611,20 @@ export async function fetchAliceBootstrapResourceSnapshot({
     : await apiSuccessBody({
         fetchImpl,
         apiToken,
+        operation: "LIST_AI_GATEWAY_ROUTES",
         pathname: `${gatewayPath}/routes?page=1&per_page=100`,
       });
 
   const routes = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_WORKER_ROUTES",
     pathname: `/zones/${ZONE_ID}/workers/routes`,
   });
   const customDomains = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_WORKER_DOMAINS",
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/domains?zone_id=${ZONE_ID}`,
   });
@@ -567,24 +650,28 @@ export async function fetchAliceBootstrapResourceSnapshot({
         fetchImpl,
         apiToken,
         method: "GET",
+        operation: "GET_WORKER_DEPLOYMENTS",
         pathname: `${workerPath}/deployments`,
       }),
       scriptSettings: await api({
         fetchImpl,
         apiToken,
         method: "GET",
+        operation: "GET_WORKER_SCRIPT_SETTINGS",
         pathname: `${workerPath}/script-settings`,
       }),
       settings: await api({
         fetchImpl,
         apiToken,
         method: "GET",
+        operation: "GET_WORKER_SETTINGS",
         pathname: `${workerPath}/settings`,
       }),
       subdomain: await api({
         fetchImpl,
         apiToken,
         method: "GET",
+        operation: "GET_WORKER_SUBDOMAIN",
         pathname: `${workerPath}/subdomain`,
       }),
     };
@@ -606,6 +693,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
     fetchImpl,
     apiToken,
     method: "GET",
+    operation: "GET_PLAN_WORKFLOW",
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workflows/${ALICE_CLOUDFLARE_TARGET.planWorkflow}`,
   });
@@ -615,6 +703,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
     fetchImpl,
     apiToken,
     method: "GET",
+    operation: "GET_EVIDENCE_BUCKET",
     pathname: bucketPath,
   });
   const sentinelObjects = bucket === null
@@ -623,6 +712,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
         fetchImpl,
         apiToken,
         method: "GET",
+        operation: "LIST_EVIDENCE_SENTINELS",
         pathname:
           `${bucketPath}/objects?prefix=${ALICE_CONTINUITY_SENTINEL_KEY}&per_page=2`,
       });
@@ -631,8 +721,9 @@ export async function fetchAliceBootstrapResourceSnapshot({
     await ensureExactSentinelBody({ fetchImpl, apiToken, objectsPath: bucketPath + "/objects" });
   }
   return {
-    schemaVersion: "alice.cloudflare-bootstrap-preflight.v2",
+    schemaVersion: "alice.cloudflare-bootstrap-preflight.v3",
     accountId: ALICE_CLOUDFLARE_TARGET.accountId,
+    deployCredentialIdSha256,
     access: {
       accountApplications: inventoryIdentity(aliceAccountApplications, {
         count: aliceAccountApplications.length,
@@ -809,6 +900,7 @@ async function ensureConsumer({ fetchImpl, apiToken, queue }) {
   let consumers = await apiGetAllResults({
     fetchImpl,
     apiToken,
+    operation: "LIST_QUEUE_CONSUMERS",
     pathname: pathName,
   });
   let created = false;
@@ -817,6 +909,7 @@ async function ensureConsumer({ fetchImpl, apiToken, queue }) {
       fetchImpl,
       apiToken,
       method: "POST",
+      operation: "CREATE_QUEUE_CONSUMER",
       pathname: pathName,
       body: {
         type: "worker",
@@ -835,6 +928,7 @@ async function ensureConsumer({ fetchImpl, apiToken, queue }) {
     consumers = await apiGetAllResults({
       fetchImpl,
       apiToken,
+      operation: "LIST_QUEUE_CONSUMERS",
       pathname: pathName,
     });
   }
@@ -876,6 +970,7 @@ export async function fetchAliceActiveControlVersionId({ fetchImpl, apiToken }) 
     fetchImpl,
     apiToken,
     method: "GET",
+    operation: "GET_CONTROL_DEPLOYMENTS",
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/deployments`,
   });
@@ -978,13 +1073,19 @@ async function main() {
     flag: "wx",
     mode: 0o444,
   });
+  const deployCredentialIdSha256 = await verifyAliceBootstrapDeployToken({
+    fetchImpl: globalThis.fetch,
+    apiToken,
+  });
   const preflightFirst = await fetchAliceBootstrapResourceSnapshot({
     fetchImpl: globalThis.fetch,
     apiToken,
+    deployCredentialIdSha256,
   });
   const preflightSecond = await fetchAliceBootstrapResourceSnapshot({
     fetchImpl: globalThis.fetch,
     apiToken,
+    deployCredentialIdSha256,
   });
   if (canonicalAliceJson(preflightFirst) !== canonicalAliceJson(preflightSecond)) {
     invalid("ALICE_CLOUDFLARE_BOOTSTRAP_PREFLIGHT_DRIFT");
@@ -1048,6 +1149,7 @@ async function main() {
     fetchImpl: globalThis.fetch,
     apiToken,
     method: "GET",
+    operation: "GET_CONTROL_VERSION",
     pathname:
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/versions/${versionId}`,
   });

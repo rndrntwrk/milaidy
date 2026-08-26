@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import test from "node:test";
+import * as bootstrapModule from "./alice_cloudflare_bootstrap.mjs";
 
 import {
   buildAliceBootstrapCreationCommand,
@@ -416,6 +418,129 @@ test("snapshots every Alice provider surface twice before the first mutation", (
   const firstMutation = main.indexOf("ensureAliceBootstrapQueue");
   assert.ok(first >= 0 && second > first && firstMutation > second);
   assert.match(main, /ALICE_CLOUDFLARE_BOOTSTRAP_PREFLIGHT_DRIFT/);
+});
+
+test("reports only a static provider-read operation, HTTP status, and numeric Cloudflare code", async () => {
+  const cases = [
+    {
+      response: () => Response.json({
+        success: false,
+        errors: [{ code: 9109, message: "provider detail must stay private" }],
+      }, { status: 403 }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_QUEUES:HTTP_403:CF_9109",
+    },
+    {
+      response: () => new Response("not-json", { status: 502 }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_QUEUES:HTTP_502:CF_NONE",
+    },
+    {
+      response: () => Response.json({
+        success: false,
+        errors: [{ code: 1001 }],
+      }, { status: 404 }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_QUEUES:HTTP_404:CF_1001",
+    },
+    {
+      response: () => Response.json({
+        success: false,
+        errors: [{ code: 10000 }],
+      }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_QUEUES:HTTP_200:CF_10000",
+    },
+    {
+      response: () => Response.json({ success: true }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_QUEUES:HTTP_200:CF_NONE",
+    },
+  ];
+  for (const fixture of cases) {
+    let calls = 0;
+    let failure;
+    try {
+      await ensureAliceBootstrapQueue({
+        fetchImpl: async () => {
+          calls += 1;
+          return fixture.response();
+        },
+        apiToken: "provider-token-value-must-not-appear",
+        name: "alice-production-evidence-v1",
+      });
+    } catch (error) {
+      failure = error;
+    }
+    assert.equal(failure?.message, fixture.expected);
+    assert.equal(calls, 1);
+    assert.equal(failure.message.includes("provider-token-value"), false);
+    assert.equal(failure.message.includes("provider detail"), false);
+    assert.equal(failure.message.includes("/accounts/"), false);
+  }
+});
+
+test("verifies and hashes the exact deploy token identity without retaining the token", async () => {
+  const tokenId = "0123456789abcdef0123456789abcdef";
+  const apiToken = "provider-token-value-must-not-appear";
+  const calls = [];
+  const credentialIdSha256 =
+    await bootstrapModule.verifyAliceBootstrapDeployToken({
+      apiToken,
+      fetchImpl: async (url, options) => {
+        calls.push({ url, options });
+        return Response.json({
+          success: true,
+          errors: [],
+          messages: [],
+          result: { id: tokenId, status: "active" },
+        });
+      },
+    });
+  assert.equal(
+    credentialIdSha256,
+    `sha256:${crypto.createHash("sha256").update(tokenId).digest("hex")}`,
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url.endsWith("/user/tokens/verify"), true);
+  assert.equal(JSON.stringify(credentialIdSha256).includes(apiToken), false);
+});
+
+test("rejects an inactive, malformed, or extended deploy-token identity", async () => {
+  for (const result of [
+    { id: "0".repeat(32), status: "disabled" },
+    { id: "not-a-token-id", status: "active" },
+    { id: "0".repeat(32), status: "active", secret: "provider-value" },
+  ]) {
+    await assert.rejects(
+      bootstrapModule.verifyAliceBootstrapDeployToken({
+        apiToken: "provider-token-value",
+        fetchImpl: async () => Response.json({ success: true, result }),
+      }),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_DEPLOY_TOKEN_INVALID/,
+    );
+  }
+});
+
+test("binds the verified deploy-token hash before the first provider snapshot", () => {
+  const source = fs.readFileSync(
+    new URL("./alice_cloudflare_bootstrap.mjs", import.meta.url),
+    "utf8",
+  );
+  const snapshot = source.slice(
+    source.indexOf("export async function fetchAliceBootstrapResourceSnapshot"),
+    source.indexOf("function verifyProtectedRefStillExact"),
+  );
+  const main = source.slice(source.indexOf("async function main()"));
+  const verify = main.indexOf(
+    "const deployCredentialIdSha256 = await verifyAliceBootstrapDeployToken",
+  );
+  const first = main.indexOf(
+    "const preflightFirst = await fetchAliceBootstrapResourceSnapshot",
+  );
+  assert.ok(verify >= 0 && first > verify);
+  assert.match(snapshot, /deployCredentialIdSha256/);
+  assert.match(snapshot, /alice\.cloudflare-bootstrap-preflight\.v3/);
 });
 
 test("finds the exact paused queue across every provider page without mutating", async () => {
