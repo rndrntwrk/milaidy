@@ -108,11 +108,12 @@ test("builds one create-only digest-named Modal secret with the exact allowlist"
 });
 
 test("gives Modal children only the exact token, tool, locale, and release inputs", () => {
+  const modalTokenSecret = `as-${"s".repeat(22)}`;
   const env = aliceModalCommandEnv({
     PATH: "/tools",
     LANG: "C.UTF-8",
     MODAL_TOKEN_ID: "ak-test-token-id",
-    MODAL_TOKEN_SECRET: "as-test-token-secret-with-at-least-32-bytes",
+    MODAL_TOKEN_SECRET: modalTokenSecret,
     ALICE_MODAL_RELEASE_SECRET_NAME: `alice-production-core-${"2".repeat(64)}-12345-1`,
     ALICE_MODAL_REVISION: "49",
     ALICE_RUNTIME_IMAGE: release.runtimeImage,
@@ -122,12 +123,42 @@ test("gives Modal children only the exact token, tool, locale, and release input
     PATH: "/tools",
     LANG: "C.UTF-8",
     MODAL_TOKEN_ID: "ak-test-token-id",
-    MODAL_TOKEN_SECRET: "as-test-token-secret-with-at-least-32-bytes",
+    MODAL_TOKEN_SECRET: modalTokenSecret,
     MODAL_ENVIRONMENT: "main",
     ALICE_MODAL_RELEASE_SECRET_NAME: `alice-production-core-${"2".repeat(64)}-12345-1`,
     ALICE_MODAL_REVISION: "49",
     ALICE_RUNTIME_IMAGE: release.runtimeImage,
   });
+});
+
+test("accepts only the exact provider-issued Modal API token secret shape", () => {
+  const ambient = {
+    MODAL_TOKEN_ID: "ak-test-token-id",
+    MODAL_TOKEN_SECRET: `as-${"s".repeat(22)}`,
+    ALICE_MODAL_RELEASE_SECRET_NAME:
+      `alice-production-core-${"2".repeat(64)}-12345-1`,
+    ALICE_MODAL_REVISION: "49",
+    ALICE_RUNTIME_IMAGE: release.runtimeImage,
+  };
+  assert.doesNotThrow(() => aliceModalCommandEnv(ambient));
+
+  for (const invalidSecret of [
+    `as-${"s".repeat(21)}`,
+    `as-${"s".repeat(23)}`,
+    `ws-${"s".repeat(22)}`,
+    `as-${"s".repeat(21)}!`,
+    `as-${"s".repeat(21)}\n`,
+    `as-${"s".repeat(21)}\r`,
+    "as-test-token-secret-with-at-least-32-bytes",
+  ]) {
+    assert.throws(
+      () => aliceModalCommandEnv({
+        ...ambient,
+        MODAL_TOKEN_SECRET: invalidSecret,
+      }),
+      /ALICE_MODAL_COMMAND_ENV_INVALID/,
+    );
+  }
 });
 
 test("keeps signed Alice revision separate from Modal provider deployment versions", () => {
