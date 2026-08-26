@@ -300,6 +300,16 @@ function validPause(value, expected) {
   );
 }
 
+function pauseIdentity(value) {
+  return {
+    pauseId: value.pauseId,
+    pausedAt: value.pausedAt,
+    binding: value.binding,
+    deploymentManifestSha256: value.deploymentManifestSha256,
+    rollbackBoundary: value.rollbackBoundary,
+  };
+}
+
 export async function pauseAliceReleaseMachine({
   fetchImpl = globalThis.fetch,
   serviceClientId,
@@ -350,6 +360,11 @@ export async function pauseAliceReleaseMachine({
     authority.activeReleaseEpoch === active.releaseEpoch &&
     authority.rollbackBoundary === active.rollbackBoundary &&
     validAdmissionGeneration(active, authority.admissionGeneration),
+  );
+  const pauseMatches = (value, expected) => Boolean(
+    validPause(value, active) &&
+    validPause(expected, active) &&
+    canonical(pauseIdentity(value)) === canonical(pauseIdentity(expected))
   );
   const edgeMatches = (status, nonce) => Boolean(
     exactKeys(status?.edgeReadiness, [
@@ -453,7 +468,7 @@ export async function pauseAliceReleaseMachine({
       Array.isArray(authority.pausedScopes) &&
       authority.pausedScopes.includes("all") &&
       object(authority.activePauses) &&
-      canonical(authority.activePauses.all) === canonical(paused.result.pause) &&
+      pauseMatches(authority.activePauses.all, paused.result.pause) &&
       object(status.candidateAdmission) &&
       status.candidateAdmission.ok === false &&
       status.candidateAdmission.allowed === false &&
@@ -480,7 +495,7 @@ export async function pauseAliceReleaseMachine({
     !Array.isArray(authority.pausedScopes) ||
     !authority.pausedScopes.includes("all") ||
     !object(authority.activePauses) ||
-    canonical(authority.activePauses.all) !== canonical(paused.result.pause) ||
+    !pauseMatches(authority.activePauses.all, paused.result.pause) ||
     !object(status.candidateAdmission) ||
     status.candidateAdmission.ok !== false ||
     status.candidateAdmission.allowed !== false ||

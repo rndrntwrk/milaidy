@@ -124,6 +124,13 @@ test("machine PAUSE_ALL is confirmed by a second signed status read", async () =
     deploymentManifestSha256: release.deploymentManifestSha256,
     rollbackBoundary: "modal:alice-runtime:v49",
   };
+  const durablePause = {
+    ...pause,
+    pausedBy: "deployment-controller:pause-only",
+    resumedAt: null,
+    resumedBy: null,
+    recoveryReceipt: null,
+  };
   const seen = [];
   const nonces = ["p".repeat(43), "q".repeat(43)];
   const fetchImpl = async (url, init) => {
@@ -131,7 +138,7 @@ test("machine PAUSE_ALL is confirmed by a second signed status read", async () =
     if (init.method === "POST") {
       return Response.json({
         ok: true,
-        result: { ok: true, code: "SCOPE_PAUSED", pause },
+        result: { ok: true, code: "SCOPE_PAUSED", pause: durablePause },
         evidenceQueued: true,
       });
     }
@@ -188,7 +195,7 @@ test("machine PAUSE_ALL is confirmed by a second signed status read", async () =
     nonceFactory: () => nonces.shift(),
     sleepImpl: async () => {},
   });
-  assert.deepEqual(result.pause, pause);
+  assert.deepEqual(result.pause, durablePause);
   assert.equal(seen.length, 3);
   assert.deepEqual(seen.map((entry) => entry.init.method), ["GET", "POST", "GET"]);
   assert.match(seen[1].url, /\/pause-all-v2$/);
@@ -200,6 +207,90 @@ test("machine PAUSE_ALL is confirmed by a second signed status read", async () =
   assert.equal(
     seen[0].init.headers["x-alice-deployment-pause-token"],
     "deployment-pause-token-at-least-32-bytes",
+  );
+});
+
+test("machine PAUSE_ALL rejects a mismatch in the shared pause identity", async () => {
+  const pause = {
+    pauseId: "pause-12345678",
+    pausedAt: 1_787_400_000_000,
+    binding,
+    deploymentManifestSha256: release.deploymentManifestSha256,
+    rollbackBoundary: "modal:alice-runtime:v49",
+  };
+  const durablePause = {
+    ...pause,
+    pausedBy: "deployment-controller:pause-only",
+    resumedAt: null,
+    resumedBy: null,
+    recoveryReceipt: null,
+  };
+  const nonces = ["u".repeat(43), "v".repeat(43)];
+  let paused = false;
+  await assert.rejects(
+    () => pauseAliceReleaseMachine({
+      fetchImpl: async (_url, init) => {
+        if (init.method === "POST") {
+          paused = true;
+          return Response.json({
+            ok: true,
+            result: { ok: true, code: "SCOPE_PAUSED", pause: durablePause },
+            evidenceQueued: true,
+          });
+        }
+        const nonce = init.headers["x-alice-deployment-edge-nonce"];
+        return Response.json({
+          ok: true,
+          code: "DEPLOYMENT_STATUS_READ",
+          authority: {
+            binding,
+            deploymentManifestSha256: release.deploymentManifestSha256,
+            admissionGeneration: 3,
+            activeReleaseEpoch: 1,
+            highestReleaseEpoch: 1,
+            rollbackBoundary: "modal:alice-runtime:v49",
+            pausedScopes: paused ? ["all"] : [],
+            activePauses: paused
+              ? { all: { ...pause, pauseId: "pause-different-12345678" } }
+              : {},
+          },
+          candidateAdmission: paused
+            ? {
+                ok: false,
+                allowed: false,
+                code: "RUNTIME_PAUSED",
+                blockingScopes: ["all"],
+                binding,
+                release,
+              }
+            : {
+                ok: true,
+                allowed: true,
+                code: "RUNTIME_ADMITTED",
+                blockingScopes: [],
+                binding,
+                release,
+              },
+          edgeReadiness: edgeReadiness(nonce),
+        });
+      },
+      serviceClientId: "release-client-id",
+      serviceClientSecret: "release-client-secret-at-least-32-bytes",
+      deploymentPauseToken: "deployment-pause-token-at-least-32-bytes",
+      active: {
+        binding,
+        deploymentManifestSha256: release.deploymentManifestSha256,
+        releaseEpoch: release.releaseEpoch,
+        rollbackBoundary: "modal:alice-runtime:v49",
+      },
+      candidateExpected,
+      expectedControlVersionId: controlVersionId,
+      readinessAttempts: 1,
+      readinessDelayMs: 0,
+      nonceFactory: () => nonces.shift(),
+      sleepImpl: async () => {},
+    }),
+    /ALICE_DEPLOYMENT_PAUSE_INVALID/,
   );
 });
 
