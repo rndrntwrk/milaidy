@@ -80,6 +80,13 @@ function secure(value) {
   );
 }
 
+function modalTokenSecret(value) {
+  return (
+    typeof value === "string" &&
+    /^as-[A-Za-z0-9_-]{22}$/.test(value)
+  );
+}
+
 export function deriveAliceRuntimeReleaseCredential({
   rootSecret,
   releaseDigest,
@@ -181,7 +188,7 @@ export function aliceModalCommandEnv(ambient = process.env) {
     !object(ambient) ||
     typeof ambient.MODAL_TOKEN_ID !== "string" ||
     !/^ak-[A-Za-z0-9_-]{8,128}$/.test(ambient.MODAL_TOKEN_ID) ||
-    !secure(ambient.MODAL_TOKEN_SECRET) ||
+    !modalTokenSecret(ambient.MODAL_TOKEN_SECRET) ||
     DENIED_ENV_KEYS.some((key) => ambient[key] !== undefined) ||
     ambient.MODAL_ENVIRONMENT !== undefined &&
       ambient.MODAL_ENVIRONMENT !== ENVIRONMENT ||
