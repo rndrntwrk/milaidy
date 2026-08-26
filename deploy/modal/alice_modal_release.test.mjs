@@ -509,7 +509,15 @@ test("keeps capture-current strictly read-only and enforcement explicit", () => 
     source.slice(0, guard),
     /autoscaler_enforcement = \{"status": "provider-unverifiable"\}/,
   );
-  assert.match(source, /enforce_autoscaler=capture_mode != "--capture-current"/);
+  assert.match(
+    source,
+    /read_only_capture = capture_mode in \{[\s\S]*?"--capture-current"[\s\S]*?"--capture-recovery-readiness"[\s\S]*?\}/,
+  );
+  assert.match(source, /enforce_autoscaler=not read_only_capture/);
+  assert.match(
+    source,
+    /allow_stopped_recovery=capture_mode == "--capture-recovery-readiness"/,
+  );
 });
 
 test("distinguishes Modal proxy rejection from runtime API authentication", async () => {

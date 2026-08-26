@@ -73,7 +73,7 @@ jobs:
           readback="${RUNNER_TEMP}/alice-modal-recovery-readback.json"
           timeout --signal=TERM --kill-after=10s 120s \
             "${RUNNER_TEMP}/alice-modal-recovery-client/bin/python" \
-            deploy/modal/alice_modal_provider_readback.py --capture-current \
+            deploy/modal/alice_modal_provider_readback.py --capture-recovery-readiness \
             > "$readback"
           jq -e \
             '.environment == "main" and

@@ -17,6 +17,7 @@ from modal_proto import api_pb2
 
 
 APP_NAME = "alice-runtime"
+APP_ID = "ap-oFaCNy2jJDFalZienNB2Ht"
 ENVIRONMENT = "main"
 RELEASE_SECRET = re.compile(
     r"alice-production-core-[a-f0-9]{64}-[1-9][0-9]*-[1-9][0-9]*"
@@ -26,6 +27,62 @@ SECRET_ID = re.compile(r"st-[A-Za-z0-9]{20,32}")
 
 def _invalid():
     raise RuntimeError("ALICE_MODAL_PROVIDER_READBACK_INVALID")
+
+
+def _resolve_stopped_app_identity(app, app_items, task_items):
+    """Admit the exact inert stopped Alice identity for recovery readiness."""
+    candidates = [
+        item
+        for item in app_items
+        if item.app_id == APP_ID
+        or item.name == APP_NAME
+        or item.description == APP_NAME
+    ]
+    if (
+        app.app_id != ""
+        or app.previous_app_id != APP_ID
+        or app.environment_name != ENVIRONMENT
+        or app.lifecycle.app_state != api_pb2.APP_STATE_STOPPED
+        or not isinstance(app.lifecycle.version, int)
+        or app.lifecycle.version < 1
+        or not isinstance(app.lifecycle.stopped_at, (int, float))
+        or app.lifecycle.stopped_at <= 0
+        or len(candidates) != 1
+        or candidates[0].app_id != APP_ID
+        or candidates[0].name != APP_NAME
+        or candidates[0].description != APP_NAME
+        or candidates[0].state != api_pb2.APP_STATE_STOPPED
+        or candidates[0].n_running_tasks != 0
+        or candidates[0].stopped_at != app.lifecycle.stopped_at
+        or len(task_items) != 0
+    ):
+        _invalid()
+    return APP_ID
+
+
+async def _resolve_app_identity(client, app, allow_stopped_recovery):
+    if app.app_id:
+        if (
+            app.app_id != APP_ID
+            or app.environment_name != ENVIRONMENT
+            or app.lifecycle.app_state != api_pb2.APP_STATE_DEPLOYED
+            or not isinstance(app.lifecycle.version, int)
+            or app.lifecycle.version < 1
+        ):
+            _invalid()
+        return APP_ID, False
+    if not allow_stopped_recovery:
+        _invalid()
+    app_list = await client.stub.AppList(
+        api_pb2.AppListRequest(environment_name=ENVIRONMENT)
+    )
+    task_list = await client.stub.TaskList(
+        api_pb2.TaskListRequest(environment_name=ENVIRONMENT, app_id=APP_ID)
+    )
+    return (
+        _resolve_stopped_app_identity(app, app_list.apps, task_list.tasks),
+        True,
+    )
 
 
 def _resolve_mounted_secret_objects(layout_objects, secret_items):
@@ -108,7 +165,11 @@ async def _delete_secret(name, secret_id):
     return {"deleted": True, "id": secret_id, "name": name}
 
 
-async def _readback(expected_release_secret, enforce_autoscaler=False):
+async def _readback(
+    expected_release_secret,
+    enforce_autoscaler=False,
+    allow_stopped_recovery=False,
+):
     client = await _Client.from_env()
     app = await client.stub.AppGetByDeploymentName(
         api_pb2.AppGetByDeploymentNameRequest(
@@ -116,13 +177,14 @@ async def _readback(expected_release_secret, enforce_autoscaler=False):
             environment_name=ENVIRONMENT,
         )
     )
-    if not re.fullmatch(r"ap-[A-Za-z0-9]{20,32}", app.app_id):
-        _invalid()
+    app_id, stopped_recovery = await _resolve_app_identity(
+        client, app, allow_stopped_recovery
+    )
     layout_response = await client.stub.AppGetLayout(
-        api_pb2.AppGetLayoutRequest(app_id=app.app_id)
+        api_pb2.AppGetLayoutRequest(app_id=app_id)
     )
     history_response = await client.stub.AppDeploymentHistory(
-        api_pb2.AppDeploymentHistoryRequest(app_id=app.app_id)
+        api_pb2.AppDeploymentHistoryRequest(app_id=app_id)
     )
     secret_response = await client.stub.SecretList(
         api_pb2.SecretListRequest(environment_name=ENVIRONMENT)
@@ -199,11 +261,14 @@ async def _readback(expected_release_secret, enforce_autoscaler=False):
             environment_name=ENVIRONMENT,
         )
     )
+    terminal_app_id, terminal_stopped_recovery = await _resolve_app_identity(
+        client, terminal_app, allow_stopped_recovery
+    )
     terminal_layout_response = await client.stub.AppGetLayout(
-        api_pb2.AppGetLayoutRequest(app_id=terminal_app.app_id)
+        api_pb2.AppGetLayoutRequest(app_id=terminal_app_id)
     )
     terminal_history_response = await client.stub.AppDeploymentHistory(
-        api_pb2.AppDeploymentHistoryRequest(app_id=terminal_app.app_id)
+        api_pb2.AppDeploymentHistoryRequest(app_id=terminal_app_id)
     )
     terminal_secret_response = await client.stub.SecretList(
         api_pb2.SecretListRequest(environment_name=ENVIRONMENT)
@@ -213,9 +278,15 @@ async def _readback(expected_release_secret, enforce_autoscaler=False):
         terminal_secret_response.items,
     )
     if (
-        terminal_app.app_id != app.app_id
+        terminal_app_id != app_id
+        or terminal_stopped_recovery != stopped_recovery
         or terminal_app.environment_name != app.environment_name
         or terminal_app.lifecycle.version != app.lifecycle.version
+        or (
+            stopped_recovery
+            and terminal_app.lifecycle.SerializeToString(deterministic=True)
+            != app.lifecycle.SerializeToString(deterministic=True)
+        )
         or terminal_layout_response.app_layout.SerializeToString(
             deterministic=True
         )
@@ -231,7 +302,7 @@ async def _readback(expected_release_secret, enforce_autoscaler=False):
     ):
         _invalid()
     return {
-        "appId": app.app_id,
+        "appId": app_id,
         "environment": app.environment_name or ENVIRONMENT,
         "providerVersion": app.lifecycle.version,
         "providerHistory": [
@@ -277,7 +348,13 @@ def main():
         sys.stdout.write("\n")
         return
     if len(sys.argv) == 2 and sys.argv[1] == "--capture-terminal":
-        provider = asyncio.run(_readback(None, enforce_autoscaler=True))
+        provider = asyncio.run(
+            _readback(
+                None,
+                enforce_autoscaler=True,
+                allow_stopped_recovery=False,
+            )
+        )
         result = {
             "schemaVersion": "alice.modal-current-provider-readback.v1",
             "observedAt": datetime.now(timezone.utc)
@@ -296,10 +373,19 @@ def main():
     if len(sys.argv) != 2:
         _invalid()
     capture_mode = sys.argv[1]
+    read_only_capture = capture_mode in {
+        "--capture-current",
+        "--capture-recovery-readiness",
+    }
     expected_release_secret = (
         None
         if capture_mode
-        in {"--capture-current", "--enforce-current", "--safe-bootstrap"}
+        in {
+            "--capture-current",
+            "--capture-recovery-readiness",
+            "--enforce-current",
+            "--safe-bootstrap",
+        }
         else capture_mode
     )
     if (
@@ -310,7 +396,8 @@ def main():
     result = asyncio.run(
         _readback(
             expected_release_secret,
-            enforce_autoscaler=capture_mode != "--capture-current",
+            enforce_autoscaler=not read_only_capture,
+            allow_stopped_recovery=capture_mode == "--capture-recovery-readiness",
         )
     )
     sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")))

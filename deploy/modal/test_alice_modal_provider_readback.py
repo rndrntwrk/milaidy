@@ -1,5 +1,6 @@
 """Unit regressions for sanitized Modal provider layout admission."""
 
+import asyncio
 import importlib.util
 import json
 import sys
@@ -34,6 +35,158 @@ class Item:
 
 
 class ModalProviderSecretResolutionTests(unittest.TestCase):
+    def test_active_identity_is_hard_pinned_and_deployed_before_provider_reads(self):
+        client = types.SimpleNamespace(stub=types.SimpleNamespace(
+            AppList=AsyncMock(),
+            TaskList=AsyncMock(),
+        ))
+        exact = types.SimpleNamespace(
+            app_id="ap-oFaCNy2jJDFalZienNB2Ht",
+            previous_app_id="",
+            environment_name="main",
+            lifecycle=types.SimpleNamespace(app_state=3, version=49),
+        )
+        invalid_values = [
+            types.SimpleNamespace(**{
+                **vars(exact),
+                "app_id": "ap-BBBBBBBBBBBBBBBBBBBBBB",
+            }),
+            types.SimpleNamespace(**{
+                **vars(exact),
+                "environment_name": "staging",
+            }),
+            types.SimpleNamespace(**{
+                **vars(exact),
+                "lifecycle": types.SimpleNamespace(app_state=4, version=49),
+            }),
+            types.SimpleNamespace(**{
+                **vars(exact),
+                "lifecycle": types.SimpleNamespace(app_state=5, version=49),
+            }),
+        ]
+        with patch.object(MODULE.api_pb2, "APP_STATE_DEPLOYED", 3, create=True):
+            self.assertEqual(
+                asyncio.run(MODULE._resolve_app_identity(client, exact, False)),
+                ("ap-oFaCNy2jJDFalZienNB2Ht", False),
+            )
+            for value in invalid_values:
+                with self.subTest(value=value):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "ALICE_MODAL_PROVIDER_READBACK_INVALID"
+                    ):
+                        asyncio.run(
+                            MODULE._resolve_app_identity(client, value, False)
+                        )
+        client.stub.AppList.assert_not_awaited()
+        client.stub.TaskList.assert_not_awaited()
+
+    def test_capture_current_admits_only_the_exact_stopped_zero_runtime_app(self):
+        stopped_at = 1_787_780_400.0
+        app = types.SimpleNamespace(
+            app_id="",
+            previous_app_id="ap-oFaCNy2jJDFalZienNB2Ht",
+            environment_name="main",
+            lifecycle=types.SimpleNamespace(
+                app_state=5,
+                version=49,
+                stopped_at=stopped_at,
+            ),
+        )
+        apps = [types.SimpleNamespace(
+            app_id="ap-oFaCNy2jJDFalZienNB2Ht",
+            name="alice-runtime",
+            description="alice-runtime",
+            state=5,
+            n_running_tasks=0,
+            stopped_at=stopped_at,
+        )]
+        with patch.object(MODULE.api_pb2, "APP_STATE_STOPPED", 5, create=True):
+            self.assertEqual(
+                MODULE._resolve_stopped_app_identity(app, apps, []),
+                "ap-oFaCNy2jJDFalZienNB2Ht",
+            )
+
+    def test_stopped_fallback_rejects_active_ambiguous_or_malformed_identity(self):
+        stopped_at = 1_787_780_400.0
+        app = types.SimpleNamespace(
+            app_id="",
+            previous_app_id="ap-oFaCNy2jJDFalZienNB2Ht",
+            environment_name="main",
+            lifecycle=types.SimpleNamespace(
+                app_state=5,
+                version=49,
+                stopped_at=stopped_at,
+            ),
+        )
+        exact = types.SimpleNamespace(
+            app_id="ap-oFaCNy2jJDFalZienNB2Ht",
+            name="alice-runtime",
+            description="alice-runtime",
+            state=5,
+            n_running_tasks=0,
+            stopped_at=stopped_at,
+        )
+        invalid_values = [
+            (types.SimpleNamespace(**{**vars(app), "app_id": exact.app_id}), [exact], []),
+            (types.SimpleNamespace(**{
+                **vars(app),
+                "previous_app_id": "ap-BBBBBBBBBBBBBBBBBBBBBB",
+            }), [exact], []),
+            (types.SimpleNamespace(**{
+                **vars(app),
+                "lifecycle": types.SimpleNamespace(
+                    app_state=3,
+                    version=49,
+                    stopped_at=stopped_at,
+                ),
+            }), [exact], []),
+            (app, [exact, types.SimpleNamespace(**vars(exact))], []),
+            (app, [types.SimpleNamespace(**{
+                **vars(exact),
+                "app_id": "ap-BBBBBBBBBBBBBBBBBBBBBB",
+            })], []),
+        ]
+        with patch.object(MODULE.api_pb2, "APP_STATE_STOPPED", 5, create=True):
+            for response, apps, tasks in invalid_values:
+                with self.subTest(response=response, apps=apps):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "ALICE_MODAL_PROVIDER_READBACK_INVALID"
+                    ):
+                        MODULE._resolve_stopped_app_identity(response, apps, tasks)
+
+    def test_stopped_fallback_rejects_tasks_containers_and_timestamp_drift(self):
+        stopped_at = 1_787_780_400.0
+        app = types.SimpleNamespace(
+            app_id="",
+            previous_app_id="ap-oFaCNy2jJDFalZienNB2Ht",
+            environment_name="main",
+            lifecycle=types.SimpleNamespace(
+                app_state=5,
+                version=49,
+                stopped_at=stopped_at,
+            ),
+        )
+        exact = types.SimpleNamespace(
+            app_id="ap-oFaCNy2jJDFalZienNB2Ht",
+            name="alice-runtime",
+            description="alice-runtime",
+            state=5,
+            n_running_tasks=0,
+            stopped_at=stopped_at,
+        )
+        invalid_values = [
+            ([types.SimpleNamespace(**{**vars(exact), "n_running_tasks": 1})], []),
+            ([types.SimpleNamespace(**{**vars(exact), "stopped_at": stopped_at + 1})], []),
+            ([exact], [types.SimpleNamespace(task_id="ta-running")]),
+        ]
+        with patch.object(MODULE.api_pb2, "APP_STATE_STOPPED", 5, create=True):
+            for apps, tasks in invalid_values:
+                with self.subTest(apps=apps, tasks=tasks):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "ALICE_MODAL_PROVIDER_READBACK_INVALID"
+                    ):
+                        MODULE._resolve_stopped_app_identity(app, apps, tasks)
+
     def test_resolves_exact_mounted_secret_set(self):
         objects = [
             Item(object_id="fu-function"),
@@ -75,7 +228,11 @@ class ModalProviderSecretResolutionTests(unittest.TestCase):
             redirect_stdout(StringIO()),
         ):
             MODULE.main()
-        readback.assert_awaited_once_with(None, enforce_autoscaler=True)
+        readback.assert_awaited_once_with(
+            None,
+            enforce_autoscaler=True,
+            allow_stopped_recovery=False,
+        )
 
     def test_secret_inventory_retains_exact_provider_object_ids(self):
         items = [
@@ -118,7 +275,43 @@ class ModalProviderSecretResolutionTests(unittest.TestCase):
             redirect_stdout(StringIO()),
         ):
             MODULE.main()
-        readback.assert_awaited_once_with(None, enforce_autoscaler=False)
+        readback.assert_awaited_once_with(
+            None,
+            enforce_autoscaler=False,
+            allow_stopped_recovery=False,
+        )
+
+    def test_recovery_readiness_alone_admits_the_stopped_fallback(self):
+        readback = AsyncMock(return_value={"mode": "recovery-readiness"})
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [str(MODULE_PATH), "--capture-recovery-readiness"],
+            ),
+            patch.object(MODULE, "_readback", readback),
+            redirect_stdout(StringIO()),
+        ):
+            MODULE.main()
+        readback.assert_awaited_once_with(
+            None,
+            enforce_autoscaler=False,
+            allow_stopped_recovery=True,
+        )
+
+    def test_non_recovery_modes_do_not_admit_the_stopped_fallback(self):
+        readback = AsyncMock(return_value={"mode": "enforced"})
+        with (
+            patch.object(sys, "argv", [str(MODULE_PATH), "--enforce-current"]),
+            patch.object(MODULE, "_readback", readback),
+            redirect_stdout(StringIO()),
+        ):
+            MODULE.main()
+        readback.assert_awaited_once_with(
+            None,
+            enforce_autoscaler=True,
+            allow_stopped_recovery=False,
+        )
 
     def test_terminal_capture_wraps_fresh_bounded_autoscaler_enforcement(self):
         provider = {"providerVersion": 52}
@@ -141,7 +334,11 @@ class ModalProviderSecretResolutionTests(unittest.TestCase):
         )
         self.assertRegex(value["observedAt"], r"^\d{4}-\d{2}-\d{2}T.*Z$")
         self.assertEqual(value["provider"], provider)
-        readback.assert_awaited_once_with(None, enforce_autoscaler=True)
+        readback.assert_awaited_once_with(
+            None,
+            enforce_autoscaler=True,
+            allow_stopped_recovery=False,
+        )
 
 
 if __name__ == "__main__":
