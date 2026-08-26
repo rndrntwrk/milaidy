@@ -420,6 +420,208 @@ test("snapshots every Alice provider surface twice before the first mutation", (
   assert.match(main, /ALICE_CLOUDFLARE_BOOTSTRAP_PREFLIGHT_DRIFT/);
 });
 
+function bootstrapSnapshotFetch(routeResponses) {
+  let routeCalls = 0;
+  const requests = [];
+  const emptyList = () => Response.json({
+    success: true,
+    errors: [],
+    messages: [],
+    result: [],
+  });
+  return {
+    get routeCalls() {
+      return routeCalls;
+    },
+    get writeCalls() {
+      return requests.filter(({ method }) => method !== "GET").length;
+    },
+    get requests() {
+      return requests;
+    },
+    async fetchImpl(url, options = {}) {
+      const pathname = new URL(url).pathname;
+      requests.push({ method: options.method ?? "GET", pathname });
+      if (pathname.endsWith("/workers/routes")) {
+        const response = routeResponses[
+          Math.min(routeCalls, routeResponses.length - 1)
+        ];
+        routeCalls += 1;
+        return response();
+      }
+      if (
+        pathname.endsWith("/queues") ||
+        pathname.endsWith("/event_subscriptions/subscriptions") ||
+        pathname.endsWith("/access/apps") ||
+        pathname.endsWith("/access/identity_providers") ||
+        pathname.endsWith("/devices/posture") ||
+        pathname.endsWith("/workers/domains")
+      ) {
+        return emptyList();
+      }
+      return Response.json({
+        success: false,
+        errors: [{ code: 1001 }],
+        messages: [],
+        result: null,
+      }, { status: 404 });
+    },
+  };
+}
+
+test("retries only a 503/CF_NONE Worker-route GET with deterministic delay and zero writes", async () => {
+  const provider = bootstrapSnapshotFetch([
+    () => new Response("private upstream detail", { status: 503 }),
+    () => Response.json({ success: true, result: [] }),
+  ]);
+  const delays = [];
+  const snapshot = await bootstrapModule.fetchAliceBootstrapResourceSnapshot({
+    fetchImpl: provider.fetchImpl,
+    apiToken: "provider-token-value-must-not-appear",
+    deployCredentialIdSha256: `sha256:${"0".repeat(64)}`,
+    transientRouteReadSleep: async (delayMs) => delays.push(delayMs),
+  });
+  assert.equal(provider.routeCalls, 2);
+  assert.deepEqual(delays, [100]);
+  assert.equal(provider.writeCalls, 0);
+  assert.deepEqual(snapshot.traffic.routes, []);
+});
+
+test("exhausts exactly three 503/CF_NONE Worker-route GETs with the same sanitized error", async () => {
+  const provider = bootstrapSnapshotFetch([
+    () => new Response("private upstream detail", { status: 503 }),
+  ]);
+  const delays = [];
+  await assert.rejects(
+    bootstrapModule.fetchAliceBootstrapResourceSnapshot({
+      fetchImpl: provider.fetchImpl,
+      apiToken: "provider-token-value-must-not-appear",
+      deployCredentialIdSha256: `sha256:${"0".repeat(64)}`,
+      transientRouteReadSleep: async (delayMs) => delays.push(delayMs),
+    }),
+    (error) => error?.message ===
+      "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_503:CF_NONE",
+  );
+  assert.equal(provider.routeCalls, 3);
+  assert.deepEqual(delays, [100, 100]);
+  assert.equal(provider.writeCalls, 0);
+});
+
+test("does not retry a 503 Worker-route GET carrying a numeric Cloudflare error", async () => {
+  const provider = bootstrapSnapshotFetch([
+    () => Response.json({
+      success: false,
+      errors: [{ code: 1000, message: "provider detail must stay private" }],
+    }, { status: 503 }),
+    () => Response.json({ success: true, result: [] }),
+  ]);
+  const delays = [];
+  await assert.rejects(
+    bootstrapModule.fetchAliceBootstrapResourceSnapshot({
+      fetchImpl: provider.fetchImpl,
+      apiToken: "provider-token-value-must-not-appear",
+      deployCredentialIdSha256: `sha256:${"0".repeat(64)}`,
+      transientRouteReadSleep: async (delayMs) => delays.push(delayMs),
+    }),
+    (error) => error?.message ===
+      "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_503:CF_1000",
+  );
+  assert.equal(provider.routeCalls, 1);
+  assert.deepEqual(delays, []);
+});
+
+test("fails every non-eligible Worker-route read error after one call", async () => {
+  const cases = [
+    {
+      response: () => {
+        throw new TypeError("private transport detail");
+      },
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_NONE:CF_NONE",
+    },
+    {
+      response: () => Response.json({
+        success: false,
+        errors: [{ code: 1015 }],
+      }, { status: 429 }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_429:CF_1015",
+    },
+    {
+      response: () => Response.json({
+        success: false,
+        errors: [{ code: 9109 }],
+      }, { status: 403 }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_403:CF_9109",
+    },
+    {
+      response: () => Response.json({
+        success: false,
+        errors: [{ code: 1001 }],
+      }, { status: 404 }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_404:CF_1001",
+    },
+    {
+      response: () => new Response("private upstream detail", { status: 502 }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_502:CF_NONE",
+    },
+    {
+      response: () => new Response("not-json", { status: 200 }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_200:CF_NONE",
+    },
+    {
+      response: () => Response.json({
+        success: false,
+        errors: [{ code: 10000 }],
+      }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_200:CF_10000",
+    },
+    {
+      response: () => Response.json({ success: true, result: {} }),
+      expected:
+        "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:LIST_WORKER_ROUTES:HTTP_200:CF_NONE",
+    },
+  ];
+  for (const fixture of cases) {
+    const provider = bootstrapSnapshotFetch([fixture.response]);
+    await assert.rejects(
+      bootstrapModule.fetchAliceBootstrapResourceSnapshot({
+        fetchImpl: provider.fetchImpl,
+        apiToken: "provider-token-value-must-not-appear",
+        deployCredentialIdSha256: `sha256:${"0".repeat(64)}`,
+      }),
+      (error) => error?.message === fixture.expected,
+    );
+    assert.equal(provider.routeCalls, 1);
+    assert.equal(provider.writeCalls, 0);
+  }
+});
+
+test("does not retry a POST that returns 503/CF_NONE", async () => {
+  const calls = [];
+  await assert.rejects(
+    ensureAliceBootstrapQueue({
+      fetchImpl: async (_url, options) => {
+        calls.push(options.method);
+        if (options.method === "GET") {
+          return Response.json({ success: true, result: [] });
+        }
+        return new Response("private upstream detail", { status: 503 });
+      },
+      apiToken: "provider-token-value-must-not-appear",
+      name: "alice-production-evidence-v1",
+    }),
+    (error) => error?.message ===
+      "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:CREATE_QUEUE:HTTP_503:CF_NONE",
+  );
+  assert.deepEqual(calls, ["GET", "POST"]);
+});
+
 test("reports only a static provider-read operation, HTTP status, and numeric Cloudflare code", async () => {
   const cases = [
     {

@@ -47,9 +47,15 @@ const BOOTSTRAP_RESOURCE_KEYS = [
   "evidenceQueueConsumer",
   "evidenceSentinel",
 ];
+const TRANSIENT_ROUTE_READ_ATTEMPTS = 3;
+const TRANSIENT_ROUTE_READ_DELAY_MS = 100;
 
 function invalid(message = "ALICE_CLOUDFLARE_BOOTSTRAP_INVALID") {
   throw new Error(message);
+}
+
+function defaultTransientRouteReadSleep(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function absolute(value) {
@@ -120,51 +126,89 @@ async function apiEnvelope(
     headers = {},
     allowNotFound = false,
     requireResult = true,
+    retryTransientRoute503 = false,
+    transientRouteReadSleep = defaultTransientRouteReadSleep,
   },
 ) {
   if (!API_OPERATION.test(operation ?? "")) invalid();
-  const response = await fetchImpl(`${API_BASE}${pathname}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      accept: "application/json",
-      "cache-control": "no-cache",
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-      ...headers,
-    },
-    ...(body === undefined
-      ? {}
-      : { body: typeof body === "string" ? body : JSON.stringify(body) }),
-  });
-  if (!(response instanceof Response)) {
-    providerApiInvalid(operation, null, null);
-  }
-  if (response.status === 404 && method === "GET" && allowNotFound) return null;
-  let value;
-  try {
-    value = await response.json();
-  } catch {
-    providerApiInvalid(operation, response.status, null);
-  }
-  if (!response.ok) {
-    providerApiInvalid(operation, response.status, value);
-  }
   if (
-    value?.success !== true ||
-    (requireResult && !("result" in value))
+    retryTransientRoute503 &&
+    (method !== "GET" || typeof transientRouteReadSleep !== "function")
   ) {
-    providerApiInvalid(operation, response.status, value);
+    invalid();
   }
-  return value;
+  const attempts = retryTransientRoute503 ? TRANSIENT_ROUTE_READ_ATTEMPTS : 1;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    let response;
+    try {
+      response = await fetchImpl(`${API_BASE}${pathname}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${apiToken}`,
+          accept: "application/json",
+          "cache-control": "no-cache",
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...headers,
+        },
+        ...(body === undefined
+          ? {}
+          : { body: typeof body === "string" ? body : JSON.stringify(body) }),
+      });
+    } catch {
+      providerApiInvalid(operation, null, null);
+    }
+    if (!(response instanceof Response)) {
+      providerApiInvalid(operation, null, null);
+    }
+    if (response.status === 404 && method === "GET" && allowNotFound) return null;
+    let value;
+    try {
+      value = await response.json();
+    } catch {
+      if (
+        retryTransientRoute503 &&
+        response.status === 503 &&
+        attempt < attempts
+      ) {
+        await transientRouteReadSleep(TRANSIENT_ROUTE_READ_DELAY_MS);
+        continue;
+      }
+      providerApiInvalid(operation, response.status, null);
+    }
+    if (!response.ok) {
+      if (
+        retryTransientRoute503 &&
+        response.status === 503 &&
+        providerErrorCode(value) === undefined &&
+        attempt < attempts
+      ) {
+        await transientRouteReadSleep(TRANSIENT_ROUTE_READ_DELAY_MS);
+        continue;
+      }
+      providerApiInvalid(operation, response.status, value);
+    }
+    if (
+      value?.success !== true ||
+      (requireResult && !("result" in value))
+    ) {
+      providerApiInvalid(operation, response.status, value);
+    }
+    return value;
+  }
+  invalid();
 }
 
-function providerApiInvalid(operation, status, value) {
-  if (!API_OPERATION.test(operation ?? "")) invalid();
-  const code = Array.isArray(value?.errors)
+function providerErrorCode(value) {
+  return Array.isArray(value?.errors)
     ? value.errors
       .map((entry) => entry?.code)
       .find((entry) => Number.isSafeInteger(entry) && entry >= 0)
     : undefined;
+}
+
+function providerApiInvalid(operation, status, value) {
+  if (!API_OPERATION.test(operation ?? "")) invalid();
+  const code = providerErrorCode(value);
   const httpStatus = Number.isSafeInteger(status) && status >= 100 && status <= 599
     ? status
     : "NONE";
@@ -225,6 +269,8 @@ async function apiGetAllResults({
   apiToken,
   operation,
   pathname,
+  retryTransientRoute503 = false,
+  transientRouteReadSleep = defaultTransientRouteReadSleep,
 }) {
   const values = [];
   let expectedTotalPages;
@@ -237,6 +283,8 @@ async function apiGetAllResults({
       method: "GET",
       operation,
       pathname: `${pathname}${separator}page=${page}&per_page=100`,
+      retryTransientRoute503,
+      transientRouteReadSleep,
     });
     if (envelope === null || !Array.isArray(envelope.result)) {
       providerApiInvalid(operation, 200, envelope);
@@ -477,8 +525,14 @@ export async function fetchAliceBootstrapResourceSnapshot({
   fetchImpl,
   apiToken,
   deployCredentialIdSha256,
+  transientRouteReadSleep = defaultTransientRouteReadSleep,
 }) {
-  if (!DIGEST.test(deployCredentialIdSha256 ?? "")) invalid();
+  if (
+    !DIGEST.test(deployCredentialIdSha256 ?? "") ||
+    typeof transientRouteReadSleep !== "function"
+  ) {
+    invalid();
+  }
   const inventorySha256 = (value) => `sha256:${crypto
     .createHash("sha256")
     .update(canonicalAliceJson(value))
@@ -620,6 +674,8 @@ export async function fetchAliceBootstrapResourceSnapshot({
     apiToken,
     operation: "LIST_WORKER_ROUTES",
     pathname: `/zones/${ZONE_ID}/workers/routes`,
+    retryTransientRoute503: true,
+    transientRouteReadSleep,
   });
   const customDomains = await apiGetAllResults({
     fetchImpl,
