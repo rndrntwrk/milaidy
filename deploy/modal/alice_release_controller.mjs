@@ -275,6 +275,17 @@ function validAuthorityTuple(expected) {
   );
 }
 
+function validAdmissionGeneration(expected, admissionGeneration) {
+  const tuple = authorityTuple(expected);
+  return Boolean(
+    validAuthorityTuple(tuple) &&
+    Number.isSafeInteger(admissionGeneration) &&
+    (tuple.releaseEpoch === 0
+      ? admissionGeneration === 0
+      : admissionGeneration >= 1)
+  );
+}
+
 function validPause(value, expected) {
   const tuple = authorityTuple(expected);
   return Boolean(
@@ -332,15 +343,13 @@ export async function pauseAliceReleaseMachine({
     "cf-access-client-secret": serviceClientSecret,
     "x-alice-deployment-pause-token": deploymentPauseToken,
   };
-
   const authorityMatches = (authority) => Boolean(
     object(authority) &&
     exactBinding(authority.binding, active.binding) &&
     authority.deploymentManifestSha256 === active.deploymentManifestSha256 &&
     authority.activeReleaseEpoch === active.releaseEpoch &&
     authority.rollbackBoundary === active.rollbackBoundary &&
-    Number.isSafeInteger(authority.admissionGeneration) &&
-    authority.admissionGeneration >= 1,
+    validAdmissionGeneration(active, authority.admissionGeneration),
   );
   const edgeMatches = (status, nonce) => Boolean(
     exactKeys(status?.edgeReadiness, [
@@ -467,13 +476,7 @@ export async function pauseAliceReleaseMachine({
     !statusResponse.ok ||
     status.ok !== true ||
     status.code !== "DEPLOYMENT_STATUS_READ" ||
-    !object(authority) ||
-    !exactBinding(authority.binding, active.binding) ||
-    authority.deploymentManifestSha256 !== active.deploymentManifestSha256 ||
-    authority.activeReleaseEpoch !== active.releaseEpoch ||
-    authority.rollbackBoundary !== active.rollbackBoundary ||
-    !Number.isSafeInteger(authority.admissionGeneration) ||
-    authority.admissionGeneration < 1 ||
+    !authorityMatches(authority) ||
     !Array.isArray(authority.pausedScopes) ||
     !authority.pausedScopes.includes("all") ||
     !object(authority.activePauses) ||
@@ -558,8 +561,7 @@ export function verifyAliceDeploymentPauseEvidence(
     value.sourceCommit !== candidateExpected?.release?.sourceCommit ||
     !object(value.result) ||
     !validPause(value.result.pause, value.active) ||
-    !Number.isSafeInteger(value.result.admissionGeneration) ||
-    value.result.admissionGeneration < 1 ||
+    !validAdmissionGeneration(value.active, value.result.admissionGeneration) ||
     value.result.evidenceQueued !== true ||
     value.result.confirmedByStatusRead !== true ||
     value.result.edgeReadinessConfirmed !== true ||

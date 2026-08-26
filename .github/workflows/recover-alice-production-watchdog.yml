@@ -278,17 +278,10 @@ jobs:
           then
             timeout --signal=TERM --kill-after=30s 900s \
               node deploy/modal/alice_modal_emergency_rollback.mjs
-          elif test ! -f "$ALICE_MODAL_ROLLBACK_ANCHOR_PATH" && \
-               test -f "$ALICE_MODAL_LEGACY_TRANSITION_PATH"
-          then
-            export ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=stop-if-unanchored
+          else
+            export ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=recover
             timeout --signal=TERM --kill-after=30s 900s \
               node deploy/modal/alice_modal_safe_bootstrap_cli.mjs
-          elif test -f "$ALICE_MODAL_ROLLBACK_ANCHOR_PATH"
-          then
-            exit 0
-          else
-            exit 1
           fi
 
       - name: Preserve watchdog Modal evidence
@@ -296,7 +289,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: alice-watchdog-modal-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-independent-recovery-evidence.json
+          path: |
+            ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-independent-recovery-evidence.json
+            ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-safe-bootstrap-evidence.json
           if-no-files-found: warn
           retention-days: 90
           overwrite: false

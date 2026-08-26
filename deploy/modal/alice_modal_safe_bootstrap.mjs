@@ -258,6 +258,52 @@ export function verifyAliceModalSafeRollbackAnchor(value, { release }) {
   return value;
 }
 
+export function resolveAliceModalSafeRecovery({
+  release,
+  transition,
+  anchor,
+  mutationJournalPresent,
+  observedAt = new Date().toISOString(),
+}) {
+  if (
+    !validRelease(release) ||
+    !canonicalIsoTimestamp(observedAt) ||
+    typeof mutationJournalPresent !== "boolean" ||
+    (transition !== null && !object(transition)) ||
+    (anchor !== null && !object(anchor))
+  ) {
+    invalid("ALICE_MODAL_RECOVERY_STATE_INVALID");
+  }
+  if (transition !== null) {
+    const verifiedTransition = verifyAliceModalLegacyTransitionJournal(transition);
+    if (
+      canonicalAliceJson(verifiedTransition.release) !==
+        canonicalAliceJson(release)
+    ) {
+      invalid("ALICE_MODAL_LEGACY_TRANSITION_INVALID");
+    }
+  }
+  if (anchor !== null) {
+    verifyAliceModalSafeRollbackAnchor(anchor, { release });
+  }
+  if (mutationJournalPresent && anchor === null) {
+    invalid("ALICE_MODAL_RECOVERY_STATE_INVALID");
+  }
+  const action = anchor !== null
+    ? mutationJournalPresent ? "emergency-rollback" : "safe-anchor"
+    : transition !== null ? "stop-if-unanchored" : "pre-modal-noop";
+  return {
+    schemaVersion: "alice.modal-recovery-decision.v1",
+    observedAt,
+    sourceCommit: release.sourceCommit,
+    deploymentManifestSha256: release.deploymentManifestSha256,
+    action,
+    transitionPresent: transition !== null,
+    anchorPresent: anchor !== null,
+    mutationJournalPresent,
+  };
+}
+
 function verifyRuntimeEvidence(value, release) {
   if (
     !exactKeys(value, [

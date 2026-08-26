@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+import * as safeBootstrapModule from "./alice_modal_safe_bootstrap.mjs";
 
 import {
   buildAliceModalSafeBootstrapResult,
@@ -7,6 +12,8 @@ import {
   orchestrateAliceModalSafeBootstrap,
   verifyAliceModalSafeBootstrapHttp,
 } from "./alice_modal_safe_bootstrap.mjs";
+
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 const release = {
   programDigest: `sha256:${"1".repeat(64)}`,
@@ -117,6 +124,124 @@ test("captures only the exact known unsafe v48 transition boundary", () => {
     release,
     observedAt: "2026-08-23T12:00:00.000Z",
   }), /ALICE_MODAL_LEGACY_TRANSITION_INVALID/);
+});
+
+test("recovery explicitly no-ops before Modal and stops only a verified unanchored transition", () => {
+  assert.equal(typeof safeBootstrapModule.resolveAliceModalSafeRecovery, "function");
+  const observedAt = "2026-08-23T12:03:00.000Z";
+  assert.deepEqual(
+    safeBootstrapModule.resolveAliceModalSafeRecovery({
+      release,
+      transition: null,
+      anchor: null,
+      mutationJournalPresent: false,
+      observedAt,
+    }),
+    {
+      schemaVersion: "alice.modal-recovery-decision.v1",
+      observedAt,
+      sourceCommit: release.sourceCommit,
+      deploymentManifestSha256: release.deploymentManifestSha256,
+      action: "pre-modal-noop",
+      transitionPresent: false,
+      anchorPresent: false,
+      mutationJournalPresent: false,
+    },
+  );
+  const transition = buildAliceModalLegacyTransitionJournal({
+    previous: legacy,
+    release,
+    observedAt,
+  });
+  assert.equal(
+    safeBootstrapModule.resolveAliceModalSafeRecovery({
+      release,
+      transition,
+      anchor: null,
+      mutationJournalPresent: false,
+      observedAt,
+    }).action,
+    "stop-if-unanchored",
+  );
+});
+
+test("recovery validates anchors and fails closed on malformed or partial artifacts", () => {
+  assert.equal(typeof safeBootstrapModule.resolveAliceModalSafeRecovery, "function");
+  const observedAt = "2026-08-23T12:04:00.000Z";
+  const runtime = {
+    schemaVersion: "alice.modal-safe-bootstrap-runtime.v1",
+    unauthenticatedStatus: 401,
+    authenticatedStatus: 503,
+    safeBootstrap: true,
+    paused: true,
+    ready: false,
+    release,
+  };
+  const anchor = buildAliceModalSafeBootstrapResult({
+    release,
+    state: providerState,
+    runtime,
+    observedAt,
+  }).anchor;
+  assert.equal(
+    safeBootstrapModule.resolveAliceModalSafeRecovery({
+      release,
+      transition: null,
+      anchor,
+      mutationJournalPresent: false,
+      observedAt,
+    }).action,
+    "safe-anchor",
+  );
+  assert.throws(
+    () => safeBootstrapModule.resolveAliceModalSafeRecovery({
+      release,
+      transition: { schemaVersion: "alice.modal-legacy-transition.v1" },
+      anchor: null,
+      mutationJournalPresent: false,
+      observedAt,
+    }),
+    /ALICE_MODAL_LEGACY_TRANSITION_INVALID/,
+  );
+  assert.throws(
+    () => safeBootstrapModule.resolveAliceModalSafeRecovery({
+      release,
+      transition: null,
+      anchor: null,
+      mutationJournalPresent: true,
+      observedAt,
+    }),
+    /ALICE_MODAL_RECOVERY_STATE_INVALID/,
+  );
+  assert.throws(
+    () => safeBootstrapModule.resolveAliceModalSafeRecovery({
+      release,
+      transition: null,
+      anchor: { schemaVersion: "alice.modal-rollback-anchor.v2" },
+      mutationJournalPresent: false,
+      observedAt,
+    }),
+    /ALICE_MODAL_ROLLBACK_ANCHOR_INVALID/,
+  );
+});
+
+test("the recovery CLI resolves artifacts before constructing any Modal command environment", () => {
+  const source = fs.readFileSync(
+    path.join(currentDirectory, "alice_modal_safe_bootstrap_cli.mjs"),
+    "utf8",
+  );
+  const resolve = source.indexOf(
+    "recoveryDecision = resolveAliceModalSafeRecovery({",
+  );
+  const noOp = source.indexOf(
+    'if (recoveryDecision.action === "pre-modal-noop")',
+  );
+  const commandEnvironment = source.indexOf(
+    "const commandEnv = aliceModalCommandEnv(process.env);",
+  );
+  const stop = source.indexOf('if (phase === "recover") {', commandEnvironment);
+  assert.ok(resolve >= 0 && noOp >= 0 && commandEnvironment >= 0 && stop >= 0);
+  assert.ok(resolve < noOp && noOp < commandEnvironment && commandEnvironment < stop);
 });
 
 test("deploys and externally binds the inert bootstrap before returning an anchor", async () => {

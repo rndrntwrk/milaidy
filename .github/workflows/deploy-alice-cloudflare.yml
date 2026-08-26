@@ -618,7 +618,7 @@ jobs:
           timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
             node deploy/modal/alice_modal_safe_bootstrap_cli.mjs
 
-      - name: Stop unsafe Modal transition when no safe anchor was persisted
+      - name: Recover Modal from verified artifacts or prove pre-mutation no-op
         if: failure() || cancelled()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -630,10 +630,11 @@ jobs:
           ALICE_MODAL_LEGACY_TRANSITION_PATH: ${{ runner.temp }}/alice-release/modal-legacy-transition.json
           ALICE_MODAL_ROLLBACK_ANCHOR_PATH: ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
           ALICE_MODAL_SAFE_BOOTSTRAP_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/modal-safe-bootstrap-evidence.json
+          ALICE_MODAL_MUTATION_JOURNAL_PATH: ${{ runner.temp }}/alice-release/modal-mutation-journal.json
           ALICE_MODAL_BIN: ${{ env.ALICE_MODAL_BIN }}
           ALICE_MODAL_PYTHON_BIN: ${{ env.ALICE_MODAL_PYTHON_BIN }}
           ALICE_MODAL_RELEASE_SECRET_NAME: ${{ env.ALICE_MODAL_RELEASE_SECRET_NAME }}
-          ALICE_MODAL_SAFE_BOOTSTRAP_PHASE: stop-if-unanchored
+          ALICE_MODAL_SAFE_BOOTSTRAP_PHASE: recover
           ALICE_MODAL_REVISION: ${{ inputs.modal_revision }}
           ALICE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
         run: |
@@ -790,7 +791,9 @@ jobs:
             ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
             ${{ runner.temp }}/alice-release/live-readback.json
             ${{ runner.temp }}/alice-release/program-admission.json
+            ${{ runner.temp }}/alice-release/modal-legacy-transition.json
             ${{ runner.temp }}/alice-release/modal-rollback-anchor.json
+            ${{ runner.temp }}/alice-release/modal-safe-bootstrap-evidence.json
             ${{ runner.temp }}/alice-release/modal-mutation-journal.json
             ${{ runner.temp }}/alice-release/modal-promotion-evidence.json
             ${{ runner.temp }}/alice-release/watchdog-modal-readiness.json
@@ -1170,17 +1173,10 @@ jobs:
           then
             timeout --signal=TERM --kill-after=30s 900s \
               node deploy/modal/alice_modal_emergency_rollback.mjs
-          elif test ! -f "$ALICE_MODAL_ROLLBACK_ANCHOR_PATH" && \
-               test -f "$ALICE_MODAL_LEGACY_TRANSITION_PATH"
-          then
-            export ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=stop-if-unanchored
+          else
+            export ALICE_MODAL_SAFE_BOOTSTRAP_PHASE=recover
             timeout --signal=TERM --kill-after=30s 900s \
               node deploy/modal/alice_modal_safe_bootstrap_cli.mjs
-          elif test -f "$ALICE_MODAL_ROLLBACK_ANCHOR_PATH"
-          then
-            exit 0
-          else
-            exit 1
           fi
 
       - name: Preserve independent Modal recovery evidence
@@ -1188,7 +1184,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: alice-independent-modal-recovery-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-independent-recovery-evidence.json
+          path: |
+            ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-independent-recovery-evidence.json
+            ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-safe-bootstrap-evidence.json
           if-no-files-found: warn
           retention-days: 90
           overwrite: false
