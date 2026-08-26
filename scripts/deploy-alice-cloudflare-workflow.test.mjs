@@ -467,8 +467,9 @@ test("a protected push prestarts cancellation-safe provider recovery before disp
   );
   assert.match(
     watchdog,
-    /Verify Modal recovery credential and provider readback[\s\S]*?--capture-current[\s\S]*?alice_recovery_credential_binding\.mjs[\s\S]*?Publish exact Modal recovery readiness/,
+    /Verify Modal recovery credential and provider readback[\s\S]*?--capture-recovery-readiness[\s\S]*?alice_recovery_credential_binding\.mjs[\s\S]*?Publish exact Modal recovery readiness/,
   );
+  assert.doesNotMatch(workflow, /--capture-recovery-readiness/);
   assert.match(
     watchdog,
     /Verify Cloudflare recovery credential and provider readback[\s\S]*?user\/tokens\/verify[\s\S]*?workers\/scripts[\s\S]*?alice_recovery_credential_binding\.mjs[\s\S]*?Publish exact Cloudflare recovery readiness/,
