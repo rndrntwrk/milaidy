@@ -7,6 +7,13 @@ const API_BASE = "https://api.cloudflare.com/client/v4";
 const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const ROUTE_ID = /^[a-f0-9]{32}$/;
 const ROLES = ["access", "control", "aiGateway"];
+const POST_CREATE_CONVERGENCE_READS = 12;
+const POST_CREATE_CONVERGENCE_DELAY_MS = 1_000;
+const CONVERGENCE_FAILURES = new Set([
+  "PRIOR_STATE_TIMEOUT",
+  "READ_INVALID",
+  "SEMANTIC_DRIFT",
+]);
 const WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
   control: ALICE_CLOUDFLARE_TARGET.controlWorker,
@@ -15,6 +22,19 @@ const WORKERS = Object.freeze({
 
 function invalid() {
   throw new Error("ALICE_CLOUDFLARE_TRAFFIC_INVALID");
+}
+
+function convergenceInvalid(reason) {
+  if (!CONVERGENCE_FAILURES.has(reason)) invalid();
+  throw new Error(
+    `ALICE_CLOUDFLARE_TRAFFIC_INVALID:VERIFY_POST_CREATE:${reason}`,
+  );
+}
+
+function defaultConvergenceSleep() {
+  return new Promise((resolve) => {
+    setTimeout(resolve, POST_CREATE_CONVERGENCE_DELAY_MS);
+  });
 }
 
 function sortedRoutes(routes) {
@@ -466,7 +486,14 @@ function semanticFromObserved(value) {
   return targetSemantic(value);
 }
 
-async function applyAndVerify({ apiToken, expected, restore, ...options }) {
+async function applyAndVerify({
+  apiToken,
+  expected,
+  restore,
+  convergenceSleep = defaultConvergenceSleep,
+  ...options
+}) {
+  if (typeof convergenceSleep !== "function") invalid();
   const accountId = options.accountId ?? ALICE_CLOUDFLARE_TARGET.accountId;
   const zoneId = options.zoneId ?? ZONE_ID;
   const baseUrl = options.baseUrl ?? API_BASE;
@@ -482,20 +509,47 @@ async function applyAndVerify({ apiToken, expected, restore, ...options }) {
     ? planAliceTrafficRestoration(before, expected)
     : planAliceCandidateTrafficMutations(before, expected);
   await applyPlan({ fetchImpl, apiToken, baseUrl, accountId, zoneId }, plan);
-  const after = await fetchAliceCloudflareTrafficState({
-    fetchImpl,
-    apiToken,
-    accountId,
-    zoneId,
-    baseUrl,
-  });
-  if (
-    canonicalAliceJson(semanticFromObserved(after)) !==
-    canonicalAliceJson(targetSemantic(expected))
-  ) {
-    invalid();
+  const expectedSemantic = canonicalAliceJson(targetSemantic(expected));
+  const priorSemantic = canonicalAliceJson(semanticFromObserved(before));
+  const createOnly =
+    !restore &&
+    plan.createRoutes.length > 0 &&
+    plan.updateRoutes.length === 0 &&
+    plan.deleteRoutes.length === 0 &&
+    plan.setSubdomains.length === 0;
+  let after;
+  for (let read = 1; read <= POST_CREATE_CONVERGENCE_READS; read += 1) {
+    try {
+      after = await fetchAliceCloudflareTrafficState({
+        fetchImpl,
+        apiToken,
+        accountId,
+        zoneId,
+        baseUrl,
+      });
+    } catch (error) {
+      if (
+        createOnly &&
+        error instanceof Error &&
+        error.message === "ALICE_CLOUDFLARE_TRAFFIC_INVALID"
+      ) {
+        convergenceInvalid("READ_INVALID");
+      }
+      throw error;
+    }
+    const observedSemantic = canonicalAliceJson(semanticFromObserved(after));
+    if (observedSemantic === expectedSemantic) {
+      return { before, after, plan };
+    }
+    if (!createOnly || observedSemantic !== priorSemantic) {
+      convergenceInvalid("SEMANTIC_DRIFT");
+    }
+    if (read === POST_CREATE_CONVERGENCE_READS) {
+      convergenceInvalid("PRIOR_STATE_TIMEOUT");
+    }
+    await convergenceSleep();
   }
-  return { before, after, plan };
+  invalid();
 }
 
 export async function applyAliceCandidateTrafficState(options) {

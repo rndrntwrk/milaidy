@@ -5,6 +5,7 @@ import {
   aliceExpectedControlTrafficState,
   aliceExpectedReleaseControlTrafficState,
   aliceExpectedProductionTrafficState,
+  applyAliceCandidateTrafficState,
   fetchAliceCloudflareTrafficState,
   planAliceCandidateTrafficMutations,
   planAliceTrafficRestoration,
@@ -121,14 +122,250 @@ test("restores only Alice traffic bindings captured by the rollback anchor", () 
   assert.deepEqual(plan.setSubdomains, []);
 });
 
-function cloudflareResponse(result, resultInfo) {
+function cloudflareResponse(result, resultInfo, responseInit = {}) {
   return new Response(JSON.stringify({
     success: true,
     result,
     ...(resultInfo === undefined ? {} : { result_info: resultInfo }),
   }), {
-    status: 200,
+    status: responseInit.status ?? 200,
     headers: { "content-type": "application/json" },
+  });
+}
+
+const productionCurrent = {
+  ...current,
+  subdomains: {
+    ...current.subdomains,
+    aiGateway: { enabled: true, previewsEnabled: true },
+  },
+};
+
+const releaseControlRoute = {
+  id: "22222222222222222222222222222222",
+  pattern: "alice-release.rndrntwrk.com/control/internal/v1/deployment/*",
+  script: "alice-production-control",
+};
+
+function routeMutationFetch({ postCreateStates }) {
+  let created = false;
+  let postCreateStateRead = 0;
+  let activePostCreateState;
+  const requests = [];
+  const fetchImpl = async (input, init = {}) => {
+    const url = new URL(input);
+    const method = init.method ?? "GET";
+    requests.push({ method, pathname: url.pathname });
+    if (url.pathname.endsWith("/workers/routes") && method === "POST") {
+      assert.deepEqual(JSON.parse(init.body), {
+        pattern: releaseControlRoute.pattern,
+        script: releaseControlRoute.script,
+      });
+      created = true;
+      return cloudflareResponse(releaseControlRoute);
+    }
+    if (url.pathname.endsWith("/workers/routes")) {
+      if (!created) return cloudflareResponse(productionCurrent.routes);
+      activePostCreateState = postCreateStates[
+        Math.min(postCreateStateRead++, postCreateStates.length - 1)
+      ];
+      if (activePostCreateState.routeResponse) {
+        return activePostCreateState.routeResponse();
+      }
+      return cloudflareResponse(activePostCreateState.routes);
+    }
+    if (url.pathname.endsWith("/workers/domains")) {
+      return cloudflareResponse(activePostCreateState?.customDomains ?? []);
+    }
+    if (url.pathname.endsWith("/subdomain")) {
+      const role = url.pathname.includes("alice-access-gateway")
+        ? "access"
+        : url.pathname.includes("alice-production-control")
+          ? "control"
+          : "aiGateway";
+      const state = activePostCreateState?.subdomains?.[role] ??
+        productionCurrent.subdomains[role];
+      return cloudflareResponse({
+        enabled: state.enabled,
+        previews_enabled: state.previewsEnabled,
+      });
+    }
+    throw new Error(`unexpected request ${method} ${url.pathname}`);
+  };
+  return { fetchImpl, requests };
+}
+
+test("waits for the exact release route after a successful create returns one stale read", async () => {
+  const { fetchImpl, requests } = routeMutationFetch({
+    postCreateStates: [
+      productionCurrent,
+      {
+        ...productionCurrent,
+        routes: productionCurrent.routes.concat(releaseControlRoute),
+      },
+    ],
+  });
+  const result = await applyAliceCandidateTrafficState({
+    fetchImpl,
+    apiToken: "test-api-token",
+    baseUrl: "https://api.cloudflare.test/client/v4",
+    expected: aliceExpectedReleaseControlTrafficState(productionCurrent),
+    convergenceSleep: async () => {},
+  });
+  assert.deepEqual(result.after.routes, [
+    productionCurrent.routes[0],
+    releaseControlRoute,
+  ]);
+  assert.equal(
+    requests.filter((request) =>
+      request.method === "GET" &&
+      request.pathname.endsWith("/workers/routes")
+    ).length,
+    3,
+  );
+});
+
+test("fails closed after bounded reads remain the exact prior semantic state", async () => {
+  let sleeps = 0;
+  const { fetchImpl, requests } = routeMutationFetch({
+    postCreateStates: [productionCurrent],
+  });
+  await assert.rejects(
+    () => applyAliceCandidateTrafficState({
+      fetchImpl,
+      apiToken: "test-api-token",
+      baseUrl: "https://api.cloudflare.test/client/v4",
+      expected: aliceExpectedReleaseControlTrafficState(productionCurrent),
+      convergenceSleep: async () => { sleeps += 1; },
+    }),
+    /^Error: ALICE_CLOUDFLARE_TRAFFIC_INVALID:VERIFY_POST_CREATE:PRIOR_STATE_TIMEOUT$/,
+  );
+  assert.ok(sleeps > 0 && sleeps < 100);
+  assert.equal(
+    requests.filter((request) =>
+      request.method === "GET" &&
+      request.pathname.endsWith("/workers/routes")
+    ).length,
+    sleeps + 2,
+  );
+});
+
+for (const [name, changedState, reason] of [
+  [
+    "an extra Alice route",
+    {
+      ...productionCurrent,
+      routes: productionCurrent.routes.concat(
+        releaseControlRoute,
+        {
+          id: "33333333333333333333333333333333",
+          pattern: "alice.rndrntwrk.com/shadow/*",
+          script: "alice-production-control",
+        },
+      ),
+    },
+    "SEMANTIC_DRIFT",
+  ],
+  [
+    "the release route bound to the wrong script",
+    {
+      ...productionCurrent,
+      routes: productionCurrent.routes.concat({
+        ...releaseControlRoute,
+        script: "shadow-worker",
+      }),
+    },
+    "SEMANTIC_DRIFT",
+  ],
+  [
+    "an Alice custom domain",
+    {
+      ...productionCurrent,
+      routes: productionCurrent.routes.concat(releaseControlRoute),
+      customDomains: [{
+        hostname: "alice.rndrntwrk.com",
+        service: "shadow-worker",
+      }],
+    },
+    "READ_INVALID",
+  ],
+  [
+    "subdomain drift",
+    {
+      ...productionCurrent,
+      routes: productionCurrent.routes.concat(releaseControlRoute),
+      subdomains: {
+        ...productionCurrent.subdomains,
+        control: { enabled: true, previewsEnabled: false },
+      },
+    },
+    "SEMANTIC_DRIFT",
+  ],
+]) {
+  test(`fails immediately after create observes ${name}`, async () => {
+    let sleeps = 0;
+    const { fetchImpl, requests } = routeMutationFetch({
+      postCreateStates: [changedState, productionCurrent],
+    });
+    await assert.rejects(
+      () => applyAliceCandidateTrafficState({
+        fetchImpl,
+        apiToken: "test-api-token",
+        baseUrl: "https://api.cloudflare.test/client/v4",
+        expected: aliceExpectedReleaseControlTrafficState(productionCurrent),
+        convergenceSleep: async () => { sleeps += 1; },
+      }),
+      new RegExp(
+        `^Error: ALICE_CLOUDFLARE_TRAFFIC_INVALID:VERIFY_POST_CREATE:${reason}$`,
+      ),
+    );
+    assert.equal(sleeps, 0);
+    assert.equal(
+      requests.filter((request) =>
+        request.method === "GET" &&
+        request.pathname.endsWith("/workers/routes")
+      ).length,
+      2,
+    );
+  });
+}
+
+for (const [name, routeResponse] of [
+  [
+    "a malformed response",
+    () => new Response("not-json", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  ],
+  [
+    "an HTTP error",
+    () => cloudflareResponse([], undefined, { status: 500 }),
+  ],
+]) {
+  test(`fails immediately after create receives ${name}`, async () => {
+    let sleeps = 0;
+    const { fetchImpl, requests } = routeMutationFetch({
+      postCreateStates: [{ ...productionCurrent, routeResponse }],
+    });
+    await assert.rejects(
+      () => applyAliceCandidateTrafficState({
+        fetchImpl,
+        apiToken: "test-api-token",
+        baseUrl: "https://api.cloudflare.test/client/v4",
+        expected: aliceExpectedReleaseControlTrafficState(productionCurrent),
+        convergenceSleep: async () => { sleeps += 1; },
+      }),
+      /^Error: ALICE_CLOUDFLARE_TRAFFIC_INVALID:VERIFY_POST_CREATE:READ_INVALID$/,
+    );
+    assert.equal(sleeps, 0);
+    assert.equal(
+      requests.filter((request) =>
+        request.method === "GET" &&
+        request.pathname.endsWith("/workers/routes")
+      ).length,
+      2,
+    );
   });
 }
 
