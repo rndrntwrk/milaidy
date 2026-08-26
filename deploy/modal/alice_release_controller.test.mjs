@@ -279,7 +279,7 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
     release,
     releaseIsActive: false,
     pausedScopes: ["all"],
-    admissionGeneration: 0,
+    admissionGeneration: 1,
   });
   const unpausedCandidate = buildAliceReleaseCheckResponse({
     binding,
@@ -307,7 +307,7 @@ test("first release pauses the exact unadmitted tuple while checking the signed 
           authority: {
             binding: zeroBinding,
             deploymentManifestSha256: `sha256:${"0".repeat(64)}`,
-            admissionGeneration: 0,
+            admissionGeneration: paused ? 1 : 0,
             activeReleaseEpoch: 0,
             highestReleaseEpoch: 0,
             rollbackBoundary: "release:unadmitted",
@@ -385,7 +385,7 @@ test("admission generation is zero only for the exact unadmitted authority tuple
   };
   const cases = [
     {
-      name: "nonzero generation on the unadmitted tuple",
+      name: "zero generation on a malformed unadmitted tuple",
       active: {
         binding: zeroBinding,
         deploymentManifestSha256: zero,
@@ -394,8 +394,8 @@ test("admission generation is zero only for the exact unadmitted authority tuple
       },
       authority: {
         binding: zeroBinding,
-        deploymentManifestSha256: zero,
-        admissionGeneration: 1,
+        deploymentManifestSha256: release.deploymentManifestSha256,
+        admissionGeneration: 0,
         activeReleaseEpoch: 0,
         highestReleaseEpoch: 0,
         rollbackBoundary: "release:unadmitted",

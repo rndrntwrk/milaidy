@@ -43,6 +43,40 @@ function researchIntent(nonce: string) {
 }
 
 describe("Alice durable authority ledger", () => {
+  test("persists a first-release PAUSE_ALL generation transition", () => {
+    const zero = `sha256:${"0".repeat(64)}`;
+    const zeroBinding = {
+      programDigest: zero,
+      releaseDigest: zero,
+      policyHash: zero,
+    };
+    const ledger = AuthorityLedger.create(
+      zeroBinding,
+      100,
+      "release:unadmitted",
+      0,
+      0,
+      zero,
+    );
+
+    expect(ledger.snapshot().admissionGeneration).toBe(0);
+    expect(
+      ledger.pause(
+        "all",
+        1_787_400_000_000,
+        "deployment-controller:pause-only",
+        "pause-first-release-0001",
+      ),
+    ).toMatchObject({ ok: true, code: "SCOPE_PAUSED" });
+    expect(ledger.snapshot().admissionGeneration).toBe(1);
+    expect(() =>
+      ledger.assertPersistable(AUTHORITY_PERSISTENCE_LIMITS.pauseAllBytes),
+    ).not.toThrow();
+    expect(() =>
+      AuthorityLedger.restoreGlobal(ledger.exportState(), 100),
+    ).not.toThrow();
+  });
+
   test("makes an exact authorized intent idempotent after state restoration", () => {
     const ledger = AuthorityLedger.create(binding, 100);
     expect(ledger.authorize(researchIntent("nonce-one"), 1_787_400_000_000)).toEqual({

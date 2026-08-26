@@ -281,7 +281,7 @@ function validAdmissionGeneration(expected, admissionGeneration) {
     validAuthorityTuple(tuple) &&
     Number.isSafeInteger(admissionGeneration) &&
     (tuple.releaseEpoch === 0
-      ? admissionGeneration === 0
+      ? admissionGeneration >= 0
       : admissionGeneration >= 1)
   );
 }
