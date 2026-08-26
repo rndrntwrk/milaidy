@@ -38,6 +38,7 @@ def _resolve_stopped_app_identity(app, app_items, task_items):
         or item.name == APP_NAME
         or item.description == APP_NAME
     ]
+    retained = candidates[0] if len(candidates) == 1 else None
     if (
         app.app_id != ""
         or app.previous_app_id != APP_ID
@@ -47,13 +48,18 @@ def _resolve_stopped_app_identity(app, app_items, task_items):
         or app.lifecycle.version < 1
         or not isinstance(app.lifecycle.stopped_at, (int, float))
         or app.lifecycle.stopped_at <= 0
-        or len(candidates) != 1
-        or candidates[0].app_id != APP_ID
-        or candidates[0].name != APP_NAME
-        or candidates[0].description != APP_NAME
-        or candidates[0].state != api_pb2.APP_STATE_STOPPED
-        or candidates[0].n_running_tasks != 0
-        or candidates[0].stopped_at != app.lifecycle.stopped_at
+        or len(candidates) > 1
+        or (
+            retained is not None
+            and (
+                retained.app_id != APP_ID
+                or retained.name != APP_NAME
+                or retained.description != APP_NAME
+                or retained.state != api_pb2.APP_STATE_STOPPED
+                or retained.n_running_tasks != 0
+                or retained.stopped_at != app.lifecycle.stopped_at
+            )
+        )
         or len(task_items) != 0
     ):
         _invalid()
@@ -169,7 +175,10 @@ async def _readback(
     expected_release_secret,
     enforce_autoscaler=False,
     allow_stopped_recovery=False,
+    require_stopped_recovery=False,
 ):
+    if require_stopped_recovery and not allow_stopped_recovery:
+        _invalid()
     client = await _Client.from_env()
     app = await client.stub.AppGetByDeploymentName(
         api_pb2.AppGetByDeploymentNameRequest(
@@ -180,6 +189,8 @@ async def _readback(
     app_id, stopped_recovery = await _resolve_app_identity(
         client, app, allow_stopped_recovery
     )
+    if require_stopped_recovery and not stopped_recovery:
+        _invalid()
     layout_response = await client.stub.AppGetLayout(
         api_pb2.AppGetLayoutRequest(app_id=app_id)
     )
@@ -376,6 +387,7 @@ def main():
     read_only_capture = capture_mode in {
         "--capture-current",
         "--capture-recovery-readiness",
+        "--capture-stopped-reentry",
     }
     expected_release_secret = (
         None
@@ -383,6 +395,7 @@ def main():
         in {
             "--capture-current",
             "--capture-recovery-readiness",
+            "--capture-stopped-reentry",
             "--enforce-current",
             "--safe-bootstrap",
         }
@@ -393,13 +406,14 @@ def main():
         and not RELEASE_SECRET.fullmatch(expected_release_secret)
     ):
         _invalid()
-    result = asyncio.run(
-        _readback(
-            expected_release_secret,
-            enforce_autoscaler=not read_only_capture,
-            allow_stopped_recovery=capture_mode == "--capture-recovery-readiness",
-        )
-    )
+    options = {
+        "enforce_autoscaler": not read_only_capture,
+        "allow_stopped_recovery": capture_mode
+        in {"--capture-recovery-readiness", "--capture-stopped-reentry"},
+    }
+    if capture_mode == "--capture-stopped-reentry":
+        options["require_stopped_recovery"] = True
+    result = asyncio.run(_readback(expected_release_secret, **options))
     sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")))
     sys.stdout.write("\n")
 

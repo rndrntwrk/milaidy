@@ -76,9 +76,7 @@ const previous = layout({
   sourceCommit: release.sourceCommit,
   functionId: "fu-AAAAAAAAAAAAAAAAAAAAAA",
   imageId: "im-AAAAAAAAAAAAAAAAAAAAAA",
-  mountedSecretObjects: [
-    { id: "st-AAAAAAAAAAAAAAAAAAAAAA", name: "alice-ghcr-registry" },
-  ],
+  mountedSecretObjects: [],
   autoscalerStatus: "provider-enforced",
 });
 const candidate = layout({

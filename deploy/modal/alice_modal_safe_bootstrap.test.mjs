@@ -7,8 +7,10 @@ import { fileURLToPath } from "node:url";
 import * as safeBootstrapModule from "./alice_modal_safe_bootstrap.mjs";
 
 import {
+  buildAliceModalStoppedReentryJournal,
   buildAliceModalSafeBootstrapResult,
   buildAliceModalLegacyTransitionJournal,
+  captureAliceModalStopBoundary,
   orchestrateAliceModalSafeBootstrap,
   verifyAliceModalSafeBootstrapHttp,
 } from "./alice_modal_safe_bootstrap.mjs";
@@ -76,9 +78,7 @@ const safe = {
     ...legacy.function,
     id: "fu-AAAAAAAAAAAAAAAAAAAAAA",
   },
-  mountedSecretObjects: [
-    { id: "st-BBBBBBBBBBBBBBBBBBBBBB", name: "alice-ghcr-registry" },
-  ],
+  mountedSecretObjects: [],
   imageObjectIds: ["im-AAAAAAAAAAAAAAAAAAAAAA"],
   autoscalerEnforcement: {
     status: "provider-enforced",
@@ -88,6 +88,30 @@ const safe = {
     bufferContainers: 0,
     scaledownWindow: 300,
   },
+};
+
+const stoppedSafe = {
+  ...safe,
+  functionIds: { alice_web: "fu-fm2fP3cNQPgCIqe7QoBIHn" },
+  function: {
+    ...safe.function,
+    id: "fu-fm2fP3cNQPgCIqe7QoBIHn",
+  },
+  imageObjectIds: ["im-XuoDTAvQeu5HBjYMOdbGoc"],
+  autoscalerEnforcement: { status: "provider-unverifiable" },
+  providerHistory: [{
+    ...safe.providerHistory[0],
+    commitHash: "be7a8a13765eb13bae1d21706c0f85866ce51069",
+  }],
+};
+
+const nextSafe = {
+  ...safe,
+  providerVersion: 50,
+  providerHistory: [{
+    ...safe.providerHistory[0],
+    providerVersion: 50,
+  }],
 };
 
 const providerState = {
@@ -109,6 +133,15 @@ const providerState = {
   }],
   containers: [],
   layout: safe,
+};
+
+const nextProviderState = {
+  ...providerState,
+  history: [{
+    ...providerState.history[0],
+    version: "v50",
+  }],
+  layout: nextSafe,
 };
 
 const stoppedAppReadback = {
@@ -231,6 +264,121 @@ test("captures only the exact known unsafe v48 transition boundary", () => {
   }), /ALICE_MODAL_LEGACY_TRANSITION_INVALID/);
 });
 
+test("captures the exact stopped safe-bootstrap graph for bounded re-entry", async () => {
+  const calls = [];
+  const result = await captureAliceModalStopBoundary({
+    release,
+    observedAt: "2026-08-26T22:20:00.000Z",
+    captureCurrent: async () => {
+      calls.push("capture-current");
+      throw new Error("ALICE_MODAL_PROVIDER_READBACK_INVALID");
+    },
+    captureStopped: async () => {
+      calls.push("capture-stopped");
+      return stoppedSafe;
+    },
+  });
+  assert.deepEqual(calls, ["capture-current", "capture-stopped"]);
+  assert.equal(result.action, "transition");
+  assert.equal(result.journal.schemaVersion, "alice.modal-stopped-reentry.v1");
+  assert.equal(result.journal.failureBoundary, "restart-stopped-safe-bootstrap");
+  assert.equal(result.journal.previousProviderVersion, 49);
+  assert.deepEqual(result.journal.previous, stoppedSafe);
+});
+
+test("keeps an active safe bootstrap on the existing runtime re-entry path", async () => {
+  let stoppedCaptures = 0;
+  const result = await captureAliceModalStopBoundary({
+    release,
+    observedAt: "2026-08-26T22:20:00.000Z",
+    captureCurrent: async () => safe,
+    captureStopped: async () => {
+      stoppedCaptures += 1;
+      return stoppedSafe;
+    },
+  });
+  assert.deepEqual(result, { action: "active-safe-reentry" });
+  assert.equal(stoppedCaptures, 0);
+});
+
+test("stopped re-entry rejects drift from the inert safe-bootstrap graph", () => {
+  const invalidPrevious = [
+    { ...stoppedSafe, appId: "ap-ZZZZZZZZZZZZZZZZZZZZZZ" },
+    { ...stoppedSafe, providerVersion: 48 },
+    {
+      ...stoppedSafe,
+      providerHistory: [{ ...stoppedSafe.providerHistory[0], rollbackVersion: 48 }],
+    },
+    {
+      ...stoppedSafe,
+      mountedSecretObjects: [
+        ...stoppedSafe.mountedSecretObjects,
+        { id: "st-CCCCCCCCCCCCCCCCCCCCCC", name: "alice-runtime" },
+      ],
+    },
+  ];
+  for (const previous of invalidPrevious) {
+    assert.throws(
+      () => buildAliceModalStoppedReentryJournal({
+        previous,
+        release,
+        observedAt: "2026-08-26T22:20:00.000Z",
+      }),
+      /ALICE_MODAL_STOPPED_REENTRY_INVALID/,
+    );
+  }
+});
+
+test("re-enters from stopped v49 through one verified inert v50 bootstrap", async () => {
+  const calls = [];
+  const journal = buildAliceModalStoppedReentryJournal({
+    previous: stoppedSafe,
+    release,
+    observedAt: "2026-08-26T22:20:00.000Z",
+  });
+  const result = await orchestrateAliceModalSafeBootstrap({
+    journal,
+    release,
+    operations: {
+      captureLegacy: async () => {
+        throw new Error("legacy capture must not run");
+      },
+      captureStopped: async () => {
+        calls.push("capture-stopped");
+        return stoppedSafe;
+      },
+      verifyProtectedRef: async () => calls.push("verify-protected-ref"),
+      deploySafeBootstrap: async () => calls.push("deploy-safe-bootstrap"),
+      readSafeBootstrapState: async () => {
+        calls.push("read-safe-bootstrap");
+        return nextProviderState;
+      },
+      verifySafeBootstrapRuntime: async () => {
+        calls.push("verify-safe-runtime");
+        return {
+          schemaVersion: "alice.modal-safe-bootstrap-runtime.v1",
+          unauthenticatedStatus: 401,
+          authenticatedStatus: 503,
+          safeBootstrap: true,
+          paused: true,
+          ready: false,
+          release,
+        };
+      },
+      stopIfUnanchored: async () => calls.push("stop-if-unanchored"),
+    },
+    observedAt: "2026-08-26T22:21:00.000Z",
+  });
+  assert.deepEqual(calls, [
+    "capture-stopped",
+    "verify-protected-ref",
+    "deploy-safe-bootstrap",
+    "read-safe-bootstrap",
+    "verify-safe-runtime",
+  ]);
+  assert.equal(result.anchor.previous.providerVersion, 50);
+});
+
 test("recovery explicitly no-ops before Modal and stops only a verified unanchored transition", () => {
   assert.equal(typeof safeBootstrapModule.resolveAliceModalSafeRecovery, "function");
   const observedAt = "2026-08-23T12:03:00.000Z";
@@ -262,6 +410,21 @@ test("recovery explicitly no-ops before Modal and stops only a verified unanchor
     safeBootstrapModule.resolveAliceModalSafeRecovery({
       release,
       transition,
+      anchor: null,
+      mutationJournalPresent: false,
+      observedAt,
+    }).action,
+    "stop-if-unanchored",
+  );
+  const stoppedTransition = buildAliceModalStoppedReentryJournal({
+    previous: stoppedSafe,
+    release,
+    observedAt,
+  });
+  assert.equal(
+    safeBootstrapModule.resolveAliceModalSafeRecovery({
+      release,
+      transition: stoppedTransition,
       anchor: null,
       mutationJournalPresent: false,
       observedAt,
