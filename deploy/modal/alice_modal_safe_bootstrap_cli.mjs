@@ -10,11 +10,14 @@ import {
   verifyAliceDeploymentManifest,
 } from "./alice_deployment_manifest.mjs";
 import {
+  buildAliceModalSafeBootstrapFailure,
   buildAliceModalLegacyTransitionJournal,
   buildAliceModalSafeBootstrapResult,
   orchestrateAliceModalSafeBootstrap,
   resolveAliceModalSafeRecovery,
+  stopAliceModalIfUnanchored,
   verifyAliceModalLegacyTransitionJournal,
+  verifyAliceModalSafeBootstrapFailure,
   verifyAliceModalSafeBootstrapHttp,
   verifyAliceModalSafeRollbackAnchor,
 } from "./alice_modal_safe_bootstrap.mjs";
@@ -189,6 +192,7 @@ async function main() {
   const transitionPath = process.env.ALICE_MODAL_LEGACY_TRANSITION_PATH;
   const anchorPath = process.env.ALICE_MODAL_ROLLBACK_ANCHOR_PATH;
   const evidencePath = process.env.ALICE_MODAL_SAFE_BOOTSTRAP_EVIDENCE_PATH;
+  const failurePath = process.env.ALICE_MODAL_SAFE_BOOTSTRAP_FAILURE_PATH;
   const mutationJournalPath = process.env.ALICE_MODAL_MUTATION_JOURNAL_PATH;
   const modalBin = process.env.ALICE_MODAL_BIN;
   const pythonBin = process.env.ALICE_MODAL_PYTHON_BIN;
@@ -201,6 +205,7 @@ async function main() {
       transitionPath,
       anchorPath,
       evidencePath,
+      failurePath,
       modalBin,
       pythonBin,
     ].every(absolute) ||
@@ -220,6 +225,9 @@ async function main() {
   verifySource({ sourceRoot, sourceCommit: release.sourceCommit });
   let recoveryDecision = null;
   if (phase === "recover") {
+    if (fs.existsSync(failurePath)) {
+      verifyAliceModalSafeBootstrapFailure(readJson(failurePath), { release });
+    }
     recoveryDecision = resolveAliceModalSafeRecovery({
       release,
       transition: fs.existsSync(transitionPath) ? readJson(transitionPath) : null,
@@ -281,27 +289,6 @@ async function main() {
     code,
   }), code);
 
-  const verifyStopped = async () => {
-    for (let attempt = 1; attempt <= 13; attempt += 1) {
-      const apps = modalJson(commands.apps, "ALICE_MODAL_SAFE_STOP_INVALID");
-      const containers = modalJson(
-        commands.containers,
-        "ALICE_MODAL_SAFE_STOP_INVALID",
-      );
-      const aliceApps = apps.filter((item) => item?.app_id === "ap-oFaCNy2jJDFalZienNB2Ht");
-      if (
-        containers.length === 0 &&
-        (aliceApps.length === 0 ||
-          aliceApps.length === 1 &&
-          aliceApps[0]?.state === "stopped" &&
-          aliceApps[0]?.tasks === "0")
-      ) {
-        return;
-      }
-      if (attempt < 13) await new Promise((resolve) => setTimeout(resolve, 5_000));
-    }
-    invalid("ALICE_MODAL_SAFE_STOP_INVALID");
-  };
   const stopApp = async () => {
     run(modalBin, commands.stopApp, {
       cwd: sourceRoot,
@@ -309,6 +296,17 @@ async function main() {
       code: "ALICE_MODAL_SAFE_STOP_FAILED",
     });
   };
+  const readStoppedState = async () => ({
+    apps: modalJson(commands.apps, "ALICE_MODAL_SAFE_STOP_INVALID"),
+    containers: modalJson(
+      commands.containers,
+      "ALICE_MODAL_SAFE_STOP_INVALID",
+    ),
+  });
+  const stopIfUnanchored = async () => stopAliceModalIfUnanchored({
+    readState: readStoppedState,
+    stopApp,
+  });
   const readSafeState = async () => {
     let lastError;
     for (let attempt = 1; attempt <= 19; attempt += 1) {
@@ -377,11 +375,18 @@ async function main() {
       })}\n`);
       return;
     } catch (legacyError) {
+      let safeFailureStage = "provider-readback";
+      const safeObservedAt = new Date().toISOString();
       try {
+        const state = await readSafeState();
+        safeFailureStage = "runtime-http";
+        const runtime = await verifyRuntime();
+        safeFailureStage = "provider-readback";
         const result = buildAliceModalSafeBootstrapResult({
           release,
-          state: await readSafeState(),
-          runtime: await verifyRuntime(),
+          state,
+          runtime,
+          observedAt: safeObservedAt,
         });
         writeReadonly(evidencePath, result.safeBootstrapEvidence);
         writeReadonly(anchorPath, result.anchor);
@@ -396,8 +401,7 @@ async function main() {
       } catch (safeError) {
         let stopError;
         try {
-          await stopApp();
-          await verifyStopped();
+          await stopIfUnanchored();
         } catch (caught) {
           stopError = caught;
         }
@@ -408,14 +412,22 @@ async function main() {
             : "ALICE_MODAL_REENTRY_REJECTED_APP_STOPPED",
         );
         failure.modalSafeStopVerified = !stopError;
+        const safeFailure = buildAliceModalSafeBootstrapFailure({
+          release,
+          observedAt: safeObservedAt,
+          stage: safeFailureStage,
+          error: safeError,
+          safeStopVerified: !stopError,
+        });
+        writeReadonly(failurePath, safeFailure);
+        failure.modalSafeBootstrapFailure = safeFailure;
         throw failure;
       }
     }
   }
 
   if (phase === "recover") {
-    await stopApp();
-    await verifyStopped();
+    await stopIfUnanchored();
     process.stdout.write(`${JSON.stringify({
       ok: true,
       phase,
@@ -443,29 +455,42 @@ async function main() {
     invalid("ALICE_MODAL_LEGACY_TRANSITION_INVALID");
   }
   const safeEnv = releaseCommandEnv(commandEnv, release);
-  const result = await orchestrateAliceModalSafeBootstrap({
-    journal,
-    release,
-    operations: {
-      captureLegacy: async () => pythonJson(
-        commands.providerCaptureCurrent,
-        "ALICE_MODAL_LEGACY_TRANSITION_INVALID",
-      ),
-      verifyProtectedRef: async () => verifyProtectedRef({
-        sourceRoot,
-        sourceCommit: release.sourceCommit,
-      }),
-      deploySafeBootstrap: async () => run(modalBin, commands.deployBootstrap, {
-        cwd: sourceRoot,
-        env: safeEnv,
-        code: "ALICE_MODAL_SAFE_BOOTSTRAP_DEPLOY_FAILED",
-      }),
-      readSafeBootstrapState: readSafeState,
-      verifySafeBootstrapRuntime: verifyRuntime,
-      stopApp,
-      verifyAppStopped: verifyStopped,
-    },
-  });
+  let result;
+  try {
+    result = await orchestrateAliceModalSafeBootstrap({
+      journal,
+      release,
+      operations: {
+        captureLegacy: async () => pythonJson(
+          commands.providerCaptureCurrent,
+          "ALICE_MODAL_LEGACY_TRANSITION_INVALID",
+        ),
+        verifyProtectedRef: async () => verifyProtectedRef({
+          sourceRoot,
+          sourceCommit: release.sourceCommit,
+        }),
+        deploySafeBootstrap: async () => run(modalBin, commands.deployBootstrap, {
+          cwd: sourceRoot,
+          env: safeEnv,
+          code: "ALICE_MODAL_SAFE_BOOTSTRAP_DEPLOY_FAILED",
+        }),
+        readSafeBootstrapState: readSafeState,
+        verifySafeBootstrapRuntime: verifyRuntime,
+        stopIfUnanchored,
+      },
+    });
+  } catch (error) {
+    if (error?.modalSafeBootstrapFailure) {
+      writeReadonly(
+        failurePath,
+        verifyAliceModalSafeBootstrapFailure(
+          error.modalSafeBootstrapFailure,
+          { release },
+        ),
+      );
+    }
+    throw error;
+  }
   writeReadonly(evidencePath, result.safeBootstrapEvidence);
   writeReadonly(anchorPath, result.anchor);
   process.stdout.write(`${JSON.stringify({

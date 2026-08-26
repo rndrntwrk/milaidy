@@ -240,6 +240,7 @@ jobs:
               modal-legacy-transition.json \
               modal-rollback-anchor.json \
               modal-safe-bootstrap-evidence.json \
+              modal-safe-bootstrap-failure.json \
               modal-mutation-journal.json \
               modal-promotion-evidence.json \
               modal-emergency-rollback-evidence.json
@@ -265,6 +266,7 @@ jobs:
           export ALICE_MODAL_LEGACY_TRANSITION_PATH="$recovery_root/alice-release/modal-legacy-transition.json"
           export ALICE_MODAL_ROLLBACK_ANCHOR_PATH="$recovery_root/alice-release/modal-rollback-anchor.json"
           export ALICE_MODAL_SAFE_BOOTSTRAP_EVIDENCE_PATH="$recovery_root/alice-release/modal-safe-bootstrap-evidence.json"
+          export ALICE_MODAL_SAFE_BOOTSTRAP_FAILURE_PATH="$recovery_root/alice-release/modal-safe-bootstrap-failure.json"
           export ALICE_MODAL_MUTATION_JOURNAL_PATH="$recovery_root/alice-release/modal-mutation-journal.json"
           export ALICE_MODAL_PROMOTION_EVIDENCE_PATH="$recovery_root/alice-release/modal-promotion-evidence.json"
           export ALICE_MODAL_EMERGENCY_ROLLBACK_EVIDENCE_PATH="$recovery_root/alice-release/modal-independent-recovery-evidence.json"
@@ -292,6 +294,7 @@ jobs:
           path: |
             ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-independent-recovery-evidence.json
             ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-safe-bootstrap-evidence.json
+            ${{ runner.temp }}/alice-independent-modal-recovery/alice-release/modal-safe-bootstrap-failure.json
           if-no-files-found: warn
           retention-days: 90
           overwrite: false

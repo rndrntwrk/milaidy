@@ -406,6 +406,45 @@ test("runner loss invokes provider-isolated recovery from external journals", ()
   assert.doesNotMatch(cloudflareAnchor, /include-hidden-files: true/);
 });
 
+test("the first sanitized Modal bootstrap failure survives every recovery lane", () => {
+  const deployBootstrap = workflow.match(
+    /- name: Establish inert proxy-authenticated Modal rollback anchor[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(
+    deployBootstrap,
+    /ALICE_MODAL_SAFE_BOOTSTRAP_FAILURE_PATH: \$\{\{ runner\.temp \}\}\/alice-release\/modal-safe-bootstrap-failure\.json/,
+  );
+
+  const terminalRecovery = workflow.match(
+    /- name: Preserve terminal recovery evidence[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(terminalRecovery, /modal-safe-bootstrap-failure\.json/);
+
+  const independentRecovery = workflow.match(
+    /  recover-modal:[\s\S]*?(?=\n  recover-cloudflare:)/,
+  )?.[0] ?? "";
+  assert.match(
+    independentRecovery,
+    /ALICE_MODAL_SAFE_BOOTSTRAP_FAILURE_PATH="\$recovery_root\/alice-release\/modal-safe-bootstrap-failure\.json"/,
+  );
+  assert.match(
+    independentRecovery,
+    /- name: Preserve independent Modal recovery evidence[\s\S]*?path:[\s\S]*?modal-safe-bootstrap-failure\.json/,
+  );
+
+  const watchdogRecovery = watchdog.match(
+    /  recover-modal:[\s\S]*?(?=\n  recover-cloudflare:)/,
+  )?.[0] ?? "";
+  assert.match(
+    watchdogRecovery,
+    /ALICE_MODAL_SAFE_BOOTSTRAP_FAILURE_PATH="\$recovery_root\/alice-release\/modal-safe-bootstrap-failure\.json"/,
+  );
+  assert.match(
+    watchdogRecovery,
+    /- name: Preserve watchdog Modal evidence[\s\S]*?path:[\s\S]*?modal-safe-bootstrap-failure\.json/,
+  );
+});
+
 test("a protected push prestarts cancellation-safe provider recovery before dispatch", () => {
   assert.ok(watchdog.length > 0, "independent recovery watchdog is missing");
   assert.match(

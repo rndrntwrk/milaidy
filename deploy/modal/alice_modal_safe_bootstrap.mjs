@@ -9,6 +9,34 @@ const COMMIT = /^[a-f0-9]{40}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const IMAGE = /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/;
 const APP_ID = "ap-oFaCNy2jJDFalZienNB2Ht";
+const SAFE_BOOTSTRAP_FAILURE_CODES = Object.freeze({
+  "protected-ref": new Set([
+    "ALICE_MODAL_PROTECTED_REF_INVALID",
+  ]),
+  "deploy-bootstrap": new Set([
+    "ALICE_MODAL_SAFE_BOOTSTRAP_DEPLOY_FAILED",
+  ]),
+  "provider-readback": new Set([
+    "ALICE_MODAL_LAYOUT_INVALID",
+    "ALICE_MODAL_WORKSPACE_INVALID",
+    "ALICE_MODAL_ENVIRONMENT_INVALID",
+    "ALICE_MODAL_APP_INVALID",
+    "ALICE_MODAL_HISTORY_INVALID",
+    "ALICE_MODAL_IDLE_INVALID",
+    "ALICE_MODAL_SAFE_BOOTSTRAP_INVALID",
+    "ALICE_MODAL_ROLLBACK_ANCHOR_INVALID",
+  ]),
+  "runtime-http": new Set([
+    "ALICE_MODAL_SAFE_BOOTSTRAP_PROXY_INVALID",
+    "ALICE_MODAL_SAFE_BOOTSTRAP_RUNTIME_INVALID",
+  ]),
+});
+const DEFAULT_SAFE_BOOTSTRAP_FAILURE_CODE = Object.freeze({
+  "protected-ref": "ALICE_MODAL_PROTECTED_REF_INVALID",
+  "deploy-bootstrap": "ALICE_MODAL_SAFE_BOOTSTRAP_DEPLOY_FAILED",
+  "provider-readback": "ALICE_MODAL_SAFE_BOOTSTRAP_INVALID",
+  "runtime-http": "ALICE_MODAL_SAFE_BOOTSTRAP_RUNTIME_INVALID",
+});
 
 const LEGACY_PROVIDER_VERSION = 48;
 const LEGACY_HEAD = Object.freeze({
@@ -304,6 +332,125 @@ export function resolveAliceModalSafeRecovery({
   };
 }
 
+function exactStoppedAppState(value) {
+  if (
+    !exactKeys(value, ["apps", "containers"]) ||
+    !Array.isArray(value.apps) ||
+    !Array.isArray(value.containers) ||
+    value.containers.length !== 0
+  ) {
+    return false;
+  }
+  const aliceApps = value.apps.filter((item) => item?.app_id === APP_ID);
+  return Boolean(
+    aliceApps.length === 1 &&
+    aliceApps[0]?.state === "stopped" &&
+    aliceApps[0]?.tasks === "0"
+  );
+}
+
+export async function stopAliceModalIfUnanchored({
+  readState,
+  stopApp,
+  wait = (milliseconds) => new Promise((resolve) =>
+    setTimeout(resolve, milliseconds)),
+}) {
+  if (
+    typeof readState !== "function" ||
+    typeof stopApp !== "function" ||
+    typeof wait !== "function"
+  ) {
+    invalid("ALICE_MODAL_SAFE_STOP_INVALID");
+  }
+
+  try {
+    if (exactStoppedAppState(await readState())) {
+      return {
+        stopped: true,
+        stopAttempted: false,
+        stopCommandSucceeded: null,
+      };
+    }
+  } catch {
+    // An unreadable initial state is not evidence that the app is stopped.
+  }
+
+  let stopCommandSucceeded = true;
+  try {
+    await stopApp();
+  } catch {
+    stopCommandSucceeded = false;
+  }
+
+  for (let attempt = 1; attempt <= 13; attempt += 1) {
+    try {
+      if (exactStoppedAppState(await readState())) {
+        return {
+          stopped: true,
+          stopAttempted: true,
+          stopCommandSucceeded,
+        };
+      }
+    } catch {
+      // Only the exact authoritative stopped readback admits recovery.
+    }
+    if (attempt < 13) await wait(5_000);
+  }
+  invalid(
+    stopCommandSucceeded
+      ? "ALICE_MODAL_SAFE_STOP_INVALID"
+      : "ALICE_MODAL_SAFE_STOP_FAILED",
+  );
+}
+
+export function verifyAliceModalSafeBootstrapFailure(value, { release }) {
+  const allowedCodes = SAFE_BOOTSTRAP_FAILURE_CODES[value?.stage];
+  if (
+    !validRelease(release) ||
+    !exactKeys(value, [
+      "schemaVersion",
+      "observedAt",
+      "sourceCommit",
+      "deploymentManifestSha256",
+      "stage",
+      "code",
+      "safeStopVerified",
+    ]) ||
+    value.schemaVersion !== "alice.modal-safe-bootstrap-failure.v1" ||
+    !canonicalIsoTimestamp(value.observedAt) ||
+    value.sourceCommit !== release.sourceCommit ||
+    value.deploymentManifestSha256 !== release.deploymentManifestSha256 ||
+    !(allowedCodes instanceof Set) ||
+    !allowedCodes.has(value.code) ||
+    typeof value.safeStopVerified !== "boolean"
+  ) {
+    invalid("ALICE_MODAL_SAFE_BOOTSTRAP_FAILURE_INVALID");
+  }
+  return value;
+}
+
+export function buildAliceModalSafeBootstrapFailure({
+  release,
+  observedAt,
+  stage,
+  error,
+  safeStopVerified,
+}) {
+  const message = error instanceof Error ? error.message : "";
+  const code = SAFE_BOOTSTRAP_FAILURE_CODES[stage]?.has(message)
+    ? message
+    : DEFAULT_SAFE_BOOTSTRAP_FAILURE_CODE[stage];
+  return verifyAliceModalSafeBootstrapFailure({
+    schemaVersion: "alice.modal-safe-bootstrap-failure.v1",
+    observedAt,
+    sourceCommit: release.sourceCommit,
+    deploymentManifestSha256: release.deploymentManifestSha256,
+    stage,
+    code,
+    safeStopVerified,
+  }, { release });
+}
+
 function verifyRuntimeEvidence(value, release) {
   if (
     !exactKeys(value, [
@@ -475,8 +622,7 @@ export async function orchestrateAliceModalSafeBootstrap({
       "deploySafeBootstrap",
       "readSafeBootstrapState",
       "verifySafeBootstrapRuntime",
-      "stopApp",
-      "verifyAppStopped",
+      "stopIfUnanchored",
     ].every((name) => typeof operations[name] === "function")
   ) {
     invalid();
@@ -488,21 +634,26 @@ export async function orchestrateAliceModalSafeBootstrap({
     invalid("ALICE_MODAL_LEGACY_TRANSITION_CHANGED");
   }
 
+  let failureStage = "protected-ref";
   try {
     await operations.verifyProtectedRef();
+    failureStage = "deploy-bootstrap";
     await operations.deploySafeBootstrap();
+    failureStage = "provider-readback";
     const state = await operations.readSafeBootstrapState();
+    failureStage = "runtime-http";
+    const runtime = await operations.verifySafeBootstrapRuntime();
+    failureStage = "provider-readback";
     return buildAliceModalSafeBootstrapResult({
       release,
       state,
-      runtime: await operations.verifySafeBootstrapRuntime(),
+      runtime,
       observedAt,
     });
   } catch (error) {
     let stopError;
     try {
-      await operations.stopApp();
-      await operations.verifyAppStopped();
+      await operations.stopIfUnanchored();
     } catch (caught) {
       stopError = caught;
     }
@@ -513,6 +664,13 @@ export async function orchestrateAliceModalSafeBootstrap({
         : "ALICE_MODAL_SAFE_BOOTSTRAP_FAILED_APP_STOPPED",
     );
     failure.modalSafeStopVerified = !stopError;
+    failure.modalSafeBootstrapFailure = buildAliceModalSafeBootstrapFailure({
+      release,
+      observedAt,
+      stage: failureStage,
+      error,
+      safeStopVerified: !stopError,
+    });
     throw failure;
   }
 }
