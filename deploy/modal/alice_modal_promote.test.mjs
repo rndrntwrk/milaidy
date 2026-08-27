@@ -177,7 +177,7 @@ function operations({
         calls.push("capture-current");
         captures += 1;
         if (captures === 1 && malformedPrevious) {
-          return { ...previous, appId: "ap-ZZZZZZZZZZZZZZZZZZZZZZ" };
+          return { ...previous, appId: "not-a-modal-app-id" };
         }
         return captures === 1 ? previous : candidate;
       },

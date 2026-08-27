@@ -18,6 +18,7 @@ import {
   verifyAliceModalRuntimeHttp,
   verifyAliceModalSafeBootstrapReadback,
 } from "./alice_modal_release.mjs";
+import * as releaseModule from "./alice_modal_release.mjs";
 
 const release = {
   programDigest: `sha256:${"1".repeat(64)}`,
@@ -188,6 +189,15 @@ test("keeps signed Alice revision separate from Modal provider deployment versio
   assert.equal("rollback" in commands, false);
   assert.equal("forward" in commands, false);
   assert.deepEqual(commands.providerEnforceCurrent.slice(-1), ["--enforce-current"]);
+  assert.equal(typeof releaseModule.buildAliceModalStopCommand, "function");
+  assert.deepEqual(
+    releaseModule.buildAliceModalStopCommand("ap-AAAAAAAAAAAAAAAAAAAAAA"),
+    ["app", "stop", "ap-AAAAAAAAAAAAAAAAAAAAAA", "--env", "main", "--yes"],
+  );
+  assert.throws(
+    () => releaseModule.buildAliceModalStopCommand("alice-runtime"),
+    /ALICE_MODAL_COMMAND_INVALID/,
+  );
   const transition = buildAliceModalRollbackCommands({
     previousProviderVersion: 49,
     candidateProviderVersion: 73,
@@ -210,12 +220,13 @@ function providerValue({
   safeBootstrap = false,
   functionId = "fu-fm2fP3cNQPgCIqe7QoBIHn",
   imageId = "im-uqZXCsMeoubO36BvfdQSDT",
+  appId = "ap-oFaCNy2jJDFalZienNB2Ht",
 } = {}) {
   return {
     tokenInfo: "Token: ak-redacted\nWorkspace: rndrntwrk (ac-heK8sGJBc367raQUx6R59o)\nUser: rndrntwrk (us-rJM1ZZiySURgAhBEOqvR16)\n",
     environments: [{ name: "main", web_suffix: "", active: "True" }],
     apps: [{
-      app_id: "ap-oFaCNy2jJDFalZienNB2Ht",
+      app_id: appId,
       description: "alice-runtime",
       state: "deployed",
       tasks: "0",
@@ -231,7 +242,7 @@ function providerValue({
     }],
     containers: [],
     layout: {
-      appId: "ap-oFaCNy2jJDFalZienNB2Ht",
+      appId,
       environment: "main",
       providerVersion,
       providerHistory: [{
@@ -277,7 +288,7 @@ test("accepts only the exact clean Alice app graph as a rollback anchor", () => 
   assert.throws(
     () => verifyAliceModalRollbackAnchorLayout({
       ...exact,
-      appId: "ap-ZZZZZZZZZZZZZZZZZZZZZZ",
+      appId: "not-a-modal-app-id",
     }),
     /ALICE_MODAL_PROVIDER_READBACK_INVALID/,
   );
@@ -303,6 +314,61 @@ test("admits only the release-bound, registry-only safe bootstrap", () => {
     () => verifyAliceModalSafeBootstrapReadback(providerValue(), {
       release,
       expectedProviderVersion: 73,
+    }),
+    /ALICE_MODAL_SAFE_BOOTSTRAP_INVALID/,
+  );
+});
+
+test("admits the exact recreated v1 safe bootstrap identity", () => {
+  const appId = "ap-BBBBBBBBBBBBBBBBBBBBBB";
+  const value = providerValue({
+    appId,
+    providerVersion: 1,
+    safeBootstrap: true,
+  });
+  const readback = verifyAliceModalSafeBootstrapReadback(value, {
+    release,
+    expectedProviderVersion: 1,
+    recreatedFromAppId: "ap-poY7q5xDReRQWDqAAWz6PT",
+  });
+  assert.equal(readback.appId, appId);
+  assert.equal(readback.providerVersion, 1);
+  assert.equal(
+    verifyAliceModalRollbackAnchorLayout(value.layout).appId,
+    appId,
+  );
+
+  assert.throws(
+    () => verifyAliceModalSafeBootstrapReadback({
+      ...value,
+      apps: [{ ...value.apps[0], app_id: "ap-CCCCCCCCCCCCCCCCCCCCCC" }],
+    }, {
+      release,
+      expectedProviderVersion: 1,
+    }),
+    /ALICE_MODAL_SAFE_BOOTSTRAP_INVALID/,
+  );
+  assert.throws(
+    () => verifyAliceModalSafeBootstrapReadback(providerValue({
+      appId: "ap-poY7q5xDReRQWDqAAWz6PT",
+      providerVersion: 1,
+      safeBootstrap: true,
+    }), {
+      release,
+      expectedProviderVersion: 1,
+      recreatedFromAppId: "ap-poY7q5xDReRQWDqAAWz6PT",
+    }),
+    /ALICE_MODAL_SAFE_BOOTSTRAP_INVALID/,
+  );
+  assert.throws(
+    () => verifyAliceModalSafeBootstrapReadback(providerValue({
+      appId,
+      providerVersion: 2,
+      safeBootstrap: true,
+    }), {
+      release,
+      expectedProviderVersion: 2,
+      recreatedFromAppId: "ap-poY7q5xDReRQWDqAAWz6PT",
     }),
     /ALICE_MODAL_SAFE_BOOTSTRAP_INVALID/,
   );

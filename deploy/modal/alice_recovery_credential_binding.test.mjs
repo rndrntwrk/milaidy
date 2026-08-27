@@ -166,6 +166,48 @@ test("binds an exact non-granular Modal credential and provider workspace", () =
   assert.equal(JSON.stringify(readiness).includes(credentialId), false);
 });
 
+test("binds recovery readiness to the exact recreated name-resolved app", () => {
+  const credentialId = "ak-test-modal-recovery-token-id";
+  const policy = {
+    schemaVersion: "alice.modal-recovery-credential-policy.v1",
+    provider: "modal",
+    tokenIdSha256: digest(credentialId),
+    authorityModel: "workspace-token-non-granular",
+    environment: "main",
+    appId: "ap-oFaCNy2jJDFalZienNB2Ht",
+    appName: "alice-runtime",
+    requiredOperations: [...ALICE_MODAL_RECOVERY_OPERATIONS],
+  };
+  const encodedPolicy = encodeAliceRecoveryCredentialPolicy(policy);
+  const currentAppId = "ap-poY7q5xDReRQWDqAAWz6PT";
+  const readiness = buildAliceRecoveryCredentialReadiness({
+    ...common(),
+    provider: "modal",
+    credentialId,
+    encodedPolicy,
+    expectedPolicySha256: digest(Buffer.from(encodedPolicy, "base64url")),
+    providerReadback: {
+      appId: currentAppId,
+      environment: "main",
+      providerVersion: 1,
+    },
+  });
+  assert.equal(readiness.providerIdentity.appId, currentAppId);
+  assert.equal(readiness.providerIdentity.providerVersion, 1);
+  assert.throws(() => buildAliceRecoveryCredentialReadiness({
+    ...common(),
+    provider: "modal",
+    credentialId,
+    encodedPolicy,
+    expectedPolicySha256: digest(Buffer.from(encodedPolicy, "base64url")),
+    providerReadback: {
+      appId: "not-a-modal-app-id",
+      environment: "main",
+      providerVersion: 1,
+    },
+  }), /ALICE_RECOVERY_CREDENTIAL_BINDING_INVALID/);
+});
+
 test("binds the full sanitized Modal capture emitted by the watchdog", () => {
   const credentialId = "ak-test-modal-recovery-token-id";
   const policy = {

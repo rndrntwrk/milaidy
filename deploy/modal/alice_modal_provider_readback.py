@@ -17,7 +17,7 @@ from modal_proto import api_pb2
 
 
 APP_NAME = "alice-runtime"
-APP_ID = "ap-oFaCNy2jJDFalZienNB2Ht"
+APP_ID = re.compile(r"ap-[A-Za-z0-9]{20,32}")
 ENVIRONMENT = "main"
 RELEASE_SECRET = re.compile(
     r"alice-production-core-[a-f0-9]{64}-[1-9][0-9]*-[1-9][0-9]*"
@@ -31,17 +31,19 @@ def _invalid():
 
 def _resolve_stopped_app_identity(app, app_items, task_items):
     """Admit the exact inert stopped Alice identity for recovery readiness."""
+    previous_app_id = app.previous_app_id
     candidates = [
         item
         for item in app_items
-        if item.app_id == APP_ID
+        if item.app_id == previous_app_id
         or item.name == APP_NAME
         or item.description == APP_NAME
     ]
     retained = candidates[0] if len(candidates) == 1 else None
     if (
         app.app_id != ""
-        or app.previous_app_id != APP_ID
+        or not isinstance(previous_app_id, str)
+        or not APP_ID.fullmatch(previous_app_id)
         or app.environment_name != ENVIRONMENT
         or app.lifecycle.app_state != api_pb2.APP_STATE_STOPPED
         or not isinstance(app.lifecycle.version, int)
@@ -52,7 +54,7 @@ def _resolve_stopped_app_identity(app, app_items, task_items):
         or (
             retained is not None
             and (
-                retained.app_id != APP_ID
+                retained.app_id != previous_app_id
                 or retained.name != APP_NAME
                 or retained.description != APP_NAME
                 or retained.state != api_pb2.APP_STATE_STOPPED
@@ -63,27 +65,36 @@ def _resolve_stopped_app_identity(app, app_items, task_items):
         or len(task_items) != 0
     ):
         _invalid()
-    return APP_ID
+    return previous_app_id
 
 
 async def _resolve_app_identity(client, app, allow_stopped_recovery):
     if app.app_id:
         if (
-            app.app_id != APP_ID
+            not isinstance(app.app_id, str)
+            or not APP_ID.fullmatch(app.app_id)
             or app.environment_name != ENVIRONMENT
             or app.lifecycle.app_state != api_pb2.APP_STATE_DEPLOYED
             or not isinstance(app.lifecycle.version, int)
             or app.lifecycle.version < 1
         ):
             _invalid()
-        return APP_ID, False
+        return app.app_id, False
     if not allow_stopped_recovery:
+        _invalid()
+    if (
+        not isinstance(app.previous_app_id, str)
+        or not APP_ID.fullmatch(app.previous_app_id)
+    ):
         _invalid()
     app_list = await client.stub.AppList(
         api_pb2.AppListRequest(environment_name=ENVIRONMENT)
     )
     task_list = await client.stub.TaskList(
-        api_pb2.TaskListRequest(environment_name=ENVIRONMENT, app_id=APP_ID)
+        api_pb2.TaskListRequest(
+            environment_name=ENVIRONMENT,
+            app_id=app.previous_app_id,
+        )
     )
     return (
         _resolve_stopped_app_identity(app, app_list.apps, task_list.tasks),

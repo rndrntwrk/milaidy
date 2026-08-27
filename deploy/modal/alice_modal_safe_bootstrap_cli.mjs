@@ -24,6 +24,7 @@ import {
 import {
   aliceModalCommandEnv,
   buildAliceModalReleaseCommands,
+  buildAliceModalStopCommand,
 } from "./alice_modal_release.mjs";
 
 const PROTECTED_BRANCH = "release/alice-production-core-2026-08-22";
@@ -289,8 +290,8 @@ async function main() {
     code,
   }), code);
 
-  const stopApp = async () => {
-    run(modalBin, commands.stopApp, {
+  const stopApp = async (appId) => {
+    run(modalBin, buildAliceModalStopCommand(appId), {
       cwd: sourceRoot,
       env: commandEnv,
       code: "ALICE_MODAL_SAFE_STOP_FAILED",
@@ -391,6 +392,7 @@ async function main() {
         release,
         state,
         runtime,
+        expectedProviderVersion: state?.layout?.providerVersion,
         observedAt: safeObservedAt,
       });
       writeReadonly(evidencePath, result.safeBootstrapEvidence);
