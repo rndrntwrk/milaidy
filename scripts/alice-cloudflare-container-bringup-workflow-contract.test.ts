@@ -155,8 +155,149 @@ test("independent teardown guard preserves the documented 30-minute expiry", () 
     'echo "FAILSAFE_CHECKPOINT',
   );
   const expirySeconds = Number(
-    failsafeLoop.match(/deadline_epoch="\$\(\(now_epoch \+ (\d+)\)\)"/u)?.[1],
+    failsafeLoop.match(/expiry_seconds=(\d+)/u)?.[1],
   );
 
   assert.equal(expirySeconds, 30 * 60);
+});
+
+test("user-test mode is an explicit bounded 60-minute workflow input", () => {
+  assert.match(
+    workflow,
+    /user_test_window_minutes:[\s\S]*?type: choice[\s\S]*?default: "0"[\s\S]*?options:[\s\S]*?- "0"[\s\S]*?- "60"/u,
+  );
+  assert.match(
+    workflow,
+    /USER_TEST_WINDOW_MINUTES: \$\{\{ inputs\.user_test_window_minutes \}\}/u,
+  );
+});
+
+test("user-test page keeps its short-lived capability in the URL fragment", () => {
+  const workerSource = between(
+    workflow,
+    "cat > src/index.ts <<'EOF'",
+    "\n          EOF",
+  );
+
+  assert.match(workerSource, /id="transcript"/u);
+  assert.match(workerSource, /id="prompt"/u);
+  assert.match(workerSource, /window\.location\.hash\.slice\(1\)/u);
+  assert.match(workerSource, /history\.replaceState\(null, "", window\.location\.pathname\)/u);
+  assert.match(workerSource, /"x-alice-user-test-token": capability/u);
+  assert.match(workerSource, /content-security-policy/u);
+  assert.match(workerSource, /script-src 'nonce-\$\{nonce\}'/u);
+  assert.doesNotMatch(workerSource, /BRINGUP_USER_TEST_TOKEN[^\n]*Response/u);
+});
+
+test("user-test API requires the exact temporary secret while automated canary auth remains intact", () => {
+  const workerSource = between(
+    workflow,
+    "cat > src/index.ts <<'EOF'",
+    "\n          EOF",
+  );
+
+  assert.match(workerSource, /BRINGUP_USER_TEST_TOKEN\?: string/u);
+  assert.match(
+    workerSource,
+    /pathname === "\/v1\/chat\/completions"[\s\S]*?x-alice-user-test-token[\s\S]*?env\.BRINGUP_USER_TEST_TOKEN/u,
+  );
+  assert.match(
+    workerSource,
+    /x-alice-bringup-token[\s\S]*?env\.BRINGUP_EDGE_TOKEN/u,
+  );
+});
+
+test("successful user-test canary stays available for 60 minutes with an independent absolute ceiling", () => {
+  const primarySuccess = between(
+    workflow,
+    'echo "CONTAINER_INSTANCE_GREEN',
+    "trap - EXIT INT TERM",
+  );
+  const failsafeLoop = between(
+    workflow,
+    'first_seen_epoch=""',
+    'echo "FAILSAFE_CHECKPOINT',
+  );
+
+  assert.match(
+    primarySuccess,
+    /if \[ "\$USER_TEST_WINDOW_MINUTES" = "60" \]; then[\s\S]*?USER_TEST_LINK_READY[\s\S]*?CLEANUP_COMPLETE=1/u,
+  );
+  assert.match(
+    failsafeLoop,
+    /expiry_seconds=1800[\s\S]*?if \[ "\$USER_TEST_WINDOW_MINUTES" = "60" \]; then[\s\S]*?expiry_seconds=5100/u,
+  );
+  assert.match(
+    failsafeLoop,
+    /primary_conclusion[\s\S]*?failure\|cancelled\|timed_out\|action_required/u,
+    "failed primary jobs must clean up immediately instead of holding the test surface",
+  );
+  assert.match(failsafeLoop, /FAILSAFE_EXPIRY_REACHED/u);
+  assert.match(failsafeLoop, /failsafe_cleanup_once/u);
+});
+
+test("the 60-minute owner window starts only after verified conversation readiness", () => {
+  const bringupJob = between(workflow, "  bringup:", "\n  failsafe:");
+  assert.match(
+    bringupJob,
+    /60 minutes after verified link readiness; absolute provider-resource ceiling: 85 minutes after creation/u,
+  );
+  assert.match(
+    bringupJob,
+    /CONVERSATION_GREEN[\s\S]*?LINK_READY_AT="\$\(date -u \+%Y-%m-%dT%H:%M:%SZ\)"[\s\S]*?EXPIRES_AT="\$\(date -u -d '\+60 minutes' \+%Y-%m-%dT%H:%M:%SZ\)"[\s\S]*?USER_TEST_LINK_READY/u,
+  );
+});
+
+test("primary user-test owner remains alive and tears down on expiry or cancellation", () => {
+  const bringupJob = between(workflow, "  bringup:", "\n  failsafe:");
+  const userTestBranch = between(
+    bringupJob,
+    'echo "OBSERVABILITY_EMPTY" >&2',
+    "          else",
+  );
+
+  assert.match(bringupJob, /timeout-minutes: 120/u);
+  assert.match(userTestBranch, /USER_TEST_LINK_READY/u);
+  assert.match(userTestBranch, /USER_TEST_WINDOW_EXPIRED/u);
+  assert.match(
+    userTestBranch,
+    /USER_TEST_LINK_READY[\s\S]*?while true; do[\s\S]*?USER_TEST_WINDOW_EXPIRED[\s\S]*?cleanup[\s\S]*?CLEANUP_COMPLETE=1[\s\S]*?trap - EXIT INT TERM/u,
+  );
+  assert.doesNotMatch(
+    userTestBranch,
+    /USER_TEST_LINK_READY[\s\S]*?CLEANUP_COMPLETE=1[\s\S]*?trap - EXIT INT TERM[\s\S]*?USER_TEST_WINDOW_EXPIRED/u,
+    "the primary cleanup trap must stay armed throughout the live window",
+  );
+});
+
+test("independent expiry guard also tears down on cancellation", () => {
+  const failsafeJob = workflow.slice(workflow.indexOf("  failsafe:"));
+
+  assert.match(failsafeJob, /if: \$\{\{ always\(\) \}\}/u);
+  assert.match(failsafeJob, /failsafe_on_exit\(\)/u);
+  assert.match(failsafeJob, /trap failsafe_on_exit EXIT INT TERM/u);
+  assert.match(failsafeJob, /failsafe_cleanup_once/u);
+});
+
+test("temporary user-test capability is a step-local secret and is never logged", () => {
+  const bringupStep = between(
+    workflow,
+    "- name: Import exact image, run live conversation, and prove teardown",
+    "  failsafe:",
+  );
+
+  assert.match(
+    bringupStep,
+    /ALICE_USER_TEST_LINK_TOKEN: \$\{\{ secrets\.ALICE_USER_TEST_LINK_TOKEN \}\}/u,
+  );
+  assert.match(bringupStep, /BRINGUP_USER_TEST_TOKEN/u);
+  assert.doesNotMatch(
+    bringupStep,
+    /echo[^\n]*\$\{?ALICE_USER_TEST_LINK_TOKEN/u,
+  );
+  assert.doesNotMatch(
+    bringupStep,
+    /echo[^\n]*\$\{?BRINGUP_USER_TEST_TOKEN/u,
+  );
+  assert.doesNotMatch(bringupStep, /USER_TEST_LINK_READY[^\n]*#/u);
 });

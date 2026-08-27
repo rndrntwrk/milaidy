@@ -2,6 +2,15 @@ name: Alice Cloudflare Container Bring-up
 
 on:
   workflow_dispatch:
+    inputs:
+      user_test_window_minutes:
+        description: Keep the verified temporary chat surface available for owner testing
+        required: true
+        type: choice
+        default: "0"
+        options:
+          - "0"
+          - "60"
 
 permissions:
   actions: read
@@ -16,7 +25,7 @@ jobs:
   bringup:
     name: Import, converse, and tear down
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     environment: alice-cloudflare-bringup
     env:
       CLOUDFLARE_ACCOUNT_ID: "036df6c823669b8fa2f66cf4c16eeb29"
@@ -28,11 +37,16 @@ jobs:
       WORKERS_SUBDOMAIN: gl4sspr1sm
       WRANGLER_VERSION: 4.122.0
       CONTAINERS_PACKAGE_VERSION: 0.3.7
+      USER_TEST_WINDOW_MINUTES: ${{ inputs.user_test_window_minutes }}
     steps:
       - name: Record bounded staging contract
         shell: bash
         run: |
           set -euo pipefail
+          expiry_contract="30 minutes after Worker/Container creation"
+          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
+            expiry_contract="60 minutes after verified link readiness; absolute provider-resource ceiling: 85 minutes after creation"
+          fi
           {
             echo "### Alice Cloudflare Container bring-up contract"
             echo "- Owner: Alice Cloudflare bring-up operator"
@@ -41,7 +55,7 @@ jobs:
             echo "- Surface: one uniquely named workers.dev Worker and one Container application"
             echo "- Capacity: standard-4, max_instances=1, sleepAfter=5m, SSH disabled"
             echo "- Routes: workers.dev only; no custom route or domain"
-            echo "- Hard expiry: 30 minutes after Worker/Container creation"
+            echo "- Hard expiry: ${expiry_contract}"
             echo "- Teardown: delete Worker, remaining Container application, and unique registry image tag"
             echo "- Completion evidence: live health, one conversational response, singleton instance readback, then Worker/Container/image absence"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -50,6 +64,7 @@ jobs:
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_CONTAINER_BRINGUP_TOKEN }}
+          ALICE_USER_TEST_LINK_TOKEN: ${{ secrets.ALICE_USER_TEST_LINK_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -60,6 +75,15 @@ jobs:
           fi
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
             echo "CLOUDFLARE_CONTAINER_BRINGUP_TOKEN is not configured" >&2
+            exit 1
+          fi
+          if ! [[ "$USER_TEST_WINDOW_MINUTES" =~ ^(0|60)$ ]]; then
+            echo "USER_TEST_WINDOW_INVALID" >&2
+            exit 1
+          fi
+          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ] &&
+            ! [[ "${ALICE_USER_TEST_LINK_TOKEN:-}" =~ ^[A-Za-z0-9_-]{43,128}$ ]]; then
+            echo "ALICE_USER_TEST_LINK_TOKEN_INVALID" >&2
             exit 1
           fi
 
@@ -81,8 +105,10 @@ jobs:
           ACCESS_SECRET="$(openssl rand -hex 32)"
           MODEL_TOKEN="$(openssl rand -hex 32)"
           VAULT_PASSPHRASE="$(openssl rand -hex 32)"
-          for masked in "$EDGE_TOKEN" "$RUNTIME_TOKEN" "$ACCESS_SECRET" "$MODEL_TOKEN" "$VAULT_PASSPHRASE"; do
-            echo "::add-mask::${masked}"
+          for masked in "$EDGE_TOKEN" "$RUNTIME_TOKEN" "$ACCESS_SECRET" "$MODEL_TOKEN" "$VAULT_PASSPHRASE" "${ALICE_USER_TEST_LINK_TOKEN:-}"; do
+            if [ -n "$masked" ]; then
+              echo "::add-mask::${masked}"
+            fi
           done
 
           mkdir -p "$PROJECT_DIR/src"
@@ -211,6 +237,7 @@ jobs:
             BRINGUP_EDGE_TOKEN: string;
             BRINGUP_MODEL_TOKEN: string;
             BRINGUP_RUNTIME_TOKEN: string;
+            BRINGUP_USER_TEST_TOKEN?: string;
             BRINGUP_VAULT_PASSPHRASE: string;
             BRINGUP_WORKER_ORIGIN: string;
           };
@@ -298,6 +325,109 @@ jobs:
             return value.startsWith("Bearer ") ? value.slice(7) : "";
           }
 
+          function userTestPage(env: AliceEnv) {
+            if (!env.BRINGUP_USER_TEST_TOKEN) {
+              return new Response("not found", { status: 404 });
+            }
+            const nonce = crypto.randomUUID();
+            const body = `<!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>Alice Cloudflare canary</title>
+            <style nonce="${nonce}">
+              :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+              body { margin: 0; background: #080a0f; color: #f5f7ff; }
+              main { width: min(760px, calc(100% - 32px)); margin: 48px auto; }
+              h1 { font-size: 24px; margin: 0 0 8px; }
+              .note { color: #9da7bf; margin: 0 0 24px; }
+              #transcript { min-height: 280px; border: 1px solid #293047; border-radius: 12px; padding: 16px; background: #0e121c; white-space: pre-wrap; }
+              .turn { margin: 0 0 16px; }
+              .role { color: #72e6b1; font-weight: 700; }
+              form { display: flex; gap: 10px; margin-top: 14px; }
+              input { flex: 1; min-width: 0; border: 1px solid #39425d; border-radius: 10px; padding: 12px; background: #111625; color: inherit; }
+              button { border: 0; border-radius: 10px; padding: 0 18px; background: #72e6b1; color: #07120d; font-weight: 700; cursor: pointer; }
+              button:disabled { opacity: .5; cursor: wait; }
+            </style>
+          </head>
+          <body>
+            <main>
+              <h1>Alice</h1>
+              <p class="note">Temporary Cloudflare canary · proposer-only · actions and tools disabled</p>
+              <div id="transcript" aria-live="polite"></div>
+              <form id="chat-form">
+                <input id="prompt" name="prompt" autocomplete="off" placeholder="Message Alice" required>
+                <button type="submit">Send</button>
+              </form>
+            </main>
+            <script nonce="${nonce}">
+              const capability = window.location.hash.slice(1);
+              history.replaceState(null, "", window.location.pathname);
+              const transcript = document.getElementById("transcript");
+              const form = document.getElementById("chat-form");
+              const prompt = document.getElementById("prompt");
+              const button = form.querySelector("button");
+              const messages = [];
+              function append(role, content) {
+                const turn = document.createElement("div");
+                turn.className = "turn";
+                const label = document.createElement("span");
+                label.className = "role";
+                label.textContent = role + ": ";
+                const text = document.createElement("span");
+                text.textContent = content;
+                turn.append(label, text);
+                transcript.append(turn);
+              }
+              if (!/^[A-Za-z0-9_-]{43,128}$/.test(capability)) {
+                append("System", "This test link is incomplete or expired.");
+                form.hidden = true;
+              }
+              form.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const content = prompt.value.trim();
+                if (!content) return;
+                messages.push({ role: "user", content });
+                append("You", content);
+                prompt.value = "";
+                button.disabled = true;
+                try {
+                  const response = await fetch("/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                      "content-type": "application/json",
+                      "x-alice-user-test-token": capability,
+                    },
+                    body: JSON.stringify({ model: "alice-cloudflare-bringup", messages }),
+                  });
+                  if (!response.ok) throw new Error("HTTP " + response.status);
+                  const payload = await response.json();
+                  const reply = payload?.choices?.[0]?.message?.content;
+                  if (typeof reply !== "string" || !reply.trim()) throw new Error("Empty response");
+                  messages.push({ role: "assistant", content: reply });
+                  append("Alice", reply);
+                } catch (error) {
+                  append("System", "Request failed: " + (error instanceof Error ? error.message : "unknown error"));
+                } finally {
+                  button.disabled = false;
+                  prompt.focus();
+                }
+              });
+            </script>
+          </body>
+          </html>`;
+            return new Response(body, {
+              headers: {
+                "cache-control": "no-store",
+                "content-type": "text/html; charset=utf-8",
+                "content-security-policy": `default-src 'none'; base-uri 'none'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'`,
+                "referrer-policy": "no-referrer",
+                "x-content-type-options": "nosniff",
+              },
+            });
+          }
+
           async function modelResponse(request: Request, env: AliceEnv) {
             if (bearer(request) !== env.BRINGUP_MODEL_TOKEN) return new Response("not found", { status: 404 });
             let body: Record<string, unknown>;
@@ -346,12 +476,21 @@ jobs:
           export default {
             async fetch(request: Request, env: AliceEnv) {
               const pathname = new URL(request.url).pathname;
+              if (pathname === "/" && request.method === "GET") return userTestPage(env);
               if (pathname.startsWith("/internal-model/v1/")) return modelResponse(request, env);
-              if (request.headers.get("x-alice-bringup-token") !== env.BRINGUP_EDGE_TOKEN) {
+              const userTestAuthorized =
+                pathname === "/v1/chat/completions" &&
+                request.method === "POST" &&
+                typeof env.BRINGUP_USER_TEST_TOKEN === "string" &&
+                request.headers.get("x-alice-user-test-token") === env.BRINGUP_USER_TEST_TOKEN;
+              const automatedCanaryAuthorized =
+                request.headers.get("x-alice-bringup-token") === env.BRINGUP_EDGE_TOKEN;
+              if (!userTestAuthorized && !automatedCanaryAuthorized) {
                 return new Response("not found", { status: 404 });
               }
               const headers = new Headers(request.headers);
               headers.delete("x-alice-bringup-token");
+              headers.delete("x-alice-user-test-token");
               headers.set("authorization", `Bearer ${env.BRINGUP_RUNTIME_TOKEN}`);
               headers.set("cf-access-authenticated-user-email", "alice-owner-verified.invalid");
               headers.set("x-milady-cloudflare-access-secret", env.BRINGUP_ACCESS_SECRET);
@@ -431,13 +570,31 @@ jobs:
           echo "CONTAINER_DEPLOY_START worker=${WORKER_NAME} app=${APP_NAME} max_instances=1"
           npx wrangler deploy --containers-rollout=immediate | tee /tmp/alice-worker-deploy.log
           CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          EXPIRES_AT="$(date -u -d '+30 minutes' +%Y-%m-%dT%H:%M:%SZ)"
-          echo "CONTAINER_CREATED worker=${WORKER_NAME} url=${WORKER_URL} created=${CREATED_AT} expires=${EXPIRES_AT}"
+          ABSOLUTE_EXPIRY_MINUTES=30
+          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
+            ABSOLUTE_EXPIRY_MINUTES=85
+          fi
+          ABSOLUTE_EXPIRES_AT="$(date -u -d "+${ABSOLUTE_EXPIRY_MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)"
+          EXPIRES_AT="$ABSOLUTE_EXPIRES_AT"
+          echo "CONTAINER_CREATED worker=${WORKER_NAME} url=${WORKER_URL} created=${CREATED_AT} absolute_expires=${ABSOLUTE_EXPIRES_AT}"
 
-          printf '{"BRINGUP_ACCESS_SECRET":"%s","BRINGUP_EDGE_TOKEN":"%s","BRINGUP_MODEL_TOKEN":"%s","BRINGUP_RUNTIME_TOKEN":"%s","BRINGUP_VAULT_PASSPHRASE":"%s"}' \
-            "$ACCESS_SECRET" "$EDGE_TOKEN" "$MODEL_TOKEN" "$RUNTIME_TOKEN" "$VAULT_PASSPHRASE" \
-            | npx wrangler secret bulk --name "$WORKER_NAME" >/tmp/alice-secret-bulk.log
-          echo "WORKER_SECRET_BINDINGS_GREEN count=5"
+          secret_payload="$(jq -cn \
+            --arg access "$ACCESS_SECRET" \
+            --arg edge "$EDGE_TOKEN" \
+            --arg model "$MODEL_TOKEN" \
+            --arg runtime "$RUNTIME_TOKEN" \
+            --arg vault "$VAULT_PASSPHRASE" \
+            '{BRINGUP_ACCESS_SECRET:$access,BRINGUP_EDGE_TOKEN:$edge,BRINGUP_MODEL_TOKEN:$model,BRINGUP_RUNTIME_TOKEN:$runtime,BRINGUP_VAULT_PASSPHRASE:$vault}')"
+          secret_count=5
+          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
+            secret_payload="$(printf '%s' "$secret_payload" | jq -c \
+              --arg token "$ALICE_USER_TEST_LINK_TOKEN" \
+              '. + {BRINGUP_USER_TEST_TOKEN:$token}')"
+            secret_count=6
+          fi
+          printf '%s' "$secret_payload" | npx wrangler secret bulk --name "$WORKER_NAME" >/tmp/alice-secret-bulk.log
+          unset secret_payload
+          echo "WORKER_SECRET_BINDINGS_GREEN count=${secret_count}"
 
           apps_json="$(list_all_container_apps)"
           app_id="$(printf '%s' "$apps_json" | jq -r --arg name "$APP_NAME" '[.[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
@@ -519,9 +676,45 @@ jobs:
             echo "OBSERVABILITY_EMPTY" >&2
           fi
 
-          cleanup
-          CLEANUP_COMPLETE=1
-          trap - EXIT INT TERM
+          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
+            if [ -n "$TAIL_PID" ]; then
+              kill "$TAIL_PID" >/dev/null 2>&1 || true
+              wait "$TAIL_PID" >/dev/null 2>&1 || true
+              TAIL_PID=""
+            fi
+            /bin/rm -f /tmp/alice-*.log /tmp/alice-*.err /tmp/alice-health.json /tmp/alice-chat.json
+            LINK_READY_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            EXPIRES_AT="$(date -u -d '+60 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+            if [ "$(date -u -d "$EXPIRES_AT" +%s)" -gt "$(date -u -d "$ABSOLUTE_EXPIRES_AT" +%s)" ]; then
+              echo "USER_TEST_ABSOLUTE_EXPIRY_INVALID" >&2
+              exit 1
+            fi
+            echo "USER_TEST_LINK_READY url=${WORKER_URL} expires=${EXPIRES_AT}"
+            expiry_epoch="$(date -u -d "$EXPIRES_AT" +%s)"
+            while true; do
+              now_epoch="$(date +%s)"
+              if [ "$now_epoch" -ge "$expiry_epoch" ]; then
+                break
+              fi
+              remaining_seconds="$((expiry_epoch - now_epoch))"
+              sleep_seconds=30
+              if [ "$remaining_seconds" -lt "$sleep_seconds" ]; then
+                sleep_seconds="$remaining_seconds"
+              fi
+              echo "USER_TEST_WINDOW_CHECKPOINT remaining_seconds=${remaining_seconds}"
+              sleep "$sleep_seconds"
+            done
+            echo "USER_TEST_WINDOW_EXPIRED expires=${EXPIRES_AT}"
+            cleanup
+            CLEANUP_COMPLETE=1
+            trap - EXIT INT TERM
+            teardown_summary="Primary expiry owner proved Worker, Container, and registry tag absent at ${EXPIRES_AT}"
+          else
+            cleanup
+            CLEANUP_COMPLETE=1
+            trap - EXIT INT TERM
+            teardown_summary="Worker absent; Container absent; registry tag absent"
+          fi
 
           {
             echo "- GitHub run: ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
@@ -532,17 +725,19 @@ jobs:
             echo "- Conversation model: ${chat_model}"
             echo "- Conversation response: ${chat_content}"
             echo "- Conversation boundary: proposer-only; actions/tools disabled"
-            echo "- Teardown: Worker absent; Container absent; registry tag absent"
+            echo "- Teardown: ${teardown_summary}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   failsafe:
     name: Independent expiry and teardown guard
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     environment: alice-cloudflare-bringup
     env:
       CLOUDFLARE_ACCOUNT_ID: "036df6c823669b8fa2f66cf4c16eeb29"
       WRANGLER_VERSION: 4.122.0
+      USER_TEST_WINDOW_MINUTES: ${{ inputs.user_test_window_minutes }}
     steps:
       - name: Enforce independent 30-minute expiry and absence
         shell: bash
@@ -665,43 +860,87 @@ jobs:
             return "$cleanup_rc"
           )
 
+          FAILSAFE_CLEANUP_COMPLETE=0
+          failsafe_cleanup_once() {
+            if [ "$FAILSAFE_CLEANUP_COMPLETE" = "1" ]; then
+              return 0
+            fi
+            if cleanup_exact_resources; then
+              FAILSAFE_CLEANUP_COMPLETE=1
+              return 0
+            fi
+            return 1
+          }
+          failsafe_on_exit() {
+            local original_rc=$?
+            trap - EXIT INT TERM
+            if [ "$FAILSAFE_CLEANUP_COMPLETE" != "1" ]; then
+              failsafe_cleanup_once || true
+            fi
+            exit "$original_rc"
+          }
+          trap failsafe_on_exit EXIT INT TERM
+
           first_seen_epoch=""
           deadline_epoch=""
+          expiry_seconds=1800
+          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
+            expiry_seconds=5100
+          fi
           while true; do
             now_epoch="$(date +%s)"
             worker_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
               --max-time 5 \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/settings" || true)"
-            if ! primary_state="$(gh api \
+            if ! primary_snapshot="$(gh api \
               "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
-              --jq '[.jobs[] | select(.name == "Import, converse, and tear down")] | if length == 1 then .[0].status else "unknown" end')"; then
-              primary_state="unknown"
+              --jq '[.jobs[] | select(.name == "Import, converse, and tear down")] | if length == 1 then {status:.[0].status,conclusion:(.[0].conclusion // "")} else {status:"unknown",conclusion:""} end')"; then
+              primary_snapshot='{"status":"unknown","conclusion":""}'
               echo "FAILSAFE_GITHUB_READ_TRANSIENT"
             fi
+            primary_state="$(printf '%s' "$primary_snapshot" | jq -r '.status')"
+            primary_conclusion="$(printf '%s' "$primary_snapshot" | jq -r '.conclusion')"
 
             if [ -z "$first_seen_epoch" ] && [ "$worker_status" = "200" ]; then
               first_seen_epoch="$now_epoch"
-              deadline_epoch="$((now_epoch + 1800))"
+              deadline_epoch="$((now_epoch + expiry_seconds))"
               echo "FAILSAFE_ARMED first_seen_epoch=${first_seen_epoch} deadline_epoch=${deadline_epoch}"
             fi
 
-            if [ "$primary_state" = "completed" ]; then
+            case "$primary_conclusion" in
+              failure|cancelled|timed_out|action_required|stale|skipped)
+                echo "FAILSAFE_PRIMARY_UNSAFE conclusion=${primary_conclusion}"
+                failsafe_cleanup_once
+                trap - EXIT INT TERM
+                exit 0
+                ;;
+            esac
+            if [ "$primary_state" = "completed" ] && [ "$primary_conclusion" != "success" ]; then
+              echo "FAILSAFE_PRIMARY_UNSAFE conclusion=unknown"
+              failsafe_cleanup_once
+              trap - EXIT INT TERM
+              exit 0
+            fi
+            if [ "$primary_state" = "completed" ] && [ "$USER_TEST_WINDOW_MINUTES" != "60" ]; then
               echo "FAILSAFE_PRIMARY_TERMINAL"
-              cleanup_exact_resources
+              failsafe_cleanup_once
+              trap - EXIT INT TERM
               exit 0
             fi
             if [ -n "$first_seen_epoch" ] && [ "$worker_status" = "404" ]; then
               echo "FAILSAFE_PRIMARY_TEARDOWN_OBSERVED"
-              cleanup_exact_resources
+              failsafe_cleanup_once
+              trap - EXIT INT TERM
               exit 0
             fi
             if [ -n "$deadline_epoch" ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
               echo "FAILSAFE_EXPIRY_REACHED"
-              cleanup_exact_resources
+              failsafe_cleanup_once
+              trap - EXIT INT TERM
               exit 0
             fi
 
-            echo "FAILSAFE_CHECKPOINT worker_http=${worker_status} primary_status=${primary_state} now_epoch=${now_epoch}"
+            echo "FAILSAFE_CHECKPOINT worker_http=${worker_status} primary_status=${primary_state} primary_conclusion=${primary_conclusion:-none} now_epoch=${now_epoch}"
             sleep 15
           done
