@@ -1,0 +1,679 @@
+name: Alice Cloudflare Container Bring-up
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: alice-cloudflare-container-bringup
+  cancel-in-progress: false
+
+jobs:
+  bringup:
+    name: Import, converse, and tear down
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: alice-cloudflare-bringup
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "036df6c823669b8fa2f66cf4c16eeb29"
+      SOURCE_IMAGE: ghcr.io/rndrntwrk/milaidy-agent@sha256:983041c9d8691bcebda35872f07e8a8d43912fb8594e84f3af5d04d25cc165e2
+      SOURCE_DIGEST: sha256:983041c9d8691bcebda35872f07e8a8d43912fb8594e84f3af5d04d25cc165e2
+      SOURCE_COMMIT: 91db832dbb423e360c0be5771fedcebcbbded8e7
+      ELIZA_COMMIT: a21d401bf7429bc8c794698b20832512b5315187
+      RUNTIME_BUILD_MANIFEST_SHA256: sha256:9605b9b42263f02585a2cc2db41cf0b854555d19e1193d413d22aa5c4270aaeb
+      WORKERS_SUBDOMAIN: gl4sspr1sm
+      WRANGLER_VERSION: 4.122.0
+      CONTAINERS_PACKAGE_VERSION: 0.3.7
+    steps:
+      - name: Record bounded staging contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "### Alice Cloudflare Container bring-up contract"
+            echo "- Owner: Alice Cloudflare bring-up operator"
+            echo "- Provider/account: Cloudflare / ${CLOUDFLARE_ACCOUNT_ID}"
+            echo "- Source: ${SOURCE_IMAGE}"
+            echo "- Surface: one uniquely named workers.dev Worker and one Container application"
+            echo "- Capacity: standard-4, max_instances=1, sleepAfter=5m, SSH disabled"
+            echo "- Routes: workers.dev only; no custom route or domain"
+            echo "- Hard expiry: 30 minutes after Worker/Container creation"
+            echo "- Teardown: delete Worker, remaining Container application, and unique registry image tag"
+            echo "- Completion evidence: live health, one conversational response, singleton instance readback, then Worker/Container/image absence"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Import exact image, run live conversation, and prove teardown
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_CONTAINER_BRINGUP_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid immutable source digest" >&2
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "CLOUDFLARE_CONTAINER_BRINGUP_TOKEN is not configured" >&2
+            exit 1
+          fi
+
+          WORKER_NAME="alice-cf-bringup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          APP_NAME="${WORKER_NAME}-app"
+          CF_IMAGE="${WORKER_NAME}"
+          CF_TAG="ghcr-${SOURCE_DIGEST#sha256:}"
+          CF_IMAGE_TAG="${CF_IMAGE}:${CF_TAG}"
+          CF_IMAGE_REF="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/${CF_IMAGE_TAG}"
+          WORKER_HOST="${WORKER_NAME}.${WORKERS_SUBDOMAIN}.workers.dev"
+          WORKER_URL="https://${WORKER_HOST}"
+          PROJECT_DIR="${RUNNER_TEMP}/alice-cloudflare-container-bringup"
+          TAIL_LOG="${RUNNER_TEMP}/alice-cloudflare-container-tail.log"
+          CLEANUP_COMPLETE=0
+          TAIL_PID=""
+
+          EDGE_TOKEN="$(openssl rand -hex 32)"
+          RUNTIME_TOKEN="$(openssl rand -hex 32)"
+          ACCESS_SECRET="$(openssl rand -hex 32)"
+          MODEL_TOKEN="$(openssl rand -hex 32)"
+          VAULT_PASSPHRASE="$(openssl rand -hex 32)"
+          for masked in "$EDGE_TOKEN" "$RUNTIME_TOKEN" "$ACCESS_SECRET" "$MODEL_TOKEN" "$VAULT_PASSPHRASE"; do
+            echo "::add-mask::${masked}"
+          done
+
+          mkdir -p "$PROJECT_DIR/src"
+          cd "$PROJECT_DIR"
+          npm init --yes >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund \
+            "@cloudflare/containers@${CONTAINERS_PACKAGE_VERSION}" \
+            "wrangler@${WRANGLER_VERSION}"
+
+          list_all_container_apps() (
+            set -euo pipefail
+            local all_apps='[]'
+            local page_token=''
+            local previous_page_token=''
+            local response_file="${RUNNER_TEMP}/alice-container-apps-${BASHPID}.json"
+            trap '/bin/rm -f "$response_file"' EXIT
+
+            for page in $(seq 1 20); do
+              curl_args=(
+                --silent --show-error --max-time 5
+                --output "$response_file" --write-out '%{http_code}'
+                --get
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+                --data-urlencode 'per_page=1000'
+              )
+              if [ -n "$page_token" ]; then
+                curl_args+=(--data-urlencode "page_token=${page_token}")
+              fi
+              http_status="$(curl "${curl_args[@]}" \
+                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/containers/dash/applications")"
+              if [ "$http_status" != "200" ] || ! jq -e \
+                '.success == true and (.result | type == "array") and ((.result_info // {}) | type == "object")' \
+                "$response_file" >/dev/null; then
+                echo "CONTAINER_INVENTORY_INVALID page=${page} http=${http_status}" >&2
+                return 1
+              fi
+              page_apps="$(jq -c '.result' "$response_file")"
+              all_apps="$(jq -cn --argjson prior "$all_apps" --argjson page "$page_apps" '$prior + $page')"
+              previous_page_token="$page_token"
+              page_token="$(jq -r '.result_info.next_page_token // empty' "$response_file")"
+              if [ -z "$page_token" ]; then
+                printf '%s\n' "$all_apps"
+                return 0
+              fi
+              if [ "$page_token" = "$previous_page_token" ]; then
+                echo "CONTAINER_INVENTORY_PAGINATION_INVALID page=${page}" >&2
+                return 1
+              fi
+            done
+            echo "CONTAINER_INVENTORY_PAGE_LIMIT" >&2
+            return 1
+          )
+
+          cleanup() (
+            local cleanup_rc=0
+            set +e
+            if [ -n "$TAIL_PID" ]; then
+              kill "$TAIL_PID" >/dev/null 2>&1 || true
+              wait "$TAIL_PID" >/dev/null 2>&1 || true
+            fi
+
+            echo "TEARDOWN_START worker=${WORKER_NAME} app=${APP_NAME} image=${CF_IMAGE_TAG}"
+            npx wrangler delete "$WORKER_NAME" --force >/tmp/alice-worker-delete.log 2>&1 || true
+
+            for _attempt in $(seq 1 18); do
+              apps_json="$(list_all_container_apps 2>/tmp/alice-container-list.err)" || {
+                cat /tmp/alice-container-list.err >&2
+                cleanup_rc=1
+                apps_json='[]'
+                break
+              }
+              app_id="$(printf '%s' "$apps_json" | jq -r --arg name "$APP_NAME" '[.[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
+              if [ -z "$app_id" ]; then
+                break
+              fi
+              npx wrangler containers delete "$app_id" >/tmp/alice-container-delete.log 2>&1 || true
+              sleep 5
+            done
+
+            npx wrangler containers images delete "$CF_IMAGE_TAG" --skip-confirmation >/tmp/alice-image-delete.log 2>&1 || true
+
+            worker_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/settings" || true)"
+            final_apps="$(list_all_container_apps 2>/tmp/alice-final-container-list.err)" || {
+              cat /tmp/alice-final-container-list.err >&2
+              cleanup_rc=1
+              final_apps='[]'
+            }
+            final_images="$(npx wrangler containers images list --filter "^(${CLOUDFLARE_ACCOUNT_ID}/)?${CF_IMAGE}$" --json 2>/tmp/alice-final-image-list.err)" || {
+              cat /tmp/alice-final-image-list.err >&2
+              cleanup_rc=1
+              final_images='[]'
+            }
+            remaining_apps="$(printf '%s' "$final_apps" | jq --arg name "$APP_NAME" '[.[] | select(.name == $name)] | length')"
+            remaining_tags="$(printf '%s' "$final_images" | jq --arg name "$CF_IMAGE" --arg tag "$CF_TAG" '[.[] | select(.name == $name and (.tags | index($tag)))] | length')"
+
+            if [ "$worker_status" != "404" ] || [ "$remaining_apps" != "0" ] || [ "$remaining_tags" != "0" ]; then
+              echo "TEARDOWN_INVALID worker_http=${worker_status} remaining_apps=${remaining_apps} remaining_tags=${remaining_tags}" >&2
+              cleanup_rc=1
+            else
+              echo "TEARDOWN_GREEN worker_http=404 remaining_apps=0 remaining_tags=0"
+            fi
+            /bin/rm -rf "$PROJECT_DIR"
+            /bin/rm -f /tmp/alice-*.log /tmp/alice-*.err /tmp/alice-health.json /tmp/alice-chat.json
+            return "$cleanup_rc"
+          )
+
+          on_exit() {
+            local original_rc=$?
+            if [ "$CLEANUP_COMPLETE" != "1" ]; then
+              cleanup || true
+            fi
+            exit "$original_rc"
+          }
+          trap on_exit EXIT INT TERM
+
+          cat > src/index.ts <<'EOF'
+          import { Container } from "@cloudflare/containers";
+          import { env as cfEnv } from "cloudflare:workers";
+
+          type AliceEnv = {
+            AI: Ai;
+            ALICE_CONTAINER: DurableObjectNamespace<AliceBringupContainer>;
+            BRINGUP_ACCESS_SECRET: string;
+            BRINGUP_EDGE_TOKEN: string;
+            BRINGUP_MODEL_TOKEN: string;
+            BRINGUP_RUNTIME_TOKEN: string;
+            BRINGUP_VAULT_PASSPHRASE: string;
+            BRINGUP_WORKER_ORIGIN: string;
+          };
+
+          const sourceImage = "ghcr.io/rndrntwrk/milaidy-agent@sha256:983041c9d8691bcebda35872f07e8a8d43912fb8594e84f3af5d04d25cc165e2";
+
+          export class AliceBringupContainer extends Container {
+            defaultPort = 2138;
+            sleepAfter = "5m";
+            enableInternet = true;
+            envVars = {
+              NODE_ENV: "production",
+              PORT: "2138",
+              APP_PORT: "2138",
+              APP_API_BIND: "0.0.0.0",
+              MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+              ELIZA_AUTH_DISABLED: "0",
+              MILADY_API_TOKEN: cfEnv.BRINGUP_RUNTIME_TOKEN,
+              MILADY_TRUST_CLOUDFLARE_ACCESS: "1",
+              MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: cfEnv.BRINGUP_ACCESS_SECRET,
+              ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+              ENABLE_AUTONOMY: "false",
+              ELIZA_TRIGGERS_ENABLED: "false",
+              MILADY_ALLOWED_ORIGINS: cfEnv.BRINGUP_WORKER_ORIGIN,
+              ELIZA_ALLOWED_ORIGINS: cfEnv.BRINGUP_WORKER_ORIGIN,
+              OPENAI_API_KEY: cfEnv.BRINGUP_MODEL_TOKEN,
+              OPENAI_BASE_URL: `${cfEnv.BRINGUP_WORKER_ORIGIN}/internal-model/v1`,
+              OPENAI_EMBEDDING_URL: `${cfEnv.BRINGUP_WORKER_ORIGIN}/internal-model/v1`,
+              ELIZA_VAULT_PASSPHRASE: cfEnv.BRINGUP_VAULT_PASSPHRASE,
+              ALICE_PROGRAM_DIGEST: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              ALICE_RELEASE_DIGEST: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              ALICE_POLICY_HASH: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              ALICE_SOURCE_COMMIT: "91db832dbb423e360c0be5771fedcebcbbded8e7",
+              ALICE_DEPLOYMENT_CONTROLLER_COMMIT: "91db832dbb423e360c0be5771fedcebcbbded8e7",
+              ALICE_RUNTIME_IMAGE: sourceImage,
+              ALICE_RUNTIME_BUILD_MANIFEST_SHA256: "sha256:9605b9b42263f02585a2cc2db41cf0b854555d19e1193d413d22aa5c4270aaeb",
+              ALICE_DEPLOYMENT_MANIFEST_SHA256: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+              ALICE_ELIZA_COMMIT: "a21d401bf7429bc8c794698b20832512b5315187",
+              ALICE_MODAL_REVISION: "49",
+              ELIZA_SKIP_PLUGINS: "@rndrntwrk/plugin-555stream,@miladyai/agent/plugins/five55-games,@elizaos/plugin-evm,@elizaos/plugin-solana,@elizaos/plugin-wallet,@stwd/eliza-plugin,@elizaos/plugin-x402,@elizaos/plugin-agent-orchestrator,@elizaos/plugin-agent-skills,@elizaos/plugin-commands,@elizaos/plugin-shell,@elizaos/plugin-code,@elizaos/plugin-cua,@elizaos/plugin-computeruse,@elizaos/plugin-browser,@miladyai/plugin-milady-browser,@miladyai/plugin-lifeops-browser,@elizaos/plugin-repoprompt,@elizaos/plugin-claude-code-workbench,@elizaos/plugin-twitter,@elizaos/plugin-discord,@miladyai/plugin-discord-local,@elizaos/plugin-telegram,@elizaos-plugins/client-telegram-account,@elizaos/plugin-whatsapp,@elizaos/plugin-signal,@elizaos/plugin-imessage,@elizaos/plugin-farcaster,@elizaos/plugin-lens,@elizaos/plugin-slack,@elizaos/plugin-twitch,@elizaos/plugin-streaming-base,@elizaos/plugin-twitch-streaming,@elizaos/plugin-youtube-streaming,@elizaos/plugin-custom-rtmp,@elizaos/plugin-pumpfun-streaming,@elizaos/plugin-x-streaming,@elizaos/plugin-webhooks,@elizaos/plugin-gmail-watch",
+            };
+
+            override onStart() {
+              console.log("ALICE_TEMP_CONTAINER_STARTED");
+            }
+
+            override onStop() {
+              console.log("ALICE_TEMP_CONTAINER_STOPPED");
+            }
+
+            override onError() {
+              console.error("ALICE_TEMP_CONTAINER_ERROR");
+            }
+          }
+
+          function json(body: unknown, status = 200) {
+            return Response.json(body, { status, headers: { "cache-control": "no-store" } });
+          }
+
+          function bearer(request: Request) {
+            const value = request.headers.get("authorization") ?? "";
+            return value.startsWith("Bearer ") ? value.slice(7) : "";
+          }
+
+          async function modelResponse(request: Request, env: AliceEnv) {
+            if (bearer(request) !== env.BRINGUP_MODEL_TOKEN) return new Response("not found", { status: 404 });
+            let body: Record<string, unknown>;
+            try {
+              body = await request.json<Record<string, unknown>>();
+            } catch {
+              return json({ error: "invalid_request" }, 400);
+            }
+            const pathname = new URL(request.url).pathname;
+            if (pathname.endsWith("/embeddings")) {
+              const input = Array.isArray(body.input) ? body.input : [body.input];
+              return json({
+                object: "list",
+                model: typeof body.model === "string" ? body.model : "alice-cloudflare-embedding",
+                data: input.map((_value, index) => ({ object: "embedding", index, embedding: Array(1024).fill(0) })),
+                usage: { prompt_tokens: 0, total_tokens: 0 },
+              });
+            }
+            if (!pathname.endsWith("/chat/completions") || body.stream === true || body.tools !== undefined) {
+              return json({ error: "unsupported_request" }, 400);
+            }
+            const messages = Array.isArray(body.messages) ? body.messages : [];
+            const prompt = messages
+              .map((message) => {
+                const record = message as Record<string, unknown>;
+                return `${String(record.role ?? "user")}: ${String(record.content ?? "")}`;
+              })
+              .join("\n");
+            const inference = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+              prompt,
+              max_tokens: 128,
+              temperature: 0.2,
+            }) as { response?: string };
+            const content = typeof inference.response === "string" ? inference.response.trim() : "";
+            if (!content) return json({ error: "empty_model_response" }, 502);
+            return json({
+              id: "chatcmpl-alice-cloudflare-bringup",
+              object: "chat.completion",
+              created: Math.floor(Date.now() / 1000),
+              model: "@cf/meta/llama-3.1-8b-instruct-fast",
+              choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+              usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+            });
+          }
+
+          export default {
+            async fetch(request: Request, env: AliceEnv) {
+              const pathname = new URL(request.url).pathname;
+              if (pathname.startsWith("/internal-model/v1/")) return modelResponse(request, env);
+              if (request.headers.get("x-alice-bringup-token") !== env.BRINGUP_EDGE_TOKEN) {
+                return new Response("not found", { status: 404 });
+              }
+              const headers = new Headers(request.headers);
+              headers.delete("x-alice-bringup-token");
+              headers.set("authorization", `Bearer ${env.BRINGUP_RUNTIME_TOKEN}`);
+              headers.set("cf-access-authenticated-user-email", "alice-owner-verified.invalid");
+              headers.set("x-milady-cloudflare-access-secret", env.BRINGUP_ACCESS_SECRET);
+              headers.set("origin", env.BRINGUP_WORKER_ORIGIN);
+              return env.ALICE_CONTAINER.getByName("singleton").fetch(new Request(request, { headers }));
+            },
+          };
+          EOF
+
+          WORKER_NAME="$WORKER_NAME" APP_NAME="$APP_NAME" CF_IMAGE_REF="$CF_IMAGE_REF" \
+          WORKER_URL="$WORKER_URL" \
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = {
+            $schema: "./node_modules/wrangler/config-schema.json",
+            name: process.env.WORKER_NAME,
+            main: "src/index.ts",
+            compatibility_date: "2026-08-27",
+            compatibility_flags: ["nodejs_compat"],
+            workers_dev: true,
+            preview_urls: false,
+            observability: { enabled: true, head_sampling_rate: 1 },
+            ai: { binding: "AI" },
+            vars: {
+              BRINGUP_WORKER_ORIGIN: process.env.WORKER_URL,
+            },
+            containers: [{
+              name: process.env.APP_NAME,
+              class_name: "AliceBringupContainer",
+              image: process.env.CF_IMAGE_REF,
+              instance_type: "standard-4",
+              max_instances: 1,
+              rollout_step_percentage: 100,
+              ssh: { enabled: false },
+            }],
+            durable_objects: {
+              bindings: [{ name: "ALICE_CONTAINER", class_name: "AliceBringupContainer" }],
+            },
+            migrations: [{ tag: "v1", new_sqlite_classes: ["AliceBringupContainer"] }],
+          };
+          fs.writeFileSync("wrangler.jsonc", `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+          NODE
+
+          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/alice-bringup-dry-run" >/tmp/alice-bringup-dry-run.log
+
+          echo "IMPORT_START source=${SOURCE_IMAGE}"
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull --platform linux/amd64 "$SOURCE_IMAGE"
+          pulled_platform="$(docker image inspect "$SOURCE_IMAGE" --format '{{.Os}}/{{.Architecture}}')"
+          pulled_revision="$(docker image inspect "$SOURCE_IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+          pulled_repo_digests="$(docker image inspect "$SOURCE_IMAGE" --format '{{json .RepoDigests}}')"
+          if [ "$pulled_platform" != "linux/amd64" ] || [ "$pulled_revision" != "$SOURCE_COMMIT" ]; then
+            echo "SOURCE_IMAGE_INVALID platform=${pulled_platform} revision=${pulled_revision}" >&2
+            exit 1
+          fi
+          if ! printf '%s' "$pulled_repo_digests" | jq -e --arg image "$SOURCE_IMAGE" 'index($image) != null' >/dev/null; then
+            echo "SOURCE_DIGEST_INVALID" >&2
+            exit 1
+          fi
+
+          docker tag "$SOURCE_IMAGE" "$CF_IMAGE_TAG"
+          echo "IMPORT_PUSH_START local=${CF_IMAGE_TAG}"
+          npx wrangler containers push "$CF_IMAGE_TAG" | tee /tmp/alice-container-push.log
+          cf_repo_digests="$(docker image inspect "$CF_IMAGE_REF" --format '{{json .RepoDigests}}')"
+          cf_registry_digest="$(printf '%s' "$cf_repo_digests" | jq -r --arg prefix "registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/${CF_IMAGE}@" '[.[] | select(startswith($prefix))] | if length == 1 then .[0] else empty end')"
+          if ! [[ "$cf_registry_digest" =~ ^registry\.cloudflare\.com/${CLOUDFLARE_ACCOUNT_ID}/${CF_IMAGE}@sha256:[0-9a-f]{64}$ ]]; then
+            echo "CLOUDFLARE_REGISTRY_IDENTITY_INVALID" >&2
+            exit 1
+          fi
+          image_inventory="$(npx wrangler containers images list --filter "^(${CLOUDFLARE_ACCOUNT_ID}/)?${CF_IMAGE}$" --json)"
+          if [ "$(printf '%s' "$image_inventory" | jq --arg name "$CF_IMAGE" --arg tag "$CF_TAG" '[.[] | select(.name == $name and (.tags | index($tag)))] | length')" != "1" ]; then
+            echo "CLOUDFLARE_REGISTRY_READBACK_INVALID" >&2
+            exit 1
+          fi
+          echo "IMPORT_GREEN source=${SOURCE_IMAGE} cloudflare=${cf_registry_digest} tag=${CF_IMAGE_REF}"
+
+          echo "CONTAINER_DEPLOY_START worker=${WORKER_NAME} app=${APP_NAME} max_instances=1"
+          npx wrangler deploy --containers-rollout=immediate | tee /tmp/alice-worker-deploy.log
+          CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          EXPIRES_AT="$(date -u -d '+30 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+          echo "CONTAINER_CREATED worker=${WORKER_NAME} url=${WORKER_URL} created=${CREATED_AT} expires=${EXPIRES_AT}"
+
+          printf '{"BRINGUP_ACCESS_SECRET":"%s","BRINGUP_EDGE_TOKEN":"%s","BRINGUP_MODEL_TOKEN":"%s","BRINGUP_RUNTIME_TOKEN":"%s","BRINGUP_VAULT_PASSPHRASE":"%s"}' \
+            "$ACCESS_SECRET" "$EDGE_TOKEN" "$MODEL_TOKEN" "$RUNTIME_TOKEN" "$VAULT_PASSPHRASE" \
+            | npx wrangler secret bulk --name "$WORKER_NAME" >/tmp/alice-secret-bulk.log
+          echo "WORKER_SECRET_BINDINGS_GREEN count=5"
+
+          apps_json="$(list_all_container_apps)"
+          app_id="$(printf '%s' "$apps_json" | jq -r --arg name "$APP_NAME" '[.[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
+          if ! [[ "$app_id" =~ ^[0-9a-f-]{36}$ ]]; then
+            echo "CONTAINER_ID_INVALID" >&2
+            exit 1
+          fi
+          app_info="$(npx wrangler containers info "$app_id")"
+          echo "CONTAINER_IDENTITY id=${app_id} name=${APP_NAME}"
+          printf '%s\n' "$app_info"
+
+          timeout --signal=INT 1200s npx wrangler tail "$WORKER_NAME" --format json > "$TAIL_LOG" 2>&1 &
+          TAIL_PID=$!
+
+          health_status=""
+          for attempt in $(seq 1 90); do
+            health_status="$(curl --silent --show-error --output /tmp/alice-health.json --write-out '%{http_code}' \
+              --max-time 5 \
+              -H "x-alice-bringup-token: ${EDGE_TOKEN}" \
+              "${WORKER_URL}/health/live" || true)"
+            if [ "$health_status" = "200" ]; then
+              break
+            fi
+            if [ "$health_status" != "" ] && [ "$health_status" != "000" ] && [ "$health_status" != "502" ] && [ "$health_status" != "503" ] && [ "$health_status" != "504" ]; then
+              echo "CONTAINER_BOOT_HTTP_INVALID status=${health_status}" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          if [ "$health_status" != "200" ]; then
+            echo "CONTAINER_BOOT_TIMEOUT status=${health_status:-000}" >&2
+            exit 1
+          fi
+          echo "CONTAINER_BOOT_GREEN url=${WORKER_URL} health=200"
+
+          chat_status="$(curl --silent --show-error --output /tmp/alice-chat.json --write-out '%{http_code}' \
+            --max-time 180 \
+            -X POST \
+            -H "x-alice-bringup-token: ${EDGE_TOKEN}" \
+            -H 'content-type: application/json' \
+            --data '{"model":"alice-cloudflare-bringup","messages":[{"role":"user","content":"In one short sentence, confirm you are responding from the temporary Cloudflare Alice canary."}]}' \
+            "${WORKER_URL}/v1/chat/completions")"
+          if [ "$chat_status" != "200" ]; then
+            echo "CONVERSATION_HTTP_INVALID status=${chat_status}" >&2
+            exit 1
+          fi
+          chat_content_raw="$(jq -er '.choices[0].message.content | select(type == "string" and length > 0)' /tmp/alice-chat.json)"
+          chat_content="$(printf '%s' "$chat_content_raw" | tr '\r\n' '  ' | sed 's/::/: :/g' | cut -c1-400)"
+          if [ -z "$chat_content" ]; then
+            echo "CONVERSATION_CONTENT_INVALID" >&2
+            exit 1
+          fi
+          chat_boundary="$(jq -cer '.alice_boundary | select(.authorityMode == "proposer-only" and .actionExecution == "disabled" and .tools == "disabled")' /tmp/alice-chat.json)"
+          chat_model="$(jq -er '.model // "unknown"' /tmp/alice-chat.json)"
+          echo "CONVERSATION_GREEN status=200 model=${chat_model} boundary=${chat_boundary}"
+          echo "CONVERSATION_RESPONSE ${chat_content}"
+
+          instances_json="$(npx wrangler containers instances "$app_id" --json)"
+          instance_count="$(printf '%s' "$instances_json" | jq 'length')"
+          if [ "$instance_count" != "1" ]; then
+            echo "CONTAINER_CARDINALITY_INVALID count=${instance_count}" >&2
+            exit 1
+          fi
+          instance_id="$(printf '%s' "$instances_json" | jq -er '.[0].id')"
+          instance_state="$(printf '%s' "$instances_json" | jq -er '.[0].state')"
+          echo "CONTAINER_INSTANCE_GREEN id=${instance_id} state=${instance_state} count=1"
+
+          sleep 5
+          if [ -s "$TAIL_LOG" ]; then
+            tail_hash="sha256:$(sha256sum "$TAIL_LOG" | awk '{print $1}')"
+            echo "OBSERVABILITY_CAPTURED hash=${tail_hash}"
+            grep -E 'ALICE_TEMP_CONTAINER_STARTED|CONVERSATION|health/live|chat/completions' "$TAIL_LOG" | tail -20 || true
+          else
+            echo "OBSERVABILITY_EMPTY" >&2
+          fi
+
+          cleanup
+          CLEANUP_COMPLETE=1
+          trap - EXIT INT TERM
+
+          {
+            echo "- GitHub run: ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
+            echo "- Cloudflare registry image: ${cf_registry_digest}"
+            echo "- Temporary Worker URL: ${WORKER_URL}"
+            echo "- Container application: ${app_id}"
+            echo "- Live health: HTTP 200"
+            echo "- Conversation model: ${chat_model}"
+            echo "- Conversation response: ${chat_content}"
+            echo "- Conversation boundary: proposer-only; actions/tools disabled"
+            echo "- Teardown: Worker absent; Container absent; registry tag absent"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  failsafe:
+    name: Independent expiry and teardown guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: alice-cloudflare-bringup
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "036df6c823669b8fa2f66cf4c16eeb29"
+      WRANGLER_VERSION: 4.122.0
+    steps:
+      - name: Enforce independent 30-minute expiry and absence
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_CONTAINER_BRINGUP_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          WORKER_NAME="alice-cf-bringup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          APP_NAME="${WORKER_NAME}-app"
+          CF_IMAGE="${WORKER_NAME}"
+          CF_TAG="ghcr-983041c9d8691bcebda35872f07e8a8d43912fb8594e84f3af5d04d25cc165e2"
+          CF_IMAGE_TAG="${CF_IMAGE}:${CF_TAG}"
+          REAPER_DIR="${RUNNER_TEMP}/alice-cloudflare-container-reaper"
+
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "CLOUDFLARE_CONTAINER_BRINGUP_TOKEN is not configured" >&2
+            exit 1
+          fi
+
+          mkdir -p "$REAPER_DIR"
+          npm install --prefix "$REAPER_DIR" --ignore-scripts --no-audit --no-fund \
+            "wrangler@${WRANGLER_VERSION}" >/dev/null
+          WRANGLER="${REAPER_DIR}/node_modules/.bin/wrangler"
+
+          list_all_container_apps() (
+            set -euo pipefail
+            local all_apps='[]'
+            local page_token=''
+            local previous_page_token=''
+            local response_file="${RUNNER_TEMP}/alice-failsafe-container-apps-${BASHPID}.json"
+            trap '/bin/rm -f "$response_file"' EXIT
+
+            for page in $(seq 1 20); do
+              curl_args=(
+                --silent --show-error --max-time 5
+                --output "$response_file" --write-out '%{http_code}'
+                --get
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+                --data-urlencode 'per_page=1000'
+              )
+              if [ -n "$page_token" ]; then
+                curl_args+=(--data-urlencode "page_token=${page_token}")
+              fi
+              http_status="$(curl "${curl_args[@]}" \
+                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/containers/dash/applications")"
+              if [ "$http_status" != "200" ] || ! jq -e \
+                '.success == true and (.result | type == "array") and ((.result_info // {}) | type == "object")' \
+                "$response_file" >/dev/null; then
+                echo "CONTAINER_INVENTORY_INVALID page=${page} http=${http_status}" >&2
+                return 1
+              fi
+              page_apps="$(jq -c '.result' "$response_file")"
+              all_apps="$(jq -cn --argjson prior "$all_apps" --argjson page "$page_apps" '$prior + $page')"
+              previous_page_token="$page_token"
+              page_token="$(jq -r '.result_info.next_page_token // empty' "$response_file")"
+              if [ -z "$page_token" ]; then
+                printf '%s\n' "$all_apps"
+                return 0
+              fi
+              if [ "$page_token" = "$previous_page_token" ]; then
+                echo "CONTAINER_INVENTORY_PAGINATION_INVALID page=${page}" >&2
+                return 1
+              fi
+            done
+            echo "CONTAINER_INVENTORY_PAGE_LIMIT" >&2
+            return 1
+          )
+
+          cleanup_exact_resources() (
+            local cleanup_rc=0
+            set +e
+            echo "FAILSAFE_TEARDOWN_START worker=${WORKER_NAME} app=${APP_NAME} image=${CF_IMAGE_TAG}"
+
+            timeout --signal=TERM 30s "$WRANGLER" delete "$WORKER_NAME" --force >/tmp/alice-failsafe-worker-delete.log 2>&1 || true
+
+            for _attempt in $(seq 1 4); do
+              apps_json="$(list_all_container_apps 2>/tmp/alice-failsafe-container-list.err)" || {
+                cat /tmp/alice-failsafe-container-list.err >&2
+                cleanup_rc=1
+                apps_json='[]'
+                break
+              }
+              app_id="$(printf '%s' "$apps_json" | jq -r --arg name "$APP_NAME" '[.[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
+              if [ -z "$app_id" ]; then
+                break
+              fi
+              timeout --signal=TERM 30s "$WRANGLER" containers delete "$app_id" >/tmp/alice-failsafe-container-delete.log 2>&1 || true
+              sleep 5
+            done
+
+            timeout --signal=TERM 30s "$WRANGLER" containers images delete "$CF_IMAGE_TAG" --skip-confirmation >/tmp/alice-failsafe-image-delete.log 2>&1 || true
+
+            worker_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --max-time 5 \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/settings" || true)"
+            final_apps="$(list_all_container_apps 2>/tmp/alice-failsafe-final-container-list.err)" || {
+              cat /tmp/alice-failsafe-final-container-list.err >&2
+              cleanup_rc=1
+              final_apps='[]'
+            }
+            final_images="$(timeout --signal=TERM 30s "$WRANGLER" containers images list --filter "^(${CLOUDFLARE_ACCOUNT_ID}/)?${CF_IMAGE}$" --json 2>/tmp/alice-failsafe-final-image-list.err)" || {
+              cat /tmp/alice-failsafe-final-image-list.err >&2
+              cleanup_rc=1
+              final_images='[]'
+            }
+            remaining_apps="$(printf '%s' "$final_apps" | jq --arg name "$APP_NAME" '[.[] | select(.name == $name)] | length')"
+            remaining_tags="$(printf '%s' "$final_images" | jq --arg name "$CF_IMAGE" --arg tag "$CF_TAG" '[.[] | select(.name == $name and (.tags | index($tag)))] | length')"
+
+            if [ "$worker_status" != "404" ] || [ "$remaining_apps" != "0" ] || [ "$remaining_tags" != "0" ]; then
+              echo "FAILSAFE_TEARDOWN_INVALID worker_http=${worker_status} remaining_apps=${remaining_apps} remaining_tags=${remaining_tags}" >&2
+              cleanup_rc=1
+            else
+              echo "FAILSAFE_TEARDOWN_GREEN worker_http=404 remaining_apps=0 remaining_tags=0"
+            fi
+            /bin/rm -rf "$REAPER_DIR"
+            /bin/rm -f /tmp/alice-failsafe-*.log /tmp/alice-failsafe-*.err
+            return "$cleanup_rc"
+          )
+
+          first_seen_epoch=""
+          deadline_epoch=""
+          while true; do
+            now_epoch="$(date +%s)"
+            worker_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --max-time 5 \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/settings" || true)"
+            if ! primary_state="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
+              --jq '[.jobs[] | select(.name == "Import, converse, and tear down")] | if length == 1 then .[0].status else "unknown" end')"; then
+              primary_state="unknown"
+              echo "FAILSAFE_GITHUB_READ_TRANSIENT"
+            fi
+
+            if [ -z "$first_seen_epoch" ] && [ "$worker_status" = "200" ]; then
+              first_seen_epoch="$now_epoch"
+              deadline_epoch="$((now_epoch + 900))"
+              echo "FAILSAFE_ARMED first_seen_epoch=${first_seen_epoch} deadline_epoch=${deadline_epoch}"
+            fi
+
+            if [ "$primary_state" = "completed" ]; then
+              echo "FAILSAFE_PRIMARY_TERMINAL"
+              cleanup_exact_resources
+              exit 0
+            fi
+            if [ -n "$first_seen_epoch" ] && [ "$worker_status" = "404" ]; then
+              echo "FAILSAFE_PRIMARY_TEARDOWN_OBSERVED"
+              cleanup_exact_resources
+              exit 0
+            fi
+            if [ -n "$deadline_epoch" ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
+              echo "FAILSAFE_EXPIRY_REACHED"
+              cleanup_exact_resources
+              exit 0
+            fi
+
+            echo "FAILSAFE_CHECKPOINT worker_http=${worker_status} primary_status=${primary_state} now_epoch=${now_epoch}"
+            sleep 15
+          done
