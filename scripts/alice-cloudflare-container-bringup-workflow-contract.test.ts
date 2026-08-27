@@ -301,3 +301,59 @@ test("temporary user-test capability is a step-local secret and is never logged"
   );
   assert.doesNotMatch(bringupStep, /USER_TEST_LINK_READY[^\n]*#/u);
 });
+
+test("post-health conversation retries only the observed transient 503", () => {
+  const conversationGate = between(
+    workflow,
+    'echo "CONTAINER_BOOT_GREEN',
+    'chat_content_raw=',
+  );
+
+  assert.match(conversationGate, /for chat_attempt in \$\(seq 1 6\); do/u);
+  assert.match(conversationGate, /if \[ "\$chat_status" = "200" \]; then[\s\S]*?break/u);
+  assert.match(
+    conversationGate,
+    /if \[ "\$chat_status" != "503" \]; then[\s\S]*?CONVERSATION_HTTP_INVALID[\s\S]*?exit 1/u,
+  );
+  assert.match(conversationGate, /CONVERSATION_CONVERGENCE_RETRY/u);
+  assert.match(
+    conversationGate,
+    /done[\s\S]*?if \[ "\$chat_status" != "200" \]; then[\s\S]*?CONVERSATION_HTTP_INVALID/u,
+  );
+  assert.doesNotMatch(conversationGate, /502\|503|503\|504|000\|503/u);
+});
+
+test("owner-link capability activates only after the automated conversation is green", () => {
+  const deploymentBeforeConversation = between(
+    workflow,
+    'secret_payload="$(jq -cn',
+    'echo "CONVERSATION_GREEN',
+  );
+  const afterConversation = workflow.slice(
+    workflow.indexOf('echo "CONVERSATION_GREEN'),
+  );
+
+  assert.doesNotMatch(deploymentBeforeConversation, /BRINGUP_USER_TEST_TOKEN/u);
+  assert.match(
+    afterConversation,
+    /printf '%s' "\$ALICE_USER_TEST_LINK_TOKEN" \| npx wrangler secret put \\\n\s*BRINGUP_USER_TEST_TOKEN --name "\$WORKER_NAME"/u,
+  );
+  assert.match(afterConversation, /USER_TEST_LINK_BINDING_GREEN/u);
+  const finalVersionGate = between(
+    afterConversation,
+    'echo "USER_TEST_LINK_BINDING_GREEN"',
+    'echo "USER_TEST_LINK_READY',
+  );
+  assert.match(finalVersionGate, /USER_TEST_FINAL_PAGE_GREEN/u);
+  assert.match(finalVersionGate, /USER_TEST_FINAL_HEALTH_GREEN/u);
+  assert.match(finalVersionGate, /x-alice-user-test-token: \$\{ALICE_USER_TEST_LINK_TOKEN\}/u);
+  assert.match(finalVersionGate, /USER_TEST_FINAL_CHAT_GREEN/u);
+  assert.match(
+    finalVersionGate,
+    /USER_TEST_FINAL_INSTANCE_GREEN[^\n]*state=running[^\n]*count=1/u,
+  );
+  assert.match(
+    afterConversation,
+    /USER_TEST_LINK_BINDING_GREEN[\s\S]*?USER_TEST_FINAL_PAGE_GREEN[\s\S]*?USER_TEST_FINAL_HEALTH_GREEN[\s\S]*?USER_TEST_FINAL_CHAT_GREEN[\s\S]*?USER_TEST_FINAL_INSTANCE_GREEN[\s\S]*?USER_TEST_LINK_READY/u,
+  );
+});
