@@ -226,6 +226,8 @@ jobs:
               PORT: "2138",
               APP_PORT: "2138",
               APP_API_BIND: "0.0.0.0",
+              MILADY_API_BIND: "0.0.0.0",
+              ELIZA_API_BIND: "0.0.0.0",
               MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
               ELIZA_AUTH_DISABLED: "0",
               MILADY_API_TOKEN: cfEnv.BRINGUP_RUNTIME_TOKEN,
@@ -261,8 +263,9 @@ jobs:
               console.log("ALICE_TEMP_CONTAINER_STOPPED");
             }
 
-            override onError() {
-              console.error("ALICE_TEMP_CONTAINER_ERROR");
+            override onError(error: unknown) {
+              console.error("ALICE_TEMP_CONTAINER_ERROR", error);
+              throw error;
             }
           }
 
@@ -430,9 +433,11 @@ jobs:
           TAIL_PID=$!
 
           health_status=""
-          for attempt in $(seq 1 90); do
+          BOOT_WINDOW_SECONDS=1200
+          BOOT_DEADLINE_EPOCH="$(( $(date +%s) + BOOT_WINDOW_SECONDS ))"
+          while [ "$(date +%s)" -lt "$BOOT_DEADLINE_EPOCH" ]; do
             health_status="$(curl --silent --show-error --output /tmp/alice-health.json --write-out '%{http_code}' \
-              --max-time 5 \
+              --max-time 40 \
               -H "x-alice-bringup-token: ${EDGE_TOKEN}" \
               "${WORKER_URL}/health/live" || true)"
             if [ "$health_status" = "200" ]; then
@@ -441,6 +446,9 @@ jobs:
             if [ "$health_status" != "" ] && [ "$health_status" != "000" ] && [ "$health_status" != "502" ] && [ "$health_status" != "503" ] && [ "$health_status" != "504" ]; then
               echo "CONTAINER_BOOT_HTTP_INVALID status=${health_status}" >&2
               exit 1
+            fi
+            if [ "$(date +%s)" -ge "$BOOT_DEADLINE_EPOCH" ]; then
+              break
             fi
             sleep 5
           done
