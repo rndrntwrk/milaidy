@@ -81,6 +81,25 @@ test("boot probe allows the Container SDK readiness budget without exceeding sta
   );
 });
 
+test("boot probe retries the bounded first-deploy 404 without accepting it as ready", () => {
+  const healthLoop = between(
+    workflow,
+    'health_status=""',
+    'echo "CONTAINER_BOOT_GREEN',
+  );
+
+  assert.match(
+    healthLoop,
+    /if \[ "\$health_status" = "200" \]; then\s+break/u,
+    "only HTTP 200 may complete the boot probe",
+  );
+  assert.match(
+    healthLoop,
+    /"\$health_status" != "404"/u,
+    "the first-deploy 404 must stay inside the bounded readiness loop",
+  );
+});
+
 test("independent teardown guard preserves the documented 30-minute expiry", () => {
   const failsafeLoop = between(
     workflow,
