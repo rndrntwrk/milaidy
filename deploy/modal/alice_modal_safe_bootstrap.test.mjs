@@ -144,6 +144,40 @@ const nextProviderState = {
   layout: nextSafe,
 };
 
+const recreatedStoppedSafe = {
+  ...stoppedSafe,
+  appId: "ap-poY7q5xDReRQWDqAAWz6PT",
+  providerVersion: 1,
+  providerHistory: [{
+    ...stoppedSafe.providerHistory[0],
+    providerVersion: 1,
+    commitHash: release.sourceCommit,
+  }],
+};
+
+const recreatedSafe = {
+  ...safe,
+  appId: "ap-BBBBBBBBBBBBBBBBBBBBBB",
+  providerVersion: 1,
+  providerHistory: [{
+    ...safe.providerHistory[0],
+    providerVersion: 1,
+  }],
+};
+
+const recreatedProviderState = {
+  ...providerState,
+  apps: [{
+    ...providerState.apps[0],
+    app_id: recreatedSafe.appId,
+  }],
+  history: [{
+    ...providerState.history[0],
+    version: "v1",
+  }],
+  layout: recreatedSafe,
+};
+
 const stoppedAppReadback = {
   apps: [{
     app_id: "ap-oFaCNy2jJDFalZienNB2Ht",
@@ -183,6 +217,27 @@ test("stop-if-unanchored performs no stop when Alice is already stopped", async 
   assert.equal(stopCalls, 0);
 });
 
+test("stop-if-unanchored recognizes a recreated stopped Alice identity", async () => {
+  let stopCalls = 0;
+  const result = await safeBootstrapModule.stopAliceModalIfUnanchored({
+    readState: async () => ({
+      apps: [{
+        ...stoppedAppReadback.apps[0],
+        app_id: "ap-poY7q5xDReRQWDqAAWz6PT",
+      }],
+      containers: [],
+    }),
+    stopApp: async () => { stopCalls += 1; },
+    wait: async () => {},
+  });
+  assert.deepEqual(result, {
+    stopped: true,
+    stopAttempted: false,
+    stopCommandSucceeded: null,
+  });
+  assert.equal(stopCalls, 0);
+});
+
 test("stop-if-unanchored stops an active Alice app exactly once", async () => {
   assert.equal(
     typeof safeBootstrapModule.stopAliceModalIfUnanchored,
@@ -204,6 +259,104 @@ test("stop-if-unanchored stops an active Alice app exactly once", async () => {
     stopCommandSucceeded: true,
   });
   assert.equal(stopCalls, 1);
+});
+
+test("stop-if-unanchored binds Alice before stopping a running bootstrap", async () => {
+  let reads = 0;
+  let stopCalls = 0;
+  const stoppedAppIds = [];
+  const unrelated = {
+    app_id: "ap-CCCCCCCCCCCCCCCCCCCCCC",
+    description: "unrelated-app",
+    state: "deployed",
+    tasks: "0",
+  };
+  const result = await safeBootstrapModule.stopAliceModalIfUnanchored({
+    readState: async () => {
+      reads += 1;
+      return reads === 1
+        ? {
+            apps: [
+              unrelated,
+              { ...activeAppReadback.apps[0], tasks: "1" },
+            ],
+            containers: [{
+              container_id: `ta-${"R".repeat(22)}`,
+              app_id: activeAppReadback.apps[0].app_id,
+              app_name: "alice-runtime",
+              start_time: "2026-08-26 20:00:00-05:00",
+            }],
+          }
+        : {
+            apps: [unrelated, stoppedAppReadback.apps[0]],
+            containers: [],
+          };
+    },
+    stopApp: async (appId) => {
+      stopCalls += 1;
+      stoppedAppIds.push(appId);
+    },
+    wait: async () => {},
+  });
+  assert.deepEqual(result, {
+    stopped: true,
+    stopAttempted: true,
+    stopCommandSucceeded: true,
+  });
+  assert.equal(stopCalls, 1);
+  assert.deepEqual(stoppedAppIds, [activeAppReadback.apps[0].app_id]);
+});
+
+test("stop-if-unanchored ignores containers bound to an unrelated app", async () => {
+  let stopCalls = 0;
+  const unrelatedAppId = "ap-CCCCCCCCCCCCCCCCCCCCCC";
+  const result = await safeBootstrapModule.stopAliceModalIfUnanchored({
+    readState: async () => ({
+      apps: [
+        stoppedAppReadback.apps[0],
+        {
+          app_id: unrelatedAppId,
+          description: "unrelated-app",
+          state: "deployed",
+          tasks: "1",
+        },
+      ],
+      containers: [{
+        container_id: `ta-${"U".repeat(22)}`,
+        app_id: unrelatedAppId,
+        app_name: "unrelated-app",
+        start_time: "2026-08-26 20:00:00-05:00",
+      }],
+    }),
+    stopApp: async () => { stopCalls += 1; },
+    wait: async () => {},
+  });
+  assert.deepEqual(result, {
+    stopped: true,
+    stopAttempted: false,
+    stopCommandSucceeded: null,
+  });
+  assert.equal(stopCalls, 0);
+});
+
+test("stop-if-unanchored rejects an unattributed container before mutation", async () => {
+  let stopCalls = 0;
+  await assert.rejects(
+    safeBootstrapModule.stopAliceModalIfUnanchored({
+      readState: async () => ({
+        ...stoppedAppReadback,
+        containers: [{
+          container_id: `ta-${"M".repeat(22)}`,
+          app_name: "unrelated-app",
+          start_time: "2026-08-26 20:00:00-05:00",
+        }],
+      }),
+      stopApp: async () => { stopCalls += 1; },
+      wait: async () => {},
+    }),
+    /ALICE_MODAL_SAFE_STOP_INVALID/,
+  );
+  assert.equal(stopCalls, 0);
 });
 
 test("stop-if-unanchored accepts a nonzero stop race only after stopped readback", async () => {
@@ -247,6 +400,53 @@ test("stop-if-unanchored fails closed when active state remains unverifiable", a
     /ALICE_MODAL_SAFE_STOP_INVALID/,
   );
   assert.equal(stopCalls, 1);
+});
+
+test("stop-if-unanchored rejects an identity swap after the stop command", async () => {
+  let reads = 0;
+  let stopCalls = 0;
+  await assert.rejects(
+    safeBootstrapModule.stopAliceModalIfUnanchored({
+      readState: async () => {
+        reads += 1;
+        return reads === 1
+          ? activeAppReadback
+          : {
+              apps: [{
+                ...stoppedAppReadback.apps[0],
+                app_id: "ap-BBBBBBBBBBBBBBBBBBBBBB",
+              }],
+              containers: [],
+            };
+      },
+      stopApp: async () => { stopCalls += 1; },
+      wait: async () => {},
+    }),
+    /ALICE_MODAL_SAFE_STOP_INVALID/,
+  );
+  assert.equal(stopCalls, 1);
+});
+
+test("stop-if-unanchored rejects ambiguous Alice app rows before mutation", async () => {
+  let stopCalls = 0;
+  await assert.rejects(
+    safeBootstrapModule.stopAliceModalIfUnanchored({
+      readState: async () => ({
+        apps: [
+          activeAppReadback.apps[0],
+          {
+            ...activeAppReadback.apps[0],
+            app_id: "ap-BBBBBBBBBBBBBBBBBBBBBB",
+          },
+        ],
+        containers: [],
+      }),
+      stopApp: async () => { stopCalls += 1; },
+      wait: async () => {},
+    }),
+    /ALICE_MODAL_SAFE_STOP_INVALID/,
+  );
+  assert.equal(stopCalls, 0);
 });
 
 test("captures only the exact known unsafe v48 transition boundary", () => {
@@ -303,7 +503,7 @@ test("keeps an active safe bootstrap on the existing runtime re-entry path", asy
 
 test("stopped re-entry rejects drift from the inert safe-bootstrap graph", () => {
   const invalidPrevious = [
-    { ...stoppedSafe, appId: "ap-ZZZZZZZZZZZZZZZZZZZZZZ" },
+    { ...stoppedSafe, appId: "not-a-modal-app-id" },
     { ...stoppedSafe, providerVersion: 48 },
     {
       ...stoppedSafe,
@@ -329,54 +529,96 @@ test("stopped re-entry rejects drift from the inert safe-bootstrap graph", () =>
   }
 });
 
-test("re-enters from stopped v49 through one verified inert v50 bootstrap", async () => {
+test("rejects a stopped re-entry that reuses the retired identity/version epoch", async () => {
   const calls = [];
   const journal = buildAliceModalStoppedReentryJournal({
     previous: stoppedSafe,
     release,
     observedAt: "2026-08-26T22:20:00.000Z",
   });
-  const result = await orchestrateAliceModalSafeBootstrap({
-    journal,
-    release,
-    operations: {
-      captureLegacy: async () => {
-        throw new Error("legacy capture must not run");
+  await assert.rejects(
+    orchestrateAliceModalSafeBootstrap({
+      journal,
+      release,
+      operations: {
+        captureLegacy: async () => {
+          throw new Error("legacy capture must not run");
+        },
+        captureStopped: async () => {
+          calls.push("capture-stopped");
+          return stoppedSafe;
+        },
+        verifyProtectedRef: async () => calls.push("verify-protected-ref"),
+        deploySafeBootstrap: async () => calls.push("deploy-safe-bootstrap"),
+        readSafeBootstrapState: async () => {
+          calls.push("read-safe-bootstrap");
+          return nextProviderState;
+        },
+        verifySafeBootstrapRuntime: async () => {
+          calls.push("verify-safe-runtime");
+          return {
+            schemaVersion: "alice.modal-safe-bootstrap-runtime.v1",
+            unauthenticatedStatus: 401,
+            authenticatedStatus: 503,
+            safeBootstrap: true,
+            paused: true,
+            ready: false,
+            release,
+          };
+        },
+        stopIfUnanchored: async () => calls.push("stop-if-unanchored"),
       },
-      captureStopped: async () => {
-        calls.push("capture-stopped");
-        return stoppedSafe;
-      },
-      verifyProtectedRef: async () => calls.push("verify-protected-ref"),
-      deploySafeBootstrap: async () => calls.push("deploy-safe-bootstrap"),
-      readSafeBootstrapState: async () => {
-        calls.push("read-safe-bootstrap");
-        return nextProviderState;
-      },
-      verifySafeBootstrapRuntime: async () => {
-        calls.push("verify-safe-runtime");
-        return {
-          schemaVersion: "alice.modal-safe-bootstrap-runtime.v1",
-          unauthenticatedStatus: 401,
-          authenticatedStatus: 503,
-          safeBootstrap: true,
-          paused: true,
-          ready: false,
-          release,
-        };
-      },
-      stopIfUnanchored: async () => calls.push("stop-if-unanchored"),
+      observedAt: "2026-08-26T22:21:00.000Z",
+    }),
+    (error) => {
+      assert.equal(
+        error.modalSafeBootstrapFailure?.code,
+        "ALICE_MODAL_SAFE_BOOTSTRAP_INVALID",
+      );
+      return true;
     },
-    observedAt: "2026-08-26T22:21:00.000Z",
-  });
+  );
   assert.deepEqual(calls, [
     "capture-stopped",
     "verify-protected-ref",
     "deploy-safe-bootstrap",
     "read-safe-bootstrap",
     "verify-safe-runtime",
+    "stop-if-unanchored",
   ]);
-  assert.equal(result.anchor.previous.providerVersion, 50);
+});
+
+test("re-enters a stopped recreated app through one fresh v1 identity", async () => {
+  const journal = buildAliceModalStoppedReentryJournal({
+    previous: recreatedStoppedSafe,
+    release,
+    observedAt: "2026-08-26T23:35:00.000Z",
+  });
+  const result = await orchestrateAliceModalSafeBootstrap({
+    journal,
+    release,
+    operations: {
+      captureStopped: async () => recreatedStoppedSafe,
+      verifyProtectedRef: async () => {},
+      deploySafeBootstrap: async () => {},
+      readSafeBootstrapState: async () => recreatedProviderState,
+      verifySafeBootstrapRuntime: async () => ({
+        schemaVersion: "alice.modal-safe-bootstrap-runtime.v1",
+        unauthenticatedStatus: 401,
+        authenticatedStatus: 503,
+        safeBootstrap: true,
+        paused: true,
+        ready: false,
+        release,
+      }),
+      stopIfUnanchored: async () => {},
+    },
+    observedAt: "2026-08-26T23:36:00.000Z",
+  });
+  assert.equal(journal.appId, recreatedStoppedSafe.appId);
+  assert.equal(result.anchor.appId, recreatedSafe.appId);
+  assert.notEqual(result.anchor.appId, journal.appId);
+  assert.equal(result.anchor.previous.providerVersion, 1);
 });
 
 test("recovery explicitly no-ops before Modal and stops only a verified unanchored transition", () => {
@@ -510,6 +752,15 @@ test("the recovery CLI resolves artifacts before constructing any Modal command 
   const stop = source.indexOf('if (phase === "recover") {', commandEnvironment);
   assert.ok(resolve >= 0 && noOp >= 0 && commandEnvironment >= 0 && stop >= 0);
   assert.ok(resolve < noOp && noOp < commandEnvironment && commandEnvironment < stop);
+});
+
+test("the recovery CLI stops only the app ID selected by the readback", () => {
+  const source = fs.readFileSync(
+    path.join(currentDirectory, "alice_modal_safe_bootstrap_cli.mjs"),
+    "utf8",
+  );
+  assert.match(source, /const stopApp = async \(appId\) =>/);
+  assert.match(source, /buildAliceModalStopCommand\(appId\)/);
 });
 
 test("capture safe re-entry persists its first sanitized failure after cleanup", () => {

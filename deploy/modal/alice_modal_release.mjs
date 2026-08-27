@@ -8,7 +8,6 @@ const MODAL_REVISION = /^(?:49|[5-9][0-9]|[1-9][0-9]{2,})$/;
 const RELEASE_SECRET =
   /^alice-production-core-[a-f0-9]{64}-[1-9][0-9]*-[1-9][0-9]*$/;
 const APP_ID = /^ap-[A-Za-z0-9]{20,32}$/;
-const ALICE_APP_ID = "ap-oFaCNy2jJDFalZienNB2Ht";
 const FUNCTION_ID = /^fu-[A-Za-z0-9]{20,32}$/;
 const WORKSPACE_ID = "ac-heK8sGJBc367raQUx6R59o";
 const USER_ID = "us-rJM1ZZiySURgAhBEOqvR16";
@@ -265,7 +264,6 @@ export function buildAliceModalReleaseCommands({
       "recreate",
       path.join(sourceRoot, "deploy/modal/alice_safe_bootstrap.py"),
     ],
-    stopApp: ["app", "stop", APP_NAME, "--env", ENVIRONMENT, "--yes"],
     deploy: [
       "deploy",
       "--env",
@@ -303,6 +301,13 @@ export function buildAliceModalReleaseCommands({
       "--secret-inventory",
     ],
   };
+}
+
+export function buildAliceModalStopCommand(appId) {
+  if (!APP_ID.test(appId ?? "")) {
+    invalid("ALICE_MODAL_COMMAND_INVALID");
+  }
+  return ["app", "stop", appId, "--env", ENVIRONMENT, "--yes"];
 }
 
 export function buildAliceModalRollbackCommands({
@@ -399,7 +404,6 @@ function verifyProviderLayout(layout) {
       "providerVersion",
     ]) ||
     !APP_ID.test(layout.appId ?? "") ||
-    layout.appId !== ALICE_APP_ID ||
     layout.environment !== ENVIRONMENT ||
     !Number.isSafeInteger(layout.providerVersion) ||
     layout.providerVersion < 1 ||
@@ -475,7 +479,6 @@ export function verifyAliceModalRollbackAnchorLayout(layout) {
   verifyProviderLayout(layout);
   const head = providerHistoryHead(layout);
   if (
-    layout.appId !== ALICE_APP_ID ||
     head.dirty !== false ||
     head.clientVersion !== MODAL_VERSION ||
     layout.autoscalerEnforcement.status !== "provider-enforced" ||
@@ -490,7 +493,6 @@ export function verifyAliceModalStoppedRecoveryLayout(layout) {
   verifyProviderLayout(layout);
   const head = providerHistoryHead(layout);
   if (
-    layout.appId !== ALICE_APP_ID ||
     head.dirty !== false ||
     head.clientVersion !== MODAL_VERSION ||
     head.rollbackVersion !== 0 ||
@@ -506,11 +508,14 @@ export function verifyAliceModalStoppedRecoveryLayout(layout) {
 export function verifyAliceModalSafeBootstrapReadback(value, {
   release,
   expectedProviderVersion,
+  recreatedFromAppId = null,
 }) {
   if (
     !validRelease(release) ||
     !Number.isSafeInteger(expectedProviderVersion) ||
-    expectedProviderVersion < 49
+    expectedProviderVersion < 1 ||
+    recreatedFromAppId !== null &&
+      (!APP_ID.test(recreatedFromAppId) || expectedProviderVersion !== 1)
   ) {
     invalid("ALICE_MODAL_SAFE_BOOTSTRAP_INVALID");
   }
@@ -543,6 +548,7 @@ export function verifyAliceModalSafeBootstrapReadback(value, {
     history[0]?.deployed_by !== "rndrntwrk" ||
     history[0]?.commit !== release.sourceCommit.slice(0, 7) ||
     layout.providerVersion !== expectedProviderVersion ||
+    recreatedFromAppId !== null && layout.appId === recreatedFromAppId ||
     head.rollbackVersion !== 0 ||
     head.commitHash !== release.sourceCommit ||
     JSON.stringify(layout.mountedSecretObjects.map((item) => item.name)) !==

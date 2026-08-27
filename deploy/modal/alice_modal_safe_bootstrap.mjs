@@ -9,6 +9,8 @@ import {
 const COMMIT = /^[a-f0-9]{40}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const IMAGE = /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/;
+const APP_ID_PATTERN = /^ap-[A-Za-z0-9]{20,32}$/;
+const CONTAINER_ID_PATTERN = /^ta-[A-Za-z0-9]{20,32}$/;
 const APP_ID = "ap-oFaCNy2jJDFalZienNB2Ht";
 const SAFE_BOOTSTRAP_FAILURE_CODES = Object.freeze({
   "protected-ref": new Set([
@@ -208,9 +210,9 @@ function verifyStoppedSafeBootstrapLayout(previous) {
   }
   const head = verified.providerHistory[0];
   if (
-    verified.appId !== APP_ID ||
+    !APP_ID_PATTERN.test(verified.appId ?? "") ||
     verified.environment !== "main" ||
-    verified.providerVersion < LEGACY_PROVIDER_VERSION + 1 ||
+    verified.providerVersion < 1 ||
     head.providerVersion !== verified.providerVersion ||
     head.rollbackVersion !== 0 ||
     verified.mountedSecretObjects.length !== 0 ||
@@ -236,7 +238,7 @@ export function buildAliceModalStoppedReentryJournal({
     observedAt,
     failureBoundary: "restart-stopped-safe-bootstrap",
     release,
-    appId: APP_ID,
+    appId: verified.appId,
     previousProviderVersion: verified.providerVersion,
     previousGraphSha256: digestAliceModalProviderGraph(verified),
     previous: verified,
@@ -259,14 +261,15 @@ export function verifyAliceModalStoppedReentryJournal(value) {
     !canonicalIsoTimestamp(value.observedAt) ||
     value.failureBoundary !== "restart-stopped-safe-bootstrap" ||
     !validRelease(value.release) ||
-    value.appId !== APP_ID ||
+    !APP_ID_PATTERN.test(value.appId ?? "") ||
     !Number.isSafeInteger(value.previousProviderVersion) ||
-    value.previousProviderVersion < LEGACY_PROVIDER_VERSION + 1
+    value.previousProviderVersion < 1
   ) {
     invalid("ALICE_MODAL_STOPPED_REENTRY_INVALID");
   }
   const previous = verifyStoppedSafeBootstrapLayout(value.previous);
   if (
+    value.appId !== previous.appId ||
     value.previousProviderVersion !== previous.providerVersion ||
     value.previousGraphSha256 !== digestAliceModalProviderGraph(previous)
   ) {
@@ -339,7 +342,7 @@ export function verifyAliceModalSafeRollbackAnchor(value, { release }) {
     !canonicalIsoTimestamp(value.capturedAt) ||
     !COMMIT.test(value.sourceCommit ?? "") ||
     !DIGEST.test(value.deploymentManifestSha256 ?? "") ||
-    value.appId !== APP_ID
+    !APP_ID_PATTERN.test(value.appId ?? "")
   ) {
     invalid("ALICE_MODAL_ROLLBACK_ANCHOR_INVALID");
   }
@@ -348,6 +351,7 @@ export function verifyAliceModalSafeRollbackAnchor(value, { release }) {
   const provider = evidence?.provider;
   const runtime = evidence?.runtime;
   if (
+    value.appId !== previous.appId ||
     !exactKeys(evidence, [
       "schemaVersion",
       "observedAt",
@@ -457,21 +461,73 @@ export function resolveAliceModalSafeRecovery({
   };
 }
 
-function exactStoppedAppState(value) {
+function selectAliceAppState(value, expectedAppId = null) {
   if (
     !exactKeys(value, ["apps", "containers"]) ||
     !Array.isArray(value.apps) ||
-    !Array.isArray(value.containers) ||
-    value.containers.length !== 0
+    !Array.isArray(value.containers)
   ) {
-    return false;
+    return null;
   }
-  const aliceApps = value.apps.filter((item) => item?.app_id === APP_ID);
-  return Boolean(
-    aliceApps.length === 1 &&
-    aliceApps[0]?.state === "stopped" &&
-    aliceApps[0]?.tasks === "0"
+  const aliceApps = value.apps.filter(
+    (app) => app?.description === "alice-runtime",
   );
+  if (aliceApps.length !== 1) return null;
+  const app = aliceApps[0];
+  if (
+    !APP_ID_PATTERN.test(app?.app_id ?? "") ||
+    expectedAppId !== null && app.app_id !== expectedAppId ||
+    !["deployed", "stopped"].includes(app?.state) ||
+    !/^(?:0|[1-9][0-9]*)$/.test(app?.tasks ?? "")
+  ) {
+    return null;
+  }
+  const containers = [];
+  for (const container of value.containers) {
+    if (
+      !exactKeys(container, [
+        "container_id",
+        "app_id",
+        "app_name",
+        "start_time",
+      ]) ||
+      !CONTAINER_ID_PATTERN.test(container.container_id ?? "") ||
+      !APP_ID_PATTERN.test(container.app_id ?? "") ||
+      typeof container.app_name !== "string" ||
+      container.app_name.length === 0 ||
+      /[\0\r\n]/.test(container.app_name) ||
+      typeof container.start_time !== "string" ||
+      container.start_time.length === 0 ||
+      /[\0\r\n]/.test(container.start_time)
+    ) {
+      return null;
+    }
+    const boundApps = value.apps.filter(
+      (candidate) => candidate?.app_id === container.app_id,
+    );
+    if (
+      boundApps.length !== 1 ||
+      boundApps[0]?.description !== container.app_name
+    ) {
+      return null;
+    }
+    if (container.app_id === app.app_id) containers.push(container);
+  }
+  return {
+    appId: app.app_id,
+    state: app.state,
+    tasks: app.tasks,
+    containers,
+  };
+}
+
+function exactStoppedAliceAppState(value, expectedAppId = null) {
+  const state = selectAliceAppState(value, expectedAppId);
+  return state?.state === "stopped" &&
+      state.tasks === "0" &&
+      state.containers.length === 0
+    ? state
+    : null;
 }
 
 export async function stopAliceModalIfUnanchored({
@@ -488,28 +544,39 @@ export async function stopAliceModalIfUnanchored({
     invalid("ALICE_MODAL_SAFE_STOP_INVALID");
   }
 
+  let initial;
   try {
-    if (exactStoppedAppState(await readState())) {
-      return {
-        stopped: true,
-        stopAttempted: false,
-        stopCommandSucceeded: null,
-      };
-    }
+    initial = selectAliceAppState(await readState());
   } catch {
-    // An unreadable initial state is not evidence that the app is stopped.
+    invalid("ALICE_MODAL_SAFE_STOP_INVALID");
+  }
+  if (initial === null) invalid("ALICE_MODAL_SAFE_STOP_INVALID");
+  if (
+    initial.state === "stopped" &&
+    initial.tasks === "0" &&
+    initial.containers.length === 0
+  ) {
+    return {
+      stopped: true,
+      stopAttempted: false,
+      stopCommandSucceeded: null,
+    };
   }
 
   let stopCommandSucceeded = true;
   try {
-    await stopApp();
+    await stopApp(initial.appId);
   } catch {
     stopCommandSucceeded = false;
   }
 
   for (let attempt = 1; attempt <= 13; attempt += 1) {
     try {
-      if (exactStoppedAppState(await readState())) {
+      const state = exactStoppedAliceAppState(
+        await readState(),
+        initial.appId,
+      );
+      if (state !== null) {
         return {
           stopped: true,
           stopAttempted: true,
@@ -698,12 +765,14 @@ export function buildAliceModalSafeBootstrapResult({
   state,
   runtime,
   expectedProviderVersion = LEGACY_PROVIDER_VERSION + 1,
+  recreatedFromAppId = null,
   observedAt = new Date().toISOString(),
 }) {
   if (!validRelease(release) || !canonicalIsoTimestamp(observedAt)) invalid();
   const provider = verifyAliceModalSafeBootstrapReadback(state, {
     release,
     expectedProviderVersion,
+    recreatedFromAppId,
   });
   const verifiedRuntime = verifyRuntimeEvidence(runtime, release);
   const previous = verifyAliceModalRollbackAnchorLayout(state.layout);
@@ -790,7 +859,10 @@ export async function orchestrateAliceModalSafeBootstrap({
       release,
       state,
       runtime,
-      expectedProviderVersion: verifiedJournal.previousProviderVersion + 1,
+      expectedProviderVersion: stoppedReentry
+        ? 1
+        : verifiedJournal.previousProviderVersion + 1,
+      recreatedFromAppId: stoppedReentry ? verifiedJournal.appId : null,
       observedAt,
     });
   } catch (error) {

@@ -35,7 +35,56 @@ class Item:
 
 
 class ModalProviderSecretResolutionTests(unittest.TestCase):
-    def test_active_identity_is_hard_pinned_and_deployed_before_provider_reads(self):
+    def test_active_identity_accepts_the_exact_name_resolved_recreated_app(self):
+        client = types.SimpleNamespace(stub=types.SimpleNamespace(
+            AppList=AsyncMock(),
+            TaskList=AsyncMock(),
+        ))
+        recreated_app_id = "ap-poY7q5xDReRQWDqAAWz6PT"
+        recreated = types.SimpleNamespace(
+            app_id=recreated_app_id,
+            previous_app_id="",
+            environment_name="main",
+            lifecycle=types.SimpleNamespace(app_state=3, version=1),
+        )
+        with patch.object(MODULE.api_pb2, "APP_STATE_DEPLOYED", 3, create=True):
+            self.assertEqual(
+                asyncio.run(
+                    MODULE._resolve_app_identity(client, recreated, False)
+                ),
+                (recreated_app_id, False),
+            )
+        client.stub.AppList.assert_not_awaited()
+        client.stub.TaskList.assert_not_awaited()
+
+    def test_stopped_identity_binds_the_dynamic_previous_app_id(self):
+        stopped_at = 1_787_780_400.0
+        recreated_app_id = "ap-poY7q5xDReRQWDqAAWz6PT"
+        app = types.SimpleNamespace(
+            app_id="",
+            previous_app_id=recreated_app_id,
+            environment_name="main",
+            lifecycle=types.SimpleNamespace(
+                app_state=5,
+                version=1,
+                stopped_at=stopped_at,
+            ),
+        )
+        apps = [types.SimpleNamespace(
+            app_id=recreated_app_id,
+            name="alice-runtime",
+            description="alice-runtime",
+            state=5,
+            n_running_tasks=0,
+            stopped_at=stopped_at,
+        )]
+        with patch.object(MODULE.api_pb2, "APP_STATE_STOPPED", 5, create=True):
+            self.assertEqual(
+                MODULE._resolve_stopped_app_identity(app, apps, []),
+                recreated_app_id,
+            )
+
+    def test_active_identity_requires_a_valid_deployed_name_resolution(self):
         client = types.SimpleNamespace(stub=types.SimpleNamespace(
             AppList=AsyncMock(),
             TaskList=AsyncMock(),
@@ -49,7 +98,7 @@ class ModalProviderSecretResolutionTests(unittest.TestCase):
         invalid_values = [
             types.SimpleNamespace(**{
                 **vars(exact),
-                "app_id": "ap-BBBBBBBBBBBBBBBBBBBBBB",
+                "app_id": "not-a-modal-app-id",
             }),
             types.SimpleNamespace(**{
                 **vars(exact),

@@ -8,6 +8,7 @@ import { canonicalAliceJson } from "../../workers/alice-effective-config.js";
 const ACCOUNT_ID = "036df6c823669b8fa2f66cf4c16eeb29";
 const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const MODAL_APP_ID = "ap-oFaCNy2jJDFalZienNB2Ht";
+const MODAL_APP_ID_PATTERN = /^ap-[A-Za-z0-9]{20,32}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const CLOUDFLARE_TOKEN_ID = /^[a-f0-9]{32}$/;
@@ -164,7 +165,7 @@ function validateModalPolicy(policy, credentialId, providerReadback) {
       exactKeys(providerReadback, MODAL_PROVIDER_IDENTITY_KEYS) ||
       exactKeys(providerReadback, MODAL_PROVIDER_CAPTURE_KEYS)
     ) ||
-    providerReadback.appId !== policy.appId ||
+    !MODAL_APP_ID_PATTERN.test(providerReadback.appId ?? "") ||
     providerReadback.environment !== policy.environment ||
     !Number.isSafeInteger(providerReadback.providerVersion) ||
     providerReadback.providerVersion < 1
