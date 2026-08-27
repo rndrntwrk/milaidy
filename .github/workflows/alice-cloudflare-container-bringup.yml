@@ -267,6 +267,26 @@ jobs:
               console.error("ALICE_TEMP_CONTAINER_ERROR", error);
               throw error;
             }
+
+            override async fetch(request: Request): Promise<Response> {
+              try {
+                await this.startAndWaitForPorts({
+                  ports: [this.defaultPort],
+                  cancellationOptions: {
+                    abort: request.signal,
+                    instanceGetTimeoutMS: 60_000,
+                    portReadyTimeoutMS: 120_000,
+                  },
+                });
+              } catch (error) {
+                const message = String(error).toLowerCase();
+                if (message.includes("there is no container instance that can be provided to this durable object")) {
+                  return new Response("Container provisioning in progress", { status: 503 });
+                }
+                throw error;
+              }
+              return this.containerFetch(request);
+            }
           }
 
           function json(body: unknown, status = 200) {
@@ -437,7 +457,7 @@ jobs:
           BOOT_DEADLINE_EPOCH="$(( $(date +%s) + BOOT_WINDOW_SECONDS ))"
           while [ "$(date +%s)" -lt "$BOOT_DEADLINE_EPOCH" ]; do
             health_status="$(curl --silent --show-error --output /tmp/alice-health.json --write-out '%{http_code}' \
-              --max-time 40 \
+              --max-time 130 \
               -H "x-alice-bringup-token: ${EDGE_TOKEN}" \
               "${WORKER_URL}/health/ready" || true)"
             if [ "$health_status" = "200" ]; then
