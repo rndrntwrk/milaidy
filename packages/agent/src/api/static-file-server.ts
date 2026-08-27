@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "@elizaos/core";
 import { resolveApiToken } from "../config/runtime-env.js";
+import { isAliceProductionRuntime } from "./alice-production-guard.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { sendJsonError } from "./http-helpers.js";
 import { getOrReadCachedFile } from "./memory-bounds.js";
@@ -138,7 +139,7 @@ function getCachedFile(filePath: string, mtimeMs: number): Buffer {
 export function injectApiBaseIntoHtml(
   html: Buffer,
   externalBase?: string | null,
-  opts?: { apiToken?: string | null },
+  opts?: { apiToken?: string | null; allowApiToken?: boolean },
 ): Buffer {
   const trimmedBase = externalBase?.trim();
   const trimmedToken = opts?.apiToken?.trim();
@@ -166,7 +167,7 @@ export function injectApiBaseIntoHtml(
       "window.__MILADY_API_BASE__=window.__MILADY_API_BASE__||window.location.origin;",
     );
   }
-  if (trimmedToken) {
+  if (trimmedToken && opts?.allowApiToken !== false) {
     parts.push(`window.__ELIZA_API_TOKEN__=${JSON.stringify(trimmedToken)};`);
   }
   if (parts.length === 0) return html;
@@ -337,7 +338,12 @@ export function serveStaticUi(
   let html = injectApiBaseIntoHtml(
     uiIndexHtml,
     process.env.ELIZA_EXTERNAL_BASE_URL,
-    cloudToken ? { apiToken: cloudToken } : undefined,
+    cloudToken
+      ? {
+          apiToken: cloudToken,
+          allowApiToken: !isAliceProductionRuntime(process.env),
+        }
+      : undefined,
   );
 
   // SPA is built with Vite `base: "./"` for Electrobun + Capacitor

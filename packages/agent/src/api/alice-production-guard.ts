@@ -1,7 +1,17 @@
-type AliceProductionGuardEnv = Pick<
-  NodeJS.ProcessEnv,
-  "ALICE_RUNTIME_AUTHORITY_MODE"
->;
+import {
+  type AliceRuntimeProfileEnv,
+  isAliceFullRuntimeProfile,
+  isAliceProductionRuntime,
+  isAliceResponseOnlyRuntime,
+} from "../runtime/alice-runtime-profile.js";
+
+type AliceProductionGuardEnv = AliceRuntimeProfileEnv;
+
+export {
+  isAliceFullRuntimeProfile,
+  isAliceProductionRuntime,
+  isAliceResponseOnlyRuntime,
+};
 
 export type AliceProductionRequestDecision =
   | { allowed: true }
@@ -23,20 +33,27 @@ const SAFE_WRITE_PATHS = [
   /^\/v1\/chat\/completions$/,
 ];
 
+const FULL_PROFILE_SENSITIVE_READ_PATHS = [
+  /^\/api\/secrets(?:\/|$)/,
+  /^\/api\/wallet\/(?:export|keys)(?:\/|$)/,
+  /^\/ws(?:\/|$)/,
+];
+
+const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
+  /^\/v1\/(?:chat\/completions|messages)$/,
+  /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
+  /^\/api\/companion\/stage$/,
+  /^\/api\/avatar\/(?:vrm|background)$/,
+];
+
 function matches(pathname: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(pathname));
-}
-
-export function isAliceProductionRuntime(
-  env: AliceProductionGuardEnv = process.env,
-): boolean {
-  return env.ALICE_RUNTIME_AUTHORITY_MODE?.trim() === "proposer-only";
 }
 
 export function shouldStartOptionalRuntimeSubsystems(
   env: AliceProductionGuardEnv = process.env,
 ): boolean {
-  return !isAliceProductionRuntime(env);
+  return !isAliceResponseOnlyRuntime(env);
 }
 
 export function isAliceProductionRequestAuthenticated(input: {
@@ -73,6 +90,17 @@ export function evaluateAliceProductionRequest(
 
   const normalizedMethod = method.trim().toUpperCase();
   if (normalizedMethod === "OPTIONS") return { allowed: true };
+
+  if (isAliceFullRuntimeProfile(env)) {
+    if (normalizedMethod === "GET" || normalizedMethod === "HEAD") {
+      return matches(pathname, FULL_PROFILE_SENSITIVE_READ_PATHS)
+        ? { allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" }
+        : { allowed: true };
+    }
+    return matches(pathname, FULL_PROFILE_ALLOWED_WRITE_PATHS)
+      ? { allowed: true }
+      : { allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" };
+  }
 
   if (normalizedMethod === "GET" || normalizedMethod === "HEAD") {
     if (matches(pathname, SAFE_READ_PATHS)) return { allowed: true };

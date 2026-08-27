@@ -52,7 +52,7 @@ import {
   generateAliceProductionText,
   type AliceProductionChatBoundary,
 } from "./alice-production-chat.js";
-import { isAliceProductionRuntime } from "./alice-production-guard.js";
+import { isAliceResponseOnlyRuntime } from "./alice-production-guard.js";
 import {
   isClientVisibleNoResponse,
   isNoResponsePlaceholder,
@@ -873,7 +873,7 @@ export async function generateChatResponse(
       extractCompatTextContent(message.content) ?? "",
     );
 
-    if (isAliceProductionRuntime(process.env)) {
+    if (isAliceResponseOnlyRuntime(process.env)) {
       const text = await withTimeout(
         generateAliceProductionText(
           runtime,
@@ -1882,7 +1882,7 @@ export async function handleChatRoutes(
     // Alice production uses an isolated response-only path. Do not create a
     // local room, connection, world, message, or invoke any runtime service;
     // Cloudflare is the durable session authority and supplies bounded context.
-    if (isAliceProductionRuntime(process.env)) {
+    if (isAliceResponseOnlyRuntime(process.env)) {
       if (wantsStream) {
         json(
           res,

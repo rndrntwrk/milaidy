@@ -4,11 +4,23 @@ import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("./eliza.ts", import.meta.url), "utf8");
 
 describe("Alice proposer-only startup wiring", () => {
+  it("uses the composition selector, not ambient authority, for the reduced bridge", () => {
+    expect(source).toContain(
+      "const aliceResponseOnly = isAliceResponseOnlyRuntime(process.env);",
+    );
+    expect(source).toMatch(
+      /const elizaPlugin = aliceResponseOnly\s*\? createAliceProductionRuntimePlugin\(\)\s*:\s*createElizaPlugin/,
+    );
+    expect(source).not.toContain(
+      "const aliceProduction = isAliceProductionPluginPolicyEnabled(process.env);",
+    );
+  });
+
   it("forces sandbox off even when persisted config requests a container", () => {
     expect(source).toMatch(
-      /const sandboxMode: SandboxMode = aliceProduction\s*\? "off"/,
+      /const sandboxMode: SandboxMode = aliceResponseOnly\s*\? "off"/,
     );
-    expect(source.indexOf("const sandboxMode: SandboxMode = aliceProduction")).toBeLessThan(
+    expect(source.indexOf("const sandboxMode: SandboxMode = aliceResponseOnly")).toBeLessThan(
       source.indexOf("new SandboxManager"),
     );
   });
@@ -18,7 +30,7 @@ describe("Alice proposer-only startup wiring", () => {
       /let runtime = new AgentRuntime\(\{[\s\S]*?\n  \}\);/m,
     )?.[0] ?? "";
     expect(construction).toMatch(
-      /\.\.\.\(aliceProduction\s*\?\s*\{[\s\S]*?enableDocuments: false,[\s\S]*?enableRelationships: false,[\s\S]*?enableTrajectories: false,[\s\S]*?\}\s*:\s*\{\}\)/,
+      /\.\.\.\(aliceResponseOnly\s*\?\s*\{[\s\S]*?enableDocuments: false,[\s\S]*?enableRelationships: false,[\s\S]*?enableTrajectories: false,[\s\S]*?\}\s*:\s*\{\}\)/,
     );
   });
 
@@ -43,11 +55,11 @@ describe("Alice proposer-only startup wiring", () => {
     const hookBlock = source.match(
       /const loadHooksSystem = async \(\): Promise<void> => \{[\s\S]*?\n  \};/m,
     )?.[0] ?? "";
-    expect(hookBlock).toContain("if (aliceProduction) return;");
-    expect(hookBlock.indexOf("if (aliceProduction) return;")).toBeLessThan(
+    expect(hookBlock).toContain("if (aliceResponseOnly) return;");
+    expect(hookBlock.indexOf("if (aliceResponseOnly) return;")).toBeLessThan(
       hookBlock.indexOf("await loadHooks"),
     );
-    expect(hookBlock.indexOf("if (aliceProduction) return;")).toBeLessThan(
+    expect(hookBlock.indexOf("if (aliceResponseOnly) return;")).toBeLessThan(
       hookBlock.indexOf("await triggerHook"),
     );
   });
@@ -60,7 +72,7 @@ describe("Alice proposer-only startup wiring", () => {
       let cursor = source.indexOf(marker);
       while (cursor >= 0) {
         const prefix = source.slice(Math.max(0, cursor - 160), cursor);
-        expect(prefix).toContain("!aliceProduction");
+        expect(prefix).toContain("!aliceResponseOnly");
         cursor = source.indexOf(marker, cursor + marker.length);
       }
     }

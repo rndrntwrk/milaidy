@@ -1,3 +1,4 @@
+import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
 import { readAliceReleaseMetadata } from "./alice-release-metadata.js";
 
 type EnvironmentLike = Record<string, string | undefined>;
@@ -6,9 +7,6 @@ type RuntimeLike = {
   actions?: unknown[];
   evaluators?: unknown[];
   services?: unknown;
-  taskWorkers?: unknown;
-  taskWorkerRegistry?: unknown;
-  [key: symbol]: unknown;
 };
 
 const BOUNDARY = Symbol.for("rndrntwrk.alice.production-boundary.v1");
@@ -24,6 +22,13 @@ type BoundaryStamp = {
   actionPlanning: false;
   backgroundAuthorityWorkers: "absent";
   observedServiceTypes: string[];
+};
+
+type FullRuntimeBoundaryStamp = {
+  schemaVersion: "alice.full-runtime-boundary-stamp.v1";
+  configuredPluginPackages: string[];
+  actionPlanning: true;
+  bridgePlugin: "eliza";
 };
 
 function exactStrings(actual: string[], expected: readonly string[]): boolean {
@@ -55,6 +60,23 @@ function inventory(entries: unknown[] | undefined): string[] {
   return [...new Set(names)].sort();
 }
 
+function configuredInventory(entries: string[]): string[] {
+  if (
+    entries.length < 1 ||
+    entries.length > 64 ||
+    entries.some(
+      (name) =>
+        typeof name !== "string" ||
+        name.length < 1 ||
+        name.length > 128 ||
+        !/^[a-zA-Z0-9@/._:-]+$/.test(name),
+    )
+  ) {
+    throw new Error("ALICE_PRODUCTION_PLUGIN_CLOSURE_INVALID");
+  }
+  return [...entries];
+}
+
 function registryKeys(value: unknown): string[] {
   if (value === undefined || value === null) return [];
   if (value instanceof Map) {
@@ -72,10 +94,14 @@ function registryKeys(value: unknown): string[] {
 }
 
 function taskWorkerNames(runtime: RuntimeLike): string[] {
+  const registries = runtime as unknown as {
+    taskWorkers?: unknown;
+    taskWorkerRegistry?: unknown;
+  };
   return [
     ...new Set([
-      ...registryKeys(runtime.taskWorkers),
-      ...registryKeys(runtime.taskWorkerRegistry),
+      ...registryKeys(registries.taskWorkers),
+      ...registryKeys(registries.taskWorkerRegistry),
     ]),
   ].sort();
 }
@@ -134,7 +160,35 @@ function exactRuntimePluginClosure(plugins: unknown[] | undefined): boolean {
 export function stampAliceProductionRuntimeBoundary(
   runtime: RuntimeLike,
   configuredPluginPackages: string[],
+  environment: EnvironmentLike = process.env,
 ): void {
+  if (isAliceFullRuntimeProfile(environment)) {
+    const configured = configuredInventory(configuredPluginPackages);
+    const runtimePluginNames = inventory(runtime.plugins);
+    if (
+      configured[0] !== "eliza" ||
+      configured.includes("alice-production-response-only") ||
+      !runtimePluginNames.includes("eliza") ||
+      runtimePluginNames.includes("alice-production-response-only") ||
+      inventory(runtime.actions).length === 0
+    ) {
+      throw new Error("ALICE_PRODUCTION_EXECUTION_SURFACE_INVALID");
+    }
+    const stamp: FullRuntimeBoundaryStamp = Object.freeze({
+      schemaVersion: "alice.full-runtime-boundary-stamp.v1",
+      configuredPluginPackages: Object.freeze([...configured]) as unknown as string[],
+      actionPlanning: true,
+      bridgePlugin: "eliza",
+    });
+    Object.defineProperty(runtime, BOUNDARY, {
+      value: stamp,
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
+    return;
+  }
+
   if (!exactStrings(configuredPluginPackages, EXACT_CONFIGURED_PLUGINS)) {
     throw new Error("ALICE_PRODUCTION_PLUGIN_CLOSURE_INVALID");
   }
@@ -172,8 +226,40 @@ export function buildAliceProductionProof(
   runtime: RuntimeLike,
   environment: EnvironmentLike,
 ) {
-  const stamp = runtime[BOUNDARY] as BoundaryStamp | undefined;
+  const stamp = (runtime as RuntimeLike & Record<symbol, unknown>)[BOUNDARY] as
+    | BoundaryStamp
+    | FullRuntimeBoundaryStamp
+    | undefined;
   const release = readAliceReleaseMetadata(environment);
+  if (isAliceFullRuntimeProfile(environment)) {
+    if (
+      stamp?.schemaVersion !== "alice.full-runtime-boundary-stamp.v1" ||
+      stamp.actionPlanning !== true ||
+      stamp.bridgePlugin !== "eliza" ||
+      !release
+    ) {
+      throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
+    }
+    const runtimePluginNames = inventory(runtime.plugins);
+    if (
+      !runtimePluginNames.includes("eliza") ||
+      runtimePluginNames.includes("alice-production-response-only") ||
+      inventory(runtime.actions).length === 0
+    ) {
+      throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
+    }
+    return {
+      schemaVersion: "alice.full-runtime-boundary-proof.v1" as const,
+      authorityMode: "proposer-only" as const,
+      runtimeProfile: "full-gated" as const,
+      bridgePlugin: "eliza" as const,
+      actionPlanning: true as const,
+      configuredPluginPackages: [...stamp.configuredPluginPackages],
+      runtimePluginNames,
+      release,
+    };
+  }
+
   if (
     environment.ALICE_RUNTIME_AUTHORITY_MODE !== "proposer-only" ||
     !stamp ||
