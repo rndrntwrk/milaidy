@@ -443,7 +443,7 @@ jobs:
             if [ "$health_status" = "200" ]; then
               break
             fi
-            if [ "$health_status" != "" ] && [ "$health_status" != "000" ] && [ "$health_status" != "502" ] && [ "$health_status" != "503" ] && [ "$health_status" != "504" ]; then
+            if [ "$health_status" != "" ] && [ "$health_status" != "000" ] && [ "$health_status" != "404" ] && [ "$health_status" != "502" ] && [ "$health_status" != "503" ] && [ "$health_status" != "504" ]; then
               echo "CONTAINER_BOOT_HTTP_INVALID status=${health_status}" >&2
               exit 1
             fi
