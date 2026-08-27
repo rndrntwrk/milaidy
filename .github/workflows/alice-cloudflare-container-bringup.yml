@@ -585,16 +585,9 @@ jobs:
             --arg runtime "$RUNTIME_TOKEN" \
             --arg vault "$VAULT_PASSPHRASE" \
             '{BRINGUP_ACCESS_SECRET:$access,BRINGUP_EDGE_TOKEN:$edge,BRINGUP_MODEL_TOKEN:$model,BRINGUP_RUNTIME_TOKEN:$runtime,BRINGUP_VAULT_PASSPHRASE:$vault}')"
-          secret_count=5
-          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
-            secret_payload="$(printf '%s' "$secret_payload" | jq -c \
-              --arg token "$ALICE_USER_TEST_LINK_TOKEN" \
-              '. + {BRINGUP_USER_TEST_TOKEN:$token}')"
-            secret_count=6
-          fi
           printf '%s' "$secret_payload" | npx wrangler secret bulk --name "$WORKER_NAME" >/tmp/alice-secret-bulk.log
           unset secret_payload
-          echo "WORKER_SECRET_BINDINGS_GREEN count=${secret_count}"
+          echo "WORKER_SECRET_BINDINGS_GREEN count=5"
 
           apps_json="$(list_all_container_apps)"
           app_id="$(printf '%s' "$apps_json" | jq -r --arg name "$APP_NAME" '[.[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
@@ -635,15 +628,29 @@ jobs:
           fi
           echo "CONTAINER_BOOT_GREEN url=${WORKER_URL} readiness=200"
 
-          chat_status="$(curl --silent --show-error --output /tmp/alice-chat.json --write-out '%{http_code}' \
-            --max-time 180 \
-            -X POST \
-            -H "x-alice-bringup-token: ${EDGE_TOKEN}" \
-            -H 'content-type: application/json' \
-            --data '{"model":"alice-cloudflare-bringup","messages":[{"role":"user","content":"In one short sentence, confirm you are responding from the temporary Cloudflare Alice canary."}]}' \
-            "${WORKER_URL}/v1/chat/completions")"
+          chat_status=""
+          for chat_attempt in $(seq 1 6); do
+            chat_status="$(curl --silent --show-error --output /tmp/alice-chat.json --write-out '%{http_code}' \
+              --max-time 60 \
+              -X POST \
+              -H "x-alice-bringup-token: ${EDGE_TOKEN}" \
+              -H 'content-type: application/json' \
+              --data '{"model":"alice-cloudflare-bringup","messages":[{"role":"user","content":"In one short sentence, confirm you are responding from the temporary Cloudflare Alice canary."}]}' \
+              "${WORKER_URL}/v1/chat/completions" || true)"
+            if [ "$chat_status" = "200" ]; then
+              break
+            fi
+            if [ "$chat_status" != "503" ]; then
+              echo "CONVERSATION_HTTP_INVALID status=${chat_status:-000} attempt=${chat_attempt}" >&2
+              exit 1
+            fi
+            if [ "$chat_attempt" -lt 6 ]; then
+              echo "CONVERSATION_CONVERGENCE_RETRY status=503 attempt=${chat_attempt}"
+              sleep 5
+            fi
+          done
           if [ "$chat_status" != "200" ]; then
-            echo "CONVERSATION_HTTP_INVALID status=${chat_status}" >&2
+            echo "CONVERSATION_HTTP_INVALID status=${chat_status:-000} attempts=6" >&2
             exit 1
           fi
           chat_content_raw="$(jq -er '.choices[0].message.content | select(type == "string" and length > 0)' /tmp/alice-chat.json)"
@@ -677,6 +684,91 @@ jobs:
           fi
 
           if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
+            printf '%s' "$ALICE_USER_TEST_LINK_TOKEN" | npx wrangler secret put \
+              BRINGUP_USER_TEST_TOKEN --name "$WORKER_NAME" >/tmp/alice-user-test-secret.log
+            echo "USER_TEST_LINK_BINDING_GREEN"
+
+            final_page_status=""
+            for final_page_attempt in $(seq 1 12); do
+              final_page_status="$(curl --silent --show-error \
+                --dump-header /tmp/alice-user-page.headers \
+                --output /tmp/alice-user-page.html \
+                --write-out '%{http_code}' --max-time 10 \
+                "${WORKER_URL}/" || true)"
+              if [ "$final_page_status" = "200" ]; then
+                break
+              fi
+              if [ "$final_page_status" != "404" ] && [ "$final_page_status" != "503" ]; then
+                echo "USER_TEST_FINAL_PAGE_INVALID status=${final_page_status:-000} attempt=${final_page_attempt}" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+            if [ "$final_page_status" != "200" ] ||
+              ! grep -q 'id="chat-form"' /tmp/alice-user-page.html ||
+              ! grep -qi '^content-security-policy:' /tmp/alice-user-page.headers; then
+              echo "USER_TEST_FINAL_PAGE_INVALID status=${final_page_status:-000}" >&2
+              exit 1
+            fi
+            echo "USER_TEST_FINAL_PAGE_GREEN status=200"
+
+            final_health_status=""
+            for final_health_attempt in $(seq 1 6); do
+              final_health_status="$(curl --silent --show-error \
+                --output /tmp/alice-user-health.json --write-out '%{http_code}' \
+                --max-time 60 \
+                -H "x-alice-bringup-token: ${EDGE_TOKEN}" \
+                "${WORKER_URL}/health/ready" || true)"
+              if [ "$final_health_status" = "200" ]; then
+                break
+              fi
+              if [ "$final_health_status" != "503" ]; then
+                echo "USER_TEST_FINAL_HEALTH_INVALID status=${final_health_status:-000} attempt=${final_health_attempt}" >&2
+                exit 1
+              fi
+              sleep 5
+            done
+            if [ "$final_health_status" != "200" ]; then
+              echo "USER_TEST_FINAL_HEALTH_INVALID status=${final_health_status:-000} attempts=6" >&2
+              exit 1
+            fi
+            echo "USER_TEST_FINAL_HEALTH_GREEN status=200"
+
+            final_chat_status=""
+            for final_chat_attempt in $(seq 1 6); do
+              final_chat_status="$(curl --silent --show-error \
+                --output /tmp/alice-user-chat.json --write-out '%{http_code}' \
+                --max-time 60 -X POST \
+                -H "x-alice-user-test-token: ${ALICE_USER_TEST_LINK_TOKEN}" \
+                -H 'content-type: application/json' \
+                --data '{"model":"alice-cloudflare-bringup","messages":[{"role":"user","content":"Confirm in one short sentence that this private Alice test link is conversational."}]}' \
+                "${WORKER_URL}/v1/chat/completions" || true)"
+              if [ "$final_chat_status" = "200" ]; then
+                break
+              fi
+              if [ "$final_chat_status" != "503" ]; then
+                echo "USER_TEST_FINAL_CHAT_INVALID status=${final_chat_status:-000} attempt=${final_chat_attempt}" >&2
+                exit 1
+              fi
+              sleep 5
+            done
+            if [ "$final_chat_status" != "200" ] ||
+              ! jq -e '.choices[0].message.content | type == "string" and length > 0' /tmp/alice-user-chat.json >/dev/null ||
+              ! jq -e '.alice_boundary | .authorityMode == "proposer-only" and .actionExecution == "disabled" and .tools == "disabled"' /tmp/alice-user-chat.json >/dev/null; then
+              echo "USER_TEST_FINAL_CHAT_INVALID status=${final_chat_status:-000}" >&2
+              exit 1
+            fi
+            echo "USER_TEST_FINAL_CHAT_GREEN status=200 boundary=proposer-only"
+
+            final_instances_json="$(npx wrangler containers instances "$app_id" --json)"
+            final_instance_count="$(printf '%s' "$final_instances_json" | jq 'length')"
+            final_instance_state="$(printf '%s' "$final_instances_json" | jq -r 'if length == 1 then .[0].state else empty end')"
+            if [ "$final_instance_count" != "1" ] || [ "$final_instance_state" != "running" ]; then
+              echo "USER_TEST_FINAL_INSTANCE_INVALID state=${final_instance_state:-unknown} count=${final_instance_count}" >&2
+              exit 1
+            fi
+            echo "USER_TEST_FINAL_INSTANCE_GREEN state=running count=1"
+
             if [ -n "$TAIL_PID" ]; then
               kill "$TAIL_PID" >/dev/null 2>&1 || true
               wait "$TAIL_PID" >/dev/null 2>&1 || true
