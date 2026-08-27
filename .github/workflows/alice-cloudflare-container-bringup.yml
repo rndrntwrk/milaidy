@@ -439,7 +439,7 @@ jobs:
             health_status="$(curl --silent --show-error --output /tmp/alice-health.json --write-out '%{http_code}' \
               --max-time 40 \
               -H "x-alice-bringup-token: ${EDGE_TOKEN}" \
-              "${WORKER_URL}/health/live" || true)"
+              "${WORKER_URL}/health/ready" || true)"
             if [ "$health_status" = "200" ]; then
               break
             fi
@@ -456,7 +456,7 @@ jobs:
             echo "CONTAINER_BOOT_TIMEOUT status=${health_status:-000}" >&2
             exit 1
           fi
-          echo "CONTAINER_BOOT_GREEN url=${WORKER_URL} health=200"
+          echo "CONTAINER_BOOT_GREEN url=${WORKER_URL} readiness=200"
 
           chat_status="$(curl --silent --show-error --output /tmp/alice-chat.json --write-out '%{http_code}' \
             --max-time 180 \
@@ -494,7 +494,7 @@ jobs:
           if [ -s "$TAIL_LOG" ]; then
             tail_hash="sha256:$(sha256sum "$TAIL_LOG" | awk '{print $1}')"
             echo "OBSERVABILITY_CAPTURED hash=${tail_hash}"
-            grep -E 'ALICE_TEMP_CONTAINER_STARTED|CONVERSATION|health/live|chat/completions' "$TAIL_LOG" | tail -20 || true
+            grep -E 'ALICE_TEMP_CONTAINER_STARTED|CONVERSATION|health/ready|chat/completions' "$TAIL_LOG" | tail -20 || true
           else
             echo "OBSERVABILITY_EMPTY" >&2
           fi
@@ -508,7 +508,7 @@ jobs:
             echo "- Cloudflare registry image: ${cf_registry_digest}"
             echo "- Temporary Worker URL: ${WORKER_URL}"
             echo "- Container application: ${app_id}"
-            echo "- Live health: HTTP 200"
+            echo "- Runtime readiness: HTTP 200"
             echo "- Conversation model: ${chat_model}"
             echo "- Conversation response: ${chat_content}"
             echo "- Conversation boundary: proposer-only; actions/tools disabled"

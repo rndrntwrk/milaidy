@@ -100,6 +100,26 @@ test("boot probe retries the bounded first-deploy 404 without accepting it as re
   );
 });
 
+test("boot gate waits for the Alice runtime readiness contract before chat", () => {
+  const healthLoop = between(
+    workflow,
+    'health_status=""',
+    'echo "CONTAINER_BOOT_GREEN',
+  );
+
+  assert.match(
+    healthLoop,
+    /\$\{WORKER_URL\}\/health\/ready/u,
+    "boot must probe runtime readiness, not process liveness",
+  );
+  assert.doesNotMatch(healthLoop, /\$\{WORKER_URL\}\/health\/live/u);
+  assert.match(
+    healthLoop,
+    /"\$health_status" != "503"/u,
+    "runtime-not-ready must remain inside the bounded readiness loop",
+  );
+});
+
 test("independent teardown guard preserves the documented 30-minute expiry", () => {
   const failsafeLoop = between(
     workflow,
