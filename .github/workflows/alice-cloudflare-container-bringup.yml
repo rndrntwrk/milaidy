@@ -662,7 +662,7 @@ jobs:
 
             if [ -z "$first_seen_epoch" ] && [ "$worker_status" = "200" ]; then
               first_seen_epoch="$now_epoch"
-              deadline_epoch="$((now_epoch + 900))"
+              deadline_epoch="$((now_epoch + 1800))"
               echo "FAILSAFE_ARMED first_seen_epoch=${first_seen_epoch} deadline_epoch=${deadline_epoch}"
             fi
 
