@@ -128,6 +128,54 @@ test("boot probe retries the bounded first-deploy 404 without accepting it as re
   );
 });
 
+test("outer Durable Object allocation retries only exact Cloudflare platform failures", () => {
+  const workerSource = between(
+    workflow,
+    "cat > src/index.ts <<'EOF'",
+    "\n          EOF",
+  );
+  const classifierSource = between(
+    workerSource,
+    "const CLOUDFLARE_INTERNAL_REFERENCE",
+    "\n\n          export class AliceBringupContainer",
+  );
+  const classifier = Function(
+    `${classifierSource.replace(
+      /error: unknown/u,
+      "error",
+    )}\nreturn isRetryableCloudflareAllocationError;`,
+  )() as (error: unknown) => boolean;
+
+  assert.equal(
+    classifier(
+      new Error("internal error; reference = qhv0petkud4fvihnqmru2vf2"),
+    ),
+    true,
+  );
+  assert.equal(
+    classifier(
+      new Error(
+        "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.",
+      ),
+    ),
+    true,
+  );
+  for (const message of [
+    "internal error; reference =",
+    "Alice internal error; reference = qhv0petkud4fvihnqmru2vf2",
+    "internal error; reference = qhv0petkud4fvihnqmru2vf2\nextra",
+    "Connection closed: this Durable Object instance is no longer active.",
+    "application failed",
+  ]) {
+    assert.equal(classifier(new Error(message)), false, message);
+  }
+
+  assert.match(
+    workerSource,
+    /try \{[\s\S]*?return await env\.ALICE_CONTAINER\.getByName\("singleton"\)\.fetch\([\s\S]*?catch \(error\)[\s\S]*?isRetryableCloudflareAllocationError\(error\)[\s\S]*?status: 503[\s\S]*?throw error/u,
+  );
+});
+
 test("boot gate waits for the Alice runtime readiness contract before chat", () => {
   const healthLoop = between(
     workflow,

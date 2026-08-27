@@ -251,6 +251,15 @@ jobs:
           };
 
           const sourceImage = "ghcr.io/rndrntwrk/milaidy-agent@sha256:983041c9d8691bcebda35872f07e8a8d43912fb8594e84f3af5d04d25cc165e2";
+          const CLOUDFLARE_INTERNAL_REFERENCE = /^internal error; reference = [a-z0-9]{24}$/iu;
+          const CLOUDFLARE_INACTIVE_DURABLE_OBJECT =
+            "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.";
+
+          function isRetryableCloudflareAllocationError(error: unknown) {
+            const message = error instanceof Error ? error.message : "";
+            return CLOUDFLARE_INTERNAL_REFERENCE.test(message) ||
+              message === CLOUDFLARE_INACTIVE_DURABLE_OBJECT;
+          }
 
           export class AliceBringupContainer extends Container {
             defaultPort = 2138;
@@ -503,7 +512,16 @@ jobs:
               headers.set("cf-access-authenticated-user-email", "alice-owner-verified.invalid");
               headers.set("x-milady-cloudflare-access-secret", env.BRINGUP_ACCESS_SECRET);
               headers.set("origin", env.BRINGUP_WORKER_ORIGIN);
-              return env.ALICE_CONTAINER.getByName("singleton").fetch(new Request(request, { headers }));
+              try {
+                return await env.ALICE_CONTAINER.getByName("singleton").fetch(
+                  new Request(request, { headers }),
+                );
+              } catch (error) {
+                if (isRetryableCloudflareAllocationError(error)) {
+                  return new Response("Container provisioning in progress", { status: 503 });
+                }
+                throw error;
+              }
             },
           };
           EOF
