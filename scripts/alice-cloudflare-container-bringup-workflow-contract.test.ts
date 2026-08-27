@@ -80,3 +80,16 @@ test("boot probe allows the Container SDK readiness budget without exceeding sta
     /while \[ "\$\(date \+%s\)" -lt "\$BOOT_DEADLINE_EPOCH" \]; do/u,
   );
 });
+
+test("independent teardown guard preserves the documented 30-minute expiry", () => {
+  const failsafeLoop = between(
+    workflow,
+    'first_seen_epoch=""',
+    'echo "FAILSAFE_CHECKPOINT',
+  );
+  const expirySeconds = Number(
+    failsafeLoop.match(/deadline_epoch="\$\(\(now_epoch \+ (\d+)\)\)"/u)?.[1],
+  );
+
+  assert.equal(expirySeconds, 30 * 60);
+});
