@@ -27,6 +27,64 @@ function inertRuntimePlugins(
 }
 
 describe("Alice sanitized runtime-boundary proof", () => {
+  it("attests the exact full-gated bridge while preserving proposer-only authority", () => {
+    const runtime = {
+      plugins: [
+        { name: "basic-capabilities" },
+        { name: "core-security-hooks" },
+        { name: "eliza" },
+        { name: "sql" },
+        { name: "openai" },
+      ],
+      actions: [{ name: "REPLY" }],
+      evaluators: [{ name: "REFLECTION" }],
+      services: new Map([["MEMORY", {}]]),
+    };
+    const environment = {
+      ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+      ALICE_RUNTIME_PROFILE: "full-gated",
+      ALICE_PROGRAM_DIGEST: `sha256:${"1".repeat(64)}`,
+      ALICE_RELEASE_DIGEST: `sha256:${"2".repeat(64)}`,
+      ALICE_POLICY_HASH: `sha256:${"3".repeat(64)}`,
+      ALICE_SOURCE_COMMIT: "4".repeat(40),
+      ALICE_DEPLOYMENT_CONTROLLER_COMMIT: "7".repeat(40),
+      ALICE_RUNTIME_IMAGE: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"5".repeat(64)}`,
+      ALICE_RUNTIME_BUILD_MANIFEST_SHA256: `sha256:${"8".repeat(64)}`,
+      ALICE_DEPLOYMENT_MANIFEST_SHA256: `sha256:${"9".repeat(64)}`,
+      ALICE_ELIZA_COMMIT: "6".repeat(40),
+      ALICE_MODAL_REVISION: "49",
+    };
+
+    stampAliceProductionRuntimeBoundary(
+      runtime,
+      ["eliza", "@elizaos/plugin-sql", "@elizaos/plugin-openai"],
+      environment,
+    );
+
+    expect(buildAliceProductionProof(runtime, environment)).toMatchObject({
+      schemaVersion: "alice.full-runtime-boundary-proof.v1",
+      authorityMode: "proposer-only",
+      runtimeProfile: "full-gated",
+      bridgePlugin: "eliza",
+      actionPlanning: true,
+      configuredPluginPackages: [
+        "eliza",
+        "@elizaos/plugin-sql",
+        "@elizaos/plugin-openai",
+      ],
+      runtimePluginNames: [
+        "basic-capabilities",
+        "core-security-hooks",
+        "eliza",
+        "openai",
+        "sql",
+      ],
+      release: {
+        deploymentManifestSha256: `sha256:${"9".repeat(64)}`,
+      },
+    });
+  });
+
   it("returns only bounded identifiers and release metadata", () => {
     const runtime = {
       plugins: inertRuntimePlugins().map((plugin) =>

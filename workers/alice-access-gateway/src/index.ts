@@ -105,8 +105,9 @@ function canonicalDurableChatBody(
   turnId: string,
   assistantText: string,
   recordedAt: number,
+  fullRuntime: boolean,
 ): Record<string, unknown> {
-  return {
+  const body: Record<string, unknown> = {
     id: `chatcmpl-${turnId.slice("turn-".length, 36)}`,
     object: "chat.completion",
     created: Math.floor(recordedAt / 1_000),
@@ -118,8 +119,9 @@ function canonicalDurableChatBody(
         finish_reason: "stop",
       },
     ],
-    alice_boundary: { ...ALICE_CHAT_BOUNDARY },
   };
+  if (!fullRuntime) body.alice_boundary = { ...ALICE_CHAT_BOUNDARY };
+  return body;
 }
 
 function durableChatResponse(
@@ -127,9 +129,12 @@ function durableChatResponse(
   sessionId: string,
   assistantText: string,
   recordedAt: number,
+  fullRuntime: boolean,
 ): Response {
   return new Response(
-    JSON.stringify(canonicalDurableChatBody(turnId, assistantText, recordedAt)),
+    JSON.stringify(
+      canonicalDurableChatBody(turnId, assistantText, recordedAt, fullRuntime),
+    ),
     {
       status: 200,
       headers: {
@@ -366,6 +371,22 @@ function exactRuntimePluginClosure(names: unknown): boolean {
   );
 }
 
+function exactFullRuntimeInventory(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 3 &&
+    value.length <= 64 &&
+    value.every(
+      (name) =>
+        typeof name === "string" &&
+        name.length >= 1 &&
+        name.length <= 128 &&
+        /^[a-zA-Z0-9@/._:-]+$/.test(name),
+    ) &&
+    new Set(value).size === value.length
+  );
+}
+
 async function readBoundedBytes(
   body: Request | Response,
   maxBytes: number,
@@ -383,6 +404,33 @@ function runtimeReleaseMatches(
   proof: Record<string, any>,
   admission: RuntimeAdmission,
 ): boolean {
+  if (
+    hasExactKeys(proof, [
+      "actionPlanning",
+      "authorityMode",
+      "bridgePlugin",
+      "configuredPluginPackages",
+      "release",
+      "runtimePluginNames",
+      "runtimeProfile",
+      "schemaVersion",
+    ]) &&
+    proof.schemaVersion === "alice.full-runtime-boundary-proof.v1" &&
+    proof.authorityMode === "proposer-only" &&
+    proof.runtimeProfile === "full-gated" &&
+    proof.bridgePlugin === "eliza" &&
+    proof.actionPlanning === true &&
+    exactFullRuntimeInventory(proof.configuredPluginPackages) &&
+    proof.configuredPluginPackages[0] === "eliza" &&
+    !proof.configuredPluginPackages.includes("alice-production-response-only") &&
+    exactFullRuntimeInventory(proof.runtimePluginNames) &&
+    proof.runtimePluginNames.includes("eliza") &&
+    !proof.runtimePluginNames.includes("alice-production-response-only") &&
+    exactSafeRuntimeRelease(proof.release, admission)
+  ) {
+    return true;
+  }
+
   const release = proof.release as Record<string, unknown> | undefined;
   return Boolean(
     hasExactKeys(proof, [
@@ -449,7 +497,9 @@ async function verifyUpstreamRelease(
   admission: RuntimeAdmission,
   env: AliceAccessGatewayEnv,
   fetchImpl: FetchImplementation,
-): Promise<{ ok: true } | { ok: false; response: Response }> {
+): Promise<
+  { ok: true; proof: Record<string, any> } | { ok: false; response: Response }
+> {
   if (admission.release.deploymentManifestSha256 !== env.ALICE_DEPLOYMENT_MANIFEST_SHA256) {
     return {
       ok: false,
@@ -482,7 +532,7 @@ async function verifyUpstreamRelease(
       response: jsonResponse({ ok: false, code: "RUNTIME_RELEASE_MISMATCH" }, 503),
     };
   }
-  return { ok: true, proof } as { ok: true; proof: Record<string, any> };
+  return { ok: true, proof };
 }
 
 function exactSafeRuntimeRelease(
@@ -894,6 +944,7 @@ function buildDurableUpstreamBody(
 function durableReplayResponse(
   capture: Awaited<ReturnType<typeof captureDurableChatRequest>>,
   existing: DurableConversationTurn,
+  fullRuntime: boolean,
 ): Response {
   if (
     existing.turnId !== capture.turnId ||
@@ -907,6 +958,7 @@ function durableReplayResponse(
     capture.sessionId,
     existing.assistantText,
     existing.recordedAt,
+    fullRuntime,
   );
 }
 
@@ -918,6 +970,7 @@ async function persistDurableChatResponse(
   request: Request,
   upstream: URL,
   fetchImpl: FetchImplementation,
+  fullRuntime: boolean,
 ): Promise<Response> {
   if (!response.ok) {
     return jsonResponse(
@@ -934,15 +987,10 @@ async function persistDurableChatResponse(
   } catch {
     throw new Error("ALICE_DURABLE_CHAT_RESPONSE_INVALID");
   }
+  const expectedKeys = ["id", "object", "created", "model", "choices"];
+  if (!fullRuntime) expectedKeys.push("alice_boundary");
   if (
-    !hasExactKeys(body, [
-      "id",
-      "object",
-      "created",
-      "model",
-      "choices",
-      "alice_boundary",
-    ]) ||
+    !hasExactKeys(body, expectedKeys) ||
     typeof body.id !== "string" ||
     !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(body.id) ||
     body.object !== "chat.completion" ||
@@ -958,7 +1006,7 @@ async function persistDurableChatResponse(
     body.choices[0].finish_reason !== "stop" ||
     !hasExactKeys(body.choices[0].message, ["role", "content"]) ||
     body.choices[0].message.role !== "assistant" ||
-    !validAliceChatBoundary(body.alice_boundary)
+    (!fullRuntime && !validAliceChatBoundary(body.alice_boundary))
   ) {
     throw new Error("ALICE_DURABLE_CHAT_RESPONSE_INVALID");
   }
@@ -972,7 +1020,11 @@ async function persistDurableChatResponse(
     throw new Error("ALICE_DURABLE_CHAT_RESPONSE_INVALID");
   }
   const responseHash = await sha256Text(
-    JSON.stringify({ assistantText, aliceBoundary: ALICE_CHAT_BOUNDARY }),
+    JSON.stringify(
+      fullRuntime
+        ? { assistantText, runtimeProfile: "full-gated" }
+        : { assistantText, aliceBoundary: ALICE_CHAT_BOUNDARY },
+    ),
   );
   const currentAdmission = await checkRuntimeAdmission(env);
   if (!currentAdmission.ok) return currentAdmission.response;
@@ -990,6 +1042,9 @@ async function persistDurableChatResponse(
     fetchImpl,
   );
   if (!currentProof.ok) return currentProof.response;
+  if (isFullRuntimeProof(currentProof.proof) !== fullRuntime) {
+    return jsonResponse({ ok: false, code: "RUNTIME_RELEASE_MISMATCH" }, 503);
+  }
   const recordedAt = Date.now();
   const persisted = await env.ALICE_CONTROL.fetch(
     `https://alice-control.internal/control/internal/v1/sessions/${encodeURIComponent(capture.sessionId)}/conversation/turn`,
@@ -1026,6 +1081,7 @@ async function persistDurableChatResponse(
     capture.sessionId,
     assistantText,
     recordedAt,
+    fullRuntime,
   );
 }
 
@@ -1047,14 +1103,110 @@ const SAFE_RUNTIME_READS = [
   /^\/api\/alice-production\/proof$/,
 ];
 
+const FULL_RUNTIME_SENSITIVE_READS = [
+  /^\/api\/secrets(?:\/|$)/,
+  /^\/api\/wallet\/(?:export|keys)(?:\/|$)/,
+  /^\/ws(?:\/|$)/,
+];
+
+const FULL_RUNTIME_WRITES = [
+  /^\/v1\/(?:chat\/completions|messages)$/,
+  /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
+  /^\/api\/companion\/stage$/,
+  /^\/api\/avatar\/(?:vrm|background)$/,
+];
+
+function isFullRuntimeUiPath(pathname: string): boolean {
+  if (
+    pathname === "/" ||
+    pathname === "/companion" ||
+    /^\/broadcast\/[a-zA-Z0-9-]+$/.test(pathname)
+  ) {
+    return true;
+  }
+  if (pathname.includes("%") || pathname.split("/").includes("..")) return false;
+  return (
+    /^\/(?:assets|vrms|models|fonts|icons|images|sounds|audio)\/[a-zA-Z0-9._/-]+$/.test(
+      pathname,
+    ) || /^\/(?:favicon\.ico|manifest\.webmanifest)$/.test(pathname)
+  );
+}
+
+function isFullRuntimeApiRead(pathname: string): boolean {
+  return (
+    (pathname.startsWith("/api/") || /^\/v1\/models(?:\/[^/]+)?$/.test(pathname)) &&
+    !FULL_RUNTIME_SENSITIVE_READS.some((pattern) => pattern.test(pathname))
+  );
+}
+
+function isFullRuntimeProof(proof: unknown): boolean {
+  return (
+    isPlainObject(proof) &&
+    proof.schemaVersion === "alice.full-runtime-boundary-proof.v1" &&
+    proof.runtimeProfile === "full-gated"
+  );
+}
+
+function isFullRuntimeRequest(method: string, pathname: string): boolean {
+  const normalized = method.toUpperCase();
+  if (normalized === "GET" || normalized === "HEAD") {
+    return (
+      isFullRuntimeUiPath(pathname) ||
+      SAFE_RUNTIME_READS.some((pattern) => pattern.test(pathname)) ||
+      isFullRuntimeApiRead(pathname)
+    );
+  }
+  return FULL_RUNTIME_WRITES.some((pattern) => pattern.test(pathname));
+}
+
+function isFullRuntimeProductApi(method: string, pathname: string): boolean {
+  const normalized = method.toUpperCase();
+  if (normalized === "GET" || normalized === "HEAD") {
+    return (
+      isFullRuntimeApiRead(pathname) &&
+      !SAFE_RUNTIME_READS.some((pattern) => pattern.test(pathname))
+    );
+  }
+  return (
+    pathname !== "/v1/chat/completions" &&
+    FULL_RUNTIME_WRITES.some((pattern) => pattern.test(pathname))
+  );
+}
+
 function isAdmittedRuntimeRequest(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
   if (normalized === "POST" && pathname === "/v1/chat/completions") return true;
-  if (normalized === "GET") {
-    if (pathname === "/") return true;
-    return SAFE_RUNTIME_READS.some((pattern) => pattern.test(pathname));
+  if (normalized === "GET" || normalized === "HEAD") {
+    if (isFullRuntimeUiPath(pathname)) return true;
+    return (
+      SAFE_RUNTIME_READS.some((pattern) => pattern.test(pathname)) ||
+      isFullRuntimeApiRead(pathname)
+    );
   }
-  return false;
+  return FULL_RUNTIME_WRITES.some((pattern) => pattern.test(pathname));
+}
+
+function sanitizedUpstreamResponse(response: Response): Response {
+  if (!response.ok) {
+    return jsonResponse({ ok: false, code: "RUNTIME_READ_UNAVAILABLE" }, 503);
+  }
+  const headers = new Headers();
+  for (const name of [
+    "cache-control",
+    "content-encoding",
+    "content-language",
+    "content-security-policy",
+    "content-type",
+    "etag",
+    "last-modified",
+    "permissions-policy",
+    "referrer-policy",
+    "x-content-type-options",
+  ]) {
+    const value = response.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  return new Response(response.body, { status: response.status, headers });
 }
 
 export async function handleRequest(
@@ -1098,10 +1250,6 @@ export async function handleRequest(
     if (!isAdmittedRuntimeRequest(request.method, path)) {
       return jsonResponse({ ok: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" }, 403);
     }
-    if (requestUrl.search !== "") {
-      return jsonResponse({ ok: false, code: "ALICE_PRODUCTION_QUERY_DENIED" }, 403);
-    }
-
     const admission = await checkRuntimeAdmission(env);
     if (!admission.ok) return admission.response;
     const upstreamProof = await verifyUpstreamRelease(
@@ -1113,7 +1261,35 @@ export async function handleRequest(
     );
     if (!upstreamProof.ok) return upstreamProof.response;
 
-    if (path === "/" && request.method === "GET") {
+    const fullRuntime = isFullRuntimeProof(upstreamProof.proof);
+    const normalizedMethod = request.method.toUpperCase();
+    if (
+      requestUrl.search !== "" &&
+      !(
+        fullRuntime &&
+        (normalizedMethod === "GET" || normalizedMethod === "HEAD") &&
+        (isFullRuntimeUiPath(path) || isFullRuntimeApiRead(path))
+      )
+    ) {
+      return jsonResponse({ ok: false, code: "ALICE_PRODUCTION_QUERY_DENIED" }, 403);
+    }
+    if (
+      fullRuntime
+        ? !isFullRuntimeRequest(request.method, path)
+        : !(
+            (request.method === "POST" && path === "/v1/chat/completions") ||
+            (request.method === "GET" &&
+              (path === "/" ||
+                SAFE_RUNTIME_READS.some((pattern) => pattern.test(path))))
+          )
+    ) {
+      return jsonResponse(
+        { ok: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" },
+        403,
+      );
+    }
+
+    if (path === "/" && request.method === "GET" && !fullRuntime) {
       return aliceChatUiResponse(
         admission.admission,
         manifest,
@@ -1134,7 +1310,7 @@ export async function handleRequest(
     }
 
     if (path === "/api/alice-production/proof" && request.method === "GET") {
-      return jsonResponse((upstreamProof as { ok: true; proof: unknown }).proof);
+      return jsonResponse(upstreamProof.proof);
     }
 
     // Assign path and query components on a clone of the pinned upstream.
@@ -1167,7 +1343,7 @@ export async function handleRequest(
         env,
       );
       if (context.existingTurn) {
-        return durableReplayResponse(durableChat, context.existingTurn);
+        return durableReplayResponse(durableChat, context.existingTurn, fullRuntime);
       }
       init.body = buildDurableUpstreamBody(durableChat, context.recentTurns);
       (init.headers as Headers).set("content-type", "application/json");
@@ -1192,6 +1368,15 @@ export async function handleRequest(
         fetchImpl,
       );
       if (!finalProof.ok) return finalProof.response;
+      if (isFullRuntimeProof(finalProof.proof) !== fullRuntime) {
+        return jsonResponse({ ok: false, code: "RUNTIME_RELEASE_MISMATCH" }, 503);
+      }
+      if (
+        fullRuntime &&
+        (isFullRuntimeUiPath(path) || isFullRuntimeProductApi(request.method, path))
+      ) {
+        return sanitizedUpstreamResponse(upstreamResponse);
+      }
       return canonicalSafeRuntimeResponse(
         path,
         upstreamResponse,
@@ -1207,6 +1392,7 @@ export async function handleRequest(
           request,
           upstream,
           fetchImpl,
+          fullRuntime,
         )
       : upstreamResponse;
   } catch (error) {

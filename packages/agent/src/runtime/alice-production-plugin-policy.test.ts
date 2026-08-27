@@ -31,6 +31,27 @@ describe("Alice production plugin policy", () => {
     expect([...plugins]).toEqual(["@acme/custom-plugin"]);
   });
 
+  it("does not collapse the exact full-gated Alice composition", () => {
+    const plugins = new Set([
+      "@elizaos/plugin-sql",
+      "@elizaos/plugin-openai",
+      "@elizaos/plugin-agent-skills",
+      "@elizaos/plugin-discord",
+    ]);
+    expect(
+      enforceAliceProductionPluginPolicy(plugins, {
+        ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+        ALICE_RUNTIME_PROFILE: "full-gated",
+      }),
+    ).toEqual([]);
+    expect([...plugins]).toEqual([
+      "@elizaos/plugin-sql",
+      "@elizaos/plugin-openai",
+      "@elizaos/plugin-agent-skills",
+      "@elizaos/plugin-discord",
+    ]);
+  });
+
   it("removes SQL service and route surfaces before Alice registration", () => {
     const sqlPlugin = {
       name: "@elizaos/plugin-sql",

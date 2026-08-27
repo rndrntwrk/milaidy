@@ -62,6 +62,18 @@ describe("injectApiBaseIntoHtml", () => {
     expect(withoutToken).not.toContain("window.__ELIZA_API_TOKEN__");
   });
 
+  it("can suppress bearer injection for an authenticated gateway shell", () => {
+    const html = Buffer.from("<html><head></head><body></body></html>");
+    const out = injectApiBaseIntoHtml(html, null, {
+      apiToken: "must-not-reach-browser",
+      allowApiToken: false,
+    }).toString("utf8");
+
+    expect(out).not.toContain("must-not-reach-browser");
+    expect(out).not.toContain("window.__ELIZA_API_TOKEN__");
+    expect(out).toContain("window.__MILADY_API_BASE__");
+  });
+
   it("declares same-origin as the API base when no explicit base is provided", () => {
     // Agent-colocated SPA (e.g. alice-bot): /api/* lives at the same origin
     // as the served HTML. The injected marker tells shouldUseCloudOnlyBranding

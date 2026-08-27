@@ -135,6 +135,30 @@ function runtimeProof(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function fullRuntimeProof() {
+  return {
+    schemaVersion: "alice.full-runtime-boundary-proof.v1",
+    authorityMode: "proposer-only",
+    runtimeProfile: "full-gated",
+    bridgePlugin: "eliza",
+    actionPlanning: true,
+    configuredPluginPackages: [
+      "eliza",
+      "@elizaos/plugin-sql",
+      "@elizaos/plugin-openai",
+      "@elizaos/plugin-agent-skills",
+    ],
+    runtimePluginNames: [
+      "basic-capabilities",
+      "core-security-hooks",
+      "eliza",
+      "openai",
+      "sql",
+    ],
+    release: { ...binding, ...release },
+  };
+}
+
 function runtimeHealth(overrides: Record<string, unknown> = {}) {
   return {
     ready: true,
@@ -289,6 +313,183 @@ function authenticatedFetch(
 }
 
 describe("Alice Access gateway", () => {
+  test("proxies the complete full-gated root, Companion, broadcast, and asset surfaces", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+    const ownerRequests: Request[] = [];
+
+    for (const pathname of [
+      "/",
+      "/companion",
+      "/broadcast/alice-cam",
+      "/assets/main.js",
+    ]) {
+      const response = await handleRequest(
+        new Request(`https://alice.rndrntwrk.com${pathname}`, {
+          headers: {
+            authorization: "Bearer must-not-reach-runtime",
+            "cf-access-jwt-assertion": token,
+          },
+        }),
+        env,
+        async (request) => {
+          if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+            return Response.json(jwks);
+          }
+          if (new URL(request.url).pathname === "/api/alice-production/proof") {
+            return Response.json(fullRuntimeProof());
+          }
+          ownerRequests.push(request.clone());
+          return new Response(
+            pathname.startsWith("/assets/")
+              ? "window.__fullMilady=true;"
+              : `<html><body data-milady-surface="${pathname}"></body></html>`,
+            {
+              headers: {
+                "content-type": pathname.startsWith("/assets/")
+                  ? "application/javascript"
+                  : "text/html; charset=utf-8",
+                "set-cookie": "must-not-cross-gateway=1",
+              },
+            },
+          );
+        },
+        now,
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain(
+        pathname.startsWith("/assets/") ? "__fullMilady" : "data-milady-surface",
+      );
+      expect(response.headers.get("set-cookie")).toBeNull();
+    }
+
+    expect(ownerRequests.map((request) => new URL(request.url).pathname)).toEqual([
+      "/",
+      "/companion",
+      "/broadcast/alice-cam",
+      "/assets/main.js",
+    ]);
+    for (const request of ownerRequests) {
+      expect(request.headers.get("authorization")).toBeNull();
+      expect(request.headers.get("cf-access-jwt-assertion")).toBeNull();
+    }
+  });
+
+  test("proxies only the reviewed full-gated Companion and broadcast API surface", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+
+    for (const [method, pathname] of [
+      ["GET", "/api/auth/status"],
+      ["GET", "/api/config"],
+      ["GET", "/api/memories/feed?limit=10"],
+      ["GET", "/api/companion/stage"],
+      ["GET", "/api/broadcast/alice-cam/scene"],
+      ["POST", "/api/companion/stage"],
+    ]) {
+      const response = await handleRequest(
+        new Request(`https://alice.rndrntwrk.com${pathname}`, {
+          method,
+          headers: {
+            "cf-access-jwt-assertion": token,
+            "content-type": "application/json",
+            origin: "https://alice.rndrntwrk.com",
+          },
+          ...(method === "POST" ? { body: '{"scene":"studio"}' } : {}),
+        }),
+        env,
+        async (request) => {
+          if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+            return Response.json(jwks);
+          }
+          if (new URL(request.url).pathname === "/api/alice-production/proof") {
+            return Response.json(fullRuntimeProof());
+          }
+          expect(request.headers.get("authorization")).toBeNull();
+          expect(request.headers.get("cf-access-jwt-assertion")).toBeNull();
+          return Response.json({ ok: true, pathname, method });
+        },
+        now,
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true, pathname, method });
+    }
+  });
+
+  test("denies an unreviewed full-gated write route before runtime ingress", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+    let runtimeRequests = 0;
+    const response = await handleRequest(
+      new Request("https://alice.rndrntwrk.com/api/unreviewed/execute", {
+        method: "POST",
+        headers: {
+          "cf-access-jwt-assertion": token,
+          "content-type": "application/json",
+          origin: "https://alice.rndrntwrk.com",
+        },
+        body: "{}",
+      }),
+      env,
+      async (request) => {
+        if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+          return Response.json(jwks);
+        }
+        runtimeRequests += 1;
+        return Response.json(fullRuntimeProof());
+      },
+      now,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "ALICE_PRODUCTION_MUTATION_DENIED",
+    });
+    expect(runtimeRequests).toBe(0);
+  });
+
+  test("rejects non-exact full-profile proof inventories and profile case variants", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+
+    for (const proof of [
+      {
+        ...fullRuntimeProof(),
+        configuredPluginPackages: ["eliza", {}, "@elizaos/plugin-sql"],
+      },
+      { ...fullRuntimeProof(), runtimeProfile: "FULL-GATED" },
+    ]) {
+      let ownerRequests = 0;
+      const response = await handleRequest(
+        new Request("https://alice.rndrntwrk.com/", {
+          headers: { "cf-access-jwt-assertion": token },
+        }),
+        env,
+        async (request) => {
+          if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+            return Response.json(jwks);
+          }
+          if (new URL(request.url).pathname === "/api/alice-production/proof") {
+            return Response.json(proof);
+          }
+          ownerRequests += 1;
+          return new Response("unsafe");
+        },
+        now,
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        ok: false,
+        code: "RUNTIME_RELEASE_MISMATCH",
+      });
+      expect(ownerRequests).toBe(0);
+    }
+  });
+
   test("requires a verified JWT for the exact owner before any upstream request", async () => {
     const env = await environment();
     let calls = 0;
@@ -666,6 +867,71 @@ describe("Alice Access gateway", () => {
         responseHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       },
     });
+  });
+
+  test("persists a full-gated normal runtime chat response without inventing a response-only boundary", async () => {
+    const controlRequests: Request[] = [];
+    const env = await environment({
+      onControlRequest: (request) => controlRequests.push(request),
+    });
+    const { token, jwks } = await accessFixture();
+    const response = await handleRequest(
+      new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "cf-access-jwt-assertion": token,
+          "content-type": "application/json",
+          origin: "https://alice.rndrntwrk.com",
+          "x-alice-session-id": "owner-primary",
+        },
+        body: JSON.stringify({
+          model: "alice-production",
+          messages: [{ role: "user", content: "Use the normal runtime." }],
+        }),
+      }),
+      env,
+      async (request) => {
+        if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+          return Response.json(jwks);
+        }
+        if (new URL(request.url).pathname === "/api/alice-production/proof") {
+          return Response.json(fullRuntimeProof());
+        }
+        return Response.json({
+          id: "chatcmpl-full-runtime",
+          object: "chat.completion",
+          created: now,
+          model: "alice-production",
+          choices: [
+            {
+              index: 0,
+              message: { role: "assistant", content: "Normal runtime reached." },
+              finish_reason: "stop",
+            },
+          ],
+        });
+      },
+      now,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      id: expect.stringMatching(/^chatcmpl-[a-f0-9]{1,36}$/),
+      object: "chat.completion",
+      created: expect.any(Number),
+      model: "alice-production",
+      choices: [
+        {
+          index: 0,
+          message: { role: "assistant", content: "Normal runtime reached." },
+          finish_reason: "stop",
+        },
+      ],
+    });
+    const persistRequest = controlRequests.find((request) =>
+      new URL(request.url).pathname.endsWith("/conversation/turn"),
+    );
+    expect(persistRequest).toBeDefined();
   });
 
   test("rejects any non-exact proposer-only boundary before durable persistence", async () => {

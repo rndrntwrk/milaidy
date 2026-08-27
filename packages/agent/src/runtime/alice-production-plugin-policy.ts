@@ -1,9 +1,11 @@
 import type { Plugin } from "@elizaos/core";
 
-type AliceProductionPluginEnv = Pick<
-  NodeJS.ProcessEnv,
-  "ALICE_RUNTIME_AUTHORITY_MODE"
->;
+import {
+  type AliceRuntimeProfileEnv,
+  isAliceResponseOnlyRuntime,
+} from "./alice-runtime-profile.js";
+
+type AliceProductionPluginEnv = AliceRuntimeProfileEnv;
 
 export const ALICE_PRODUCTION_PLUGIN_ALLOWLIST = new Set([
   "@elizaos/plugin-sql",
@@ -13,7 +15,7 @@ export const ALICE_PRODUCTION_PLUGIN_ALLOWLIST = new Set([
 export function isAliceProductionPluginPolicyEnabled(
   env: AliceProductionPluginEnv = process.env,
 ): boolean {
-  return env.ALICE_RUNTIME_AUTHORITY_MODE?.trim() === "proposer-only";
+  return isAliceResponseOnlyRuntime(env);
 }
 
 /** Mutates the resolver load set and returns every fail-closed removal. */

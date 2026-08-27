@@ -79,4 +79,10 @@ describe("Alice proposer-only chat", () => {
       expect(productionBlock).not.toContain(forbidden);
     }
   });
+
+  it("uses the response-only path only for the diagnostic composition", () => {
+    const source = readFileSync(new URL("./chat-routes.ts", import.meta.url), "utf8");
+    expect(source).toContain("isAliceResponseOnlyRuntime(process.env)");
+    expect(source).not.toContain("if (isAliceProductionRuntime(process.env))");
+  });
 });

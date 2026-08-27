@@ -11,6 +11,11 @@ const aliceEnv = {
   ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
 };
 
+const fullAliceEnv = {
+  ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+  ALICE_RUNTIME_PROFILE: "full-gated",
+};
+
 describe("Alice production runtime guard", () => {
   it("activates only for the exact proposer-only authority mode", () => {
     expect(isAliceProductionRuntime(aliceEnv)).toBe(true);
@@ -22,7 +27,70 @@ describe("Alice production runtime guard", () => {
 
   it("suppresses every optional background subsystem in production-core mode", () => {
     expect(shouldStartOptionalRuntimeSubsystems(aliceEnv)).toBe(false);
+    expect(shouldStartOptionalRuntimeSubsystems(fullAliceEnv)).toBe(true);
+    expect(
+      shouldStartOptionalRuntimeSubsystems({
+        ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+        ALICE_RUNTIME_PROFILE: "FULL-GATED",
+      }),
+    ).toBe(false);
+    expect(
+      shouldStartOptionalRuntimeSubsystems({
+        ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+        ALICE_RUNTIME_PROFILE: " full-gated ",
+      }),
+    ).toBe(false);
     expect(shouldStartOptionalRuntimeSubsystems({})).toBe(true);
+  });
+
+  it("restores authenticated product surfaces only for the exact full-gated profile", () => {
+    for (const [method, pathname] of [
+      ["GET", "/"],
+      ["GET", "/companion"],
+      ["GET", "/broadcast/alice-cam"],
+      ["GET", "/api/broadcast/alice-cam/scene"],
+      ["GET", "/api/conversations"],
+      ["POST", "/api/conversations"],
+      ["POST", "/api/conversations/7/messages"],
+      ["POST", "/api/companion/stage"],
+    ]) {
+      expect(
+        evaluateAliceProductionRequest(method, pathname, fullAliceEnv),
+      ).toEqual({ allowed: true });
+    }
+
+    expect(
+      evaluateAliceProductionRequest("POST", "/api/conversations", {
+        ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+        ALICE_RUNTIME_PROFILE: "FULL-GATED",
+      }),
+    ).toEqual({
+      allowed: false,
+      code: "ALICE_PRODUCTION_MUTATION_DENIED",
+    });
+  });
+
+  it("keeps high-risk and WebSocket surfaces denied without an exact grant", () => {
+    for (const [method, pathname] of [
+      ["POST", "/api/wallet/trade/execute"],
+      ["POST", "/api/wallet/transfer"],
+      ["POST", "/api/connectors/discord/messages"],
+      ["POST", "/api/stream/start"],
+      ["POST", "/api/cloud/deploy"],
+      ["POST", "/api/repository/merge"],
+      ["POST", "/api/sandbox/exec"],
+      ["POST", "/api/unreviewed/execute"],
+      ["GET", "/api/secrets"],
+      ["GET", "/api/wallet/keys"],
+      ["GET", "/ws"],
+    ]) {
+      expect(
+        evaluateAliceProductionRequest(method, pathname, fullAliceEnv),
+      ).toEqual({
+        allowed: false,
+        code: "ALICE_PRODUCTION_MUTATION_DENIED",
+      });
+    }
   });
 
   it("allows read-only status and only the durable bounded chat write surface", () => {
