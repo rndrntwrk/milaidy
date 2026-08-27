@@ -48,6 +48,34 @@ test("temporary Container records the Cloudflare startup diagnostic", () => {
   );
 });
 
+test("temporary Container gives the immutable Alice image its observed cold-start budget", () => {
+  const containerSource = between(
+    workflow,
+    "cat > src/index.ts <<'EOF'",
+    "\n          EOF",
+  );
+
+  assert.match(
+    containerSource,
+    /override async fetch\(request: Request\): Promise<Response>[\s\S]*?startAndWaitForPorts\(\{[\s\S]*?ports: \[this\.defaultPort\][\s\S]*?instanceGetTimeoutMS: 60_000[\s\S]*?portReadyTimeoutMS: 120_000[\s\S]*?return this\.containerFetch\(request\)/u,
+    "the Container must outlive the provider's default port-ready timeout before proxying",
+  );
+});
+
+test("explicit cold-start wait preserves only the SDK provisioning transient", () => {
+  const containerSource = between(
+    workflow,
+    "cat > src/index.ts <<'EOF'",
+    "\n          EOF",
+  );
+
+  assert.match(
+    containerSource,
+    /catch \(error\)[\s\S]*?there is no container instance that can be provided to this durable object[\s\S]*?status: 503[\s\S]*?throw error/u,
+    "ordinary first-deploy provisioning must remain retryable without admitting unknown startup errors",
+  );
+});
+
 test("boot probe allows the Container SDK readiness budget without exceeding staging expiry", () => {
   const healthLoop = between(
     workflow,
@@ -64,8 +92,8 @@ test("boot probe allows the Container SDK readiness budget without exceeding sta
   assert.ok(Number.isInteger(bootWindow), "missing bounded boot window");
   assert.ok(Number.isInteger(delay), "missing retry delay");
   assert.ok(
-    maxTime >= 33,
-    "caller aborts before the SDK instance and port-readiness budgets",
+    maxTime >= 125,
+    "caller aborts before the explicit Alice cold-start budget",
   );
   assert.ok(
     bootWindow >= 10 * 60,
