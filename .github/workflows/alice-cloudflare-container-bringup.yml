@@ -11,6 +11,7 @@ on:
         options:
           - "0"
           - "60"
+          - "300"
 
 permissions:
   actions: read
@@ -25,7 +26,7 @@ jobs:
   bringup:
     name: Import, converse, and tear down
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 360
     environment: alice-cloudflare-bringup
     env:
       CLOUDFLARE_ACCOUNT_ID: "036df6c823669b8fa2f66cf4c16eeb29"
@@ -44,9 +45,14 @@ jobs:
         run: |
           set -euo pipefail
           expiry_contract="30 minutes after Worker/Container creation"
-          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
-            expiry_contract="60 minutes after verified link readiness; absolute provider-resource ceiling: 85 minutes after creation"
-          fi
+          case "$USER_TEST_WINDOW_MINUTES" in
+            60)
+              expiry_contract="60 minutes after verified link readiness; absolute provider-resource ceiling: 85 minutes after creation"
+              ;;
+            300)
+              expiry_contract="300 minutes after verified link readiness; absolute provider-resource ceiling: 325 minutes after creation"
+              ;;
+          esac
           {
             echo "### Alice Cloudflare Container bring-up contract"
             echo "- Owner: Alice Cloudflare bring-up operator"
@@ -57,6 +63,7 @@ jobs:
             echo "- Routes: workers.dev only; no custom route or domain"
             echo "- Hard expiry: ${expiry_contract}"
             echo "- Teardown: delete Worker, remaining Container application, and unique registry image tag"
+            echo "- Manual teardown: \`gh run cancel ${GITHUB_RUN_ID} -R ${GITHUB_REPOSITORY}\` (triggers both cleanup owners)"
             echo "- Completion evidence: live health, one conversational response, singleton instance readback, then Worker/Container/image absence"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -68,6 +75,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          PROVIDER_CREATE_CUTOFF_EPOCH="$(( $(date +%s) + 1800 ))"
 
           if ! [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "Invalid immutable source digest" >&2
@@ -77,11 +85,11 @@ jobs:
             echo "CLOUDFLARE_CONTAINER_BRINGUP_TOKEN is not configured" >&2
             exit 1
           fi
-          if ! [[ "$USER_TEST_WINDOW_MINUTES" =~ ^(0|60)$ ]]; then
+          if ! [[ "$USER_TEST_WINDOW_MINUTES" =~ ^(0|60|300)$ ]]; then
             echo "USER_TEST_WINDOW_INVALID" >&2
             exit 1
           fi
-          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ] &&
+          if [ "$USER_TEST_WINDOW_MINUTES" != "0" ] &&
             ! [[ "${ALICE_USER_TEST_LINK_TOKEN:-}" =~ ^[A-Za-z0-9_-]{43,128}$ ]]; then
             echo "ALICE_USER_TEST_LINK_TOKEN_INVALID" >&2
             exit 1
@@ -553,6 +561,10 @@ jobs:
 
           docker tag "$SOURCE_IMAGE" "$CF_IMAGE_TAG"
           echo "IMPORT_PUSH_START local=${CF_IMAGE_TAG}"
+          if [ "$(date +%s)" -gt "$PROVIDER_CREATE_CUTOFF_EPOCH" ]; then
+            echo "PROVIDER_CREATE_BUDGET_INVALID stage=image-push" >&2
+            exit 1
+          fi
           npx wrangler containers push "$CF_IMAGE_TAG" | tee /tmp/alice-container-push.log
           cf_repo_digests="$(docker image inspect "$CF_IMAGE_REF" --format '{{json .RepoDigests}}')"
           cf_registry_digest="$(printf '%s' "$cf_repo_digests" | jq -r --arg prefix "registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/${CF_IMAGE}@" '[.[] | select(startswith($prefix))] | if length == 1 then .[0] else empty end')"
@@ -567,13 +579,18 @@ jobs:
           fi
           echo "IMPORT_GREEN source=${SOURCE_IMAGE} cloudflare=${cf_registry_digest} tag=${CF_IMAGE_REF}"
 
+          if [ "$(date +%s)" -gt "$PROVIDER_CREATE_CUTOFF_EPOCH" ]; then
+            echo "PROVIDER_CREATE_BUDGET_INVALID stage=worker-deploy" >&2
+            exit 1
+          fi
           echo "CONTAINER_DEPLOY_START worker=${WORKER_NAME} app=${APP_NAME} max_instances=1"
           npx wrangler deploy --containers-rollout=immediate | tee /tmp/alice-worker-deploy.log
           CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           ABSOLUTE_EXPIRY_MINUTES=30
-          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
-            ABSOLUTE_EXPIRY_MINUTES=85
-          fi
+          case "$USER_TEST_WINDOW_MINUTES" in
+            60) ABSOLUTE_EXPIRY_MINUTES=85 ;;
+            300) ABSOLUTE_EXPIRY_MINUTES=325 ;;
+          esac
           ABSOLUTE_EXPIRES_AT="$(date -u -d "+${ABSOLUTE_EXPIRY_MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)"
           EXPIRES_AT="$ABSOLUTE_EXPIRES_AT"
           echo "CONTAINER_CREATED worker=${WORKER_NAME} url=${WORKER_URL} created=${CREATED_AT} absolute_expires=${ABSOLUTE_EXPIRES_AT}"
@@ -683,7 +700,7 @@ jobs:
             echo "OBSERVABILITY_EMPTY" >&2
           fi
 
-          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
+          if [ "$USER_TEST_WINDOW_MINUTES" != "0" ]; then
             printf '%s' "$ALICE_USER_TEST_LINK_TOKEN" | npx wrangler secret put \
               BRINGUP_USER_TEST_TOKEN --name "$WORKER_NAME" >/tmp/alice-user-test-secret.log
             echo "USER_TEST_LINK_BINDING_GREEN"
@@ -776,7 +793,7 @@ jobs:
             fi
             /bin/rm -f /tmp/alice-*.log /tmp/alice-*.err /tmp/alice-health.json /tmp/alice-chat.json
             LINK_READY_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            EXPIRES_AT="$(date -u -d '+60 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+            EXPIRES_AT="$(date -u -d "+${USER_TEST_WINDOW_MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)"
             if [ "$(date -u -d "$EXPIRES_AT" +%s)" -gt "$(date -u -d "$ABSOLUTE_EXPIRES_AT" +%s)" ]; then
               echo "USER_TEST_ABSOLUTE_EXPIRY_INVALID" >&2
               exit 1
@@ -824,7 +841,7 @@ jobs:
     name: Independent expiry and teardown guard
     if: ${{ always() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 360
     environment: alice-cloudflare-bringup
     env:
       CLOUDFLARE_ACCOUNT_ID: "036df6c823669b8fa2f66cf4c16eeb29"
@@ -838,6 +855,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          FAILSAFE_STARTED_EPOCH="$(date +%s)"
 
           WORKER_NAME="alice-cf-bringup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           APP_NAME="${WORKER_NAME}-app"
@@ -976,9 +994,10 @@ jobs:
           first_seen_epoch=""
           deadline_epoch=""
           expiry_seconds=1800
-          if [ "$USER_TEST_WINDOW_MINUTES" = "60" ]; then
-            expiry_seconds=5100
-          fi
+          case "$USER_TEST_WINDOW_MINUTES" in
+            60) expiry_seconds=5100 ;;
+            300) expiry_seconds=19500 ;;
+          esac
           while true; do
             now_epoch="$(date +%s)"
             worker_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
@@ -995,6 +1014,13 @@ jobs:
             primary_conclusion="$(printf '%s' "$primary_snapshot" | jq -r '.conclusion')"
 
             if [ -z "$first_seen_epoch" ] && [ "$worker_status" = "200" ]; then
+              if [ "$USER_TEST_WINDOW_MINUTES" = "300" ] &&
+                [ "$now_epoch" -gt "$(( FAILSAFE_STARTED_EPOCH + 1800 ))" ]; then
+                echo "FAILSAFE_PROVIDER_BUDGET_EXCEEDED"
+                failsafe_cleanup_once
+                trap - EXIT INT TERM
+                exit 0
+              fi
               first_seen_epoch="$now_epoch"
               deadline_epoch="$((now_epoch + expiry_seconds))"
               echo "FAILSAFE_ARMED first_seen_epoch=${first_seen_epoch} deadline_epoch=${deadline_epoch}"
@@ -1014,7 +1040,7 @@ jobs:
               trap - EXIT INT TERM
               exit 0
             fi
-            if [ "$primary_state" = "completed" ] && [ "$USER_TEST_WINDOW_MINUTES" != "60" ]; then
+            if [ "$primary_state" = "completed" ] && [ "$USER_TEST_WINDOW_MINUTES" = "0" ]; then
               echo "FAILSAFE_PRIMARY_TERMINAL"
               failsafe_cleanup_once
               trap - EXIT INT TERM

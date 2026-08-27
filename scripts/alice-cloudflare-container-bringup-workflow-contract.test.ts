@@ -172,6 +172,48 @@ test("user-test mode is an explicit bounded 60-minute workflow input", () => {
   );
 });
 
+test("manual-stop user-test mode keeps the same link for five hours with a hard safety expiry", () => {
+  const bringupJob = between(workflow, "  bringup:", "\n  failsafe:");
+  const failsafeJob = workflow.slice(workflow.indexOf("  failsafe:"));
+
+  assert.match(
+    workflow,
+    /user_test_window_minutes:[\s\S]*?options:[\s\S]*?- "0"[\s\S]*?- "60"[\s\S]*?- "300"/u,
+  );
+  assert.match(bringupJob, /timeout-minutes: 360/u);
+  assert.match(
+    bringupJob,
+    /300 minutes after verified link readiness; absolute provider-resource ceiling: 325 minutes after creation/u,
+  );
+  assert.match(
+    bringupJob,
+    /Manual teardown: \\`gh run cancel \$\{GITHUB_RUN_ID\} -R \$\{GITHUB_REPOSITORY\}\\`/u,
+  );
+  assert.match(
+    bringupJob,
+    /EXPIRES_AT="\$\(date -u -d "\+\$\{USER_TEST_WINDOW_MINUTES\} minutes" \+%Y-%m-%dT%H:%M:%SZ\)"/u,
+  );
+  assert.match(failsafeJob, /timeout-minutes: 360/u);
+  assert.match(
+    failsafeJob,
+    /300\) expiry_seconds=19500/u,
+  );
+});
+
+test("five-hour mode reserves five minutes for cleanup before the hosted-runner limit", () => {
+  const bringupJob = between(workflow, "  bringup:", "\n  failsafe:");
+  const failsafeJob = workflow.slice(workflow.indexOf("  failsafe:"));
+
+  assert.match(
+    bringupJob,
+    /PROVIDER_CREATE_CUTOFF_EPOCH=.*1800[\s\S]*?PROVIDER_CREATE_BUDGET_INVALID[\s\S]*?containers push[\s\S]*?PROVIDER_CREATE_BUDGET_INVALID[\s\S]*?wrangler deploy --containers-rollout=immediate/u,
+  );
+  assert.match(
+    failsafeJob,
+    /FAILSAFE_STARTED_EPOCH=.*date \+%s[\s\S]*?if \[ -z "\$first_seen_epoch" \] && \[ "\$worker_status" = "200" \]; then[\s\S]*?FAILSAFE_STARTED_EPOCH \+ 1800[\s\S]*?FAILSAFE_PROVIDER_BUDGET_EXCEEDED[\s\S]*?failsafe_cleanup_once/u,
+  );
+});
+
 test("user-test page keeps its short-lived capability in the URL fragment", () => {
   const workerSource = between(
     workflow,
@@ -207,7 +249,7 @@ test("user-test API requires the exact temporary secret while automated canary a
   );
 });
 
-test("successful user-test canary stays available for 60 minutes with an independent absolute ceiling", () => {
+test("successful user-test canary stays available for the selected window with an independent absolute ceiling", () => {
   const primarySuccess = between(
     workflow,
     'echo "CONTAINER_INSTANCE_GREEN',
@@ -221,11 +263,11 @@ test("successful user-test canary stays available for 60 minutes with an indepen
 
   assert.match(
     primarySuccess,
-    /if \[ "\$USER_TEST_WINDOW_MINUTES" = "60" \]; then[\s\S]*?USER_TEST_LINK_READY[\s\S]*?CLEANUP_COMPLETE=1/u,
+    /if \[ "\$USER_TEST_WINDOW_MINUTES" != "0" \]; then[\s\S]*?USER_TEST_LINK_READY[\s\S]*?CLEANUP_COMPLETE=1/u,
   );
   assert.match(
     failsafeLoop,
-    /expiry_seconds=1800[\s\S]*?if \[ "\$USER_TEST_WINDOW_MINUTES" = "60" \]; then[\s\S]*?expiry_seconds=5100/u,
+    /expiry_seconds=1800[\s\S]*?60\) expiry_seconds=5100[\s\S]*?300\) expiry_seconds=19500/u,
   );
   assert.match(
     failsafeLoop,
@@ -236,7 +278,7 @@ test("successful user-test canary stays available for 60 minutes with an indepen
   assert.match(failsafeLoop, /failsafe_cleanup_once/u);
 });
 
-test("the 60-minute owner window starts only after verified conversation readiness", () => {
+test("the selected owner window starts only after verified conversation readiness", () => {
   const bringupJob = between(workflow, "  bringup:", "\n  failsafe:");
   assert.match(
     bringupJob,
@@ -244,7 +286,7 @@ test("the 60-minute owner window starts only after verified conversation readine
   );
   assert.match(
     bringupJob,
-    /CONVERSATION_GREEN[\s\S]*?LINK_READY_AT="\$\(date -u \+%Y-%m-%dT%H:%M:%SZ\)"[\s\S]*?EXPIRES_AT="\$\(date -u -d '\+60 minutes' \+%Y-%m-%dT%H:%M:%SZ\)"[\s\S]*?USER_TEST_LINK_READY/u,
+    /CONVERSATION_GREEN[\s\S]*?LINK_READY_AT="\$\(date -u \+%Y-%m-%dT%H:%M:%SZ\)"[\s\S]*?EXPIRES_AT="\$\(date -u -d "\+\$\{USER_TEST_WINDOW_MINUTES\} minutes" \+%Y-%m-%dT%H:%M:%SZ\)"[\s\S]*?USER_TEST_LINK_READY/u,
   );
 });
 
@@ -256,7 +298,7 @@ test("primary user-test owner remains alive and tears down on expiry or cancella
     "          else",
   );
 
-  assert.match(bringupJob, /timeout-minutes: 120/u);
+  assert.match(bringupJob, /timeout-minutes: 360/u);
   assert.match(userTestBranch, /USER_TEST_LINK_READY/u);
   assert.match(userTestBranch, /USER_TEST_WINDOW_EXPIRED/u);
   assert.match(
