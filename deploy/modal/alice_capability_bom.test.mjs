@@ -19,7 +19,8 @@ function fixtureRoot() {
 }
 
 function writePackage(root, name, options = {}) {
-  const packageRoot = path.join(root, "node_modules", ...name.split("/"));
+  const targetName = options.targetName ?? name;
+  const packageRoot = path.join(root, "node_modules", ...targetName.split("/"));
   fs.mkdirSync(packageRoot, { recursive: true });
   fs.writeFileSync(
     path.join(packageRoot, "package.json"),
@@ -84,17 +85,24 @@ function materializeCapabilityPackagesFromDockerfile(root) {
     "utf8",
   );
   const packageNames = [];
+  const aliasTargetNames = [];
   for (const match of dockerfile.matchAll(
-    /\bcp\s+[^\s\\]+\/package\.json\s+node_modules\/((?:@[^/\s\\]+\/)?[^/\s;\\]+)\/;/g,
+    /\bcp\s+([^\s\\]+\/package\.json)\s+node_modules\/((?:@[^/\s\\]+\/)?[^/\s;\\]+)\/;/g,
   )) {
-    const packageName = match[1];
+    const packageName = fs.existsSync(match[1])
+      ? JSON.parse(fs.readFileSync(match[1], "utf8")).name
+      : match[2];
     if (!/^@(?:elizaos|miladyai|rndrntwrk)\/(?:plugin-|app-)/.test(packageName)) {
       continue;
     }
-    writePackage(root, packageName);
+    writePackage(root, packageName, { targetName: match[2] });
     packageNames.push(packageName);
+    if (packageName !== match[2]) aliasTargetNames.push(match[2]);
   }
-  return [...new Set(packageNames)].sort();
+  return {
+    aliasTargetNames: [...new Set(aliasTargetNames)].sort(),
+    packageNames: [...new Set(packageNames)].sort(),
+  };
 }
 
 function applyCapabilityPruneFromDockerfile(root) {
@@ -154,7 +162,7 @@ test("the production Docker materialization and broad hoist leave no unclassifie
     }
 
     hoistBunStorePackages(root);
-    const explicitlyMaterializedPackages =
+    const explicitMaterialization =
       materializeCapabilityPackagesFromDockerfile(root);
     applyCapabilityPruneFromDockerfile(root);
 
@@ -169,7 +177,7 @@ test("the production Docker materialization and broad hoist leave no unclassifie
     const expectedPackages = [
       ...new Set([
         ...retainedPackages.keys(),
-        ...explicitlyMaterializedPackages,
+        ...explicitMaterialization.packageNames,
       ]),
     ].sort();
     assert.deepEqual(discovery.packageNames, expectedPackages);
@@ -179,6 +187,14 @@ test("the production Docker materialization and broad hoist leave no unclassifie
       .map((packageName) => `package:${packageName}`)
       .filter((id) => !classifiedIds.has(id));
     assert.deepEqual(missing, []);
+    const staleAliasTargets = checkedPolicy.entries
+      .filter(
+        (entry) =>
+          entry.source.type === "package" &&
+          explicitMaterialization.aliasTargetNames.includes(entry.source.package),
+      )
+      .map((entry) => entry.id);
+    assert.deepEqual(staleAliasTargets, []);
 
     for (const [packageName, surface] of retainedPackages) {
       const policyEntry = checkedPolicy.entries.find(
@@ -201,7 +217,7 @@ test("the production Docker materialization and broad hoist leave no unclassifie
       "@elizaos/plugin-scheduling",
     ]) {
       assert.ok(
-        explicitlyMaterializedPackages.includes(packageName),
+        explicitMaterialization.packageNames.includes(packageName),
         `${packageName} must be bound to the production Docker materialization block`,
       );
       const policyEntry = checkedPolicy.entries.find(

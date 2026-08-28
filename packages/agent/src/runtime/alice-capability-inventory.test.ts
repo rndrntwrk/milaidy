@@ -273,6 +273,10 @@ describe("Alice final-image capability runtime inventory", () => {
         runtimePlugins,
       ).counts.core,
     ).toBe(coreEntries.length);
-    expect(coreEntries.filter((entry) => entry.surface === "module").length).toBe(2);
+    expect(
+      coreEntries
+        .filter((entry) => entry.surface === "module")
+        .map((entry) => entry.id),
+    ).toEqual(["package:@miladyai/app-core"]);
   });
 });
