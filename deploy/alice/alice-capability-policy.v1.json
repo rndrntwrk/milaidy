@@ -269,6 +269,32 @@
       "policyState": "enabled"
     },
     {
+      "id": "package:@elizaos/plugin-app-control",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-app-control",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-app-manager",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-app-manager",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
       "id": "package:@elizaos/plugin-anthropic",
       "classification": "policy-disabled",
       "source": {
@@ -680,6 +706,19 @@
       "source": {
         "type": "package",
         "package": "@elizaos/plugin-plugin-manager",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-scheduling",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-scheduling",
         "entrypoint": "."
       },
       "surface": "plugin",
