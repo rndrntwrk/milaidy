@@ -1,7 +1,9 @@
 import {
   authorizeStatePlaneRequest,
   validateStateOperation,
+  type AliceObjectStore,
   type AliceStateKind,
+  type AliceVectorStore,
   type D1AliceStateAdapter,
 } from "./state-plane";
 
@@ -9,6 +11,13 @@ type PortableAdapter = Pick<
   D1AliceStateAdapter,
   "getRecord" | "putRecord" | "listRecords" | "applyAtomic"
 >;
+
+type CoordinationService = {
+  initialize(ownerId: string, sessionId: string): Promise<unknown>;
+  snapshot(ownerId: string, sessionId: string): Promise<unknown>;
+  connect(ownerId: string, sessionId: string, connectionId: string, connectedAt: number): Promise<unknown>;
+  advanceCursor(ownerId: string, sessionId: string, connector: string, cursor: string, observedAt: number): Promise<unknown>;
+};
 
 const MAX_OPERATION_BYTES = 65_536;
 
@@ -56,6 +65,9 @@ async function readBoundedJson(request: Request): Promise<unknown> {
 
 export function createAliceStateService(input: {
   adapter: PortableAdapter;
+  vectorStore?: Pick<AliceVectorStore, "upsert" | "query">;
+  objectStore?: Pick<AliceObjectStore, "put">;
+  coordination?: CoordinationService;
   token: string;
 }) {
   return {
@@ -83,9 +95,42 @@ export function createAliceStateService(input: {
           const records = await input.adapter.listRecords(listInput);
           return response({ ok: true, records }, 200);
         }
-        const { operation: _operation, ...atomicInput } = operation;
-        const records = await input.adapter.applyAtomic(atomicInput);
-        return response({ ok: true, records }, 200);
+        if (operation.operation === "records.atomic") {
+          const { operation: _operation, ...atomicInput } = operation;
+          const records = await input.adapter.applyAtomic(atomicInput);
+          return response({ ok: true, records }, 200);
+        }
+        if (operation.operation === "vector.upsert") {
+          if (!input.vectorStore) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
+          const { operation: _operation, ...vectorInput } = operation;
+          return response({ ok: true, reference: await input.vectorStore.upsert(vectorInput) }, 200);
+        }
+        if (operation.operation === "vector.query") {
+          if (!input.vectorStore) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
+          const { operation: _operation, ...queryInput } = operation;
+          return response({ ok: true, matches: await input.vectorStore.query(queryInput) }, 200);
+        }
+        if (operation.operation === "object.put") {
+          if (!input.objectStore) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
+          const binary = atob(operation.bytesBase64);
+          const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+          return response({ ok: true, reference: await input.objectStore.put(bytes, operation.mediaType, operation.createdAt) }, 200);
+        }
+        if (!input.coordination) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
+        if (operation.operation === "coordination.initialize") {
+          return response({ ok: true, state: await input.coordination.initialize(operation.ownerId, operation.sessionId) }, 200);
+        }
+        if (operation.operation === "coordination.snapshot") {
+          return response({ ok: true, state: await input.coordination.snapshot(operation.ownerId, operation.sessionId) }, 200);
+        }
+        if (operation.operation === "coordination.connect") {
+          return response({ ok: true, state: await input.coordination.connect(
+            operation.ownerId, operation.sessionId, operation.connectionId, operation.connectedAt,
+          ) }, 200);
+        }
+        return response({ ok: true, cursor: await input.coordination.advanceCursor(
+          operation.ownerId, operation.sessionId, operation.connector, operation.cursor, operation.observedAt,
+        ) }, 200);
       } catch (error) {
         const code = error instanceof Error && /^STATE_[A-Z0-9_]+$/.test(error.message)
           ? error.message

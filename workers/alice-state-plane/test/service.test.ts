@@ -79,4 +79,47 @@ describe("private Alice state service", () => {
     expect(calls.map((call) => call.operation)).toEqual(["put", "list", "atomic"]);
     expect((await invoke({ operation: "sql", statement: "SELECT 1" })).status).toBe(400);
   });
+
+  test("routes exact Vectorize, R2 and coordination operations through private dependencies", async () => {
+    const { createAliceStateService } = await import("../src/service");
+    const calls: string[] = [];
+    const never = async () => { throw new Error("record adapter must not be called"); };
+    const service = createAliceStateService({
+      adapter: { getRecord: never, putRecord: never, listRecords: never, applyAtomic: never },
+      vectorStore: {
+        async upsert() { calls.push("vector.upsert"); return { vectorId: "vec-owner-001" }; },
+        async query() { calls.push("vector.query"); return []; },
+      },
+      objectStore: {
+        async put(bytes: Uint8Array) { calls.push(`object.put:${bytes.byteLength}`); return { key: "objects/sha256/example" }; },
+      },
+      coordination: {
+        async initialize() { calls.push("coordination.initialize"); return { ownerId: "owner-001", sessionId: "session-001" }; },
+        async snapshot() { calls.push("coordination.snapshot"); return { connectionEpoch: 0 }; },
+        async connect() { calls.push("coordination.connect"); return { connectionEpoch: 1 }; },
+        async advanceCursor() { calls.push("coordination.cursor"); return { revision: 1 }; },
+      },
+      token: "s".repeat(48),
+    });
+    const invoke = async (value: unknown) => service.fetch(new Request("https://state.internal/v1/state", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-alice-state-token": "s".repeat(48) },
+      body: JSON.stringify(value),
+    }));
+    const operations = [
+      { operation: "vector.upsert", recordKind: "memory", recordId: "memory-001", ownerId: "owner-001", model: "bge-base-en-v1.5", dimensions: 3, values: [1, 2, 3] },
+      { operation: "vector.query", ownerId: "owner-001", model: "bge-base-en-v1.5", dimensions: 3, values: [1, 2, 3], topK: 5 },
+      { operation: "object.put", bytesBase64: "YWxpY2U=", mediaType: "text/plain", createdAt: 1_777_000_000_000 },
+      { operation: "coordination.initialize", ownerId: "owner-001", sessionId: "session-001" },
+      { operation: "coordination.snapshot", ownerId: "owner-001", sessionId: "session-001" },
+      { operation: "coordination.connect", ownerId: "owner-001", sessionId: "session-001", connectionId: "connection-001", connectedAt: 1_777_000_000_000 },
+      { operation: "coordination.cursor", ownerId: "owner-001", sessionId: "session-001", connector: "telegram", cursor: "cursor-001", observedAt: 1_777_000_000_001 },
+    ];
+    for (const operation of operations) expect((await invoke(operation)).status).toBe(200);
+    expect(calls).toEqual([
+      "vector.upsert", "vector.query", "object.put:5", "coordination.initialize",
+      "coordination.snapshot", "coordination.connect", "coordination.cursor",
+    ]);
+    expect((await invoke({ operation: "sql", statement: "SELECT 1" })).status).toBe(400);
+  });
 });

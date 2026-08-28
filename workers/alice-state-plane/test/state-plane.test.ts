@@ -184,8 +184,8 @@ describe("portable D1 Alice state contract", () => {
     d1.batch = async (statements) => {
       if (!injected) {
         injected = true;
-        d1.sqlite.query("INSERT INTO alice_state_idempotency(idempotency_key, request_sha256, created_at) VALUES (?, ?, ?)")
-          .run("atomic-race:0", "f".repeat(64), 1_777_000_002_000);
+        d1.sqlite.query("INSERT INTO alice_state_idempotency(owner_id, idempotency_key, request_sha256, created_at) VALUES (?, ?, ?, ?)")
+          .run("owner-001", "atomic-race:0", "f".repeat(64), 1_777_000_002_000);
       }
       return originalBatch(statements);
     };
@@ -223,6 +223,52 @@ describe("portable D1 Alice state contract", () => {
     expect((await adapter.getRecord("memory", "memory-tenant-001", "owner-001"))?.payload).toEqual({ owner: 1 });
     expect((await adapter.getRecord("memory", "memory-tenant-001", "owner-002"))?.payload).toEqual({ owner: 2 });
     await expect(adapter.getRecord("memory", "memory-tenant-001", undefined as never)).rejects.toThrow("STATE_OWNER_REQUIRED");
+  });
+
+  test("scopes the same idempotency key independently to each owner", async () => {
+    const state = await import("../src/state-plane");
+    const d1 = new SqliteD1Binding();
+    await state.installAliceStateSchema(d1);
+    const adapter = new state.D1AliceStateAdapter(d1);
+    for (const ownerId of ["owner-001", "owner-002"]) {
+      await adapter.putRecord({
+        kind: "task", recordId: "task-shared-001", ownerId,
+        payload: { ownerId }, updatedAt: 1_777_000_000_000,
+        idempotencyKey: "same-operation-001",
+      });
+    }
+    expect((await adapter.getRecord("task", "task-shared-001", "owner-001"))?.payload).toEqual({ ownerId: "owner-001" });
+    expect((await adapter.getRecord("task", "task-shared-001", "owner-002"))?.payload).toEqual({ ownerId: "owner-002" });
+  });
+
+  test("rejects duplicate canonical targets in one atomic group without changing replay state", async () => {
+    const state = await import("../src/state-plane");
+    const d1 = new SqliteD1Binding();
+    await state.installAliceStateSchema(d1);
+    const adapter = new state.D1AliceStateAdapter(d1);
+    await expect(adapter.applyAtomic({
+      operationId: "duplicate-target-001",
+      records: [1, 2].map((revision) => ({
+        kind: "task" as const, recordId: "task-duplicate-001", ownerId: "owner-001",
+        payload: { revision }, updatedAt: 1_777_000_000_000 + revision,
+      })),
+    })).rejects.toThrow("STATE_ATOMIC_TARGET_DUPLICATE");
+    expect(await adapter.getRecord("task", "task-duplicate-001", "owner-001")).toBeNull();
+  });
+
+  test("rejects corrupt stored payload digests and scalar metadata on read", async () => {
+    const state = await import("../src/state-plane");
+    const d1 = new SqliteD1Binding();
+    await state.installAliceStateSchema(d1);
+    const adapter = new state.D1AliceStateAdapter(d1);
+    await adapter.putRecord({
+      kind: "memory", recordId: "memory-corrupt-001", ownerId: "owner-001",
+      payload: { value: "original" }, updatedAt: 1_777_000_000_000,
+      idempotencyKey: "corrupt-record-001",
+    });
+    d1.sqlite.query("UPDATE alice_state_records SET payload_json = ? WHERE owner_id = ? AND kind = ? AND record_id = ?")
+      .run(JSON.stringify({ value: "tampered" }), "owner-001", "memory", "memory-corrupt-001");
+    await expect(adapter.getRecord("memory", "memory-corrupt-001", "owner-001")).rejects.toThrow("STATE_ROW_INVALID");
   });
 });
 
@@ -278,6 +324,31 @@ describe("Vectorize and R2 canonical references", () => {
     expect(bucket.objects.size).toBe(1);
     bucket.objects.get(first.key)!.customMetadata.sha256 = digest("f");
     await expect(store.put(bytes, "application/json")).rejects.toThrow("R2_CONTENT_ADDRESS_COLLISION");
+  });
+
+  test("uses owner-qualified vector identities before provider write", async () => {
+    const state = await import("../src/state-plane");
+    const d1 = new SqliteD1Binding();
+    await state.installAliceStateSchema(d1);
+    const adapter = new state.D1AliceStateAdapter(d1);
+    const index = new FakeVectorIndex();
+    const store = new state.AliceVectorStore(index, { indexName: "alice-memory-v1", model: "bge-base-en-v1.5", dimensions: 3 }, adapter);
+    const refs = [];
+    for (const ownerId of ["owner-001", "owner-002"]) {
+      await adapter.putRecord({
+        kind: "memory", recordId: "memory-shared-001", ownerId,
+        payload: { ownerId }, updatedAt: 1_777_000_000_000,
+        idempotencyKey: `vector-${ownerId}`,
+      });
+      refs.push(await store.upsert({
+        recordKind: "memory", recordId: "memory-shared-001", ownerId,
+        model: "bge-base-en-v1.5", dimensions: 3, values: [1, 2, 3],
+      }));
+    }
+    expect(refs[0]?.vectorId).not.toBe(refs[1]?.vectorId);
+    expect(index.vectors.size).toBe(2);
+    expect(await adapter.getVectorReference("memory", "memory-shared-001", "owner-001")).toEqual(refs[0]);
+    expect(await adapter.getVectorReference("memory", "memory-shared-001", "owner-002")).toEqual(refs[1]);
   });
 });
 

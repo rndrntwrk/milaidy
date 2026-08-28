@@ -1,7 +1,9 @@
 CREATE TABLE IF NOT EXISTS alice_state_idempotency (
-  idempotency_key TEXT PRIMARY KEY NOT NULL,
+  owner_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
   request_sha256 TEXT NOT NULL CHECK(length(request_sha256) = 64),
-  created_at INTEGER NOT NULL CHECK(created_at > 0)
+  created_at INTEGER NOT NULL CHECK(created_at > 0),
+  PRIMARY KEY (owner_id, idempotency_key)
 );
 
 CREATE TABLE IF NOT EXISTS alice_state_records (
