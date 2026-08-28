@@ -284,6 +284,7 @@ test("protected Alice qualification verifies provider identity and exact Worker 
   );
   for (const testFile of [
     "deploy/modal/alice_production_acceptance.test.ts",
+    "deploy/modal/alice_cloudflare_container_image.test.mjs",
     "deploy/modal/alice_program_signing_key.test.mjs",
     "deploy/modal/alice_terminal_publication.test.mjs",
     "deploy/modal/alice_cloudflare_live_readback.test.mjs",
@@ -306,6 +307,11 @@ test("protected Alice qualification verifies provider identity and exact Worker 
   assert.match(
     workflow,
     /Build exact Alice Worker bundles[\s\S]*?\.\/node_modules\/\.bin\/wrangler --version[\s\S]*?test "\$wrangler_version" = "4\.122\.0"[\s\S]*?\.\/node_modules\/\.bin\/wrangler deploy[\s\S]*?--dry-run[\s\S]*?alice_worker_bundle_artifact\.mjs/,
+  );
+  assert.match(
+    workflow,
+    /if \[ "\$worker" = "alice-access-gateway" \]; then[\s\S]*?test -f "\$bundle_root\/\$worker\/worker\.js"[\s\S]*?test ! -L "\$bundle_root\/\$worker\/worker\.js"[\s\S]*?test ! -e "\$bundle_root\/\$worker\/index\.js"[\s\S]*?mv "\$bundle_root\/\$worker\/worker\.js" "\$bundle_root\/\$worker\/index\.js"[\s\S]*?test -f "\$bundle_root\/\$worker\/index\.js"[\s\S]*?test ! -L "\$bundle_root\/\$worker\/index\.js"/,
+    "pinned Wrangler output must be normalized into the immutable artifact path",
   );
   const manifestSource = fs.readFileSync(
     path.join(repoRoot, "deploy/modal/alice_deployment_manifest.mjs"),

@@ -193,6 +193,8 @@ jobs:
       - name: Qualify Alice production-core contracts
         env:
           ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_WORKER_CONTRACT_REPLAY: "1"
+          ALICE_REPLAY_SOURCE_COMMIT: ${{ steps.source_revision.outputs.sha }}
         run: |
           bun test \
             packages/app-core/src/api/server.health-probes.test.ts \
@@ -212,6 +214,7 @@ jobs:
             workers/alice-production-control/test/*.test.ts
           node --test \
             deploy/modal/alice_capability_bom.test.mjs \
+            deploy/modal/alice_cloudflare_container_image.test.mjs \
             deploy/modal/alice_cloudflare_bootstrap.test.mjs \
             workers/alice-ai-gateway/src/index.test.mjs \
             deploy/modal/alice_cloudflare_config.test.mjs \
@@ -270,6 +273,14 @@ jobs:
               --dry-run \
               --outdir "$bundle_root/$worker" \
               --config "workers/$worker/wrangler.jsonc"
+            if [ "$worker" = "alice-access-gateway" ]; then
+              test -f "$bundle_root/$worker/worker.js"
+              test ! -L "$bundle_root/$worker/worker.js"
+              test ! -e "$bundle_root/$worker/index.js"
+              mv "$bundle_root/$worker/worker.js" "$bundle_root/$worker/index.js"
+            fi
+            test -f "$bundle_root/$worker/index.js"
+            test ! -L "$bundle_root/$worker/index.js"
             test -s "$bundle_root/$worker/index.js"
           done
           ALICE_WORKER_BUNDLE_ROOT="$bundle_root" \

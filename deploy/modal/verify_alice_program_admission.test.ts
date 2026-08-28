@@ -57,6 +57,8 @@ const secrets = {
     "aeq1_abcdefghijklmnopqrstuvwxyzABCDEFGH123456789",
   MILADY_API_TOKEN: "direct-runtime-api-token-with-at-least-32-bytes",
   ELIZA_VAULT_PASSPHRASE: "runtime-vault-passphrase-with-at-least-32-bytes",
+  ALICE_STATE_PLANE_SERVICE_TOKEN:
+    "state-plane-service-token-with-at-least-32-bytes",
   ALICE_RUNTIME_RELEASE_TOKEN: runtimeToken,
   OPENAI_API_KEY: runtimeToken,
   ALICE_RUNTIME_RELEASE_TOKEN_SHA256: `sha256:${createHash("sha256")
@@ -70,6 +72,56 @@ const protectedSecrets = {
 };
 
 describe("Alice protected Program admission", () => {
+  test("binds Container Program v2 runtime secrets without a provider proxy", () => {
+    const sourceCommit = "4".repeat(40);
+    const runtimeImage =
+      `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"5".repeat(64)}`;
+    const containerConfigs = {
+      ...configs,
+      access: {
+        secrets: {
+          required: [
+            "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
+            "ALICE_ACCESS_PROXY_SECRET",
+            "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
+            "ALICE_ELIZA_COMMIT",
+            "ALICE_POLICY_HASH",
+            "ALICE_PROGRAM_DIGEST",
+            "ALICE_RELEASE_DIGEST",
+            "ALICE_RUNTIME_API_TOKEN",
+            "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
+            "ALICE_RUNTIME_IMAGE",
+            "ALICE_RUNTIME_RELEASE_TOKEN",
+            "ALICE_RUNTIME_REVISION",
+            "ALICE_RUNTIME_VAULT_PASSPHRASE",
+            "ALICE_SOURCE_COMMIT",
+            "ALICE_STATE_PLANE_SERVICE_TOKEN",
+          ],
+        },
+      },
+    };
+    expect(() =>
+      verifyAliceRouteSecretClosure(
+        containerConfigs,
+        {
+          ...secrets,
+          ALICE_SOURCE_COMMIT: sourceCommit,
+          ALICE_DEPLOYMENT_CONTROLLER_COMMIT: sourceCommit,
+          ALICE_ELIZA_COMMIT: "6".repeat(40),
+          ALICE_POLICY_HASH: `sha256:${"7".repeat(64)}`,
+          ALICE_PROGRAM_DIGEST: `sha256:${"8".repeat(64)}`,
+          ALICE_RELEASE_DIGEST: releaseDigest,
+          ALICE_RUNTIME_API_TOKEN: secrets.MILADY_API_TOKEN,
+          ALICE_RUNTIME_BUILD_MANIFEST_SHA256: `sha256:${"9".repeat(64)}`,
+          ALICE_RUNTIME_IMAGE: runtimeImage,
+          ALICE_RUNTIME_REVISION: "49",
+          ALICE_RUNTIME_VAULT_PASSPHRASE: secrets.ELIZA_VAULT_PASSPHRASE,
+        } as any,
+        releaseDigest,
+      )
+    ).not.toThrow();
+  });
+
   test("accepts only exact scoped token pairs and release-bound runtime bearer", () => {
     expect(() =>
       verifyAliceRouteSecretClosure(configs, secrets, releaseDigest),

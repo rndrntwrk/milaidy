@@ -36,6 +36,18 @@ const candidateExpected = {
   release,
   rollbackBoundary: "modal:alice-runtime:v49",
 };
+const containerRelease = {
+  ...release,
+  runtimeImage:
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"6".repeat(64)}`,
+  runtimeRevision: 49,
+};
+delete containerRelease.modalRevision;
+const containerCandidateExpected = {
+  binding,
+  release: containerRelease,
+  rollbackBoundary: "container:alice-runtime:v49",
+};
 
 function edgeReadiness(nonce, overrides = {}) {
   return {
@@ -89,6 +101,28 @@ test("validates a fresh owner authorization tuple before protected use", async (
     }),
     /ALICE_OWNER_AUTHORIZATION_INVALID/,
   );
+});
+
+test("admits an exact Container Program v2 candidate at its container rollback boundary", async () => {
+  const result = await admitAliceReleaseOwner({
+    fetchImpl: async () => Response.json({
+      ok: true,
+      allowed: true,
+      code: "RUNTIME_ADMITTED",
+      activationCode: "RELEASE_ACTIVATED",
+      blockingScopes: [],
+      binding,
+      release: containerRelease,
+      evidenceQueued: true,
+    }),
+    ownerAuthorization: "owner-authorization-at-least-32-bytes",
+    owner: {
+      actor: `owner:sha256:${"a".repeat(64)}`,
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+    },
+    expected: containerCandidateExpected,
+  });
+  assert.equal(result.release.runtimeRevision, 49);
 });
 
 test("accepts the configured 24-hour Access session but rejects a longer owner token", async () => {

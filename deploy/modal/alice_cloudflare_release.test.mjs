@@ -190,7 +190,10 @@ test("admits only the signed index.js from a Wrangler outdir", () => {
 
 test(
   "replays signed Worker bytes and recovery from a relocated fresh-runner root",
-  { skip: process.env.ALICE_WORKER_CONTRACT_REPLAY !== "1" },
+  {
+    skip: process.env.ALICE_WORKER_CONTRACT_REPLAY !== "1",
+    timeout: 5 * 60 * 1000,
+  },
   () => {
     const wranglerBin = process.env.ALICE_WRANGLER_BIN;
     const sourceCommit = process.env.ALICE_REPLAY_SOURCE_COMMIT;
@@ -243,7 +246,8 @@ test(
       if (role === "access") {
         return {
           ...common,
-          upstreamOrigin: "https://rndrntwrk--alice.modal.run",
+          runtimeImage:
+            `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"b".repeat(64)}`,
         };
       }
       if (role === "control") {
@@ -252,7 +256,7 @@ test(
           releaseAccessAudience: "alice-release-controller-audience",
           releaseServiceTokenIdSha256: "R".repeat(43),
           modelDailyBudgetUnits: 10_000,
-          modalRevision: 49,
+          runtimeRevision: 49,
           programEnvelopeB64: "program-envelope-fixture",
           programSignatureB64: "program-signature-fixture",
           programPublicJwkB64: "program-public-jwk-fixture",
@@ -348,14 +352,29 @@ test(
       assert.match(runWrangler(["--version"], runnerA), /\b4\.122\.0\b/);
       const artifactRootA = path.join(runnerA, "alice-worker-bundles");
       for (const worker of Object.values(workers)) {
+        const workerOutdir = path.join(artifactRootA, worker);
         runWrangler([
           "deploy",
           "--dry-run",
           "--outdir",
-          path.join(artifactRootA, worker),
+          workerOutdir,
           "--config",
           path.join(repoRoot, "workers", worker, "wrangler.jsonc"),
         ], runnerA);
+        const artifactPath = path.join(workerOutdir, "index.js");
+        if (worker === "alice-access-gateway") {
+          const generatedPath = path.join(workerOutdir, "worker.js");
+          const generatedStat = fs.lstatSync(generatedPath);
+          assert.equal(generatedStat.isFile(), true);
+          assert.equal(generatedStat.isSymbolicLink(), false);
+          assert.equal(generatedStat.size > 0, true);
+          assert.equal(fs.existsSync(artifactPath), false);
+          fs.renameSync(generatedPath, artifactPath);
+        }
+        const artifactStat = fs.lstatSync(artifactPath);
+        assert.equal(artifactStat.isFile(), true);
+        assert.equal(artifactStat.isSymbolicLink(), false);
+        assert.equal(artifactStat.size > 0, true);
       }
       const artifact = buildAliceWorkerBundleArtifact({
         root: artifactRootA,

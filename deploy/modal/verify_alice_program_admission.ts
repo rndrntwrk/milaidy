@@ -27,9 +27,21 @@ type RouteSecretSource = {
   ALICE_RUNTIME_RELEASE_TOKEN_SHA256: string;
   OPENAI_API_KEY: string;
   ALICE_DEPLOYMENT_PAUSE_TOKEN: string;
+  ALICE_STATE_PLANE_SERVICE_TOKEN?: string;
   ALICE_EVIDENCE_QUEUE_HMAC_KEY: string;
   MILADY_API_TOKEN: string;
   ELIZA_VAULT_PASSPHRASE: string;
+  ALICE_SOURCE_COMMIT?: string;
+  ALICE_DEPLOYMENT_CONTROLLER_COMMIT?: string;
+  ALICE_ELIZA_COMMIT?: string;
+  ALICE_POLICY_HASH?: string;
+  ALICE_PROGRAM_DIGEST?: string;
+  ALICE_RELEASE_DIGEST?: string;
+  ALICE_RUNTIME_API_TOKEN?: string;
+  ALICE_RUNTIME_BUILD_MANIFEST_SHA256?: string;
+  ALICE_RUNTIME_IMAGE?: string;
+  ALICE_RUNTIME_REVISION?: string;
+  ALICE_RUNTIME_VAULT_PASSPHRASE?: string;
 };
 
 type ProtectedAdmissionSecretSource = Omit<
@@ -85,6 +97,7 @@ export function verifyAliceProtectedAdmissionSecretClosure(
     secrets?.ALICE_MODAL_PROXY_KEY,
     secrets?.ALICE_MODAL_PROXY_SECRET,
     secrets?.ALICE_DEPLOYMENT_PAUSE_TOKEN,
+    secrets?.ALICE_STATE_PLANE_SERVICE_TOKEN,
     secrets?.MILADY_API_TOKEN,
     secrets?.ELIZA_VAULT_PASSPHRASE,
   ];
@@ -102,28 +115,55 @@ export function verifyAliceRouteSecretClosure(
   secrets: RouteSecretSource,
   releaseDigest: string,
 ): void {
+  const containerMode = configs?.access?.secrets?.required?.includes(
+    "ALICE_RUNTIME_IMAGE",
+  );
+  const containerAccessSecrets = [
+    "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
+    "ALICE_ACCESS_PROXY_SECRET",
+    "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
+    "ALICE_ELIZA_COMMIT",
+    "ALICE_POLICY_HASH",
+    "ALICE_PROGRAM_DIGEST",
+    "ALICE_RELEASE_DIGEST",
+    "ALICE_RUNTIME_API_TOKEN",
+    "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
+    "ALICE_RUNTIME_IMAGE",
+    "ALICE_RUNTIME_RELEASE_TOKEN",
+    "ALICE_RUNTIME_REVISION",
+    "ALICE_RUNTIME_VAULT_PASSPHRASE",
+    "ALICE_SOURCE_COMMIT",
+    "ALICE_STATE_PLANE_SERVICE_TOKEN",
+  ];
   const distinctSecrets = [
     secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN,
     secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN,
     secrets.ALICE_ACCESS_PROXY_SECRET,
-    secrets.ALICE_MODAL_PROXY_KEY,
-    secrets.ALICE_MODAL_PROXY_SECRET,
+    ...(containerMode
+      ? []
+      : [secrets.ALICE_MODAL_PROXY_KEY, secrets.ALICE_MODAL_PROXY_SECRET]),
     secrets.ALICE_RUNTIME_RELEASE_TOKEN,
     secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN,
     secrets.ALICE_EVIDENCE_QUEUE_HMAC_KEY,
     secrets.MILADY_API_TOKEN,
     secrets.ELIZA_VAULT_PASSPHRASE,
+    ...(containerMode ? [secrets.ALICE_STATE_PLANE_SERVICE_TOKEN] : []),
   ];
   if (
     !configs ||
     !secrets ||
     !DIGEST.test(releaseDigest) ||
-    !exactRequiredSecrets(configs.access, [
-      "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
-      "ALICE_ACCESS_PROXY_SECRET",
-      "ALICE_MODAL_PROXY_KEY",
-      "ALICE_MODAL_PROXY_SECRET",
-    ]) ||
+    !exactRequiredSecrets(
+      configs.access,
+      containerMode
+        ? containerAccessSecrets
+        : [
+            "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
+            "ALICE_ACCESS_PROXY_SECRET",
+            "ALICE_MODAL_PROXY_KEY",
+            "ALICE_MODAL_PROXY_SECRET",
+          ],
+    ) ||
     !exactRequiredSecrets(configs.control, [
       "ALICE_ACCESS_GATEWAY_SERVICE_TOKEN",
       "ALICE_AI_GATEWAY_SERVICE_TOKEN",
@@ -141,14 +181,38 @@ export function verifyAliceRouteSecretClosure(
     !secureValue(secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN) ||
     !secureValue(secrets.ALICE_ACCESS_PROXY_SECRET) ||
     !secureValue(secrets.MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET) ||
-    !/^wk-[A-Za-z0-9_-]{16,256}$/.test(secrets.ALICE_MODAL_PROXY_KEY) ||
-    !/^ws-[A-Za-z0-9_-]{16,256}$/.test(secrets.ALICE_MODAL_PROXY_SECRET) ||
+    (!containerMode &&
+      !/^wk-[A-Za-z0-9_-]{16,256}$/.test(secrets.ALICE_MODAL_PROXY_KEY)) ||
+    (!containerMode &&
+      !/^ws-[A-Za-z0-9_-]{16,256}$/.test(secrets.ALICE_MODAL_PROXY_SECRET)) ||
     !secureValue(secrets.ALICE_RUNTIME_RELEASE_TOKEN) ||
     !secureValue(secrets.OPENAI_API_KEY) ||
     !secureValue(secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN) ||
     !/^aeq1_[A-Za-z0-9_-]{43}$/.test(secrets.ALICE_EVIDENCE_QUEUE_HMAC_KEY) ||
     !secureValue(secrets.MILADY_API_TOKEN) ||
     !secureValue(secrets.ELIZA_VAULT_PASSPHRASE) ||
+    (containerMode && !secureValue(secrets.ALICE_STATE_PLANE_SERVICE_TOKEN)) ||
+    (containerMode &&
+      (!COMMIT.test(secrets.ALICE_SOURCE_COMMIT ?? "") ||
+        !COMMIT.test(
+          secrets.ALICE_DEPLOYMENT_CONTROLLER_COMMIT ?? "",
+        ) ||
+        !COMMIT.test(secrets.ALICE_ELIZA_COMMIT ?? "") ||
+        !DIGEST.test(secrets.ALICE_POLICY_HASH ?? "") ||
+        !DIGEST.test(secrets.ALICE_PROGRAM_DIGEST ?? "") ||
+        !DIGEST.test(secrets.ALICE_RELEASE_DIGEST ?? "") ||
+        !DIGEST.test(
+          secrets.ALICE_RUNTIME_BUILD_MANIFEST_SHA256 ?? "",
+        ) ||
+        !/^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/.test(
+          secrets.ALICE_RUNTIME_IMAGE ?? "",
+        ) ||
+        !/^(?:49|[5-9][0-9]|[1-9][0-9]{2,})$/.test(
+          secrets.ALICE_RUNTIME_REVISION ?? "",
+        ) ||
+        secrets.ALICE_RUNTIME_API_TOKEN !== secrets.MILADY_API_TOKEN ||
+        secrets.ALICE_RUNTIME_VAULT_PASSPHRASE !==
+          secrets.ELIZA_VAULT_PASSPHRASE)) ||
     !DIGEST.test(secrets.ALICE_RUNTIME_RELEASE_TOKEN_SHA256) ||
     secrets.ALICE_ACCESS_CONTROL_SERVICE_TOKEN !==
       secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN ||
@@ -209,12 +273,28 @@ export async function verifyAliceProgramAdmission({
       ALICE_RUNTIME_RELEASE_TOKEN_SHA256: credential.saltedSha256,
       ALICE_EVIDENCE_QUEUE_HMAC_KEY: credential.evidenceQueueHmacKey,
       OPENAI_API_KEY: credential.token,
+      ALICE_SOURCE_COMMIT: config.envelope.release.sourceCommit,
+      ALICE_DEPLOYMENT_CONTROLLER_COMMIT:
+        config.envelope.release.deploymentControllerCommit,
+      ALICE_ELIZA_COMMIT: config.envelope.release.elizaCommit,
+      ALICE_POLICY_HASH: config.binding.policyHash,
+      ALICE_PROGRAM_DIGEST: config.binding.programDigest,
+      ALICE_RELEASE_DIGEST: config.binding.releaseDigest,
+      ALICE_RUNTIME_API_TOKEN: secrets.MILADY_API_TOKEN,
+      ALICE_RUNTIME_BUILD_MANIFEST_SHA256:
+        config.envelope.release.runtimeBuildManifestSha256,
+      ALICE_RUNTIME_IMAGE: config.envelope.release.runtimeImage,
+      ALICE_RUNTIME_REVISION: String(config.runtimeRevision),
+      ALICE_RUNTIME_VAULT_PASSPHRASE: secrets.ELIZA_VAULT_PASSPHRASE,
     },
     config.binding.releaseDigest,
   );
   const release = config.envelope.release;
+  const containerMode = config.envelope.schemaVersion === "alice.program-envelope.v2";
   const evidence = {
-    schemaVersion: "alice.program-admission.v1",
+    schemaVersion: containerMode
+      ? "alice.program-admission.v2"
+      : "alice.program-admission.v1",
     admittedAt: new Date(now).toISOString(),
     sourceCommit: release.sourceCommit,
     deploymentControllerCommit: release.deploymentControllerCommit,
@@ -228,13 +308,19 @@ export async function verifyAliceProgramAdmission({
     releaseDigest: config.binding.releaseDigest,
     policyHash: config.binding.policyHash,
     releaseEpoch: release.releaseEpoch,
-    modalRevision: config.modalRevision,
+    ...(containerMode
+      ? { runtimeRevision: config.runtimeRevision }
+      : { modalRevision: config.runtimeRevision }),
     rollbackBoundary: release.rollbackBoundary,
     serviceTokenPairsVerified: true,
     runtimeReleaseTokenBindingVerified: true,
     accessProxySecretFormatVerified: true,
-    modalProxyTokenPairVerified: true,
-    modalRuntimeSecretMappingsVerified: true,
+    ...(containerMode
+      ? { containerRuntimeSecretMappingsVerified: true }
+      : {
+          modalProxyTokenPairVerified: true,
+          modalRuntimeSecretMappingsVerified: true,
+        }),
     recoveryKeyUnavailableToDeployment: true,
   };
   return { credential, evidence };

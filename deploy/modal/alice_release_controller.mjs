@@ -49,25 +49,54 @@ function exactBinding(value, expected) {
 }
 
 function exactRelease(value, expected) {
+  const containerMode =
+    object(value) && Object.hasOwn(value, "runtimeRevision") &&
+    !Object.hasOwn(value, "modalRevision");
+  const revision = containerMode ? value.runtimeRevision : value?.modalRevision;
+  const expectedKeys = [
+    "capabilityBomSha256",
+    "deploymentControllerCommit",
+    "deploymentManifestSha256",
+    "elizaCommit",
+    containerMode ? "runtimeRevision" : "modalRevision",
+    "releaseEpoch",
+    "runtimeBuildManifestSha256",
+    "runtimeImage",
+    "sourceCommit",
+  ].sort().join(",");
   return (
     object(value) &&
-    Object.keys(value).sort().join(",") ===
-      "capabilityBomSha256,deploymentControllerCommit,deploymentManifestSha256,elizaCommit,modalRevision,releaseEpoch,runtimeBuildManifestSha256,runtimeImage,sourceCommit" &&
+    Object.keys(value).sort().join(",") === expectedKeys &&
     Number.isSafeInteger(value.releaseEpoch) &&
     value.releaseEpoch > 0 &&
-    Number.isSafeInteger(value.modalRevision) &&
-    value.modalRevision >= 49 &&
+    Number.isSafeInteger(revision) &&
+    revision >= 49 &&
     COMMIT.test(value.sourceCommit ?? "") &&
     COMMIT.test(value.deploymentControllerCommit ?? "") &&
     COMMIT.test(value.elizaCommit ?? "") &&
     DIGEST.test(value.runtimeBuildManifestSha256 ?? "") &&
     DIGEST.test(value.capabilityBomSha256 ?? "") &&
     DIGEST.test(value.deploymentManifestSha256 ?? "") &&
-    /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/.test(
-      value.runtimeImage ?? "",
-    ) &&
+    (containerMode
+      ? /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/.test(
+          value.runtimeImage ?? "",
+        )
+      : /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/.test(
+          value.runtimeImage ?? "",
+        )) &&
     canonical(value) === canonical(expected)
   );
+}
+
+function releaseRollbackBoundary(release) {
+  if (!object(release)) return "";
+  if (
+    Object.hasOwn(release, "runtimeRevision") &&
+    !Object.hasOwn(release, "modalRevision")
+  ) {
+    return `container:alice-runtime:v${release.runtimeRevision}`;
+  }
+  return `modal:alice-runtime:v${release.modalRevision}`;
 }
 
 function decodeBase64UrlJson(value) {
@@ -191,8 +220,7 @@ export async function admitAliceReleaseOwner({
     owner.expiresAt < Math.floor(Date.now() / 1000) + 15 ||
     !exactBinding(expected?.binding, expected?.binding) ||
     !exactRelease(expected?.release, expected?.release) ||
-    expected.rollbackBoundary !==
-      `modal:alice-runtime:v${expected.release.modalRevision}` ||
+    expected.rollbackBoundary !== releaseRollbackBoundary(expected.release) ||
     (rollbackReceipt && !secure(rollbackReceipt, 32)) ||
     typeof deploymentPaused !== "boolean"
   ) {
@@ -271,7 +299,7 @@ function validAuthorityTuple(expected) {
       tuple.rollbackBoundary === "release:unadmitted"
     );
   }
-  return /^modal:alice-runtime:v(?:49|[5-9][0-9]|[1-9][0-9]{2,})$/.test(
+  return /^(?:modal|container):alice-runtime:v(?:49|[5-9][0-9]|[1-9][0-9]{2,})$/.test(
     tuple.rollbackBoundary,
   );
 }
@@ -343,7 +371,7 @@ export async function pauseAliceReleaseMachine({
     typeof nonceFactory !== "function" ||
     typeof sleepImpl !== "function" ||
     candidateExpected.rollbackBoundary !==
-      `modal:alice-runtime:v${candidateExpected.release.modalRevision}`
+      releaseRollbackBoundary(candidateExpected.release)
   ) {
     invalid();
   }
@@ -645,7 +673,7 @@ export async function resumeAliceReleaseOwner({
     !exactBinding(currentExpected?.binding, currentExpected?.binding) ||
     !exactRelease(currentExpected?.release, currentExpected?.release) ||
     currentExpected.rollbackBoundary !==
-      `modal:alice-runtime:v${currentExpected.release.modalRevision}`
+      releaseRollbackBoundary(currentExpected.release)
   ) {
     invalid("ALICE_RECOVERY_RECEIPT_INVALID");
   }
