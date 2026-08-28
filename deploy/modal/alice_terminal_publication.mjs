@@ -13,6 +13,19 @@ const ACCOUNT_ID = "036df6c823669b8fa2f66cf4c16eeb29";
 const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const FRESH_WINDOW_MS = 5 * 60_000;
 const FUTURE_SKEW_MS = 30_000;
+const WORKER_ROLES = Object.freeze([
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+]);
+const FULL_PRODUCT_SURFACES = Object.freeze({
+  root: "full-milady",
+  companion: "full-companion",
+  broadcast: "alice-cam",
+  companionStage: "durable",
+});
 
 function invalid() {
   throw new Error("ALICE_TERMINAL_PUBLICATION_INVALID");
@@ -58,7 +71,7 @@ function cloudflareTerminalIdentity(value) {
     !object(value?.providerFingerprints) || !object(value?.provider) ||
     !Array.isArray(value?.workflowVersions) ||
     !object(value?.aliceTrafficBindings) || !object(value?.workers) ||
-    !["access", "control", "aiGateway"].every((role) =>
+    !WORKER_ROLES.every((role) =>
       object(value.workers[role]))
   ) invalid();
   return {
@@ -141,6 +154,7 @@ export function verifyAliceTerminalPublication({
   const runId = String(expectedRunId);
   const observedAt = Date.parse(acceptance.observedAt);
   const objectKeys = acceptance.evidence?.persistedObjectKeys;
+  const surfaceDigests = acceptance.productSurfaceDigests;
   if (
     acceptance.schemaVersion !== "alice.production-acceptance.v2" ||
     acceptance.terminal !== true ||
@@ -160,6 +174,18 @@ export function verifyAliceTerminalPublication({
     !Number.isFinite(observedAt) ||
     !Array.isArray(acceptance.finalAuthority?.pausedScopes) ||
     acceptance.finalAuthority.pausedScopes.length !== 0 ||
+    acceptance.authenticatedRoot !== "full-milady-companion-ui" ||
+    acceptance.runtimeProfile !== "full-gated" ||
+    canonicalAliceJson(acceptance.productSurfaces) !==
+      canonicalAliceJson(FULL_PRODUCT_SURFACES) ||
+    !object(surfaceDigests) ||
+    canonicalAliceJson(Object.keys(surfaceDigests).sort()) !==
+      canonicalAliceJson([
+        "broadcastHtmlSha256",
+        "companionHtmlSha256",
+      ]) ||
+    !DIGEST.test(surfaceDigests.broadcastHtmlSha256 ?? "") ||
+    !DIGEST.test(surfaceDigests.companionHtmlSha256 ?? "") ||
     !DIGEST.test(acceptance.deploymentManifestSha256 ?? "") ||
     !DIGEST.test(acceptance.binding?.programDigest ?? "") ||
     !DIGEST.test(acceptance.binding?.releaseDigest ?? "") ||
