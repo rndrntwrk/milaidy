@@ -78,6 +78,25 @@ function hoistBunStorePackages(root) {
   }
 }
 
+function materializeCapabilityPackagesFromDockerfile(root) {
+  const dockerfile = fs.readFileSync(
+    path.join(REPO_ROOT, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  const packageNames = [];
+  for (const match of dockerfile.matchAll(
+    /\bcp\s+[^\s\\]+\/package\.json\s+node_modules\/((?:@[^/\s\\]+\/)?[^/\s;\\]+)\/;/g,
+  )) {
+    const packageName = match[1];
+    if (!/^@(?:elizaos|miladyai|rndrntwrk)\/(?:plugin-|app-)/.test(packageName)) {
+      continue;
+    }
+    writePackage(root, packageName);
+    packageNames.push(packageName);
+  }
+  return [...new Set(packageNames)].sort();
+}
+
 function applyCapabilityPruneFromDockerfile(root) {
   const dockerfile = fs.readFileSync(path.join(REPO_ROOT, "deploy/Dockerfile.ci"), "utf8");
   const pruneBlock = dockerfile.match(
@@ -92,7 +111,7 @@ function applyCapabilityPruneFromDockerfile(root) {
   }
 }
 
-test("the production broad hoist leaves no unclassified capability package", () => {
+test("the production Docker materialization and broad hoist leave no unclassified capability package", () => {
   const root = fixtureRoot();
   const retainedPackages = new Map([
     ["@elizaos/app-contacts", "module"],
@@ -135,6 +154,8 @@ test("the production broad hoist leaves no unclassified capability package", () 
     }
 
     hoistBunStorePackages(root);
+    const explicitlyMaterializedPackages =
+      materializeCapabilityPackagesFromDockerfile(root);
     applyCapabilityPruneFromDockerfile(root);
 
     const checkedPolicy = JSON.parse(
@@ -145,8 +166,19 @@ test("the production broad hoist leaves no unclassified capability package", () 
     );
     const classifiedIds = new Set(checkedPolicy.entries.map((entry) => entry.id));
     const discovery = discoverAliceCapabilityInputs(root, checkedPolicy);
-    assert.deepEqual(discovery.packageNames, [...retainedPackages.keys()]);
+    const expectedPackages = [
+      ...new Set([
+        ...retainedPackages.keys(),
+        ...explicitlyMaterializedPackages,
+      ]),
+    ].sort();
+    assert.deepEqual(discovery.packageNames, expectedPackages);
     assert.equal(discovery.packageNames.includes("onnxruntime-common"), false);
+
+    const missing = discovery.packageNames
+      .map((packageName) => `package:${packageName}`)
+      .filter((id) => !classifiedIds.has(id));
+    assert.deepEqual(missing, []);
 
     for (const [packageName, surface] of retainedPackages) {
       const policyEntry = checkedPolicy.entries.find(
@@ -163,6 +195,29 @@ test("the production broad hoist leaves no unclassified capability package", () 
       });
     }
 
+    for (const packageName of [
+      "@elizaos/plugin-app-control",
+      "@elizaos/plugin-app-manager",
+      "@elizaos/plugin-scheduling",
+    ]) {
+      assert.ok(
+        explicitlyMaterializedPackages.includes(packageName),
+        `${packageName} must be bound to the production Docker materialization block`,
+      );
+      const policyEntry = checkedPolicy.entries.find(
+        (entry) => entry.id === `package:${packageName}`,
+      );
+      assert.deepEqual(policyEntry, {
+        id: `package:${packageName}`,
+        classification: "policy-disabled",
+        source: { type: "package", package: packageName, entrypoint: "." },
+        surface: "plugin",
+        runtimeNames: [],
+        adapter: null,
+        policyState: "disabled",
+      });
+    }
+
     const remoteModelExecution = checkedPolicy.entries.find(
       (entry) => entry.id === "adapter:remote-model-execution",
     );
@@ -170,11 +225,6 @@ test("the production broad hoist leaves no unclassified capability package", () 
       remoteModelExecution?.prohibitedPackages?.includes("onnxruntime-common"),
       "the orphaned ONNX package must remain prohibited after final-image pruning",
     );
-    const missing = discovery.packageNames
-      .map((packageName) => `package:${packageName}`)
-      .filter((id) => !classifiedIds.has(id));
-
-    assert.deepEqual(missing, []);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
