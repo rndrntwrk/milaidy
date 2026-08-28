@@ -131,6 +131,111 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   }
 });
 
+test("applies the exact ordered remote D1 migration suffix before Worker mutation", () => {
+  assert.equal(
+    typeof aliceCloudflareRelease.applyAliceStateMigrationsBeforeWorkerMutation,
+    "function",
+    "the release controller must own the D1 migration gate",
+  );
+  const calls = [];
+  const listOutputs = [
+    [
+      "Migrations to be applied:",
+      "0001_alice_state.sql",
+      "0002_execution_records.sql",
+      "0003_eliza_database.sql",
+      "",
+    ].join("\n"),
+    "✅ No migrations to apply!\n",
+  ];
+  const result =
+    aliceCloudflareRelease.applyAliceStateMigrationsBeforeWorkerMutation({
+      wranglerBin: "/tools/wrangler",
+      sourceRoot: "/release/source",
+      configPath: "/release/config/statePlane.wrangler.json",
+      commandEnv: { CLOUDFLARE_API_TOKEN: "provider-token" },
+      runCommand(binary, argv, options) {
+        calls.push({ binary, argv, options });
+        if (argv[2] === "list") return listOutputs.shift();
+        return "applied\n";
+      },
+    });
+  const common = [
+    "alice-production-state",
+    "--remote",
+    "--config",
+    "/release/config/statePlane.wrangler.json",
+  ];
+  assert.deepEqual(
+    calls.map(({ binary, argv }) => [binary, ...argv]),
+    [
+      ["/tools/wrangler", "d1", "migrations", "list", ...common],
+      ["/tools/wrangler", "d1", "migrations", "apply", ...common],
+      ["/tools/wrangler", "d1", "migrations", "list", ...common],
+    ],
+  );
+  assert.deepEqual(result, {
+    applied: [
+      "0001_alice_state.sql",
+      "0002_execution_records.sql",
+      "0003_eliza_database.sql",
+    ],
+    remoteVerified: true,
+  });
+  assert.equal(
+    calls.some(({ argv }) => argv.includes("versions") || argv.includes("deploy")),
+    false,
+  );
+});
+
+test("fails closed on malformed, failed, or persistently pending D1 migrations", () => {
+  const invoke = (listOutputs, applyOutput = "applied\n") => {
+    const calls = [];
+    const pending = [...listOutputs];
+    const runCommand = (binary, argv) => {
+      calls.push([binary, ...argv]);
+      if (argv[2] === "list") return pending.shift();
+      if (applyOutput instanceof Error) throw applyOutput;
+      return applyOutput;
+    };
+    const execute = () =>
+      aliceCloudflareRelease.applyAliceStateMigrationsBeforeWorkerMutation({
+        wranglerBin: "/tools/wrangler",
+        sourceRoot: "/release/source",
+        configPath: "/release/config/statePlane.wrangler.json",
+        commandEnv: { CLOUDFLARE_API_TOKEN: "provider-token" },
+        runCommand,
+      });
+    return { calls, execute };
+  };
+
+  const malformed = invoke([
+    "Migrations to be applied:\n0001_alice_state.sql\n0003_eliza_database.sql\n",
+  ]);
+  assert.throws(malformed.execute, /ALICE_STATE_MIGRATION_READBACK_INVALID/);
+  assert.equal(malformed.calls.length, 1);
+
+  const failed = invoke([
+    "Migrations to be applied:\n0003_eliza_database.sql\n",
+  ], new Error("provider failed"));
+  assert.throws(failed.execute, /provider failed/);
+  assert.equal(failed.calls.length, 2);
+
+  const stale = invoke([
+    "Migrations to be applied:\n0003_eliza_database.sql\n",
+    "Migrations to be applied:\n0003_eliza_database.sql\n",
+  ]);
+  assert.throws(stale.execute, /ALICE_STATE_MIGRATION_READBACK_INVALID/);
+  assert.equal(stale.calls.length, 3);
+  for (const { calls } of [malformed, failed, stale]) {
+    assert.equal(
+      calls.some(([, ...argv]) =>
+        argv.includes("versions") || argv.includes("deploy")),
+      false,
+    );
+  }
+});
+
 test("rejects the exact failed single-outfile serialization and admits only exact module bytes", () => {
   assert.equal(
     typeof aliceCloudflareRelease.verifyAliceWorkerUploadBytes,

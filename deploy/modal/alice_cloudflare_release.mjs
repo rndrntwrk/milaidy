@@ -74,6 +74,11 @@ const UPLOAD_ORDER = [
   "connectorPlane",
   "access",
 ];
+const STATE_MIGRATIONS = Object.freeze([
+  "0001_alice_state.sql",
+  "0002_execution_records.sql",
+  "0003_eliza_database.sql",
+]);
 const ROLLBACK_ORDER = [
   "access",
   "connectorPlane",
@@ -439,6 +444,82 @@ export function parseAliceWranglerUploadVersionId(output) {
     releaseInvalid("ALICE_WORKER_UPLOAD_VERSION_INVALID");
   }
   return matches[0][1];
+}
+
+function parseAlicePendingStateMigrations(output) {
+  if (typeof output !== "string") {
+    releaseInvalid("ALICE_STATE_MIGRATION_READBACK_INVALID");
+  }
+  const migrations = [...output.matchAll(
+    /(?:^|[^A-Za-z0-9_.-])([0-9]{4}_[A-Za-z0-9_-]+\.sql)(?=$|[^A-Za-z0-9_.-])/g,
+  )].map((match) => match[1]);
+  if (new Set(migrations).size !== migrations.length) {
+    releaseInvalid("ALICE_STATE_MIGRATION_READBACK_INVALID");
+  }
+  if (migrations.length === 0) {
+    if (!output.includes("No migrations to apply!")) {
+      releaseInvalid("ALICE_STATE_MIGRATION_READBACK_INVALID");
+    }
+    return [];
+  }
+  const suffixes = STATE_MIGRATIONS.map((_, index) =>
+    STATE_MIGRATIONS.slice(index)
+  );
+  if (
+    !output.includes("Migrations to be applied:") ||
+    !suffixes.some(
+      (suffix) => canonicalAliceJson(suffix) === canonicalAliceJson(migrations),
+    )
+  ) {
+    releaseInvalid("ALICE_STATE_MIGRATION_READBACK_INVALID");
+  }
+  return migrations;
+}
+
+export function applyAliceStateMigrationsBeforeWorkerMutation({
+  wranglerBin,
+  sourceRoot,
+  configPath: stateConfigPath,
+  commandEnv,
+  runCommand = run,
+}) {
+  if (
+    !absolute(wranglerBin) ||
+    !absolute(sourceRoot) ||
+    !absolute(stateConfigPath) ||
+    path.basename(stateConfigPath) !== "statePlane.wrangler.json" ||
+    !commandEnv ||
+    typeof commandEnv !== "object" ||
+    typeof runCommand !== "function"
+  ) {
+    releaseInvalid("ALICE_STATE_MIGRATION_READBACK_INVALID");
+  }
+  const common = [
+    ALICE_CLOUDFLARE_TARGET.stateDatabase,
+    "--remote",
+    "--config",
+    stateConfigPath,
+  ];
+  const list = () => parseAlicePendingStateMigrations(
+    runCommand(wranglerBin, ["d1", "migrations", "list", ...common], {
+      cwd: sourceRoot,
+      env: commandEnv,
+      errorCode: "ALICE_STATE_MIGRATION_READBACK_INVALID",
+    }),
+  );
+  const pending = list();
+  if (pending.length === 0) {
+    return { applied: [], remoteVerified: true };
+  }
+  runCommand(wranglerBin, ["d1", "migrations", "apply", ...common], {
+    cwd: sourceRoot,
+    env: commandEnv,
+    errorCode: "ALICE_STATE_MIGRATION_APPLY_FAILED",
+  });
+  if (list().length !== 0) {
+    releaseInvalid("ALICE_STATE_MIGRATION_READBACK_INVALID");
+  }
+  return { applied: pending, remoteVerified: true };
 }
 
 export function aliceCloudflareCommandEnv(ambient = process.env) {
@@ -1698,6 +1779,13 @@ async function main() {
         commands,
         secretPaths: secrets.paths,
         manifest: release.manifest,
+        commandEnv,
+      });
+      verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+      applyAliceStateMigrationsBeforeWorkerMutation({
+        wranglerBin,
+        sourceRoot,
+        configPath: configPath(configDir, "statePlane"),
         commandEnv,
       });
       verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
