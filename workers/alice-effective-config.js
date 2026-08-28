@@ -243,6 +243,10 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
           binding: "ALICE_AI_GATEWAY",
           service: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
         },
+        {
+          binding: "ALICE_STATE_PLANE",
+          service: "alice-state-plane",
+        },
       ],
       durableObjects: [
         {
@@ -281,6 +285,7 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
         "ALICE_RUNTIME_REVISION",
         "ALICE_RUNTIME_VAULT_PASSPHRASE",
         "ALICE_SOURCE_COMMIT",
+        "ALICE_STATE_PLANE_SERVICE_TOKEN",
       ],
     },
     values: {
@@ -402,6 +407,7 @@ export function buildAliceControlEffectiveConfig(inputs) {
       secretNames: [
         "ALICE_ACCESS_GATEWAY_SERVICE_TOKEN",
         "ALICE_AI_GATEWAY_SERVICE_TOKEN",
+        "ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN",
         "ALICE_CONTROL_RECOVERY_TOKEN",
         "ALICE_DEPLOYMENT_PAUSE_TOKEN",
         "ALICE_EVIDENCE_QUEUE_HMAC_KEY",
