@@ -371,6 +371,14 @@ jobs:
           cd eliza/packages/agent
           bun run build:docker-dist
 
+      - name: Build @miladyai/agent capability descriptors
+        run: |
+          rm -rf packages/agent/dist
+          ./node_modules/.bin/tsc --noCheck --ignoreDeprecations 6.0 -p packages/agent/tsconfig.build.json
+          node scripts/prepare-package-dist.mjs packages/agent --compiled-prefix=packages/agent/src
+          test -f packages/agent/dist/packages/agent/src/runtime/alice-capability-inventory.js
+          test -f packages/agent/dist/packages/agent/src/runtime/alice-runtime-profile.js
+
       - name: Build @elizaos/shared
         run: |
           cd eliza/packages/shared

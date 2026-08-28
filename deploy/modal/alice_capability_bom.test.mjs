@@ -301,6 +301,40 @@ test("the production app-core runtime alias resolves to the canonical attested p
   }
 });
 
+test("the production image materializes the compiled Alice capability descriptors at their policy paths", () => {
+  const dockerfile = fs.readFileSync(
+    path.join(REPO_ROOT, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  const materialization = dockerfile.match(
+    /# Product plugin resolution is dynamic\.[\s\S]*?(?=\n    rm -rf node_modules\/@rndrntwrk\/plugin-555stream;)/,
+  )?.[0];
+
+  assert.ok(materialization, "the @miladyai/agent materialization block must exist");
+  assert.match(
+    materialization,
+    /cp -a packages\/agent\/dist\/packages\/agent\/src\/\. node_modules\/@miladyai\/agent\/dist\//,
+    "the compiler's package-relative output must be flattened into the signed runtime package",
+  );
+  assert.doesNotMatch(
+    materialization,
+    /packages\/agent\/dist[^\n]*2>\/dev\/null \|\| true/,
+    "missing compiled Alice descriptors must fail the image build",
+  );
+  for (const descriptor of [
+    "alice-capability-inventory.js",
+    "alice-runtime-profile.js",
+  ]) {
+    assert.match(
+      materialization,
+      new RegExp(
+        `test -f node_modules/@miladyai/agent/dist/runtime/${descriptor.replaceAll(".", "\\.")}`,
+      ),
+      `${descriptor} must exist at its capability-policy path`,
+    );
+  }
+});
+
 test("canonical BOM is deterministic across shuffled discovery", async () => {
   const root = fixtureRoot();
   try {

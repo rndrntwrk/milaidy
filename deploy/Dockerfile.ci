@@ -58,7 +58,10 @@ RUN set -x; \
     mkdir -p node_modules/@miladyai/agent; \
     cp packages/agent/package.json node_modules/@miladyai/agent/; \
     cp -a packages/agent/src node_modules/@miladyai/agent/src; \
-    cp -a packages/agent/dist node_modules/@miladyai/agent/dist 2>/dev/null || true; \
+    mkdir -p node_modules/@miladyai/agent/dist; \
+    cp -a packages/agent/dist/packages/agent/src/. node_modules/@miladyai/agent/dist/; \
+    test -f node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js; \
+    test -f node_modules/@miladyai/agent/dist/runtime/alice-runtime-profile.js; \
     rm -rf node_modules/@rndrntwrk/plugin-555stream; \
     mkdir -p node_modules/@rndrntwrk/plugin-555stream; \
     cp packages/plugin-555stream/package.json node_modules/@rndrntwrk/plugin-555stream/; \
