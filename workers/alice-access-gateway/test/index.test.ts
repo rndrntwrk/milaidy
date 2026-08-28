@@ -4,8 +4,10 @@ import { sha256Base64Url } from "../../alice-production-control/src/access";
 import {
   buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceStatePlaneEffectiveConfig,
   encodeAliceDeploymentManifest,
 } from "../../alice-effective-config.js";
 import {
@@ -70,6 +72,12 @@ const testDeploymentManifest = await buildAliceDeploymentManifest({
     releaseServiceTokenIdSha256: "R".repeat(43),
   }),
   aiGatewayEffectiveConfig: buildAliceAiGatewayEffectiveConfig(),
+  statePlaneEffectiveConfig: buildAliceStatePlaneEffectiveConfig({
+    databaseId: "11111111-2222-3333-4444-555555555555",
+  }),
+  connectorPlaneEffectiveConfig: buildAliceConnectorPlaneEffectiveConfig({
+    providerActivation: "disabled",
+  }),
 });
 const testDeploymentManifestBytes = serializeAliceDeploymentManifest(
   testDeploymentManifest,

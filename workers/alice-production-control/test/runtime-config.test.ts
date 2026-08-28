@@ -4,7 +4,9 @@ import { canonicalJson, type ProgramEnvelope } from "../src/program";
 import {
   buildAliceAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceStatePlaneEffectiveConfig,
   encodeAliceDeploymentManifest,
 } from "../../alice-effective-config.js";
 import {
@@ -78,6 +80,12 @@ async function fixture() {
       releaseServiceTokenIdSha256: "R".repeat(43),
     }),
     aiGatewayEffectiveConfig: buildAliceAiGatewayEffectiveConfig(),
+    statePlaneEffectiveConfig: buildAliceStatePlaneEffectiveConfig({
+      databaseId: "11111111-2222-3333-4444-555555555555",
+    }),
+    connectorPlaneEffectiveConfig: buildAliceConnectorPlaneEffectiveConfig({
+      providerActivation: "disabled",
+    }),
   });
   const deploymentManifestBytes = serializeAliceDeploymentManifest(
     deploymentManifest,
