@@ -247,6 +247,26 @@ test("Alice Worker builds install the lockfile-pinned Wrangler at the repository
   );
 });
 
+test("Alice root Wrangler installs the exact Container runtime from the frozen lockfile", () => {
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+  );
+  const lockfile = fs.readFileSync(path.join(repoRoot, "bun.lock"), "utf8");
+  const rootImporter = lockfile.slice(0, lockfile.indexOf('\n    "apps/app":'));
+
+  assert.equal(packageJson.devDependencies?.["@cloudflare/containers"], "0.3.7");
+  assert.match(
+    rootImporter,
+    /"@cloudflare\/containers": "0\.3\.7"/,
+    "the root frozen importer must install the Container runtime used by root Wrangler",
+  );
+  assert.match(
+    lockfile,
+    /"@cloudflare\/containers": \["@cloudflare\/containers@0\.3\.7", "", \{\}, "sha512-[A-Za-z0-9+/=]+"\]/,
+    "the frozen lockfile must contain the exact Container runtime package",
+  );
+});
+
 test("Alice Worker typechecks generate exact Cloudflare binding declarations first", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

@@ -27,6 +27,7 @@ import {
 } from "./alice_cloudflare_config.mjs";
 import {
   aliceWorkerBundleDigests,
+  aliceWorkerMigrationSetDigest,
   assertAliceWorkerBundleArtifactMatchesDeploymentManifest,
   buildAliceWorkerBundleArtifact,
   serializeAliceWorkerBundleArtifact,
@@ -395,6 +396,18 @@ test(
           programPublicJwkB64: "program-public-jwk-fixture",
         };
       }
+      if (role === "statePlane") {
+        return {
+          ...common,
+          stateDatabaseId: "11111111-2222-3333-4444-555555555555",
+        };
+      }
+      if (role === "connectorPlane") {
+        return {
+          ...common,
+          providerActivation: "disabled",
+        };
+      }
       return common;
     };
     const materialize = ({ root, artifactRoot, configDir, manifestSha256,
@@ -509,6 +522,28 @@ test(
         assert.equal(artifactStat.isSymbolicLink(), false);
         assert.equal(artifactStat.size > 0, true);
       }
+      const migrationsOutdir = path.join(
+        artifactRootA,
+        workers.statePlane,
+        "migrations",
+      );
+      fs.mkdirSync(migrationsOutdir);
+      for (const migration of [
+        "0001_alice_state.sql",
+        "0002_execution_records.sql",
+        "0003_eliza_database.sql",
+      ]) {
+        fs.copyFileSync(
+          path.join(
+            repoRoot,
+            "workers",
+            workers.statePlane,
+            "migrations",
+            migration,
+          ),
+          path.join(migrationsOutdir, migration),
+        );
+      }
       const artifact = buildAliceWorkerBundleArtifact({
         root: artifactRootA,
         sourceCommit,
@@ -534,6 +569,9 @@ test(
             accessWorkerBundleSha256: digests.access,
             controlWorkerBundleSha256: digests.control,
             aiGatewayWorkerBundleSha256: digests.aiGateway,
+            statePlaneWorkerBundleSha256: digests.statePlane,
+            connectorPlaneWorkerBundleSha256: digests.connectorPlane,
+            stateMigrationSetSha256: aliceWorkerMigrationSetDigest(verified),
           },
         },
       });
