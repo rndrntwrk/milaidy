@@ -21,6 +21,12 @@ export function buildAliceAccessEffectiveConfig(inputs: {
   ownerEmailSha256: string;
   upstreamOrigin: string;
 }): Record<string, unknown>;
+export function buildAliceContainerAccessEffectiveConfig(inputs: {
+  accessIssuer: string;
+  accessAudience: string;
+  ownerEmailSha256: string;
+  runtimeImage: string;
+}): Record<string, unknown>;
 export function buildAliceControlEffectiveConfig(inputs: {
   accessIssuer: string;
   accessAudience: string;

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { sha256Base64Url } from "../../alice-production-control/src/access";
 import {
-  buildAliceAccessEffectiveConfig,
+  buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceControlEffectiveConfig,
   encodeAliceDeploymentManifest,
@@ -17,7 +17,7 @@ import {
   aliceTestProviderReadbacks,
   aliceTestVerifiedWorkerBundleArtifact,
 } from "../../../deploy/modal/test-fixtures/alice_provider_readbacks.mjs";
-import { handleRequest } from "../src/index";
+import { handleRequest as handleGatewayRequest } from "../src/index";
 
 const encoder = new TextEncoder();
 const now = 1_787_400_000;
@@ -39,6 +39,8 @@ const releaseSource = {
   runtimeBuildManifestSha256: `sha256:${"8".repeat(64)}`,
   elizaCommit: "7".repeat(40),
 };
+const runtimeContainerImage =
+  `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"9".repeat(64)}`;
 const testDeploymentManifest = await buildAliceDeploymentManifest({
   releaseEpoch: 1,
   ...releaseSource,
@@ -51,11 +53,11 @@ const testDeploymentManifest = await buildAliceDeploymentManifest({
   workerBundleArtifact: aliceTestVerifiedWorkerBundleArtifact({
     sourceCommit: releaseSource.sourceCommit,
   }),
-  accessEffectiveConfig: buildAliceAccessEffectiveConfig({
+  accessEffectiveConfig: buildAliceContainerAccessEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
     accessAudience: "alice-access-audience",
     ownerEmailSha256,
-    upstreamOrigin: "https://rndrntwrk--alice.modal.run",
+    runtimeImage: runtimeContainerImage,
   }),
   controlEffectiveConfig: buildAliceControlEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
@@ -88,6 +90,19 @@ const aliceChatBoundary = {
   tools: "disabled",
   services: "not-invoked",
 } as const;
+
+test("signed Container effective config binds an immutable Cloudflare registry image", () => {
+  const effectiveConfig = buildAliceContainerAccessEffectiveConfig({
+    accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+    accessAudience: "alice-access-audience",
+    ownerEmailSha256,
+    runtimeImage: runtimeContainerImage,
+  });
+
+  expect((effectiveConfig.bindings as any).containers[0].image).toBe(
+    runtimeContainerImage,
+  );
+});
 
 function modalChatResponse(
   content: string,
@@ -249,13 +264,18 @@ type EnvironmentOptions = {
 
 async function environment(options: EnvironmentOptions = {}) {
   const controlToken = "control-service-token-with-at-least-32-bytes";
+  const runtimeRequests: Request[] = [];
+  let runtimeFetch: (request: Request) => Promise<Response> = async () =>
+    Response.json(
+      { ok: false, code: "UNCONFIGURED_TEST_RUNTIME" },
+      { status: 503 },
+    );
   return {
     ALICE_ACCESS_ISSUER: "https://rndrntwrk.cloudflareaccess.com",
     ALICE_ACCESS_AUDIENCE: "alice-access-audience",
     ALICE_OWNER_EMAIL_SHA256: ownerEmailSha256,
+    ALICE_CLOUDFLARE_RUNTIME_IMAGE: runtimeContainerImage,
     ALICE_ACCESS_PROXY_SECRET: "proxy-proof-secret-with-at-least-32-bytes",
-    ALICE_MODAL_PROXY_KEY: "wk-modal-proxy-key-with-at-least-32-bytes",
-    ALICE_MODAL_PROXY_SECRET: "ws-modal-proxy-secret-with-at-least-32-bytes",
     ALICE_ACCESS_CONTROL_SERVICE_TOKEN: controlToken,
     ALICE_CONTROL: {
       async fetch(input: RequestInfo | URL, init?: RequestInit) {
@@ -296,7 +316,21 @@ async function environment(options: EnvironmentOptions = {}) {
         return Response.json({ ok: false, code: "NOT_FOUND" }, { status: 404 });
       },
     },
-    ALICE_UPSTREAM_ORIGIN: "https://rndrntwrk--alice.modal.run",
+    ALICE_RUNTIME_CONTAINER: {
+      getByName(name: string) {
+        expect(name).toBe("alice-production-runtime");
+        return {
+          async fetch(request: Request) {
+            runtimeRequests.push(request.clone());
+            return runtimeFetch(request);
+          },
+        };
+      },
+    },
+    runtimeRequests,
+    setRuntimeFetch(next: (request: Request) => Promise<Response>) {
+      runtimeFetch = next;
+    },
     ALICE_DEPLOYMENT_MANIFEST_SHA256: release.deploymentManifestSha256,
     ALICE_DEPLOYMENT_MANIFEST_B64: encodeAliceDeploymentManifest(
       testDeploymentManifestBytes,
@@ -324,7 +358,98 @@ function authenticatedFetch(
   };
 }
 
+function invokeGateway(
+  request: Request,
+  env: Awaited<ReturnType<typeof environment>>,
+  fetchImpl: (request: Request) => Promise<Response>,
+  nowSeconds: number,
+) {
+  env.setRuntimeFetch(fetchImpl);
+  return handleGatewayRequest(request, env, fetchImpl, nowSeconds);
+}
+
 describe("Alice Access gateway", () => {
+  test("full Container runtime has no Modal origin, credential, or proof dependency", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+    Reflect.deleteProperty(env, "ALICE_UPSTREAM_ORIGIN");
+    Reflect.deleteProperty(env, "ALICE_MODAL_PROXY_KEY");
+    Reflect.deleteProperty(env, "ALICE_MODAL_PROXY_SECRET");
+    env.setRuntimeFetch(async (request) => {
+      if (new URL(request.url).pathname === "/api/alice-production/proof") {
+        return Response.json(fullRuntimeProof());
+      }
+      return new Response("<html>full Milady</html>", {
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    const response = await handleGatewayRequest(
+      new Request("https://alice.rndrntwrk.com/", {
+        headers: { "cf-access-jwt-assertion": token },
+      }),
+      env,
+      async (request) => {
+        if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+          return Response.json(jwks);
+        }
+        throw new Error("Container release proof must not use network fetch");
+      },
+      now,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("full Milady");
+    expect(env.runtimeRequests.map((request) => new URL(request.url).pathname)).toEqual([
+      "/api/alice-production/proof",
+      "/",
+      "/api/alice-production/proof",
+    ]);
+    for (const request of env.runtimeRequests) {
+      expect(request.url.startsWith("https://alice-runtime.internal/")).toBe(true);
+      expect(request.headers.get("modal-key")).toBeNull();
+      expect(request.headers.get("modal-secret")).toBeNull();
+    }
+  });
+
+  test("routes an authenticated full-runtime WebSocket upgrade through the stable Container identity", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+
+    const response = await invokeGateway(
+      new Request("https://alice.rndrntwrk.com/ws", {
+        headers: {
+          connection: "Upgrade",
+          upgrade: "websocket",
+          origin: "https://alice.rndrntwrk.com",
+          "cf-access-jwt-assertion": token,
+        },
+      }),
+      env,
+      async (request) => {
+        if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+          return Response.json(jwks);
+        }
+        if (new URL(request.url).pathname === "/api/alice-production/proof") {
+          return Response.json(fullRuntimeProof());
+        }
+        return Response.json(
+          { ok: false, code: "CONTAINER_STARTING" },
+          { status: 503 },
+        );
+      },
+      now,
+    );
+
+    expect(response.status).toBe(503);
+    expect(env.runtimeRequests.map((request) => new URL(request.url).pathname)).toEqual([
+      "/api/alice-production/proof",
+      "/ws",
+      "/api/alice-production/proof",
+    ]);
+    expect(env.runtimeRequests[1]!.headers.get("upgrade")).toBe("websocket");
+  });
+
   test("proxies the complete full-gated root, Companion, broadcast, and asset surfaces", async () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
@@ -336,7 +461,7 @@ describe("Alice Access gateway", () => {
       "/broadcast/alice-cam",
       "/assets/main.js",
     ]) {
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request(`https://alice.rndrntwrk.com${pathname}`, {
           headers: {
             authorization: "Bearer must-not-reach-runtime",
@@ -400,7 +525,7 @@ describe("Alice Access gateway", () => {
       ["GET", "/api/broadcast/alice-cam/scene"],
       ["POST", "/api/companion/stage"],
     ]) {
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request(`https://alice.rndrntwrk.com${pathname}`, {
           method,
           headers: {
@@ -439,7 +564,7 @@ describe("Alice Access gateway", () => {
       ["POST", "/api/unreviewed/execute"],
     ]) {
       let runtimeRequests = 0;
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request(`https://alice.rndrntwrk.com${pathname}`, {
           method,
           headers: {
@@ -525,7 +650,7 @@ describe("Alice Access gateway", () => {
       { ...fullRuntimeProof(), runtimeProfile: "FULL-GATED" },
     ]) {
       let ownerRequests = 0;
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request("https://alice.rndrntwrk.com/", {
           headers: { "cf-access-jwt-assertion": token },
         }),
@@ -555,7 +680,7 @@ describe("Alice Access gateway", () => {
   test("requires a verified JWT for the exact owner before any upstream request", async () => {
     const env = await environment();
     let calls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health"),
       env,
       async () => {
@@ -568,11 +693,11 @@ describe("Alice Access gateway", () => {
     expect(calls).toBe(0);
   });
 
-  test("rejects a one-field effective Access configuration substitution before ingress", async () => {
+  test("rejects a one-field effective Container Access configuration substitution before ingress", async () => {
     const env = await environment();
-    env.ALICE_UPSTREAM_ORIGIN = "https://rndrntwrk--alice-substituted.modal.run";
+    env.ALICE_OWNER_EMAIL_SHA256 = "A".repeat(43);
     let calls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health"),
       env,
       async () => {
@@ -594,7 +719,7 @@ describe("Alice Access gateway", () => {
     const { token, jwks } = await accessFixture();
     const seen: Request[] = [];
     const proofRequests: Request[] = [];
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health", {
         headers: {
           authorization: "Bearer must-not-reach-modal",
@@ -635,7 +760,7 @@ describe("Alice Access gateway", () => {
     );
     expect(response.status).toBe(200);
     expect(seen).toHaveLength(1);
-    expect(seen[0]!.url).toBe("https://rndrntwrk--alice.modal.run/api/health");
+    expect(seen[0]!.url).toBe("https://alice-runtime.internal/api/health");
     expect(seen[0]!.headers.get("authorization")).toBeNull();
     expect(seen[0]!.headers.get("cookie")).toBeNull();
     expect(seen[0]!.headers.get("cf-access-jwt-assertion")).toBeNull();
@@ -656,10 +781,8 @@ describe("Alice Access gateway", () => {
         expect(outbound.headers.get(name)).toBeNull();
       }
       expect(outbound.headers.get("accept")).toBe("application/json");
-      expect(outbound.headers.get("modal-key")).toBe(env.ALICE_MODAL_PROXY_KEY);
-      expect(outbound.headers.get("modal-secret")).toBe(
-        env.ALICE_MODAL_PROXY_SECRET,
-      );
+      expect(outbound.headers.get("modal-key")).toBeNull();
+      expect(outbound.headers.get("modal-secret")).toBeNull();
       expect(outbound.headers.get("x-milady-cloudflare-access-secret")).toBe(
         env.ALICE_ACCESS_PROXY_SECRET,
       );
@@ -687,7 +810,7 @@ describe("Alice Access gateway", () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
     let ownerCalls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health", {
         headers: { "cf-access-jwt-assertion": token },
       }),
@@ -706,7 +829,7 @@ describe("Alice Access gateway", () => {
     expect(ownerCalls).toBe(1);
 
     for (const pathname of ["/api/health", "/api/emotes", "/v1/models"]) {
-      const preflight = await handleRequest(
+      const preflight = await invokeGateway(
         new Request(`https://alice.rndrntwrk.com${pathname}`, {
           method: "OPTIONS",
           headers: { "cf-access-jwt-assertion": token },
@@ -732,7 +855,7 @@ describe("Alice Access gateway", () => {
       "/%2f%2ffoo/credential-probe",
       "/%2e%2e/foo",
     ]) {
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request(`https://alice.rndrntwrk.com${path}`, {
           headers: { "cf-access-jwt-assertion": token },
         }),
@@ -760,7 +883,7 @@ describe("Alice Access gateway", () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
     let ownerProxyCalls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/", {
         headers: { "cf-access-jwt-assertion": token },
       }),
@@ -807,7 +930,7 @@ describe("Alice Access gateway", () => {
   test("serves exact gateway provenance only after owner authentication", async () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/__alice_gateway/healthz", {
         headers: { "cf-access-jwt-assertion": token },
       }),
@@ -830,7 +953,7 @@ describe("Alice Access gateway", () => {
       const env = await environment({ blockingScopes: [scope] });
       const { token, jwks } = await accessFixture();
       let upstreamCalls = 0;
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request("https://alice.rndrntwrk.com/api/health", {
           headers: { "cf-access-jwt-assertion": token },
         }),
@@ -860,7 +983,7 @@ describe("Alice Access gateway", () => {
       onControlRequest: (request) => controlRequests.push(request),
     });
     const { token, jwks } = await accessFixture();
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -937,7 +1060,7 @@ describe("Alice Access gateway", () => {
       onControlRequest: (request) => controlRequests.push(request),
     });
     const { token, jwks } = await accessFixture();
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1006,7 +1129,7 @@ describe("Alice Access gateway", () => {
         onControlRequest: (request) => controlRequests.push(request),
       });
       const { token, jwks } = await accessFixture();
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -1072,7 +1195,7 @@ describe("Alice Access gateway", () => {
         onControlRequest: (request) => controlRequests.push(request),
       });
       const { token, jwks } = await accessFixture();
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -1105,7 +1228,7 @@ describe("Alice Access gateway", () => {
     state.onControlRequest = (request) => controlRequests.push(request);
     const env = await environment(state);
     const { token, jwks } = await accessFixture();
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1154,7 +1277,7 @@ describe("Alice Access gateway", () => {
     state.onControlRequest = (request) => controlRequests.push(request);
     const env = await environment(state);
     const { token, jwks } = await accessFixture();
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1192,7 +1315,7 @@ describe("Alice Access gateway", () => {
     });
     const { token, jwks } = await accessFixture();
     let proofCalls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1239,7 +1362,7 @@ describe("Alice Access gateway", () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
     let forwarded: Request | null = null;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1292,7 +1415,7 @@ describe("Alice Access gateway", () => {
     });
     const { token, jwks } = await accessFixture();
     let forwardedBody: Record<string, any> | null = null;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1341,7 +1464,7 @@ describe("Alice Access gateway", () => {
     });
     const { token, jwks } = await accessFixture();
     let modelCalls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1396,7 +1519,7 @@ describe("Alice Access gateway", () => {
     });
     const { token, jwks } = await accessFixture();
     let modelCalls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1427,7 +1550,7 @@ describe("Alice Access gateway", () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
     let chatCalls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1460,7 +1583,7 @@ describe("Alice Access gateway", () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
     let ownerPathCalls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health", {
         headers: { "cf-access-jwt-assertion": token },
       }),
@@ -1488,7 +1611,7 @@ describe("Alice Access gateway", () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
     let ownerPathCalls = 0;
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health", {
         headers: { "cf-access-jwt-assertion": token },
       }),
@@ -1524,7 +1647,7 @@ describe("Alice Access gateway", () => {
   test("fails closed when Modal reports a different runtime build manifest", async () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health", {
         headers: { "cf-access-jwt-assertion": token },
       }),
@@ -1570,7 +1693,7 @@ describe("Alice Access gateway", () => {
   test("fails closed when Modal reports a different deployment receipt", async () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health", {
         headers: { "cf-access-jwt-assertion": token },
       }),
@@ -1603,7 +1726,7 @@ describe("Alice Access gateway", () => {
     };
 
     for (const method of ["OPTIONS", "POST"]) {
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request("https://alice.rndrntwrk.com/api/plugins/install", {
           method,
           headers: {
@@ -1638,7 +1761,7 @@ describe("Alice Access gateway", () => {
       ["GET", "/broadcast/alice-cam"],
       ["GET", "/ws"],
     ]) {
-      const response = await handleRequest(
+      const response = await invokeGateway(
         new Request(`https://alice.rndrntwrk.com${pathname}`, {
           method,
           headers: {
