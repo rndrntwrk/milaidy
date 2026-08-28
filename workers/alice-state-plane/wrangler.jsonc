@@ -1,0 +1,58 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "036df6c823669b8fa2f66cf4c16eeb29",
+  "name": "alice-state-plane",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-27",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "vars": {
+    "ALICE_VECTOR_INDEX_NAME": "alice-memory-v1",
+    "ALICE_VECTOR_MODEL": "bge-base-en-v1.5",
+    "ALICE_VECTOR_DIMENSIONS": "768"
+  },
+  "d1_databases": [
+    {
+      "binding": "ALICE_STATE_DB",
+      "database_name": "alice-production-state",
+      "database_id": "REPLACED_BY_PRODUCTION_DEPLOY",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vectorize": [
+    {
+      "binding": "ALICE_MEMORY_INDEX",
+      "index_name": "alice-memory-v1"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ALICE_STATE_OBJECTS",
+      "bucket_name": "alice-production-state-objects"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ALICE_COORDINATION",
+        "class_name": "AliceStateCoordination"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "alice-state-plane-v1",
+      "new_sqlite_classes": ["AliceStateCoordination"]
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    }
+  }
+}

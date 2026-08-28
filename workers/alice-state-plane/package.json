@@ -1,0 +1,17 @@
+{
+  "name": "@rndrntwrk/alice-state-plane",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test test",
+    "types": "wrangler types --config wrangler.jsonc worker-configuration.d.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "dry-run": "wrangler deploy --config wrangler.jsonc --dry-run",
+    "check": "bun run types && bun run test && bun run typecheck && bun run dry-run"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "wrangler": "4.32.0"
+  }
+}
