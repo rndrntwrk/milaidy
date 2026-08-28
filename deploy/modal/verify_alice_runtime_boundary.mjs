@@ -111,8 +111,8 @@ export function verifyAliceRuntimeBoundary(proof, expectedRelease = {}) {
     !/^sha256:[a-f0-9]{64}$/.test(release.capabilityBomSha256 ?? "") ||
     !/^sha256:[a-f0-9]{64}$/.test(release.deploymentManifestSha256 ?? "") ||
     !/^[a-f0-9]{40}$/.test(release.elizaCommit ?? "") ||
-    !Number.isInteger(release.modalRevision) ||
-    release.modalRevision < 49
+    !Number.isInteger(release.runtimeRevision) ||
+    release.runtimeRevision < 49
   ) {
     throw new Error("Alice runtime release identity is invalid");
   }
