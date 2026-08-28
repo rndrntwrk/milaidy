@@ -571,6 +571,44 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     /--env MILADY_TRUST_CLOUDFLARE_ACCESS=1[\s\S]*?--env MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET=alice-cloud-smoke-access-proxy-secret/,
     "the exact-image smoke must explicitly trust its bounded Access proxy proof before expecting durable chat ingress",
   );
+  const smokeStep = workflow.slice(
+    workflow.indexOf("- name: Smoke exact candidate image"),
+    workflow.indexOf("- name: Cleanup candidate smoke container"),
+  );
+  const healthLoopStart = smokeStep.indexOf("for attempt in $(seq 1 72); do");
+  const healthLoopEnd = smokeStep.indexOf("\n          done", healthLoopStart);
+  const companionMutation = smokeStep.indexOf("const companionUpdateResponse");
+  const chatMutation = smokeStep.indexOf("const chatResponse");
+  assert.ok(healthLoopStart >= 0 && healthLoopEnd > healthLoopStart);
+  assert.ok(
+    companionMutation > healthLoopEnd && chatMutation > healthLoopEnd,
+    "the health retry loop must finish before the one-shot mutating acceptance begins",
+  );
+  assert.equal(
+    smokeStep.match(/const companionUpdateResponse/g)?.length,
+    1,
+    "the candidate smoke must mutate Companion state exactly once",
+  );
+  assert.equal(
+    smokeStep.match(/const chatResponse/g)?.length,
+    1,
+    "the candidate smoke must issue its authenticated chat exactly once",
+  );
+  assert.match(
+    smokeStep,
+    /const onboardingResponse = await fetch\(`\$\{base\}\/api\/onboarding\/status`, \{ headers: authHeaders \}\);[\s\S]*?onboardingResponse\.status !== 200[\s\S]*?onboarding\.complete !== true[\s\S]*?onboarding\.cloudProvisioned !== true[\s\S]*?key !== "cloudProvisioned" && key !== "complete"/,
+    "the full-gated smoke must require completed onboarding and accept only the authenticated safe status shape",
+  );
+  const deniedReadsBlock = smokeStep.slice(
+    smokeStep.indexOf("const deniedReads = ["),
+    smokeStep.indexOf("];", smokeStep.indexOf("const deniedReads = [")) + 2,
+  );
+  assert.ok(deniedReadsBlock.length > 2);
+  assert.doesNotMatch(
+    deniedReadsBlock,
+    /\/api\/onboarding\/status/,
+    "the Companion-required onboarding status cannot be treated as a forbidden full-gated read",
+  );
   for (const forbiddenPath of [
     "/api/plugins/install",
     "/api/wallet/import",
@@ -578,7 +616,6 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     "/api/stream/start",
     "/api/terminal/run",
     "/api/wallet/keys",
-    "/api/onboarding/status",
     "/api/secrets",
     "/api/broadcast/alice-cam/scene",
   ]) {
