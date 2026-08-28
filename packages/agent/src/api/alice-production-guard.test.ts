@@ -82,6 +82,8 @@ describe("Alice production runtime guard", () => {
       ["POST", "/api/unreviewed/execute"],
       ["GET", "/api/secrets"],
       ["GET", "/api/wallet/keys"],
+      ["GET", "/api/sandbox/browser"],
+      ["GET", "/api/unreviewed/read"],
       ["GET", "/ws"],
     ]) {
       expect(

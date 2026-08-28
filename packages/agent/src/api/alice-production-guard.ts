@@ -29,14 +29,24 @@ const SAFE_READ_PATHS = [
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
-const SAFE_WRITE_PATHS = [
-  /^\/v1\/chat\/completions$/,
-];
+const SAFE_WRITE_PATHS = [/^\/v1\/chat\/completions$/];
 
-const FULL_PROFILE_SENSITIVE_READ_PATHS = [
-  /^\/api\/secrets(?:\/|$)/,
-  /^\/api\/wallet\/(?:export|keys)(?:\/|$)/,
-  /^\/ws(?:\/|$)/,
+const FULL_PROFILE_ALLOWED_READ_PATHS = [
+  /^\/$/,
+  /^\/companion$/,
+  /^\/broadcast\/[a-zA-Z0-9-]+$/,
+  /^\/(?:assets|vrms|models|fonts|icons|images|sounds|audio)\/[a-zA-Z0-9._/-]+$/,
+  /^\/(?:favicon\.ico|manifest\.webmanifest)$/,
+  /^\/api\/health$/,
+  /^\/health(?:\/(?:live|ready))?$/,
+  /^\/api\/alice-production\/proof$/,
+  /^\/api\/(?:auth\/status|status|agent\/status|onboarding\/status|config|emotes)$/,
+  /^\/api\/avatar\/(?:vrm|background)$/,
+  /^\/api\/companion\/stage$/,
+  /^\/api\/broadcast\/[a-zA-Z0-9-]+\/(?:stage|scene|vrm|background)$/,
+  /^\/api\/conversations(?:\/[^/]+\/messages)?$/,
+  /^\/api\/memories\/feed$/,
+  /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
 const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
@@ -93,9 +103,9 @@ export function evaluateAliceProductionRequest(
 
   if (isAliceFullRuntimeProfile(env)) {
     if (normalizedMethod === "GET" || normalizedMethod === "HEAD") {
-      return matches(pathname, FULL_PROFILE_SENSITIVE_READ_PATHS)
-        ? { allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" }
-        : { allowed: true };
+      return matches(pathname, FULL_PROFILE_ALLOWED_READ_PATHS)
+        ? { allowed: true }
+        : { allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" };
     }
     return matches(pathname, FULL_PROFILE_ALLOWED_WRITE_PATHS)
       ? { allowed: true }
