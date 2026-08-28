@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS alice_state_idempotency (
   owner_id TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
   request_sha256 TEXT NOT NULL CHECK(length(request_sha256) = 64),
+  claim_token TEXT NOT NULL,
   created_at INTEGER NOT NULL CHECK(created_at > 0),
   PRIMARY KEY (owner_id, idempotency_key)
 );
@@ -242,12 +243,12 @@ async function toRecord(row: StoredRecordRow): Promise<PortableRecord> {
 }
 
 const INSERT_IDEMPOTENCY = `
-INSERT INTO alice_state_idempotency(owner_id, idempotency_key, request_sha256, created_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO alice_state_idempotency(owner_id, idempotency_key, request_sha256, claim_token, created_at)
+VALUES (?, ?, ?, ?, ?)
 ON CONFLICT(owner_id, idempotency_key) DO UPDATE SET
-  request_sha256 = CASE
+  claim_token = CASE
     WHEN alice_state_idempotency.request_sha256 = excluded.request_sha256
-    THEN alice_state_idempotency.request_sha256
+    THEN alice_state_idempotency.claim_token
     ELSE NULL
   END`;
 
@@ -256,7 +257,10 @@ INSERT INTO alice_state_records(
   kind, record_id, owner_id, session_id, payload_json, payload_sha256, revision, updated_at
 )
 SELECT ?, ?, ?, ?, ?, ?, 1, ?
-WHERE (SELECT request_sha256 FROM alice_state_idempotency WHERE owner_id = ? AND idempotency_key = ?) = ?
+WHERE EXISTS (
+  SELECT 1 FROM alice_state_idempotency
+  WHERE owner_id = ? AND idempotency_key = ? AND request_sha256 = ? AND claim_token = ?
+)
 ON CONFLICT(owner_id, kind, record_id) DO UPDATE SET
   owner_id = excluded.owner_id,
   session_id = excluded.session_id,
@@ -329,8 +333,10 @@ export class D1AliceStateAdapter {
       if (targets.has(target)) throw new Error("STATE_ATOMIC_TARGET_DUPLICATE");
       targets.add(target);
     }
+    const claimToken = crypto.randomUUID();
     const statements: D1Statement[] = [];
     const prepared: Array<{ record: Omit<PortableRecordInput, "idempotencyKey">; idempotencyKey: string; requestHash: string; payloadJson: string; payloadHash: string }> = [];
+    let completedReceipts = 0;
     for (const [index, record] of input.records.entries()) {
       validateRecord(record);
       const payloadJson = canonicalJson(record.payload);
@@ -351,8 +357,9 @@ export class D1AliceStateAdapter {
       if (existing && existing.request_sha256 !== requestHash) {
         throw new Error("STATE_IDEMPOTENCY_COLLISION");
       }
+      if (existing) completedReceipts += 1;
       statements.push(
-        this.db.prepare(INSERT_IDEMPOTENCY).bind(operationOwnerId, idempotencyKey, requestHash, record.updatedAt),
+        this.db.prepare(INSERT_IDEMPOTENCY).bind(operationOwnerId, idempotencyKey, requestHash, claimToken, record.updatedAt),
         this.db.prepare(UPSERT_RECORD).bind(
           record.kind,
           record.recordId,
@@ -364,9 +371,16 @@ export class D1AliceStateAdapter {
           operationOwnerId,
           idempotencyKey,
           requestHash,
+          claimToken,
         ),
       );
       prepared.push({ record, idempotencyKey, requestHash, payloadJson, payloadHash });
+    }
+    if (completedReceipts !== 0 && completedReceipts !== prepared.length) {
+      throw new Error("STATE_ATOMIC_RECEIPT_PARTIAL");
+    }
+    if (completedReceipts === prepared.length) {
+      return this.readCurrentRecords(operationOwnerId, prepared);
     }
     try {
       await this.db.batch(statements);
@@ -382,11 +396,19 @@ export class D1AliceStateAdapter {
       }
       throw new Error("STATE_ATOMIC_COMMIT_FAILED", { cause: error });
     }
+    return this.readCurrentRecords(operationOwnerId, prepared);
+  }
+
+  private async readCurrentRecords(ownerId: string, prepared: Array<{
+    record: Omit<PortableRecordInput, "idempotencyKey">;
+    idempotencyKey: string;
+    requestHash: string;
+  }>): Promise<PortableRecord[]> {
     const output: PortableRecord[] = [];
     for (const item of prepared) {
       const ledger = await this.db
         .prepare("SELECT request_sha256 FROM alice_state_idempotency WHERE owner_id = ? AND idempotency_key = ?")
-        .bind(operationOwnerId, item.idempotencyKey)
+        .bind(ownerId, item.idempotencyKey)
         .first<{ request_sha256: string }>();
       if (!ledger || ledger.request_sha256 !== item.requestHash) throw new Error("STATE_ATOMIC_COMMIT_INVALID");
       const stored = await this.getRecord(item.record.kind, item.record.recordId, item.record.ownerId);
