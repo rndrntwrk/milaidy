@@ -27,17 +27,19 @@ type D1Binding = {
   exec(sql: string): Promise<unknown>;
 };
 
+type VectorMetadataScalar = string | number | boolean | string[];
+type VectorMetadata = VectorMetadataScalar | Record<string, VectorMetadataScalar>;
 type VectorizeBinding = {
   upsert(vectors: Array<{
     id: string;
     values: number[];
     namespace: string;
-    metadata: Record<string, unknown>;
+    metadata: Record<string, VectorMetadata>;
   }>): Promise<unknown>;
   query(
     values: number[],
     options: { namespace: string; topK: number; returnMetadata: "all" },
-  ): Promise<{ matches: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> }>;
+  ): Promise<{ matches: Array<{ id: string; score: number; metadata?: Record<string, VectorMetadata> }> }>;
 };
 
 type R2Head = {
@@ -150,9 +152,11 @@ function validateRecord(input: PortableRecordInput): void {
 
 export const ALICE_STATE_SCHEMA = `
 CREATE TABLE IF NOT EXISTS alice_state_idempotency (
-  idempotency_key TEXT PRIMARY KEY NOT NULL,
+  owner_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
   request_sha256 TEXT NOT NULL CHECK(length(request_sha256) = 64),
-  created_at INTEGER NOT NULL CHECK(created_at > 0)
+  created_at INTEGER NOT NULL CHECK(created_at > 0),
+  PRIMARY KEY (owner_id, idempotency_key)
 );
 CREATE TABLE IF NOT EXISTS alice_state_records (
   kind TEXT NOT NULL CHECK(kind IN ('message','room','world','entity','relationship','memory','task','trajectory','connectorCursor','configVersion','approvalReceipt')),
@@ -204,8 +208,25 @@ type StoredRecordRow = {
   updated_at: number;
 };
 
-function toRecord(row: StoredRecordRow): PortableRecord {
-  if (!STATE_KIND.has(row.kind) || !validIdentifier(row.record_id) || !validIdentifier(row.owner_id)) {
+async function toRecord(row: StoredRecordRow): Promise<PortableRecord> {
+  if (!exactKeys(row as unknown as Record<string, unknown>, [
+    "kind", "record_id", "owner_id", "session_id", "payload_json",
+    "payload_sha256", "revision", "updated_at",
+  ]) || !STATE_KIND.has(row.kind) || !validIdentifier(row.record_id) ||
+    !validIdentifier(row.owner_id) || (row.session_id !== null && !validIdentifier(row.session_id)) ||
+    typeof row.payload_json !== "string" || !/^[a-f0-9]{64}$/.test(row.payload_sha256) ||
+    !Number.isSafeInteger(row.revision) || row.revision < 1 ||
+    !Number.isSafeInteger(row.updated_at) || row.updated_at < 1) {
+    throw new Error("STATE_ROW_INVALID");
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(row.payload_json);
+  } catch {
+    throw new Error("STATE_ROW_INVALID");
+  }
+  const canonical = canonicalJson(payload);
+  if (canonical !== row.payload_json || await sha256Text(canonical) !== row.payload_sha256) {
     throw new Error("STATE_ROW_INVALID");
   }
   return {
@@ -213,7 +234,7 @@ function toRecord(row: StoredRecordRow): PortableRecord {
     recordId: row.record_id,
     ownerId: row.owner_id,
     sessionId: row.session_id,
-    payload: JSON.parse(row.payload_json),
+    payload,
     payloadSha256: `sha256:${row.payload_sha256}`,
     revision: row.revision,
     updatedAt: row.updated_at,
@@ -221,9 +242,9 @@ function toRecord(row: StoredRecordRow): PortableRecord {
 }
 
 const INSERT_IDEMPOTENCY = `
-INSERT INTO alice_state_idempotency(idempotency_key, request_sha256, created_at)
-VALUES (?, ?, ?)
-ON CONFLICT(idempotency_key) DO UPDATE SET
+INSERT INTO alice_state_idempotency(owner_id, idempotency_key, request_sha256, created_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(owner_id, idempotency_key) DO UPDATE SET
   request_sha256 = CASE
     WHEN alice_state_idempotency.request_sha256 = excluded.request_sha256
     THEN alice_state_idempotency.request_sha256
@@ -235,7 +256,7 @@ INSERT INTO alice_state_records(
   kind, record_id, owner_id, session_id, payload_json, payload_sha256, revision, updated_at
 )
 SELECT ?, ?, ?, ?, ?, ?, 1, ?
-WHERE (SELECT request_sha256 FROM alice_state_idempotency WHERE idempotency_key = ?) = ?
+WHERE (SELECT request_sha256 FROM alice_state_idempotency WHERE owner_id = ? AND idempotency_key = ?) = ?
 ON CONFLICT(owner_id, kind, record_id) DO UPDATE SET
   owner_id = excluded.owner_id,
   session_id = excluded.session_id,
@@ -298,6 +319,16 @@ export class D1AliceStateAdapter {
     if (!validIdentifier(input.operationId) || input.records.length === 0 || input.records.length > 100) {
       throw new Error("STATE_ATOMIC_OPERATION_INVALID");
     }
+    const operationOwnerId = input.records[0]?.ownerId;
+    if (!validIdentifier(operationOwnerId) || input.records.some((record) => record.ownerId !== operationOwnerId)) {
+      throw new Error("STATE_ATOMIC_OWNER_MISMATCH");
+    }
+    const targets = new Set<string>();
+    for (const record of input.records) {
+      const target = `${record.ownerId}\0${record.kind}\0${record.recordId}`;
+      if (targets.has(target)) throw new Error("STATE_ATOMIC_TARGET_DUPLICATE");
+      targets.add(target);
+    }
     const statements: D1Statement[] = [];
     const prepared: Array<{ record: Omit<PortableRecordInput, "idempotencyKey">; idempotencyKey: string; requestHash: string; payloadJson: string; payloadHash: string }> = [];
     for (const [index, record] of input.records.entries()) {
@@ -314,14 +345,14 @@ export class D1AliceStateAdapter {
         updatedAt: record.updatedAt,
       }));
       const existing = await this.db
-        .prepare("SELECT request_sha256 FROM alice_state_idempotency WHERE idempotency_key = ?")
-        .bind(idempotencyKey)
+        .prepare("SELECT request_sha256 FROM alice_state_idempotency WHERE owner_id = ? AND idempotency_key = ?")
+        .bind(operationOwnerId, idempotencyKey)
         .first<{ request_sha256: string }>();
       if (existing && existing.request_sha256 !== requestHash) {
         throw new Error("STATE_IDEMPOTENCY_COLLISION");
       }
       statements.push(
-        this.db.prepare(INSERT_IDEMPOTENCY).bind(idempotencyKey, requestHash, record.updatedAt),
+        this.db.prepare(INSERT_IDEMPOTENCY).bind(operationOwnerId, idempotencyKey, requestHash, record.updatedAt),
         this.db.prepare(UPSERT_RECORD).bind(
           record.kind,
           record.recordId,
@@ -330,6 +361,7 @@ export class D1AliceStateAdapter {
           payloadJson,
           payloadHash,
           record.updatedAt,
+          operationOwnerId,
           idempotencyKey,
           requestHash,
         ),
@@ -341,8 +373,8 @@ export class D1AliceStateAdapter {
     } catch (error) {
       for (const item of prepared) {
         const ledger = await this.db
-          .prepare("SELECT request_sha256 FROM alice_state_idempotency WHERE idempotency_key = ?")
-          .bind(item.idempotencyKey)
+          .prepare("SELECT request_sha256 FROM alice_state_idempotency WHERE owner_id = ? AND idempotency_key = ?")
+          .bind(operationOwnerId, item.idempotencyKey)
           .first<{ request_sha256: string }>();
         if (ledger && ledger.request_sha256 !== item.requestHash) {
           throw new Error("STATE_IDEMPOTENCY_COLLISION");
@@ -353,8 +385,8 @@ export class D1AliceStateAdapter {
     const output: PortableRecord[] = [];
     for (const item of prepared) {
       const ledger = await this.db
-        .prepare("SELECT request_sha256 FROM alice_state_idempotency WHERE idempotency_key = ?")
-        .bind(item.idempotencyKey)
+        .prepare("SELECT request_sha256 FROM alice_state_idempotency WHERE owner_id = ? AND idempotency_key = ?")
+        .bind(operationOwnerId, item.idempotencyKey)
         .first<{ request_sha256: string }>();
       if (!ledger || ledger.request_sha256 !== item.requestHash) throw new Error("STATE_ATOMIC_COMMIT_INVALID");
       const stored = await this.getRecord(item.record.kind, item.record.recordId, item.record.ownerId);
@@ -373,7 +405,7 @@ export class D1AliceStateAdapter {
         FROM alice_state_records WHERE kind = ? AND record_id = ? AND owner_id = ?`)
       .bind(kind, recordId, ownerId)
       .first<StoredRecordRow>();
-    return row ? toRecord(row) : null;
+    return row ? await toRecord(row) : null;
   }
 
   async listRecords(input: { ownerId: string; sessionId?: string | null; kind?: AliceStateKind; limit: number }): Promise<PortableRecord[]> {
@@ -397,7 +429,7 @@ export class D1AliceStateAdapter {
       FROM alice_state_records WHERE ${clauses.join(" AND ")}
       ORDER BY updated_at ASC, kind ASC, record_id ASC LIMIT ?`).bind(...params).all<StoredRecordRow>();
     if (!rows.success) throw new Error("STATE_READ_FAILED");
-    return rows.results.map(toRecord);
+    return Promise.all(rows.results.map(toRecord));
   }
 
   async putVectorReference(input: {
@@ -455,6 +487,12 @@ export class D1AliceStateAdapter {
       model: row.model,
       dimensions: row.dimensions,
     };
+  }
+
+  async requireCanonicalRecord(recordKind: AliceStateKind, recordId: string, ownerId: string): Promise<PortableRecord> {
+    const record = await this.getRecord(recordKind, recordId, ownerId);
+    if (!record) throw new Error("VECTOR_CANONICAL_RECORD_MISSING");
+    return record;
   }
 
   async putObjectReference(input: {
@@ -522,8 +560,15 @@ export class AliceVectorStore {
       throw new Error("VECTOR_IDENTITY_INVALID");
     }
     this.validate(input.model, input.dimensions, input.values);
+    if (this.canonical) await this.canonical.requireCanonicalRecord(input.recordKind, input.recordId, input.ownerId);
     const namespace = `owner:${input.ownerId}`;
-    const vectorId = `${input.recordKind}:${input.recordId}`;
+    const vectorId = `vector-${await sha256Text(canonicalJson({
+      ownerId: input.ownerId,
+      recordKind: input.recordKind,
+      recordId: input.recordId,
+      indexName: this.contract.indexName,
+      model: this.contract.model,
+    }))}`;
     await this.index.upsert([{ id: vectorId, values: input.values, namespace, metadata: {
       recordKind: input.recordKind,
       recordId: input.recordId,
@@ -533,7 +578,11 @@ export class AliceVectorStore {
       indexName: this.contract.indexName,
     } }]);
     const reference = { vectorId, recordKind: input.recordKind, recordId: input.recordId, ownerId: input.ownerId, namespace, indexName: this.contract.indexName, model: input.model, dimensions: input.dimensions };
-    if (this.canonical) await this.canonical.putVectorReference(reference, Date.now());
+    if (this.canonical) {
+      await this.canonical.putVectorReference(reference, Date.now());
+      const reconciled = await this.canonical.getVectorReference(input.recordKind, input.recordId, input.ownerId);
+      if (canonicalJson(reconciled) !== canonicalJson(reference)) throw new Error("VECTOR_REFERENCE_RECONCILIATION_INVALID");
+    }
     return reference;
   }
 
@@ -543,16 +592,23 @@ export class AliceVectorStore {
     }
     this.validate(input.model, input.dimensions, input.values);
     const response = await this.index.query(input.values, { namespace: `owner:${input.ownerId}`, topK: input.topK, returnMetadata: "all" });
-    return response.matches.map((match) => {
+    return Promise.all(response.matches.map(async (match) => {
       const metadata = match.metadata;
       if (!metadata || metadata.ownerId !== input.ownerId || metadata.model !== this.contract.model ||
         metadata.dimensions !== this.contract.dimensions || metadata.indexName !== this.contract.indexName ||
-        !STATE_KIND.has(String(metadata.recordKind)) || !validIdentifier(metadata.recordId) ||
-        match.id !== `${String(metadata.recordKind)}:${metadata.recordId}`) {
+        !STATE_KIND.has(String(metadata.recordKind)) || !validIdentifier(metadata.recordId)) {
         throw new Error("VECTOR_RESULT_IDENTITY_INVALID");
       }
+      const expectedVectorId = `vector-${await sha256Text(canonicalJson({
+        ownerId: input.ownerId,
+        recordKind: metadata.recordKind,
+        recordId: metadata.recordId,
+        indexName: this.contract.indexName,
+        model: this.contract.model,
+      }))}`;
+      if (match.id !== expectedVectorId) throw new Error("VECTOR_RESULT_IDENTITY_INVALID");
       return { vectorId: match.id, score: match.score, recordKind: metadata.recordKind as AliceStateKind, recordId: metadata.recordId as string };
-    });
+    }));
   }
 }
 
@@ -692,7 +748,14 @@ export type StateOperation =
   | { operation: "record.get"; kind: AliceStateKind; recordId: string; ownerId: string }
   | ({ operation: "record.put" } & PortableRecordInput)
   | { operation: "record.list"; ownerId: string; sessionId?: string | null; kind?: AliceStateKind; limit: number }
-  | { operation: "records.atomic"; operationId: string; records: Array<Omit<PortableRecordInput, "idempotencyKey">> };
+  | { operation: "records.atomic"; operationId: string; records: Array<Omit<PortableRecordInput, "idempotencyKey">> }
+  | { operation: "vector.upsert"; recordKind: AliceStateKind; recordId: string; ownerId: string; model: string; dimensions: number; values: number[] }
+  | { operation: "vector.query"; ownerId: string; model: string; dimensions: number; values: number[]; topK: number }
+  | { operation: "object.put"; bytesBase64: string; mediaType: string; createdAt: number }
+  | { operation: "coordination.initialize"; ownerId: string; sessionId: string }
+  | { operation: "coordination.snapshot"; ownerId: string; sessionId: string }
+  | { operation: "coordination.connect"; ownerId: string; sessionId: string; connectionId: string; connectedAt: number }
+  | { operation: "coordination.cursor"; ownerId: string; sessionId: string; connector: string; cursor: string; observedAt: number };
 
 function containsSecretField(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(containsSecretField);
@@ -700,6 +763,17 @@ function containsSecretField(value: unknown): boolean {
   return Object.entries(value as Record<string, unknown>).some(
     ([key, child]) => SECRET_FIELD.test(key) || containsSecretField(child),
   );
+}
+
+function validateVectorValues(model: unknown, dimensions: unknown, values: unknown): asserts values is number[] {
+  if (!validIdentifier(model) || !Number.isSafeInteger(dimensions) || Number(dimensions) < 1 || Number(dimensions) > 1_536 ||
+    !Array.isArray(values) || values.length !== dimensions || values.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))) {
+    throw new Error("STATE_OPERATION_INVALID");
+  }
+}
+
+function validateCoordinationIdentity(ownerId: unknown, sessionId: unknown): void {
+  if (!validIdentifier(ownerId) || !validIdentifier(sessionId)) throw new Error("STATE_OPERATION_INVALID");
 }
 
 export function validateStateOperation(value: unknown): StateOperation {
@@ -769,6 +843,62 @@ export function validateStateOperation(value: unknown): StateOperation {
       return input;
     });
     return { operation: "records.atomic", operationId: record.operationId, records };
+  }
+  if (record.operation === "vector.upsert") {
+    if (!exactKeys(record, ["operation", "recordKind", "recordId", "ownerId", "model", "dimensions", "values"]) ||
+      !STATE_KIND.has(String(record.recordKind)) || !validIdentifier(record.recordId) || !validIdentifier(record.ownerId)) {
+      throw new Error("STATE_OPERATION_INVALID");
+    }
+    validateVectorValues(record.model, record.dimensions, record.values);
+    return {
+      operation: "vector.upsert", recordKind: record.recordKind as AliceStateKind,
+      recordId: record.recordId, ownerId: record.ownerId, model: record.model as string,
+      dimensions: record.dimensions as number, values: record.values,
+    };
+  }
+  if (record.operation === "vector.query") {
+    if (!exactKeys(record, ["operation", "ownerId", "model", "dimensions", "values", "topK"]) ||
+      !validIdentifier(record.ownerId) || !Number.isSafeInteger(record.topK) || Number(record.topK) < 1 || Number(record.topK) > 50) {
+      throw new Error("STATE_OPERATION_INVALID");
+    }
+    validateVectorValues(record.model, record.dimensions, record.values);
+    return {
+      operation: "vector.query", ownerId: record.ownerId, model: record.model as string,
+      dimensions: record.dimensions as number, values: record.values, topK: record.topK as number,
+    };
+  }
+  if (record.operation === "object.put") {
+    if (!exactKeys(record, ["operation", "bytesBase64", "mediaType", "createdAt"]) ||
+      typeof record.bytesBase64 !== "string" || record.bytesBase64.length > 34_000_000 ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(record.bytesBase64) ||
+      !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(String(record.mediaType)) ||
+      !Number.isSafeInteger(record.createdAt) || Number(record.createdAt) < 1) {
+      throw new Error("STATE_OPERATION_INVALID");
+    }
+    return { operation: "object.put", bytesBase64: record.bytesBase64, mediaType: record.mediaType as string, createdAt: record.createdAt as number };
+  }
+  if (record.operation === "coordination.initialize" || record.operation === "coordination.snapshot") {
+    if (!exactKeys(record, ["operation", "ownerId", "sessionId"])) throw new Error("STATE_OPERATION_INVALID");
+    validateCoordinationIdentity(record.ownerId, record.sessionId);
+    return { operation: record.operation, ownerId: record.ownerId as string, sessionId: record.sessionId as string };
+  }
+  if (record.operation === "coordination.connect") {
+    if (!exactKeys(record, ["operation", "ownerId", "sessionId", "connectionId", "connectedAt"])) throw new Error("STATE_OPERATION_INVALID");
+    validateCoordinationIdentity(record.ownerId, record.sessionId);
+    if (!validIdentifier(record.connectionId) || !Number.isSafeInteger(record.connectedAt) || Number(record.connectedAt) < 1) throw new Error("STATE_OPERATION_INVALID");
+    return {
+      operation: "coordination.connect", ownerId: record.ownerId as string, sessionId: record.sessionId as string,
+      connectionId: record.connectionId, connectedAt: record.connectedAt as number,
+    };
+  }
+  if (record.operation === "coordination.cursor") {
+    if (!exactKeys(record, ["operation", "ownerId", "sessionId", "connector", "cursor", "observedAt"])) throw new Error("STATE_OPERATION_INVALID");
+    validateCoordinationIdentity(record.ownerId, record.sessionId);
+    if (!validIdentifier(record.connector) || !validIdentifier(record.cursor) || !Number.isSafeInteger(record.observedAt) || Number(record.observedAt) < 1) throw new Error("STATE_OPERATION_INVALID");
+    return {
+      operation: "coordination.cursor", ownerId: record.ownerId as string, sessionId: record.sessionId as string,
+      connector: record.connector, cursor: record.cursor, observedAt: record.observedAt as number,
+    };
   }
   throw new Error("STATE_OPERATION_UNSUPPORTED");
 }

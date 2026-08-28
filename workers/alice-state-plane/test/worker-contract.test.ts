@@ -9,6 +9,7 @@ describe("Alice state Worker and Durable Object deployment contract", () => {
       readFile(new URL("wrangler.jsonc", root), "utf8"),
     ]);
     expect(entrypoint).toMatch(/extends DurableObject/);
+    expect(entrypoint).not.toMatch(/ctx\.id\.name/);
     expect(entrypoint).toMatch(/DurableObjectCoordinationStorage/);
     expect(entrypoint).toMatch(/createAliceStateService/);
     expect(config).toMatch(/"workers_dev"\s*:\s*false/);
@@ -34,5 +35,19 @@ describe("Alice state Worker and Durable Object deployment contract", () => {
     await ledger.connect("connection-001", 1_777_000_000_000);
     expect(writes).toHaveLength(2);
     expect((await AliceCoordinationLedger.restore(storage, "owner-001", "session-001")).snapshot().connectionEpoch).toBe(1);
+  });
+
+  test("initializes immutable owner/session metadata without relying on a provider DO name", async () => {
+    const { AliceCoordinationObjectCore, DurableObjectCoordinationStorage } = await import("../src/coordination-storage");
+    const durable = new Map<string, unknown>();
+    const storage = new DurableObjectCoordinationStorage({
+      get: async (key: string) => durable.get(key),
+      put: async (key: string, value: unknown) => durable.set(key, structuredClone(value)),
+    });
+    const first = await AliceCoordinationObjectCore.restore(storage);
+    expect(await first.initialize("owner-001", "session-001")).toMatchObject({ ownerId: "owner-001", sessionId: "session-001" });
+    const restarted = await AliceCoordinationObjectCore.restore(storage);
+    expect(await restarted.initialize("owner-001", "session-001")).toMatchObject({ ownerId: "owner-001", sessionId: "session-001" });
+    await expect(restarted.initialize("owner-002", "session-001")).rejects.toThrow("COORDINATION_REINITIALIZATION_INVALID");
   });
 });
