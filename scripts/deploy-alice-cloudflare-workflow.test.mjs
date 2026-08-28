@@ -80,7 +80,41 @@ test("protected deployment consumes one exact successful build and immutable art
   assert.doesNotMatch(workflow, /ref: \$\{\{ inputs\.source_sha \}\}/);
 });
 
-test("source image provenance, build manifest, and capability BOM are verified before import", () => {
+test("protected deployment consumes one exact successful preimport artifact", () => {
+  for (const input of [
+    "preimport_run_id",
+    "preimport_run_attempt",
+    "preimport_workflow_sha",
+    "preimport_workflow_ref",
+    "preimport_artifact_id",
+    "preimport_artifact_name",
+    "preimport_artifact_digest",
+  ]) {
+    assert.match(workflow, new RegExp(`^      ${input}:$`, "m"));
+  }
+  const identity = workflow.match(
+    /- name: Enforce protected source and build identity[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(identity, /actions\/runs\/\$\{PREIMPORT_RUN_ID\}/);
+  assert.match(identity, /\.head_sha[\s\S]*?PREIMPORT_WORKFLOW_SHA/);
+  assert.match(identity, /\.head_branch[\s\S]*?PREIMPORT_WORKFLOW_REF/);
+  assert.match(identity, /\.run_attempt[\s\S]*?PREIMPORT_RUN_ATTEMPT/);
+  assert.match(identity, /alice-cloudflare-container-bringup\.yml/);
+  assert.match(identity, /actions\/artifacts\/\$\{PREIMPORT_ARTIFACT_ID\}/);
+  assert.match(identity, /\.workflow_run\.id/);
+  assert.match(identity, /\.digest/);
+  assert.match(identity, /\.expired/);
+  assert.match(identity, /preimport_artifact_record_count/);
+  assert.match(identity, /test "\$preimport_artifact_record_count" = "1"/);
+  const download = workflow.match(
+    /- name: Download exact preimport evidence artifact[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(download, /run-id: \$\{\{ inputs\.preimport_run_id \}\}/);
+  assert.match(download, /artifact-ids: \$\{\{ inputs\.preimport_artifact_id \}\}/);
+  assert.match(download, /merge-multiple: true/);
+});
+
+test("source image provenance, build manifest, and capability BOM are verified before registry admission", () => {
   assert.match(
     workflow,
     /gh attestation verify "oci:\/\/\$\{RUNTIME_IMAGE\}"[\s\S]*?--source-digest "\$SOURCE_SHA"[\s\S]*?--deny-self-hosted-runners/,
@@ -97,21 +131,19 @@ test("source image provenance, build manifest, and capability BOM are verified b
   assert.doesNotMatch(workflow, /\bdocker (?:build|buildx build)\b/);
 });
 
-test("the once-built image is imported and read back as one exact Cloudflare digest", () => {
-  const importStep = workflow.match(
-    /- name: Import the once-built runtime into the exact Cloudflare registry[\s\S]*?(?=\n      - name:)/,
+test("deployment admits the exact preimported Cloudflare digest without another push", () => {
+  const admission = workflow.match(
+    /- name: Admit exact preimported Cloudflare registry digest[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
-  assert.match(importStep, /docker tag "\$SOURCE_RUNTIME_IMAGE" "\$local_image"/);
-  assert.match(importStep, /wrangler" containers push "\$local_image"/);
-  assert.match(
-    importStep,
-    /registry\\\\\.cloudflare\\\\\.com\/\$\{CLOUDFLARE_ACCOUNT_ID\}\/alice-runtime@sha256:\[a-f0-9\]\{64\}/,
+  assert.match(admission, /verifyAliceCloudflareContainerImageEvidence/);
+  assert.match(admission, /ALICE_CLOUDFLARE_RUNTIME_TAG/);
+  assert.match(admission, /ALICE_CLOUDFLARE_RUNTIME_IMAGE/);
+  assert.match(admission, /runtimeDigest/);
+  assert.doesNotMatch(
+    admission,
+    /CLOUDFLARE_API_TOKEN|containers (?:push|tag|images (?:list|delete))|docker tag/,
   );
-  assert.match(importStep, /docker manifest inspect -v "\$registry_tag"/);
-  assert.match(importStep, /test "\$runtime_image" = "\$local_runtime_image"/);
-  assert.match(importStep, /containers images list[\s\S]*?length'\)" = "1"/);
-  assert.match(importStep, /alice_cloudflare_container_image\.mjs/);
-  assert.match(importStep, /ALICE_CLOUDFLARE_RUNTIME_IMAGE=\$runtime_image/);
+  assert.doesNotMatch(workflow, /containers push/);
 });
 
 test("exact registry digest, runtime revision, and BOM propagate into the signed release", () => {
@@ -135,6 +167,62 @@ test("exact registry digest, runtime revision, and BOM propagate into the signed
   assert.doesNotMatch(materialize, /ALICE_UPSTREAM_ORIGIN/);
 });
 
+test("preimport evidence is exact-bound and fresh materialization matches before mutation", () => {
+  const verify = workflow.match(
+    /- name: Verify exact preimport evidence and bind immutable Cloudflare image[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(verify, /verifyAliceCloudflareContainerImageEvidence/);
+  assert.match(verify, /verifyAliceDeploymentManifest/);
+  assert.match(verify, /alice\.preimport-output-digests\.v1/);
+  assert.match(verify, /deploymentManifestSha256/);
+  assert.match(verify, /providerReadbackSha256/);
+  assert.match(verify, /containerImageEvidenceSha256/);
+  assert.match(verify, /sourceSha[\s\S]*?SOURCE_SHA/);
+  assert.match(verify, /buildRunId[\s\S]*?BUILD_RUN_ID/);
+  assert.match(verify, /watchdogRunId[\s\S]*?RECOVERY_WATCHDOG_RUN_ID/);
+  assert.match(verify, /sourceImage[\s\S]*?EXPECTED_SOURCE_IMAGE/);
+  assert.match(verify, /runtimeRevision[\s\S]*?EXPECTED_RUNTIME_REVISION/);
+
+  const capture = workflow.indexOf(
+    "Capture exact active Durable Object identities read-only",
+  );
+  const materialize = workflow.indexOf(
+    "Materialize signed manifest and exact-byte Worker configs",
+  );
+  const firstMutation = workflow.indexOf(
+    "Bootstrap unrouted fail-closed continuity identities",
+  );
+  assert.ok(capture >= 0 && capture < materialize);
+  assert.ok(materialize > capture && materialize < firstMutation);
+  const captureStep = workflow.match(
+    /- name: Capture exact active Durable Object identities read-only[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(captureStep, /method: "GET"/);
+  assert.doesNotMatch(captureStep, /method: "(?:POST|PUT|PATCH|DELETE)"/);
+  const materializeStep = workflow.match(
+    /- name: Materialize signed manifest and exact-byte Worker configs[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(materializeStep, /cmp -s "\$manifest" "\$preimport_manifest"/);
+  assert.match(materializeStep, /verifyAliceDeploymentManifest/);
+  assert.match(materializeStep, /delete preimportProvider\.observedAt/);
+  assert.match(materializeStep, /delete freshProvider\.observedAt/);
+  assert.match(materializeStep, /canonicalAliceJson\(preimportProvider\)/);
+  assert.match(materializeStep, /canonicalAliceJson\(freshProvider\)/);
+  assert.match(materializeStep, /freshObservedAtMs - preimportObservedAtMs > 7_200_000/);
+  assert.match(materializeStep, /Math\.abs\(Date\.now\(\) - freshObservedAtMs\) > 300_000/);
+  const bootstrapStep = workflow.match(
+    /- name: Bootstrap unrouted fail-closed continuity identities[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(
+    bootstrapStep,
+    /ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: \$\{\{ runner\.temp \}\}\/alice-release\/bootstrap-durable-object-namespace-ids\.json/,
+  );
+  assert.match(
+    bootstrapStep,
+    /cmp -s[\s\S]*?"\$\{RUNNER_TEMP\}\/alice-release\/durable-object-namespace-ids\.json"[\s\S]*?bootstrap-durable-object-namespace-ids\.json/,
+  );
+});
+
 test("state-plane auth is uploaded only as an access-Worker secret", () => {
   assert.match(
     workflow,
@@ -143,16 +231,16 @@ test("state-plane auth is uploaded only as an access-Worker secret", () => {
   const materialize = workflow.match(
     /- name: Materialize signed manifest and exact-byte Worker configs[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
-  const imageImport = workflow.match(
-    /- name: Import the once-built runtime into the exact Cloudflare registry[\s\S]*?(?=\n      - name:)/,
+  const imageAdmission = workflow.match(
+    /- name: Admit exact preimported Cloudflare registry digest[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
   assert.doesNotMatch(materialize, /ALICE_STATE_PLANE_SERVICE_TOKEN/);
-  assert.doesNotMatch(imageImport, /ALICE_STATE_PLANE_SERVICE_TOKEN/);
+  assert.doesNotMatch(imageAdmission, /ALICE_STATE_PLANE_SERVICE_TOKEN/);
   assert.doesNotMatch(
     materialize,
     /DISCORD_API_TOKEN|DISCORD_APPLICATION_ID|TELEGRAM_BOT_TOKEN/,
   );
-  assert.doesNotMatch(imageImport, /DISCORD|TELEGRAM/i);
+  assert.doesNotMatch(imageAdmission, /DISCORD|TELEGRAM/i);
   assert.doesNotMatch(workflow, /ALICE_STATE_PLANE_TOKEN/);
 });
 
@@ -373,14 +461,13 @@ test("fresh-runner replay is mandatory, mutation-disabled, and exercises contain
 
 test("every provider mutation remains bounded by the shared recovery reserve", () => {
   const firstMutation = workflow.indexOf(
-    "Import the once-built runtime into the exact Cloudflare registry",
+    "Bootstrap unrouted fail-closed continuity identities",
   );
   const readiness = workflow.indexOf(
     "Verify Cloudflare recovery readiness before first mutation",
   );
   assert.ok(readiness >= 0 && readiness < firstMutation);
   for (const name of [
-    "Import the once-built runtime into the exact Cloudflare registry",
     "Bootstrap unrouted fail-closed continuity identities",
     "Assert independently preprovisioned recovery boundary",
     "Prepare service-authenticated fail-closed control route",

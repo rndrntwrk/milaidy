@@ -24,6 +24,34 @@ on:
         description: "Server-reported sha256 digest of the immutable artifact"
         required: true
         type: string
+      preimport_run_id:
+        description: "Successful exact-image preimport workflow run ID"
+        required: true
+        type: string
+      preimport_run_attempt:
+        description: "Exact successful preimport workflow run attempt"
+        required: true
+        type: number
+      preimport_workflow_sha:
+        description: "Exact reviewed preimport workflow source commit"
+        required: true
+        type: string
+      preimport_workflow_ref:
+        description: "Exact temporary preimport workflow refs/heads ref"
+        required: true
+        type: string
+      preimport_artifact_id:
+        description: "Exact immutable preimport evidence artifact ID"
+        required: true
+        type: string
+      preimport_artifact_name:
+        description: "Exact immutable preimport evidence artifact name"
+        required: true
+        type: string
+      preimport_artifact_digest:
+        description: "Server-reported sha256 preimport artifact digest"
+        required: true
+        type: string
       runtime_image:
         description: "Smoke-qualified source GHCR image pinned by sha256 digest"
         required: true
@@ -76,6 +104,13 @@ jobs:
           BUILD_RUN_ID: ${{ inputs.build_run_id }}
           ARTIFACT_NAME: ${{ inputs.worker_artifact_name }}
           ARTIFACT_DIGEST: ${{ inputs.worker_artifact_digest }}
+          PREIMPORT_RUN_ID: ${{ inputs.preimport_run_id }}
+          PREIMPORT_RUN_ATTEMPT: ${{ inputs.preimport_run_attempt }}
+          PREIMPORT_WORKFLOW_SHA: ${{ inputs.preimport_workflow_sha }}
+          PREIMPORT_WORKFLOW_REF: ${{ inputs.preimport_workflow_ref }}
+          PREIMPORT_ARTIFACT_ID: ${{ inputs.preimport_artifact_id }}
+          PREIMPORT_ARTIFACT_NAME: ${{ inputs.preimport_artifact_name }}
+          PREIMPORT_ARTIFACT_DIGEST: ${{ inputs.preimport_artifact_digest }}
           SOURCE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
           RUNTIME_REVISION: ${{ inputs.runtime_revision }}
           RELEASE_EPOCH: ${{ inputs.release_epoch }}
@@ -88,6 +123,16 @@ jobs:
           printf '%s' "$RECOVERY_WATCHDOG_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
           printf '%s' "$BUILD_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
           printf '%s' "$ARTIFACT_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          printf '%s' "$PREIMPORT_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          test "$PREIMPORT_RUN_ATTEMPT" = "1"
+          printf '%s' "$PREIMPORT_WORKFLOW_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          printf '%s' "$PREIMPORT_WORKFLOW_REF" | grep -Eq \
+            '^refs/heads/ops/alice-preimport-[a-z0-9-]+-20260828$'
+          printf '%s' "$PREIMPORT_ARTIFACT_ID" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$PREIMPORT_ARTIFACT_DIGEST" | grep -Eq \
+            '^sha256:[a-f0-9]{64}$'
+          test "$PREIMPORT_ARTIFACT_NAME" = \
+            "alice-preimport-${SOURCE_SHA}-${PREIMPORT_RUN_ID}-${PREIMPORT_RUN_ATTEMPT}"
           printf '%s' "$SOURCE_RUNTIME_IMAGE" | grep -Eq \
             '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$'
           printf '%s' "$RUNTIME_REVISION" | grep -Eq \
@@ -119,6 +164,7 @@ jobs:
           test "$(printf '%s' "$run_json" | jq -r .head_sha)" = "$SOURCE_SHA"
           test "$(printf '%s' "$run_json" | jq -r .head_branch)" = "release/alice-production-core-2026-08-22"
           test "$(printf '%s' "$run_json" | jq -r .event)" = "workflow_dispatch"
+          test "$(printf '%s' "$run_json" | jq -r .run_attempt)" = "1"
           test "$(printf '%s' "$run_json" | jq -r .conclusion)" = "success"
           test "$(printf '%s' "$run_json" | jq -r .path)" = ".github/workflows/build-cloud-agent.yml"
 
@@ -128,6 +174,42 @@ jobs:
           test "$artifact_record_count" = "1"
           test "$(printf '%s' "$artifact_record" | cut -f1)" = "$ARTIFACT_DIGEST"
           test "$(printf '%s' "$artifact_record" | cut -f2)" = "false"
+
+          preimport_run_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${PREIMPORT_RUN_ID}")"
+          test "$(printf '%s' "$preimport_run_json" | jq -r .head_sha)" = \
+            "$PREIMPORT_WORKFLOW_SHA"
+          test "refs/heads/$(printf '%s' "$preimport_run_json" | jq -r .head_branch)" = \
+            "$PREIMPORT_WORKFLOW_REF"
+          test "$(printf '%s' "$preimport_run_json" | jq -r .event)" = \
+            "workflow_dispatch"
+          test "$(printf '%s' "$preimport_run_json" | jq -r .run_attempt)" = \
+            "$PREIMPORT_RUN_ATTEMPT"
+          test "$(printf '%s' "$preimport_run_json" | jq -r .conclusion)" = \
+            "success"
+          test "$(printf '%s' "$preimport_run_json" | jq -r .path)" = \
+            ".github/workflows/alice-cloudflare-container-bringup.yml"
+
+          preimport_record="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PREIMPORT_ARTIFACT_ID}")"
+          test "$(printf '%s' "$preimport_record" | jq -r .name)" = \
+            "$PREIMPORT_ARTIFACT_NAME"
+          test "$(printf '%s' "$preimport_record" | jq -r .digest)" = \
+            "$PREIMPORT_ARTIFACT_DIGEST"
+          test "$(printf '%s' "$preimport_record" | jq -r .expired)" = "false"
+          test "$(printf '%s' "$preimport_record" | jq -r .workflow_run.id)" = \
+            "$PREIMPORT_RUN_ID"
+          preimport_artifact_record="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${PREIMPORT_RUN_ID}/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name == \"${PREIMPORT_ARTIFACT_NAME}\") | [.id, .digest, .expired] | @tsv")"
+          preimport_artifact_record_count="$(printf '%s' "$preimport_artifact_record" | \
+            awk 'NF { count++ } END { print count + 0 }')"
+          test "$preimport_artifact_record_count" = "1"
+          test "$(printf '%s' "$preimport_artifact_record" | cut -f1)" = \
+            "$PREIMPORT_ARTIFACT_ID"
+          test "$(printf '%s' "$preimport_artifact_record" | cut -f2)" = \
+            "$PREIMPORT_ARTIFACT_DIGEST"
+          test "$(printf '%s' "$preimport_artifact_record" | cut -f3)" = "false"
 
       - name: Hydrate exact reviewed Eliza PR head
         env:
@@ -184,6 +266,15 @@ jobs:
           run-id: ${{ inputs.build_run_id }}
           name: ${{ inputs.worker_artifact_name }}
           path: ${{ runner.temp }}/alice-worker-bundles
+
+      - name: Download exact preimport evidence artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.preimport_run_id }}
+          artifact-ids: ${{ inputs.preimport_artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/alice-preimport-evidence
 
       - name: Verify exact source runtime image and derive immutable identities
         env:
@@ -258,6 +349,115 @@ jobs:
               --deny-self-hosted-runners
           done
 
+      - name: Verify exact preimport evidence and bind immutable Cloudflare image
+        env:
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          EXPECTED_SOURCE_IMAGE: ${{ inputs.runtime_image }}
+          EXPECTED_RUNTIME_REVISION: ${{ inputs.runtime_revision }}
+          PREIMPORT_ROOT: ${{ runner.temp }}/alice-preimport-evidence
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          import path from "node:path";
+          import {
+            verifyAliceCloudflareContainerImageEvidence,
+          } from "./deploy/modal/alice_cloudflare_container_image.mjs";
+          import {
+            verifyAliceDeploymentManifest,
+          } from "./deploy/modal/alice_deployment_manifest.mjs";
+
+          const root = process.env.PREIMPORT_ROOT;
+          const expectedFiles = [
+            "alice-deployment-manifest.json",
+            "container-image-evidence.json",
+            "deployment-output-digests.json",
+            "provider-readback.json",
+          ];
+          const actualFiles = fs.readdirSync(root).sort();
+          if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) {
+            throw new Error("ALICE_PREIMPORT_EVIDENCE_INVALID");
+          }
+          const bytes = {};
+          for (const name of expectedFiles) {
+            const filePath = path.join(root, name);
+            const stat = fs.lstatSync(filePath);
+            if (!stat.isFile() || stat.isSymbolicLink() || stat.size === 0) {
+              throw new Error("ALICE_PREIMPORT_EVIDENCE_INVALID");
+            }
+            bytes[name] = fs.readFileSync(filePath);
+          }
+          const digest = (value) =>
+            `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
+          const output = JSON.parse(bytes["deployment-output-digests.json"]);
+          const exactOutputKeys = [
+            "buildRunId",
+            "containerImageEvidenceSha256",
+            "deploymentManifestSha256",
+            "providerReadbackSha256",
+            "runtimeImage",
+            "schemaVersion",
+            "sourceSha",
+            "watchdogRunId",
+          ].sort();
+          if (
+            JSON.stringify(Object.keys(output).sort()) !==
+              JSON.stringify(exactOutputKeys) ||
+            output.schemaVersion !== "alice.preimport-output-digests.v1" ||
+            output.sourceSha !== process.env.SOURCE_SHA ||
+            output.buildRunId !== process.env.BUILD_RUN_ID ||
+            output.watchdogRunId !== process.env.RECOVERY_WATCHDOG_RUN_ID ||
+            output.deploymentManifestSha256 !==
+              digest(bytes["alice-deployment-manifest.json"]) ||
+            output.providerReadbackSha256 !==
+              digest(bytes["provider-readback.json"]) ||
+            output.containerImageEvidenceSha256 !==
+              digest(bytes["container-image-evidence.json"])
+          ) {
+            throw new Error("ALICE_PREIMPORT_EVIDENCE_INVALID");
+          }
+          const manifest = verifyAliceDeploymentManifest(
+            bytes["alice-deployment-manifest.json"].toString("utf8"),
+          );
+          JSON.parse(bytes["provider-readback.json"].toString("utf8"));
+          const evidence = verifyAliceCloudflareContainerImageEvidence(
+            JSON.parse(bytes["container-image-evidence.json"].toString("utf8")),
+          );
+          if (
+            evidence.sourceCommit !== process.env.SOURCE_SHA ||
+            evidence.sourceImage !== process.env.EXPECTED_SOURCE_IMAGE ||
+            evidence.runtimeRevision !==
+              Number(process.env.EXPECTED_RUNTIME_REVISION) ||
+            evidence.runtimeBuildManifestSha256 !==
+              process.env.ALICE_RUNTIME_BUILD_MANIFEST_SHA256 ||
+            evidence.capabilityBomSha256 !==
+              process.env.ALICE_CAPABILITY_BOM_SHA256 ||
+            evidence.runtimeImage !== output.runtimeImage ||
+            manifest.source.sourceCommit !== process.env.SOURCE_SHA ||
+            manifest.source.runtimeImage !== evidence.runtimeImage ||
+            manifest.release.runtimeRevision !== evidence.runtimeRevision
+          ) {
+            throw new Error("ALICE_PREIMPORT_EVIDENCE_INVALID");
+          }
+          fs.mkdirSync(path.join(process.env.RUNNER_TEMP, "alice-release"), {
+            recursive: true,
+          });
+          fs.copyFileSync(
+            path.join(root, "container-image-evidence.json"),
+            path.join(process.env.RUNNER_TEMP, "alice-release", "container-image-evidence.json"),
+            fs.constants.COPYFILE_EXCL,
+          );
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            [
+              `ALICE_CLOUDFLARE_RUNTIME_IMAGE=${evidence.runtimeImage}`,
+              `ALICE_CLOUDFLARE_RUNTIME_TAG=${evidence.tag}`,
+              "",
+            ].join("\n"),
+          );
+          NODE
+
       - name: Revalidate protected head before first provider mutation
         env:
           GH_TOKEN: ${{ github.token }}
@@ -274,7 +474,7 @@ jobs:
         run: |
           set -euo pipefail
           readiness_root="${RUNNER_TEMP}/alice-watchdog-readiness"
-          mkdir "$readiness_root" "${RUNNER_TEMP}/alice-release"
+          mkdir -p "$readiness_root" "${RUNNER_TEMP}/alice-release"
           provider=cloudflare
           artifact_name="alice-watchdog-ready-${provider}-${SOURCE_SHA}-${RECOVERY_WATCHDOG_RUN_ID}-1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           artifact_json=''
@@ -334,89 +534,122 @@ jobs:
               .status == "in_progress" and .conclusion == null)]')"
           test "$(printf '%s' "$job_matches" | jq 'length')" = "1"
 
-      - name: Import the once-built runtime into the exact Cloudflare registry
+      - name: Admit exact preimported Cloudflare registry digest
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
-          SOURCE_RUNTIME_IMAGE: ${{ inputs.runtime_image }}
-          RUNTIME_REVISION: ${{ inputs.runtime_revision }}
+          CONTAINER_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/container-image-evidence.json
+          ALICE_CLOUDFLARE_RUNTIME_IMAGE: ${{ env.ALICE_CLOUDFLARE_RUNTIME_IMAGE }}
+          ALICE_CLOUDFLARE_RUNTIME_TAG: ${{ env.ALICE_CLOUDFLARE_RUNTIME_TAG }}
         run: |
           set -euo pipefail
-          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
-          runtime_tag="alice-${SOURCE_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          local_image="alice-runtime:${runtime_tag}"
-          registry_tag="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime:${runtime_tag}"
-          docker tag "$SOURCE_RUNTIME_IMAGE" "$local_image"
-          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
-            "${GITHUB_WORKSPACE}/node_modules/.bin/wrangler" containers push "$local_image"
-          repository_digests="$(docker image inspect "$registry_tag" --format '{{json .RepoDigests}}')"
-          local_runtime_image="$(printf '%s' "$repository_digests" | jq -r \
-            --arg prefix "registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime@" \
-            '[.[] | select(startswith($prefix))] | if length == 1 then .[0] else empty end')"
-          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
-          remote_manifest="$(timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
-            docker manifest inspect -v "$registry_tag")"
-          remote_digest="$(printf '%s' "$remote_manifest" | jq -er \
-            '.Descriptor.digest | select(test("^sha256:[a-f0-9]{64}$"))')"
-          runtime_image="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime@${remote_digest}"
-          printf '%s' "$runtime_image" | grep -Eq \
-            "^registry\\.cloudflare\\.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime@sha256:[a-f0-9]{64}$"
-          test "$runtime_image" = "$local_runtime_image"
-          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
-          inventory="$(timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
-            "${GITHUB_WORKSPACE}/node_modules/.bin/wrangler" containers images list \
-            --filter "^(${CLOUDFLARE_ACCOUNT_ID}/)?alice-runtime$" --json)"
-          test "$(printf '%s' "$inventory" | jq \
-            --arg tag "$runtime_tag" \
-            '[.[] | select(.name == "alice-runtime" and (.tags | index($tag)))] | length')" = "1"
-          export ALICE_SOURCE_COMMIT="$SOURCE_SHA"
-          export ALICE_SOURCE_RUNTIME_IMAGE="$SOURCE_RUNTIME_IMAGE"
-          export ALICE_CLOUDFLARE_RUNTIME_IMAGE="$runtime_image"
-          export ALICE_RUNTIME_REVISION="$RUNTIME_REVISION"
-          export ALICE_CLOUDFLARE_RUNTIME_TAG="$runtime_tag"
-          export ALICE_CONTAINER_IMAGE_EVIDENCE_PATH="${RUNNER_TEMP}/alice-release/container-image-evidence.json"
-          node deploy/modal/alice_cloudflare_container_image.mjs
-          echo "ALICE_CLOUDFLARE_RUNTIME_IMAGE=$runtime_image" >> "$GITHUB_ENV"
-          echo "ALICE_CLOUDFLARE_RUNTIME_TAG=$runtime_tag" >> "$GITHUB_ENV"
+          node --input-type=module - \
+            "$CONTAINER_EVIDENCE_PATH" \
+            "$ALICE_CLOUDFLARE_RUNTIME_IMAGE" \
+            "$ALICE_CLOUDFLARE_RUNTIME_TAG" <<'NODE'
+          import fs from "node:fs";
+          import {
+            verifyAliceCloudflareContainerImageEvidence,
+          } from "./deploy/modal/alice_cloudflare_container_image.mjs";
 
-      - name: Bootstrap unrouted fail-closed continuity identities
+          const evidence = verifyAliceCloudflareContainerImageEvidence(
+            JSON.parse(fs.readFileSync(process.argv[2], "utf8")),
+          );
+          const expectedRuntimeImage = process.argv[3];
+          const expectedTag = process.argv[4];
+          const runtimeDigest = evidence.runtimeDigest;
+          if (
+            evidence.runtimeImage !== expectedRuntimeImage ||
+            evidence.tag !== expectedTag ||
+            evidence.runtimeImage !==
+              `registry.cloudflare.com/${evidence.accountId}/alice-runtime@${runtimeDigest}`
+          ) {
+            throw new Error("ALICE_PREIMPORT_REGISTRY_ADMISSION_INVALID");
+          }
+          NODE
+
+      - name: Capture exact active Durable Object identities read-only
         env:
-          GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
-          ALICE_SOURCE_ROOT: ${{ github.workspace }}
-          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
-          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
-          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
-          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
-          ALICE_BOOTSTRAP_OUTPUT_DIR: ${{ runner.temp }}/alice-bootstrap
           ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
-          ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH: ${{ runner.temp }}/alice-release/continuity-readback.json
-          ALICE_BOOTSTRAP_PREFLIGHT_PATH: ${{ runner.temp }}/alice-release/bootstrap-preflight.json
-          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
-          ALICE_STATE_PLANE_SERVICE_TOKEN: ${{ secrets.ALICE_STATE_PLANE_SERVICE_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p "${RUNNER_TEMP}/alice-release"
-          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
-          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
-            node deploy/modal/alice_cloudflare_bootstrap.mjs
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import {
+            ALICE_CLOUDFLARE_TARGET,
+            canonicalAliceJson,
+          } from "./workers/alice-effective-config.js";
+          import {
+            extractAliceBootstrapNamespaceIds,
+          } from "./deploy/modal/alice_cloudflare_bootstrap.mjs";
 
-      - name: Assert independently preprovisioned recovery boundary
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
-          ALICE_SOURCE_ROOT: ${{ github.workspace }}
-          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
-          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
-          ALICE_BOOTSTRAP_CONTROL_CONFIG_PATH: ${{ runner.temp }}/alice-bootstrap/control.bootstrap.wrangler.json
-          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
-        run: |
-          set -euo pipefail
-          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
-          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
-            node deploy/modal/alice_cloudflare_recovery_preprovision.mjs
+          const base = "https://api.cloudflare.com/client/v4";
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const outputPath = process.env.ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH;
+          const versionId = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+          const workers = {
+            access: ALICE_CLOUDFLARE_TARGET.accessWorker,
+            control: ALICE_CLOUDFLARE_TARGET.controlWorker,
+            statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
+            connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
+          };
+
+          function invalid() {
+            throw new Error("ALICE_PREIMPORT_PROVIDER_READ_INVALID");
+          }
+
+          async function get(pathname) {
+            const response = await fetch(`${base}${pathname}`, {
+              method: "GET",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            let payload;
+            try {
+              payload = await response.json();
+            } catch {
+              invalid();
+            }
+            if (
+              !response.ok || payload?.success !== true ||
+              !Array.isArray(payload?.errors) || payload.errors.length !== 0
+            ) invalid();
+            return payload.result;
+          }
+
+          async function capture() {
+            const versions = { aiGateway: null };
+            for (const [role, worker] of Object.entries(workers)) {
+              const deployments = await get(
+                `/accounts/${accountId}/workers/scripts/${worker}/deployments`,
+              );
+              const active = deployments?.deployments?.[0];
+              if (
+                !Array.isArray(active?.versions) || active.versions.length !== 1 ||
+                active.versions[0]?.percentage !== 100 ||
+                !versionId.test(active.versions[0]?.version_id ?? "")
+              ) invalid();
+              const id = active.versions[0].version_id;
+              versions[role] = await get(
+                `/accounts/${accountId}/workers/scripts/${worker}/versions/${id}`,
+              );
+            }
+            return extractAliceBootstrapNamespaceIds(versions);
+          }
+
+          const verify = await get("/user/tokens/verify");
+          if (verify?.status !== "active" || !/^[a-f0-9]{32}$/.test(verify?.id ?? "")) {
+            invalid();
+          }
+          const first = await capture();
+          const second = await capture();
+          if (canonicalAliceJson(first) !== canonicalAliceJson(second)) invalid();
+          fs.writeFileSync(outputPath, `${canonicalAliceJson(second)}\n`, {
+            encoding: "utf8",
+            flag: "wx",
+            mode: 0o444,
+          });
+          NODE
 
       - name: Materialize signed manifest and exact-byte Worker configs
         env:
@@ -449,6 +682,7 @@ jobs:
           ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH: ${{ runner.temp }}/alice-release/provider-readback.json
           ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
           ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-release/wrangler
+          PREIMPORT_ROOT: ${{ runner.temp }}/alice-preimport-evidence
         run: |
           set -euo pipefail
           node deploy/modal/alice_deployment_manifest.mjs
@@ -457,8 +691,110 @@ jobs:
             "${RUNNER_TEMP}/alice-release/wrangler/statePlane.wrangler.json" >/dev/null
           jq -e '.workers_dev == false and .preview_urls == false and .routes == []' \
             "${RUNNER_TEMP}/alice-release/wrangler/connectorPlane.wrangler.json" >/dev/null
-          manifest_sha256="sha256:$(sha256sum "${RUNNER_TEMP}/alice-release/alice-deployment-manifest.json" | cut -d' ' -f1)"
+          manifest="${RUNNER_TEMP}/alice-release/alice-deployment-manifest.json"
+          provider="${RUNNER_TEMP}/alice-release/provider-readback.json"
+          preimport_manifest="${PREIMPORT_ROOT}/alice-deployment-manifest.json"
+          preimport_provider="${PREIMPORT_ROOT}/provider-readback.json"
+          cmp -s "$manifest" "$preimport_manifest"
+          MANIFEST="$manifest" \
+          PREIMPORT_MANIFEST="$preimport_manifest" \
+          PROVIDER="$provider" \
+          PREIMPORT_PROVIDER="$preimport_provider" \
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import {
+            verifyAliceDeploymentManifest,
+          } from "./deploy/modal/alice_deployment_manifest.mjs";
+          import { canonicalAliceJson } from "./workers/alice-effective-config.js";
+
+          const manifestBytes = fs.readFileSync(process.env.MANIFEST, "utf8");
+          const preimportManifestBytes = fs.readFileSync(
+            process.env.PREIMPORT_MANIFEST,
+            "utf8",
+          );
+          verifyAliceDeploymentManifest(manifestBytes);
+          verifyAliceDeploymentManifest(preimportManifestBytes);
+          const preimportProvider = JSON.parse(
+            fs.readFileSync(process.env.PREIMPORT_PROVIDER, "utf8"),
+          );
+          const freshProvider = JSON.parse(
+            fs.readFileSync(process.env.PROVIDER, "utf8"),
+          );
+          const canonicalTimestamp = (value) => {
+            try {
+              return typeof value === "string" && new Date(value).toISOString() === value;
+            } catch {
+              return false;
+            }
+          };
+          if (
+            !canonicalTimestamp(preimportProvider.observedAt) ||
+            !canonicalTimestamp(freshProvider.observedAt)
+          ) {
+            throw new Error("ALICE_PREIMPORT_PROVIDER_TIMESTAMP_INVALID");
+          }
+          const preimportObservedAtMs = Date.parse(preimportProvider.observedAt);
+          const freshObservedAtMs = Date.parse(freshProvider.observedAt);
+          if (
+            preimportObservedAtMs > freshObservedAtMs ||
+            freshObservedAtMs - preimportObservedAtMs > 7_200_000 ||
+            Math.abs(Date.now() - freshObservedAtMs) > 300_000
+          ) {
+            throw new Error("ALICE_PREIMPORT_PROVIDER_FRESHNESS_INVALID");
+          }
+          delete preimportProvider.observedAt;
+          delete freshProvider.observedAt;
+          if (
+            canonicalAliceJson(preimportProvider) !==
+              canonicalAliceJson(freshProvider)
+          ) {
+            throw new Error("ALICE_PREIMPORT_PROVIDER_STATE_INVALID");
+          }
+          NODE
+          manifest_sha256="sha256:$(sha256sum "$manifest" | cut -d' ' -f1)"
           echo "ALICE_PRODUCTION_RELEASE_CONFIRM=${SOURCE_SHA}:${manifest_sha256}" >> "$GITHUB_ENV"
+
+      - name: Bootstrap unrouted fail-closed continuity identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
+          ALICE_BOOTSTRAP_OUTPUT_DIR: ${{ runner.temp }}/alice-bootstrap
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/bootstrap-durable-object-namespace-ids.json
+          ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH: ${{ runner.temp }}/alice-release/continuity-readback.json
+          ALICE_BOOTSTRAP_PREFLIGHT_PATH: ${{ runner.temp }}/alice-release/bootstrap-preflight.json
+          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
+          ALICE_STATE_PLANE_SERVICE_TOKEN: ${{ secrets.ALICE_STATE_PLANE_SERVICE_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/alice-release"
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_bootstrap.mjs
+          cmp -s \
+            "${RUNNER_TEMP}/alice-release/durable-object-namespace-ids.json" \
+            "${RUNNER_TEMP}/alice-release/bootstrap-durable-object-namespace-ids.json"
+
+      - name: Assert independently preprovisioned recovery boundary
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_BOOTSTRAP_CONTROL_CONFIG_PATH: ${{ runner.temp }}/alice-bootstrap/control.bootstrap.wrangler.json
+          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
+        run: |
+          set -euo pipefail
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_recovery_preprovision.mjs
 
       - name: Derive one release-bound runtime credential set
         env:
@@ -757,7 +1093,11 @@ jobs:
       - name: Remove ephemeral release material
         if: always()
         run: |
-          rm -rf -- "${RUNNER_TEMP}/alice-worker-bundles" "${RUNNER_TEMP}/alice-release" "${RUNNER_TEMP}/alice-bootstrap"
+          rm -rf -- \
+            "${RUNNER_TEMP}/alice-worker-bundles" \
+            "${RUNNER_TEMP}/alice-preimport-evidence" \
+            "${RUNNER_TEMP}/alice-release" \
+            "${RUNNER_TEMP}/alice-bootstrap"
           docker logout ghcr.io >/dev/null 2>&1 || true
 
   accept:
