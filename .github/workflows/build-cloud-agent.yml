@@ -211,7 +211,9 @@ jobs:
             deploy/modal/alice_production_acceptance.test.ts \
             deploy/modal/verify_alice_program_admission.test.ts \
             workers/alice-access-gateway/test/index.test.ts \
-            workers/alice-production-control/test/*.test.ts
+            workers/alice-production-control/test/*.test.ts \
+            workers/alice-state-plane/test/*.test.ts \
+            workers/alice-connector-plane/test/*.test.ts
           node --test \
             deploy/modal/alice_capability_bom.test.mjs \
             deploy/modal/alice_cloudflare_container_image.test.mjs \
@@ -256,8 +258,16 @@ jobs:
             --config workers/alice-access-gateway/wrangler.jsonc \
             --env-interface AliceAccessGatewayBindings \
             workers/alice-access-gateway/worker-configuration.d.ts
+          ./node_modules/.bin/wrangler types \
+            --config workers/alice-state-plane/wrangler.jsonc \
+            workers/alice-state-plane/worker-configuration.d.ts
+          ./node_modules/.bin/wrangler types \
+            --config workers/alice-connector-plane/wrangler.jsonc \
+            workers/alice-connector-plane/worker-configuration.d.ts
           bun x tsc --project workers/alice-production-control/tsconfig.json --noEmit
           bun x tsc --project workers/alice-access-gateway/tsconfig.json --noEmit
+          bun x tsc --project workers/alice-state-plane/tsconfig.json --noEmit
+          bun x tsc --project workers/alice-connector-plane/tsconfig.json --noEmit
 
       - name: Build exact Alice Worker bundles
         id: worker_bundles
@@ -267,7 +277,7 @@ jobs:
           bundle_root="$(mktemp -d "${RUNNER_TEMP}/alice-worker-bundles.XXXXXX")"
           wrangler_version="$(./node_modules/.bin/wrangler --version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
           test "$wrangler_version" = "4.122.0"
-          for worker in alice-access-gateway alice-production-control alice-ai-gateway; do
+          for worker in alice-access-gateway alice-production-control alice-ai-gateway alice-state-plane alice-connector-plane; do
             mkdir "$bundle_root/$worker"
             ./node_modules/.bin/wrangler deploy \
               --dry-run \
@@ -282,6 +292,20 @@ jobs:
             test -f "$bundle_root/$worker/index.js"
             test ! -L "$bundle_root/$worker/index.js"
             test -s "$bundle_root/$worker/index.js"
+          done
+          migration_root="$bundle_root/alice-state-plane/migrations"
+          mkdir "$migration_root"
+          for migration in 0001_alice_state.sql 0002_execution_records.sql 0003_eliza_database.sql; do
+            migration_source="workers/alice-state-plane/migrations/$migration"
+            migration_target="$migration_root/$migration"
+            test -f "$migration_source"
+            test ! -L "$migration_source"
+            test -s "$migration_source"
+            cp -- "$migration_source" "$migration_target"
+            test -f "$migration_target"
+            test ! -L "$migration_target"
+            test -s "$migration_target"
+            cmp -s "$migration_source" "$migration_target"
           done
           ALICE_WORKER_BUNDLE_ROOT="$bundle_root" \
           ALICE_WORKER_BUNDLE_ARTIFACT_PATH="$bundle_root/alice-worker-bundles.json" \

@@ -243,7 +243,12 @@ jobs:
             "${RUNNER_TEMP}/alice-worker-bundles/alice-worker-bundles.json" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-access-gateway/index.js" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-production-control/index.js" \
-            "${RUNNER_TEMP}/alice-worker-bundles/alice-ai-gateway/index.js"
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-ai-gateway/index.js" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/index.js" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-connector-plane/index.js" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/migrations/0001_alice_state.sql" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/migrations/0002_execution_records.sql" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/migrations/0003_eliza_database.sql"
           do
             gh attestation verify "$subject" \
               --repo rndrntwrk/milaidy \
@@ -390,6 +395,7 @@ jobs:
           ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH: ${{ runner.temp }}/alice-release/continuity-readback.json
           ALICE_BOOTSTRAP_PREFLIGHT_PATH: ${{ runner.temp }}/alice-release/bootstrap-preflight.json
           ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
+          ALICE_STATE_PLANE_SERVICE_TOKEN: ${{ secrets.ALICE_STATE_PLANE_SERVICE_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/alice-release"
@@ -433,6 +439,7 @@ jobs:
           ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
           ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
           ALICE_MODEL_DAILY_BUDGET_UNITS: "10000"
+          ALICE_STATE_DATABASE_ID: ${{ vars.ALICE_STATE_DATABASE_ID }}
           ALICE_PROGRAM_ENVELOPE_B64: ${{ secrets.ALICE_PROGRAM_ENVELOPE_B64 }}
           ALICE_PROGRAM_SIGNATURE_B64: ${{ secrets.ALICE_PROGRAM_SIGNATURE_B64 }}
           ALICE_PROGRAM_PUBLIC_JWK_B64: ${{ secrets.ALICE_PROGRAM_PUBLIC_JWK_B64 }}
@@ -446,6 +453,10 @@ jobs:
           set -euo pipefail
           node deploy/modal/alice_deployment_manifest.mjs
           node deploy/modal/alice_cloudflare_config.mjs
+          jq -e '.workers_dev == false and .preview_urls == false and .routes == []' \
+            "${RUNNER_TEMP}/alice-release/wrangler/statePlane.wrangler.json" >/dev/null
+          jq -e '.workers_dev == false and .preview_urls == false and .routes == []' \
+            "${RUNNER_TEMP}/alice-release/wrangler/connectorPlane.wrangler.json" >/dev/null
           manifest_sha256="sha256:$(sha256sum "${RUNNER_TEMP}/alice-release/alice-deployment-manifest.json" | cut -d' ' -f1)"
           echo "ALICE_PRODUCTION_RELEASE_CONFIRM=${SOURCE_SHA}:${manifest_sha256}" >> "$GITHUB_ENV"
 
@@ -556,6 +567,8 @@ jobs:
           ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token-sha256
           ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-release/.alice-evidence-queue-hmac-key
           ALICE_CLOUDFLARE_RELEASE_PHASE: prepare
+          ALICE_CONNECTOR_SERVICE_TOKEN: ${{ secrets.ALICE_CONNECTOR_SERVICE_TOKEN }}
+          ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN: ${{ secrets.ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN }}
           ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
           ALICE_ACCESS_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN }}
           ALICE_AI_GATEWAY_SERVICE_TOKEN: ${{ secrets.ALICE_AI_GATEWAY_SERVICE_TOKEN }}
@@ -962,6 +975,24 @@ jobs:
           then
             exit 0
           fi
+          for worker in \
+            alice-access-gateway \
+            alice-production-control \
+            alice-ai-gateway \
+            alice-state-plane \
+            alice-connector-plane
+          do
+            test -s "$recovery_root/alice-worker-bundles/$worker/index.js"
+            test ! -L "$recovery_root/alice-worker-bundles/$worker/index.js"
+          done
+          for migration in \
+            0001_alice_state.sql \
+            0002_execution_records.sql \
+            0003_eliza_database.sql
+          do
+            test -s "$recovery_root/alice-worker-bundles/alice-state-plane/migrations/$migration"
+            test ! -L "$recovery_root/alice-worker-bundles/alice-state-plane/migrations/$migration"
+          done
           download_optional \
             "alice-recovery-evidence-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             "$terminal_root"

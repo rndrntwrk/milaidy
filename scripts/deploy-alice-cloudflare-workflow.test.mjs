@@ -144,7 +144,10 @@ test("state-plane auth is uploaded only as an access-Worker secret", () => {
   )?.[0] ?? "";
   assert.doesNotMatch(materialize, /ALICE_STATE_PLANE_SERVICE_TOKEN/);
   assert.doesNotMatch(imageImport, /ALICE_STATE_PLANE_SERVICE_TOKEN/);
-  assert.doesNotMatch(materialize, /DISCORD|TELEGRAM/i);
+  assert.doesNotMatch(
+    materialize,
+    /DISCORD_API_TOKEN|DISCORD_APPLICATION_ID|TELEGRAM_BOT_TOKEN/,
+  );
   assert.doesNotMatch(imageImport, /DISCORD|TELEGRAM/i);
   assert.doesNotMatch(workflow, /ALICE_STATE_PLANE_TOKEN/);
 });
@@ -181,6 +184,137 @@ test("rollback journals contain relocatable Worker bytes and artifact-relative c
     assert.doesNotMatch(
       source.match(/Consume external journal[\s\S]*?(?=\n      - name:)/)?.[0] ?? "",
       /ALICE_WORKER_BUNDLE_ROOT="\$GITHUB_WORKSPACE/,
+    );
+  }
+});
+
+test("deployment attests every module in the five-role Worker artifact", () => {
+  const attest = workflow.match(
+    /- name: Verify immutable Worker attestations before unrouted fail-closed bootstrap[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  for (const worker of [
+    "alice-access-gateway",
+    "alice-production-control",
+    "alice-ai-gateway",
+    "alice-state-plane",
+    "alice-connector-plane",
+  ]) {
+    assert.match(
+      attest,
+      new RegExp(`alice-worker-bundles/${worker}/index\\.js`),
+      `missing immutable attestation verification for ${worker}`,
+    );
+  }
+  for (const migration of [
+    "0001_alice_state.sql",
+    "0002_execution_records.sql",
+    "0003_eliza_database.sql",
+  ]) {
+    assert.match(
+      attest,
+      new RegExp(`alice-state-plane/migrations/${migration}`),
+      `missing immutable attestation verification for ${migration}`,
+    );
+  }
+});
+
+test("state and connector configs stay private and receive only their scoped inputs", () => {
+  const materialize = workflow.match(
+    /- name: Materialize signed manifest and exact-byte Worker configs[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(
+    materialize,
+    /ALICE_STATE_DATABASE_ID: \$\{\{ vars\.ALICE_STATE_DATABASE_ID \}\}/,
+  );
+  assert.doesNotMatch(
+    materialize,
+    /ALICE_(?:DISCORD|TELEGRAM)_PRIVATE_DESTINATION_ID/,
+    "disabled providers must not receive destination placeholders",
+  );
+  for (const config of ["statePlane", "connectorPlane"]) {
+    assert.match(
+      materialize,
+      new RegExp(
+        `jq -e '\\.workers_dev == false and \\.preview_urls == false and \\.routes == \\[\\]'[\\s\\S]*?${config}\\.wrangler\\.json`,
+      ),
+      `${config} must be proven private before any promotion`,
+    );
+  }
+  assert.doesNotMatch(
+    materialize,
+    /DISCORD_API_TOKEN|DISCORD_APPLICATION_ID|TELEGRAM_BOT_TOKEN/,
+  );
+});
+
+test("five-role mutation steps receive connector credentials only step-locally", () => {
+  const prepareStep = "Prepare service-authenticated fail-closed control route";
+  const secretNames = [
+    "ALICE_CONNECTOR_SERVICE_TOKEN",
+    "ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN",
+  ];
+  for (const step of namedWorkflowSteps(workflow)) {
+    for (const secretName of secretNames) {
+      const binding = new RegExp(
+        `^          ${secretName}: \\$\\{\\{ secrets\\.${secretName} \\}\\}$`,
+        "m",
+      );
+      if (step.name === prepareStep) {
+        assert.match(
+          step.block,
+          binding,
+          `${prepareStep} is missing step-local ${secretName}`,
+        );
+      } else {
+        assert.doesNotMatch(
+          step.block,
+          binding,
+          `${secretName} must not escape the prepare-only upload boundary`,
+        );
+      }
+    }
+  }
+  for (const source of [workflow, watchdog]) {
+    assert.doesNotMatch(
+      source,
+      /(?:DISCORD_API_TOKEN|DISCORD_APPLICATION_ID|TELEGRAM_BOT_TOKEN): \$\{\{ secrets\./,
+      "disabled providers must not receive GitHub credential bindings",
+    );
+    assert.doesNotMatch(
+      source,
+      /^    env:\n(?:^      .*\n)*^      (?:DISCORD_API_TOKEN|TELEGRAM_BOT_TOKEN|ALICE_CONNECTOR_SERVICE_TOKEN):/m,
+      "connector credentials must never be job-global",
+    );
+  }
+});
+
+test("both independent recovery lanes require all five relocated Worker modules", () => {
+  for (const source of [workflow, watchdog]) {
+    const recovery = source.match(
+      /- name: Consume external journal and recover Cloudflare independently[\s\S]*?(?=\n      - name:)/,
+    )?.[0] ?? "";
+    assert.match(
+      recovery,
+      /for worker in \\\n+\s+alice-access-gateway \\\n+\s+alice-production-control \\\n+\s+alice-ai-gateway \\\n+\s+alice-state-plane \\\n+\s+alice-connector-plane/,
+    );
+    assert.match(
+      recovery,
+      /test -s "\$recovery_root\/alice-worker-bundles\/\$worker\/index\.js"/,
+    );
+    assert.match(
+      recovery,
+      /test ! -L "\$recovery_root\/alice-worker-bundles\/\$worker\/index\.js"/,
+    );
+    assert.match(
+      recovery,
+      /for migration in \\\n+\s+0001_alice_state\.sql \\\n+\s+0002_execution_records\.sql \\\n+\s+0003_eliza_database\.sql/,
+    );
+    assert.match(
+      recovery,
+      /test -s "\$recovery_root\/alice-worker-bundles\/alice-state-plane\/migrations\/\$migration"/,
+    );
+    assert.match(
+      recovery,
+      /test ! -L "\$recovery_root\/alice-worker-bundles\/alice-state-plane\/migrations\/\$migration"/,
     );
   }
 });

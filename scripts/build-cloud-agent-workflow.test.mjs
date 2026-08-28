@@ -338,6 +338,70 @@ test("protected Alice qualification verifies provider identity and exact Worker 
   );
 });
 
+test("cloud builds qualify and emit the complete five-role Alice Worker graph", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const bundleStep = workflow.match(
+    /- name: Build exact Alice Worker bundles[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  const workerList = bundleStep.match(/for worker in ([^;\n]+); do/)?.[1]
+    ?.trim()
+    .split(/\s+/);
+
+  assert.deepEqual(workerList, [
+    "alice-access-gateway",
+    "alice-production-control",
+    "alice-ai-gateway",
+    "alice-state-plane",
+    "alice-connector-plane",
+  ]);
+  for (const worker of workerList) {
+    assert.match(
+      bundleStep,
+      new RegExp(`bundle_root/\\$worker/index\\.js`),
+      `the immutable ${worker} module must use the common artifact path`,
+    );
+  }
+
+  const migrationList = bundleStep.match(/for migration in ([^;\n]+); do/)?.[1]
+    ?.trim()
+    .split(/\s+/);
+  assert.deepEqual(migrationList, [
+    "0001_alice_state.sql",
+    "0002_execution_records.sql",
+    "0003_eliza_database.sql",
+  ]);
+  assert.match(
+    bundleStep,
+    /test -f "\$migration_source"[\s\S]*?test ! -L "\$migration_source"[\s\S]*?cp -- "\$migration_source" "\$migration_target"[\s\S]*?test -f "\$migration_target"[\s\S]*?test ! -L "\$migration_target"[\s\S]*?cmp -s "\$migration_source" "\$migration_target"/,
+    "the immutable artifact must carry exact regular migration bytes",
+  );
+
+  assert.match(
+    workflow,
+    /bun test[\s\S]*?workers\/alice-state-plane\/test\/\*\.test\.ts[\s\S]*?workers\/alice-connector-plane\/test\/\*\.test\.ts/,
+    "the cloud release must qualify both new private Workers",
+  );
+  assert.match(
+    workflow,
+    /wrangler types[\s\S]*?workers\/alice-state-plane\/wrangler\.jsonc[\s\S]*?workers\/alice-state-plane\/worker-configuration\.d\.ts/,
+  );
+  assert.match(
+    workflow,
+    /wrangler types[\s\S]*?workers\/alice-connector-plane\/wrangler\.jsonc[\s\S]*?workers\/alice-connector-plane\/worker-configuration\.d\.ts/,
+  );
+  assert.match(
+    workflow,
+    /bun x tsc --project workers\/alice-state-plane\/tsconfig\.json --noEmit/,
+  );
+  assert.match(
+    workflow,
+    /bun x tsc --project workers\/alice-connector-plane\/tsconfig\.json --noEmit/,
+  );
+});
+
 test("cloud release actions are pinned to immutable revisions", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

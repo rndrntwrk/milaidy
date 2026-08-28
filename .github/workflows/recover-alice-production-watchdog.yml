@@ -269,6 +269,24 @@ jobs:
           then
             exit 0
           fi
+          for worker in \
+            alice-access-gateway \
+            alice-production-control \
+            alice-ai-gateway \
+            alice-state-plane \
+            alice-connector-plane
+          do
+            test -s "$recovery_root/alice-worker-bundles/$worker/index.js"
+            test ! -L "$recovery_root/alice-worker-bundles/$worker/index.js"
+          done
+          for migration in \
+            0001_alice_state.sql \
+            0002_execution_records.sql \
+            0003_eliza_database.sql
+          do
+            test -s "$recovery_root/alice-worker-bundles/alice-state-plane/migrations/$migration"
+            test ! -L "$recovery_root/alice-worker-bundles/alice-state-plane/migrations/$migration"
+          done
           download_optional \
             "alice-recovery-evidence-${SOURCE_SHA}-${PARENT_RUN_ID}-${PARENT_RUN_ATTEMPT}" \
             "$terminal_root"
