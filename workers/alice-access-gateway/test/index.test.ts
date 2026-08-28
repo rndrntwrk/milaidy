@@ -283,6 +283,8 @@ async function environment(options: EnvironmentOptions = {}) {
       "runtime-release-token-with-at-least-32-bytes",
     ALICE_RUNTIME_VAULT_PASSPHRASE:
       "runtime-vault-passphrase-with-at-least-32-bytes",
+    ALICE_STATE_PLANE_SERVICE_TOKEN:
+      "state-plane-service-token-with-at-least-32-bytes",
     ALICE_PROGRAM_DIGEST: binding.programDigest,
     ALICE_RELEASE_DIGEST: binding.releaseDigest,
     ALICE_POLICY_HASH: binding.policyHash,
@@ -295,6 +297,11 @@ async function environment(options: EnvironmentOptions = {}) {
     ALICE_ELIZA_COMMIT: release.elizaCommit,
     ALICE_RUNTIME_REVISION: String(release.runtimeRevision),
     ALICE_AI_GATEWAY: {
+      async fetch() {
+        return Response.json({ ok: false }, { status: 503 });
+      },
+    },
+    ALICE_STATE_PLANE: {
       async fetch() {
         return Response.json({ ok: false }, { status: 503 });
       },

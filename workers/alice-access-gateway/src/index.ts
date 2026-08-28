@@ -20,6 +20,7 @@ export type AliceAccessGatewayEnv = {
   ALICE_RUNTIME_API_TOKEN: string;
   ALICE_RUNTIME_RELEASE_TOKEN: string;
   ALICE_RUNTIME_VAULT_PASSPHRASE: string;
+  ALICE_STATE_PLANE_SERVICE_TOKEN: string;
   ALICE_PROGRAM_DIGEST: string;
   ALICE_RELEASE_DIGEST: string;
   ALICE_POLICY_HASH: string;
@@ -31,6 +32,7 @@ export type AliceAccessGatewayEnv = {
   ALICE_RUNTIME_REVISION: string;
   ALICE_CONTROL: Fetcher;
   ALICE_AI_GATEWAY: Fetcher;
+  ALICE_STATE_PLANE: Fetcher;
   ALICE_RUNTIME_CONTAINER: AliceRuntimeContainerNamespace;
   ALICE_DEPLOYMENT_MANIFEST_SHA256: string;
   ALICE_DEPLOYMENT_MANIFEST_B64: string;
