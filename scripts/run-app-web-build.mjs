@@ -10,6 +10,11 @@ const repoRoot = path.resolve(
   "..",
 );
 const appDir = path.join(repoRoot, "apps", "app");
+const isAliceFullGatedBuild = process.env.ALICE_RUNTIME_PROFILE === "full-gated";
+
+if (isAliceFullGatedBuild && (process.env.ELIZA_SKIP_PLUGINS ?? "").trim()) {
+  throw new Error("ALICE_PRODUCTION_BUILD_STUB_FORBIDDEN");
+}
 
 function run(command, args, cwd = repoRoot) {
   return new Promise((resolve, reject) => {
@@ -41,13 +46,17 @@ if (!isLocalElizaDisabled()) {
     "build-capacitor-app.mjs",
   ]);
 } else {
-  await run(process.execPath, [
-    "scripts/ensure-elizaos-optional-app-stubs.mjs",
-  ]);
+  if (!isAliceFullGatedBuild) {
+    await run(process.execPath, [
+      "scripts/ensure-elizaos-optional-app-stubs.mjs",
+    ]);
+  }
   await run(process.execPath, ["scripts/patch-elizaos-package-styles.mjs"]);
-  await run(process.execPath, [
-    "scripts/patch-elizaos-plugin-browser-bridge-package.mjs",
-  ]);
+  if (!isAliceFullGatedBuild) {
+    await run(process.execPath, [
+      "scripts/patch-elizaos-plugin-browser-bridge-package.mjs",
+    ]);
+  }
   await run(process.execPath, [
     "scripts/patch-elizaos-app-core-native-browser-package.mjs",
   ]);

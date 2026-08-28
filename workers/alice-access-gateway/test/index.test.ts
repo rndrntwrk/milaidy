@@ -42,6 +42,7 @@ const releaseSource = {
 const testDeploymentManifest = await buildAliceDeploymentManifest({
   releaseEpoch: 1,
   ...releaseSource,
+  capabilityBomSha256: `sha256:${"a".repeat(64)}`,
   modalRevision: 49,
   policyHash: binding.policyHash,
   rollbackBoundary: "modal:alice-runtime:v49",
@@ -72,6 +73,7 @@ const testDeploymentManifestBytes = serializeAliceDeploymentManifest(
 );
 const release = {
   ...releaseSource,
+  capabilityBomSha256: testDeploymentManifest.source.capabilityBomSha256,
   modalRevision: 49,
   deploymentManifestSha256: digestAliceDeploymentManifest(
     testDeploymentManifestBytes,
@@ -1532,6 +1534,29 @@ describe("Alice Access gateway", () => {
         jwks,
         async () => Response.json({ unsafe: true }),
         { runtimeBuildManifestSha256: `sha256:${"0".repeat(64)}` },
+      ),
+      now,
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "RUNTIME_RELEASE_MISMATCH",
+    });
+  });
+
+  test("fails closed when Modal reports a different capability BOM", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+    const response = await handleRequest(
+      new Request("https://alice.rndrntwrk.com/api/health", {
+        headers: { "cf-access-jwt-assertion": token },
+      }),
+      env,
+      authenticatedFetch(
+        env,
+        jwks,
+        async () => Response.json({ unsafe: true }),
+        { capabilityBomSha256: `sha256:${"0".repeat(64)}` },
       ),
       now,
     );

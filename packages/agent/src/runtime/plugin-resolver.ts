@@ -28,6 +28,12 @@ import type { PluginInstallRecord } from "../config/types.eliza.js";
 import { diagnoseNoAIProvider } from "../services/version-compat.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import {
+  assertAliceFullGatedCapabilityEnvironment,
+  enforceAliceFullGatedCapabilityPolicy,
+  readAliceCapabilityBom,
+} from "./alice-capability-inventory.js";
+import { isAliceFullRuntimeProfile } from "./alice-runtime-profile.js";
+import {
   enforceAliceProductionPluginPolicy,
   isAliceProductionPluginPolicyEnabled,
 } from "./alice-production-plugin-policy.js";
@@ -761,6 +767,8 @@ export async function resolvePlugins(
   const failedPlugins: Array<{ name: string; error: string }> = [];
   const repairedInstallRecords = new Set<string>();
 
+  assertAliceFullGatedCapabilityEnvironment(process.env);
+
   if (!isAliceProductionPluginPolicyEnabled(process.env)) {
     await ensureTelegramAccountAuthExportCompat(process.cwd());
   }
@@ -812,6 +820,18 @@ export async function resolvePlugins(
   }
   for (const pluginName of denyList) {
     pluginsToLoad.delete(pluginName);
+  }
+  if (
+    isAliceFullRuntimeProfile(process.env) &&
+    process.env.NODE_ENV === "production"
+  ) {
+    const { bom } = readAliceCapabilityBom(process.env);
+    const disabled = enforceAliceFullGatedCapabilityPolicy(pluginsToLoad, bom);
+    if (disabled.length > 0) {
+      logger.info(
+        `[eliza] Alice capability BOM kept ${disabled.length} policy-disabled plugin(s) inert: ${disabled.join(", ")}`,
+      );
+    }
   }
   const alicePolicyRemovals = enforceAliceProductionPluginPolicy(
     pluginsToLoad,

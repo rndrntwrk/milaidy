@@ -38,6 +38,7 @@ const INPUT_KEYS = [
   "aiGatewayProviderReadback",
   "controlEffectiveConfig",
   "cloudflareContinuityReadback",
+  "capabilityBomSha256",
   "deploymentControllerCommit",
   "elizaCommit",
   "modalRevision",
@@ -137,6 +138,7 @@ async function validInputs(value) {
     COMMIT.test(value.elizaCommit) &&
     IMAGE.test(value.runtimeImage) &&
     DIGEST.test(value.runtimeBuildManifestSha256) &&
+    DIGEST.test(value.capabilityBomSha256) &&
     Number.isInteger(value.modalRevision) &&
     value.modalRevision >= 49 &&
     DIGEST.test(value.policyHash) &&
@@ -155,6 +157,7 @@ function validManifest(value) {
     value.schemaVersion !== "alice.deployment-manifest.v1" ||
     !exactKeys(value.source, [
       "deploymentControllerCommit",
+      "capabilityBomSha256",
       "elizaCommit",
       "runtimeBuildManifestSha256",
       "runtimeImage",
@@ -188,6 +191,7 @@ function validManifest(value) {
     elizaCommit: value.source.elizaCommit,
     runtimeImage: value.source.runtimeImage,
     runtimeBuildManifestSha256: value.source.runtimeBuildManifestSha256,
+    capabilityBomSha256: value.source.capabilityBomSha256,
     modalRevision: value.release.modalRevision,
     policyHash: value.release.policyHash,
     rollbackBoundary: value.release.rollbackBoundary,
@@ -203,6 +207,7 @@ function validManifest(value) {
     COMMIT.test(reconstructed.elizaCommit) &&
     IMAGE.test(reconstructed.runtimeImage) &&
     DIGEST.test(reconstructed.runtimeBuildManifestSha256) &&
+    DIGEST.test(reconstructed.capabilityBomSha256) &&
     Number.isInteger(reconstructed.modalRevision) &&
     reconstructed.modalRevision >= 49 &&
     DIGEST.test(reconstructed.policyHash) &&
@@ -248,6 +253,7 @@ export async function buildAliceDeploymentManifest(inputs) {
     source: {
       sourceCommit: inputs.sourceCommit,
       deploymentControllerCommit: inputs.deploymentControllerCommit,
+      capabilityBomSha256: inputs.capabilityBomSha256,
       elizaCommit: inputs.elizaCommit,
       runtimeImage: inputs.runtimeImage,
       runtimeBuildManifestSha256: inputs.runtimeBuildManifestSha256,
@@ -387,6 +393,7 @@ if (invokedPath === import.meta.url) {
       runtimeImage: process.env.ALICE_RUNTIME_IMAGE,
       runtimeBuildManifestSha256:
         process.env.ALICE_RUNTIME_BUILD_MANIFEST_SHA256,
+      capabilityBomSha256: process.env.ALICE_CAPABILITY_BOM_SHA256,
       modalRevision,
       policyHash: process.env.ALICE_POLICY_HASH,
       rollbackBoundary: process.env.ALICE_ROLLBACK_BOUNDARY,

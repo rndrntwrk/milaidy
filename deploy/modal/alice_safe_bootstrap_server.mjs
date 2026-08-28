@@ -14,6 +14,7 @@ const release = Object.freeze({
   runtimeImage: process.env.ALICE_RUNTIME_IMAGE,
   runtimeBuildManifestSha256:
     process.env.ALICE_RUNTIME_BUILD_MANIFEST_SHA256,
+  capabilityBomSha256: process.env.ALICE_CAPABILITY_BOM_SHA256,
   deploymentManifestSha256:
     process.env.ALICE_DEPLOYMENT_MANIFEST_SHA256,
   elizaCommit: process.env.ALICE_ELIZA_COMMIT,
@@ -28,6 +29,7 @@ if (
   !COMMIT.test(release.deploymentControllerCommit ?? "") ||
   !IMAGE.test(release.runtimeImage ?? "") ||
   !DIGEST.test(release.runtimeBuildManifestSha256 ?? "") ||
+  !DIGEST.test(release.capabilityBomSha256 ?? "") ||
   !DIGEST.test(release.deploymentManifestSha256 ?? "") ||
   !COMMIT.test(release.elizaCommit ?? "") ||
   !Number.isSafeInteger(release.modalRevision) ||

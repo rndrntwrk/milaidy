@@ -505,6 +505,16 @@ describe("resolvePlugins", () => {
     expect(getLastFailedPluginNames()).toEqual([]);
   });
 
+  it("rejects ELIZA_SKIP_PLUGINS before resolving exact full-gated Alice", async () => {
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+    process.env.ELIZA_SKIP_PLUGINS = "@elizaos/plugin-shell";
+
+    await expect(
+      resolvePlugins({ plugins: { allow: [] } } as never, { quiet: true }),
+    ).rejects.toThrow("ALICE_FULL_GATED_SKIP_PLUGINS_FORBIDDEN");
+  });
+
   it("does not rewrite denied Telegram package files in proposer-only production", async () => {
     const previousCwd = process.cwd();
     const telegramRoot = path.join(

@@ -25,11 +25,13 @@ export function verifyAliceRuntimeBuildManifest({
   root,
   expectedSourceCommit,
   expectedElizaCommit,
+  expectedCapabilityBomSha256,
   expectedManifestSha256,
 }) {
   if (
     !COMMIT.test(expectedSourceCommit) ||
     !COMMIT.test(expectedElizaCommit) ||
+    !DIGEST.test(expectedCapabilityBomSha256) ||
     !DIGEST.test(expectedManifestSha256)
   ) {
     throw new Error("ALICE_RUNTIME_BUILD_EXPECTATION_INVALID");
@@ -52,11 +54,13 @@ export function verifyAliceRuntimeBuildManifest({
       "schemaVersion",
       "sourceCommit",
       "elizaCommit",
+      "capabilityBomSha256",
       "runtimePaths",
     ]) ||
     manifest.schemaVersion !== "alice.runtime-build-manifest.v1" ||
     manifest.sourceCommit !== expectedSourceCommit ||
     manifest.elizaCommit !== expectedElizaCommit ||
+    manifest.capabilityBomSha256 !== expectedCapabilityBomSha256 ||
     !Array.isArray(manifest.runtimePaths) ||
     manifest.runtimePaths.length !== REQUIRED_RUNTIME_PATHS.length
   ) {
@@ -85,6 +89,7 @@ export function verifyAliceRuntimeBuildManifest({
     manifestSha256,
     sourceCommit: manifest.sourceCommit,
     elizaCommit: manifest.elizaCommit,
+    capabilityBomSha256: manifest.capabilityBomSha256,
     runtimePathCount: manifest.runtimePaths.length,
   };
 }
@@ -98,6 +103,8 @@ if (invokedPath === import.meta.url) {
       root: process.env.ALICE_BUILD_ROOT || "/app",
       expectedSourceCommit: process.env.ALICE_SOURCE_COMMIT || "",
       expectedElizaCommit: process.env.ALICE_ELIZA_COMMIT || "",
+      expectedCapabilityBomSha256:
+        process.env.ALICE_CAPABILITY_BOM_SHA256 || "",
       expectedManifestSha256:
         process.env.ALICE_RUNTIME_BUILD_MANIFEST_SHA256 || "",
     });

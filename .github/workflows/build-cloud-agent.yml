@@ -197,10 +197,12 @@ jobs:
           bun test \
             packages/app-core/src/api/server.health-probes.test.ts \
             packages/agent/src/api/alice-production-auth-boundary.test.ts \
+            packages/agent/src/api/alice-production-capabilities.test.ts \
             packages/agent/src/api/alice-production-chat.test.ts \
             packages/agent/src/api/alice-production-guard.test.ts \
             packages/agent/src/api/alice-production-proof.test.ts \
             packages/agent/src/api/alice-release-metadata.test.ts \
+            packages/agent/src/runtime/alice-capability-inventory.test.ts \
             packages/agent/src/runtime/alice-production-plugin-policy.test.ts \
             packages/agent/src/runtime/alice-production-runtime-plugin.test.ts \
             packages/agent/src/runtime/alice-production-startup-guard.test.ts \
@@ -209,6 +211,7 @@ jobs:
             workers/alice-access-gateway/test/index.test.ts \
             workers/alice-production-control/test/*.test.ts
           node --test \
+            deploy/modal/alice_capability_bom.test.mjs \
             deploy/modal/alice_cloudflare_bootstrap.test.mjs \
             workers/alice-ai-gateway/src/index.test.mjs \
             deploy/modal/alice_cloudflare_config.test.mjs \
@@ -231,10 +234,12 @@ jobs:
             deploy/modal/alice_release_deadline.test.mjs \
             deploy/modal/alice_smoke_model_server.test.mjs \
             deploy/modal/verify_alice_runtime_boundary.test.mjs \
+            deploy/modal/verify_alice_capability_bom.test.mjs \
             deploy/modal/write_alice_runtime_build_manifest.test.mjs \
             deploy/modal/alice_worker_bundle_artifact.test.mjs \
             deploy/modal/alice_workflow_binding_canary.test.mjs \
             scripts/deploy-alice-cloudflare-workflow.test.mjs \
+            scripts/alice-capability-production-source.test.mjs \
             scripts/build-cloud-agent-workflow.test.mjs
           python3 -m unittest \
             deploy.modal.test_alice_registry_runtime \
@@ -537,6 +542,7 @@ jobs:
           bun run build:web
         env:
           NODE_ENV: production
+          ALICE_RUNTIME_PROFILE: full-gated
           MILADY_ELIZA_APP_CORE_ROOT: packages/app-core
 
       # ── 9. Docker ignore (context root must have .dockerignore; source: deploy/)
@@ -551,6 +557,10 @@ jobs:
           echo '!deploy/modal' >> .dockerignore
           echo '!deploy/modal/write_alice_runtime_build_manifest.mjs' >> .dockerignore
           echo '!deploy/modal/verify_alice_runtime_build_manifest.mjs' >> .dockerignore
+          echo '!deploy/modal/alice_capability_bom.mjs' >> .dockerignore
+          echo '!deploy/modal/verify_alice_capability_bom.mjs' >> .dockerignore
+          echo '!deploy/alice' >> .dockerignore
+          echo '!deploy/alice/alice-capability-policy.v1.json' >> .dockerignore
           echo '!apps/homepage' >> .dockerignore
           echo '!apps/homepage/**' >> .dockerignore
           echo '!eliza/packages/examples' >> .dockerignore
@@ -618,7 +628,6 @@ jobs:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.cloud-image.outputs.digest }}
           EXPECTED_REVISION: ${{ steps.source_revision.outputs.sha }}
           SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
-          ALICE_PRODUCTION_SKIP_PLUGINS_FILE: deploy/modal/alice-denied-plugins.txt
         run: |
           set -euo pipefail
 
@@ -632,9 +641,6 @@ jobs:
           trap cleanup EXIT
 
           test -n "${{ steps.cloud-image.outputs.digest }}"
-          test -s "$ALICE_PRODUCTION_SKIP_PLUGINS_FILE"
-          ALICE_PRODUCTION_SKIP_PLUGINS="$(awk 'NF && $1 !~ /^#/ { if (seen++) printf ","; printf "%s", $0 } END { print "" }' "$ALICE_PRODUCTION_SKIP_PLUGINS_FILE")"
-          test -n "$ALICE_PRODUCTION_SKIP_PLUGINS"
           EXPECTED_ELIZA_REVISION="$(git ls-tree "$EXPECTED_REVISION" eliza | awk '{print $3}')"
           test "${#EXPECTED_ELIZA_REVISION}" -eq 40
           test "$EXPECTED_ELIZA_REVISION" = "${{ steps.eliza_revision.outputs.sha }}"
@@ -663,6 +669,14 @@ jobs:
             -e 'import fs from "node:fs"; import crypto from "node:crypto"; const bytes = fs.readFileSync("/app/alice-runtime-build-manifest.json"); process.stdout.write(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`);')"
           printf '%s' "$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" | grep -Eq '^sha256:[a-f0-9]{64}$'
 
+          EXPECTED_CAPABILITY_BOM_SHA256="$(docker run --rm \
+            --platform linux/amd64 \
+            --entrypoint node \
+            "$IMAGE" \
+            --input-type=module \
+            -e 'import fs from "node:fs"; import crypto from "node:crypto"; const bytes = fs.readFileSync("/app/alice-capability-bom.json"); process.stdout.write(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`);')"
+          printf '%s' "$EXPECTED_CAPABILITY_BOM_SHA256" | grep -Eq '^sha256:[a-f0-9]{64}$'
+
           actual_revision="$(docker image inspect "$IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
           if [ "$actual_revision" != "$EXPECTED_REVISION" ]; then
             echo "Image revision mismatch: expected $EXPECTED_REVISION, got $actual_revision" >&2
@@ -679,6 +693,7 @@ jobs:
             --env MILADY_TRUST_CLOUDFLARE_ACCESS=1 \
             --env MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET=alice-cloud-smoke-access-proxy-secret \
             --env ALICE_RUNTIME_AUTHORITY_MODE=proposer-only \
+            --env ALICE_RUNTIME_PROFILE=full-gated \
             --env ENABLE_AUTONOMY=false \
             --env ELIZA_TRIGGERS_ENABLED=false \
             --env MILADY_ALLOWED_ORIGINS=https://alice.rndrntwrk.com \
@@ -694,10 +709,10 @@ jobs:
             --env ALICE_DEPLOYMENT_CONTROLLER_COMMIT="$EXPECTED_REVISION" \
             --env ALICE_RUNTIME_IMAGE="$IMAGE" \
             --env ALICE_RUNTIME_BUILD_MANIFEST_SHA256="$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" \
+            --env ALICE_CAPABILITY_BOM_SHA256="$EXPECTED_CAPABILITY_BOM_SHA256" \
             --env ALICE_DEPLOYMENT_MANIFEST_SHA256=sha256:9999999999999999999999999999999999999999999999999999999999999999 \
             --env ALICE_ELIZA_COMMIT="$EXPECTED_ELIZA_REVISION" \
             --env ALICE_MODAL_REVISION=49 \
-            --env ELIZA_SKIP_PLUGINS="$ALICE_PRODUCTION_SKIP_PLUGINS" \
             "$IMAGE"
 
           for attempt in $(seq 1 72); do
@@ -709,6 +724,8 @@ jobs:
               docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/test/contracts'
               runtime_build_attestation="$(docker exec "$SMOKE_CONTAINER" node deploy/modal/verify_alice_runtime_build_manifest.mjs)"
               printf '%s' "$runtime_build_attestation" | grep -q '"ok":true'
+              capability_bom_attestation="$(docker exec "$SMOKE_CONTAINER" node deploy/modal/verify_alice_capability_bom.mjs)"
+              printf '%s' "$capability_bom_attestation" | grep -q '"ok":true'
               if readiness="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
                 import { gunzipSync } from "node:zlib";
                 const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
@@ -728,6 +745,7 @@ jobs:
                   "/health",
                   "/health/ready",
                   "/api/alice-production/proof",
+                  "/api/alice-production/capabilities",
                 ];
                 for (const pathname of unauthenticatedRuntimeReads) {
                   const unauthenticated = await fetch(`${base}${pathname}`);
@@ -740,6 +758,17 @@ jobs:
                 const health = await response.json();
                 if (response.status !== 200 || health.agentState !== "running") {
                   console.error(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond }));
+                  process.exit(2);
+                }
+                const capabilitiesResponse = await fetch(`${base}/api/alice-production/capabilities`, { headers: authHeaders });
+                const capabilities = await capabilitiesResponse.json();
+                if (
+                  capabilitiesResponse.status !== 200 ||
+                  capabilities.capabilityBomSha256 !== process.env.ALICE_CAPABILITY_BOM_SHA256 ||
+                  !Array.isArray(capabilities.entries) ||
+                  capabilities.entries.length === 0
+                ) {
+                  console.error(JSON.stringify({ capabilitiesStatus: capabilitiesResponse.status, capabilities }));
                   process.exit(2);
                 }
                 const readyResponse = await fetch(`${base}/health/ready`, { headers: authHeaders });
@@ -884,7 +913,7 @@ jobs:
                   console.error(JSON.stringify({ vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
                   process.exit(13);
                 }
-                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, emoteStatus: emoteResponse.status, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatBoundary: chatBody.alice_boundary, modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
+                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, capabilityBomSha256: capabilities.capabilityBomSha256, capabilityCount: capabilities.entries.length, emoteStatus: emoteResponse.status, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatBoundary: chatBody.alice_boundary, modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
               ')"; then
                 runtime_snapshot="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
                   const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
@@ -896,7 +925,7 @@ jobs:
                   }
                   process.stdout.write(body);
                 ')"
-                boundary="$(printf '%s' "$runtime_snapshot" | EXPECTED_SOURCE_COMMIT="$EXPECTED_REVISION" EXPECTED_DEPLOYMENT_CONTROLLER_COMMIT="$EXPECTED_REVISION" EXPECTED_RUNTIME_IMAGE="$IMAGE" EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256="$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" EXPECTED_DEPLOYMENT_MANIFEST_SHA256=sha256:9999999999999999999999999999999999999999999999999999999999999999 EXPECTED_ELIZA_COMMIT="$EXPECTED_ELIZA_REVISION" node deploy/modal/verify_alice_runtime_boundary.mjs)"
+                boundary="$(printf '%s' "$runtime_snapshot" | EXPECTED_SOURCE_COMMIT="$EXPECTED_REVISION" EXPECTED_DEPLOYMENT_CONTROLLER_COMMIT="$EXPECTED_REVISION" EXPECTED_RUNTIME_IMAGE="$IMAGE" EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256="$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" EXPECTED_CAPABILITY_BOM_SHA256="$EXPECTED_CAPABILITY_BOM_SHA256" EXPECTED_DEPLOYMENT_MANIFEST_SHA256=sha256:9999999999999999999999999999999999999999999999999999999999999999 EXPECTED_ELIZA_COMMIT="$EXPECTED_ELIZA_REVISION" node deploy/modal/verify_alice_runtime_boundary.mjs)"
                 echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision build=$runtime_build_attestation health=$readiness boundary=$boundary"
                 exit 0
               fi

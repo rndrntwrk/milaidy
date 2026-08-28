@@ -405,6 +405,7 @@ function validDeploymentManifest(value) {
     value.release.rollbackBoundary ===
       `modal:alice-runtime:v${value.release.modalRevision}` &&
     exactKeys(value.source, [
+      "capabilityBomSha256",
       "deploymentControllerCommit",
       "elizaCommit",
       "runtimeBuildManifestSha256",
@@ -418,6 +419,7 @@ function validDeploymentManifest(value) {
       value.source.runtimeImage,
     ) &&
     DIGEST.test(value.source.runtimeBuildManifestSha256)
+    && DIGEST.test(value.source.capabilityBomSha256)
   );
 }
 

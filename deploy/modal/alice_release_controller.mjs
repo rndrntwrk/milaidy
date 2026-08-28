@@ -52,7 +52,7 @@ function exactRelease(value, expected) {
   return (
     object(value) &&
     Object.keys(value).sort().join(",") ===
-      "deploymentControllerCommit,deploymentManifestSha256,elizaCommit,modalRevision,releaseEpoch,runtimeBuildManifestSha256,runtimeImage,sourceCommit" &&
+      "capabilityBomSha256,deploymentControllerCommit,deploymentManifestSha256,elizaCommit,modalRevision,releaseEpoch,runtimeBuildManifestSha256,runtimeImage,sourceCommit" &&
     Number.isSafeInteger(value.releaseEpoch) &&
     value.releaseEpoch > 0 &&
     Number.isSafeInteger(value.modalRevision) &&
@@ -61,6 +61,7 @@ function exactRelease(value, expected) {
     COMMIT.test(value.deploymentControllerCommit ?? "") &&
     COMMIT.test(value.elizaCommit ?? "") &&
     DIGEST.test(value.runtimeBuildManifestSha256 ?? "") &&
+    DIGEST.test(value.capabilityBomSha256 ?? "") &&
     DIGEST.test(value.deploymentManifestSha256 ?? "") &&
     /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/.test(
       value.runtimeImage ?? "",

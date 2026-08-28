@@ -52,6 +52,7 @@ type ExpectedRuntimeRelease = {
   deploymentControllerCommit: string;
   runtimeImage: string;
   runtimeBuildManifestSha256: string;
+  capabilityBomSha256: string;
   elizaCommit: string;
   modalRevision: number;
   deploymentManifestSha256: string;
@@ -280,6 +281,7 @@ async function checkRuntimeAdmission(
     !COMMIT.test(String(release.deploymentControllerCommit ?? "")) ||
     !IMAGE.test(String(release.runtimeImage ?? "")) ||
     !DIGEST.test(String(release.runtimeBuildManifestSha256 ?? "")) ||
+    !DIGEST.test(String(release.capabilityBomSha256 ?? "")) ||
     !COMMIT.test(String(release.elizaCommit ?? "")) ||
     !Number.isInteger(release.modalRevision) ||
     Number(release.modalRevision) < 49 ||
@@ -316,6 +318,7 @@ async function checkRuntimeAdmission(
         runtimeBuildManifestSha256: String(
           release.runtimeBuildManifestSha256,
         ),
+        capabilityBomSha256: String(release.capabilityBomSha256),
         elizaCommit: String(release.elizaCommit),
         modalRevision: Number(release.modalRevision),
         deploymentManifestSha256: String(release.deploymentManifestSha256),
@@ -339,6 +342,8 @@ function sameRuntimeAdmission(
     left.release.runtimeImage === right.release.runtimeImage &&
     left.release.runtimeBuildManifestSha256 ===
       right.release.runtimeBuildManifestSha256 &&
+    left.release.capabilityBomSha256 ===
+      right.release.capabilityBomSha256 &&
     left.release.elizaCommit === right.release.elizaCommit &&
     left.release.modalRevision === right.release.modalRevision &&
     left.release.deploymentManifestSha256 ===
@@ -481,6 +486,7 @@ function runtimeReleaseMatches(
       ) &&
       release &&
       hasExactKeys(release, [
+        "capabilityBomSha256",
         "deploymentControllerCommit",
         "deploymentManifestSha256",
         "elizaCommit",
@@ -501,6 +507,8 @@ function runtimeReleaseMatches(
       release.runtimeImage === admission.release.runtimeImage &&
       release.runtimeBuildManifestSha256 ===
         admission.release.runtimeBuildManifestSha256 &&
+      release.capabilityBomSha256 ===
+        admission.release.capabilityBomSha256 &&
       release.deploymentManifestSha256 === admission.release.deploymentManifestSha256 &&
       release.elizaCommit === admission.release.elizaCommit &&
       release.modalRevision === admission.release.modalRevision,
@@ -557,6 +565,7 @@ function exactSafeRuntimeRelease(
 ): boolean {
   return Boolean(
     hasExactKeys(value, [
+      "capabilityBomSha256",
       "deploymentControllerCommit",
       "deploymentManifestSha256",
       "elizaCommit",
@@ -582,6 +591,8 @@ function exactSafeRuntimeRelease(
         admission.release.runtimeImage &&
       (value as Record<string, unknown>).runtimeBuildManifestSha256 ===
         admission.release.runtimeBuildManifestSha256 &&
+      (value as Record<string, unknown>).capabilityBomSha256 ===
+        admission.release.capabilityBomSha256 &&
       (value as Record<string, unknown>).deploymentManifestSha256 ===
         admission.release.deploymentManifestSha256 &&
       (value as Record<string, unknown>).elizaCommit ===

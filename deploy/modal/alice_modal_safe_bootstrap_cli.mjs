@@ -96,6 +96,7 @@ function exactReleaseFromEvidence(evidence, manifest, manifestSha256) {
     deploymentControllerCommit: evidence?.deploymentControllerCommit,
     runtimeImage: evidence?.runtimeImage,
     runtimeBuildManifestSha256: evidence?.runtimeBuildManifestSha256,
+    capabilityBomSha256: evidence?.capabilityBomSha256,
     deploymentManifestSha256: evidence?.deploymentManifestSha256,
     elizaCommit: evidence?.elizaCommit,
     modalRevision: evidence?.modalRevision,
@@ -108,6 +109,7 @@ function exactReleaseFromEvidence(evidence, manifest, manifestSha256) {
     release.runtimeImage !== manifest.source.runtimeImage ||
     release.runtimeBuildManifestSha256 !==
       manifest.source.runtimeBuildManifestSha256 ||
+    release.capabilityBomSha256 !== manifest.source.capabilityBomSha256 ||
     release.elizaCommit !== manifest.source.elizaCommit ||
     release.policyHash !== manifest.release.policyHash ||
     release.modalRevision !== manifest.release.modalRevision ||
@@ -180,6 +182,7 @@ function releaseCommandEnv(commandEnv, release) {
     ALICE_DEPLOYMENT_CONTROLLER_COMMIT: release.deploymentControllerCommit,
     ALICE_RUNTIME_BUILD_MANIFEST_SHA256:
       release.runtimeBuildManifestSha256,
+    ALICE_CAPABILITY_BOM_SHA256: release.capabilityBomSha256,
     ALICE_DEPLOYMENT_MANIFEST_SHA256: release.deploymentManifestSha256,
     ALICE_ELIZA_COMMIT: release.elizaCommit,
   };

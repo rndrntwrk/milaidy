@@ -44,6 +44,7 @@ function releaseFromConfig(config: AliceRuntimeConfig) {
     deploymentControllerCommit: release.deploymentControllerCommit,
     runtimeImage: release.runtimeImage,
     runtimeBuildManifestSha256: release.runtimeBuildManifestSha256,
+    capabilityBomSha256: config.capabilityBomSha256,
     elizaCommit: release.elizaCommit,
     modalRevision: config.modalRevision,
     deploymentManifestSha256: config.deploymentManifestSha256,
@@ -57,6 +58,7 @@ function validServingCandidate(value: unknown): boolean {
     !exactKeys(value.release, [
       "deploymentControllerCommit",
       "deploymentManifestSha256",
+      "capabilityBomSha256",
       "elizaCommit",
       "modalRevision",
       "releaseEpoch",
@@ -82,6 +84,7 @@ function validServingCandidate(value: unknown): boolean {
     ].every((commit) => typeof commit === "string" && COMMIT.test(commit)) &&
     [
       release.runtimeBuildManifestSha256,
+      release.capabilityBomSha256,
       release.deploymentManifestSha256,
     ].every((digest) => typeof digest === "string" && DIGEST.test(digest)) &&
     typeof release.runtimeImage === "string" &&

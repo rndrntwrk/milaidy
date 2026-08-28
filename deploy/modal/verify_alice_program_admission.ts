@@ -221,6 +221,7 @@ export async function verifyAliceProgramAdmission({
     elizaCommit: release.elizaCommit,
     runtimeImage: release.runtimeImage,
     runtimeBuildManifestSha256: release.runtimeBuildManifestSha256,
+    capabilityBomSha256: config.capabilityBomSha256,
     deploymentManifestSha256: config.deploymentManifestSha256,
     programPublicJwkSha256: trustPins.programPublicJwkSha256,
     programDigest: config.binding.programDigest,

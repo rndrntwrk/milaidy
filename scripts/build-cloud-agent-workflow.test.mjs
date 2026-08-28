@@ -210,6 +210,28 @@ test("Alice production base images are immutable reviewed manifests", () => {
   assert.doesNotMatch(dockerfile, /^FROM (?:node|oven\/bun):[^@\n]+$/m);
 });
 
+test("Alice materializes the real commands capability from the exact reviewed Eliza pin", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  assert.match(workflow, /a21d401bf7429bc8c794698b20832512b5315187/);
+  assert.match(workflow, /cd eliza\/plugins\/plugin-commands[\s\S]*?bun run build/);
+  assert.match(
+    dockerfile,
+    /cp eliza\/plugins\/plugin-commands\/package\.json node_modules\/@elizaos\/plugin-commands\//,
+  );
+  assert.match(
+    dockerfile,
+    /cp -a eliza\/plugins\/plugin-commands\/dist node_modules\/@elizaos\/plugin-commands\/dist/,
+  );
+  assert.doesNotMatch(dockerfile, /0\.0\.0-(?:cloud-)?stub/);
+});
+
 test("Alice Worker builds install the lockfile-pinned Wrangler at the repository root", () => {
   const packageJson = JSON.parse(
     fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
@@ -379,9 +401,13 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
   );
-  assert.match(workflow, /deploy\/modal\/alice-denied-plugins\.txt/);
-  assert.match(workflow, /ELIZA_SKIP_PLUGINS/);
+  assert.doesNotMatch(workflow, /deploy\/modal\/alice-denied-plugins\.txt/);
+  assert.doesNotMatch(workflow, /ELIZA_SKIP_PLUGINS/);
   assert.match(workflow, /ALICE_RUNTIME_AUTHORITY_MODE=proposer-only/);
+  assert.match(workflow, /ALICE_RUNTIME_PROFILE=full-gated/);
+  assert.match(workflow, /ALICE_CAPABILITY_BOM_SHA256/);
+  assert.match(workflow, /alice-capability-bom\.json/);
+  assert.match(workflow, /\/api\/alice-production\/capabilities/);
   assert.match(workflow, /\/api\/alice-production\/proof/);
   assert.match(workflow, /verify_alice_runtime_boundary\.mjs/);
   assert.match(workflow, /verify_alice_runtime_build_manifest\.mjs/);
@@ -408,6 +434,22 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     "/api/broadcast/alice-cam/scene",
   ]) {
     assert.ok(workflow.includes(forbiddenPath), `missing live deny probe ${forbiddenPath}`);
+  }
+});
+
+test("protected qualification runs the capability BOM and runtime-state contracts", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  for (const testPath of [
+    "packages/agent/src/api/alice-production-capabilities.test.ts",
+    "packages/agent/src/runtime/alice-capability-inventory.test.ts",
+    "deploy/modal/alice_capability_bom.test.mjs",
+    "deploy/modal/verify_alice_capability_bom.test.mjs",
+    "scripts/alice-capability-production-source.test.mjs",
+  ]) {
+    assert.match(workflow, new RegExp(testPath.replaceAll(".", "\\.")));
   }
 });
 

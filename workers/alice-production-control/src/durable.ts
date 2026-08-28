@@ -114,6 +114,7 @@ function releaseDetails(config: AliceRuntimeConfig) {
     runtimeImage: config.envelope.release.runtimeImage,
     runtimeBuildManifestSha256:
       config.envelope.release.runtimeBuildManifestSha256,
+    capabilityBomSha256: config.capabilityBomSha256,
     elizaCommit: config.envelope.release.elizaCommit,
     modalRevision: config.modalRevision,
     deploymentManifestSha256: config.deploymentManifestSha256,

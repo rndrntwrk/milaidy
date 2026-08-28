@@ -717,6 +717,7 @@ function runProgramAdmissionPreflight({
       "releaseEpoch",
       "rollbackBoundary",
       "runtimeBuildManifestSha256",
+      "capabilityBomSha256",
       "runtimeImage",
       "runtimeReleaseTokenBindingVerified",
       "recoveryKeyUnavailableToDeployment",
@@ -733,6 +734,8 @@ function runProgramAdmissionPreflight({
     evidence.runtimeImage !== release.manifest.source.runtimeImage ||
     evidence.runtimeBuildManifestSha256 !==
       release.manifest.source.runtimeBuildManifestSha256 ||
+    evidence.capabilityBomSha256 !==
+      release.manifest.source.capabilityBomSha256 ||
     evidence.deploymentManifestSha256 !==
       release.deploymentManifestSha256 ||
     evidence.policyHash !== release.manifest.release.policyHash ||
@@ -1744,6 +1747,7 @@ async function main() {
       runtimeImage: admission.evidence.runtimeImage,
       runtimeBuildManifestSha256:
         admission.evidence.runtimeBuildManifestSha256,
+      capabilityBomSha256: admission.evidence.capabilityBomSha256,
       elizaCommit: admission.evidence.elizaCommit,
       modalRevision: admission.evidence.modalRevision,
       deploymentManifestSha256:

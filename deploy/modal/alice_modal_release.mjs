@@ -27,6 +27,7 @@ const RELEASE_METADATA_KEYS = [
   "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
   "ALICE_RUNTIME_IMAGE",
   "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
+  "ALICE_CAPABILITY_BOM_SHA256",
   "ALICE_DEPLOYMENT_MANIFEST_SHA256",
   "ALICE_ELIZA_COMMIT",
   "ALICE_MODAL_REVISION",
@@ -126,6 +127,7 @@ function validRelease(release) {
       "deploymentControllerCommit",
       "runtimeImage",
       "runtimeBuildManifestSha256",
+      "capabilityBomSha256",
       "deploymentManifestSha256",
       "elizaCommit",
       "modalRevision",
@@ -137,6 +139,7 @@ function validRelease(release) {
     COMMIT.test(release.deploymentControllerCommit) &&
     IMAGE.test(release.runtimeImage) &&
     DIGEST.test(release.runtimeBuildManifestSha256) &&
+    DIGEST.test(release.capabilityBomSha256) &&
     DIGEST.test(release.deploymentManifestSha256) &&
     COMMIT.test(release.elizaCommit) &&
     Number.isSafeInteger(release.modalRevision) &&
@@ -167,6 +170,7 @@ export function buildAliceModalReleaseSecret({ release, releaseRunId, scoped }) 
     ALICE_RUNTIME_IMAGE: release.runtimeImage,
     ALICE_RUNTIME_BUILD_MANIFEST_SHA256:
       release.runtimeBuildManifestSha256,
+    ALICE_CAPABILITY_BOM_SHA256: release.capabilityBomSha256,
     ALICE_DEPLOYMENT_MANIFEST_SHA256:
       release.deploymentManifestSha256,
     ALICE_ELIZA_COMMIT: release.elizaCommit,
@@ -793,6 +797,7 @@ function exactRuntimeRelease(observed, release) {
     observed.deploymentControllerCommit === release.deploymentControllerCommit &&
     observed.runtimeImage === release.runtimeImage &&
     observed.runtimeBuildManifestSha256 === release.runtimeBuildManifestSha256 &&
+    observed.capabilityBomSha256 === release.capabilityBomSha256 &&
     observed.deploymentManifestSha256 === release.deploymentManifestSha256 &&
     observed.elizaCommit === release.elizaCommit &&
     observed.modalRevision === release.modalRevision

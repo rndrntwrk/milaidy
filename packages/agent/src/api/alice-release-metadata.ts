@@ -6,6 +6,7 @@ export interface AliceReleaseMetadata {
   deploymentControllerCommit: string;
   runtimeImage: string;
   runtimeBuildManifestSha256: string;
+  capabilityBomSha256: string;
   deploymentManifestSha256: string;
   elizaCommit: string;
   modalRevision: number;
@@ -29,6 +30,7 @@ export function readAliceReleaseMetadata(
   const runtimeImage = environment.ALICE_RUNTIME_IMAGE;
   const runtimeBuildManifestSha256 =
     environment.ALICE_RUNTIME_BUILD_MANIFEST_SHA256;
+  const capabilityBomSha256 = environment.ALICE_CAPABILITY_BOM_SHA256;
   const deploymentManifestSha256 = environment.ALICE_DEPLOYMENT_MANIFEST_SHA256;
   const elizaCommit = environment.ALICE_ELIZA_COMMIT;
   const modalRevision = Number(environment.ALICE_MODAL_REVISION);
@@ -47,6 +49,8 @@ export function readAliceReleaseMetadata(
     !IMAGE.test(runtimeImage) ||
     !runtimeBuildManifestSha256 ||
     !DIGEST.test(runtimeBuildManifestSha256) ||
+    !capabilityBomSha256 ||
+    !DIGEST.test(capabilityBomSha256) ||
     !deploymentManifestSha256 ||
     !DIGEST.test(deploymentManifestSha256) ||
     !elizaCommit ||
@@ -64,6 +68,7 @@ export function readAliceReleaseMetadata(
     deploymentControllerCommit,
     runtimeImage,
     runtimeBuildManifestSha256,
+    capabilityBomSha256,
     deploymentManifestSha256,
     elizaCommit,
     modalRevision,
