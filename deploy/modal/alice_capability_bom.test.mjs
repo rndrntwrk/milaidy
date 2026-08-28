@@ -7,9 +7,12 @@ import test from "node:test";
 
 import {
   canonicalAliceCapabilityBom,
+  discoverAliceCapabilityInputs,
   digestAliceCapabilityBom,
   generateAliceCapabilityBom,
 } from "./alice_capability_bom.mjs";
+
+const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
 
 function fixtureRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "alice-capability-bom-"));
@@ -50,6 +53,132 @@ function packageEntry(name, classification = "core", options = {}) {
 function policy(entries) {
   return { schemaVersion: "alice.capability-policy.v1", entries };
 }
+
+function hoistBunStorePackages(root) {
+  const bunRoot = path.join(root, "node_modules/.bun");
+  for (const entry of fs.readdirSync(bunRoot).sort()) {
+    const nodeModules = path.join(bunRoot, entry, "node_modules");
+    for (const packageOrScope of fs.readdirSync(nodeModules).sort()) {
+      if (packageOrScope.startsWith("@")) {
+        const scopeRoot = path.join(nodeModules, packageOrScope);
+        for (const packageName of fs.readdirSync(scopeRoot).sort()) {
+          const source = path.join(scopeRoot, packageName);
+          const target = path.join(root, "node_modules", packageOrScope, packageName);
+          if (!fs.existsSync(target)) {
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.cpSync(source, target, { recursive: true });
+          }
+        }
+        continue;
+      }
+      const source = path.join(nodeModules, packageOrScope);
+      const target = path.join(root, "node_modules", packageOrScope);
+      if (!fs.existsSync(target)) fs.cpSync(source, target, { recursive: true });
+    }
+  }
+}
+
+function applyCapabilityPruneFromDockerfile(root) {
+  const dockerfile = fs.readFileSync(path.join(REPO_ROOT, "deploy/Dockerfile.ci"), "utf8");
+  const pruneBlock = dockerfile.match(
+    /# Remove implementations that the checked capability policy[\s\S]*?(?=\n# Fix @ai-sdk\/provider-utils version conflict:)/,
+  )?.[0];
+  assert.ok(pruneBlock, "production capability-prune block must exist");
+  for (const match of pruneBlock.matchAll(/node_modules\/((?:@[^/\s\\]+\/)?[^\s\\]+)/g)) {
+    fs.rmSync(path.join(root, "node_modules", ...match[1].split("/")), {
+      recursive: true,
+      force: true,
+    });
+  }
+}
+
+test("the production broad hoist leaves no unclassified capability package", () => {
+  const root = fixtureRoot();
+  const retainedPackages = new Map([
+    ["@elizaos/app-contacts", "module"],
+    ["@elizaos/app-phone", "module"],
+    ["@elizaos/app-wallet", "module"],
+    ["@elizaos/app-wifi", "module"],
+    ["@elizaos/plugin-browser-bridge", "plugin"],
+    ["@elizaos/plugin-cli", "plugin"],
+    ["@elizaos/plugin-discord-local", "plugin"],
+    ["@elizaos/plugin-groq", "plugin"],
+    ["@elizaos/plugin-knowledge", "plugin"],
+    ["@elizaos/plugin-solana", "plugin"],
+    ["@elizaos/plugin-video", "plugin"],
+    ["@elizaos/plugin-wallet", "plugin"],
+    ["@elizaos/plugin-wechat", "plugin"],
+    ["@huggingface/jinja", "module"],
+    ["@miladyai/plugin-wechat", "plugin"],
+  ]);
+  const installedPackages = [...retainedPackages.keys(), "onnxruntime-common"];
+  try {
+    for (const [index, packageName] of installedPackages.entries()) {
+      const packageRoot = path.join(
+        root,
+        "node_modules/.bun",
+        `alice-production-${index}@1.0.0`,
+        "node_modules",
+        ...packageName.split("/"),
+      );
+      fs.mkdirSync(packageRoot, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageRoot, "package.json"),
+        `${JSON.stringify({
+          name: packageName,
+          version: "1.0.0",
+          type: "module",
+          exports: { ".": "./index.mjs" },
+        })}\n`,
+      );
+      fs.writeFileSync(path.join(packageRoot, "index.mjs"), "export default {};\n");
+    }
+
+    hoistBunStorePackages(root);
+    applyCapabilityPruneFromDockerfile(root);
+
+    const checkedPolicy = JSON.parse(
+      fs.readFileSync(
+        path.join(REPO_ROOT, "deploy/alice/alice-capability-policy.v1.json"),
+        "utf8",
+      ),
+    );
+    const classifiedIds = new Set(checkedPolicy.entries.map((entry) => entry.id));
+    const discovery = discoverAliceCapabilityInputs(root, checkedPolicy);
+    assert.deepEqual(discovery.packageNames, [...retainedPackages.keys()]);
+    assert.equal(discovery.packageNames.includes("onnxruntime-common"), false);
+
+    for (const [packageName, surface] of retainedPackages) {
+      const policyEntry = checkedPolicy.entries.find(
+        (entry) => entry.id === `package:${packageName}`,
+      );
+      assert.deepEqual(policyEntry, {
+        id: `package:${packageName}`,
+        classification: "policy-disabled",
+        source: { type: "package", package: packageName, entrypoint: "." },
+        surface,
+        runtimeNames: [],
+        adapter: null,
+        policyState: "disabled",
+      });
+    }
+
+    const remoteModelExecution = checkedPolicy.entries.find(
+      (entry) => entry.id === "adapter:remote-model-execution",
+    );
+    assert.ok(
+      remoteModelExecution?.prohibitedPackages?.includes("onnxruntime-common"),
+      "the orphaned ONNX package must remain prohibited after final-image pruning",
+    );
+    const missing = discovery.packageNames
+      .map((packageName) => `package:${packageName}`)
+      .filter((id) => !classifiedIds.has(id));
+
+    assert.deepEqual(missing, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("canonical BOM is deterministic across shuffled discovery", async () => {
   const root = fixtureRoot();
