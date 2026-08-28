@@ -249,13 +249,33 @@ async function buildPackageEntry(root, entry) {
     throw new Error("ALICE_CAPABILITY_STUB_REJECTED");
   }
   const { entrypoint } = resolvePackageEntrypoint(root, entry.source, packageJson);
-  const moduleNamespace = await import(`${pathToFileURL(entrypoint).href}?alice_bom=${sha256(fs.readFileSync(entrypoint))}`);
+  const entrypointBytes = fs.readFileSync(entrypoint);
+  const files = packageFileRecords(pkgRoot);
+  if (entry.runtimeNames.some((name) => /(?:^|-)stub$/i.test(name))) {
+    throw new Error("ALICE_CAPABILITY_STUB_REJECTED");
+  }
+  if (entry.classification === "policy-disabled") {
+    return {
+      id: entry.id,
+      classification: entry.classification,
+      identity: `${packageJson.name}@${packageJson.version}`,
+      surface: entry.surface,
+      runtimeNames: [],
+      installed: true,
+      implementationCallable: false,
+      adapter: entry.adapter,
+      policyState: entry.policyState,
+      files,
+      packageSha256: packageRecordsDigest(files),
+      entrypointSha256: sha256(entrypointBytes),
+    };
+  }
+  const moduleNamespace = await import(`${pathToFileURL(entrypoint).href}?alice_bom=${sha256(entrypointBytes)}`);
   const objects = runtimeObjects(moduleNamespace, entry.runtimeNames);
   const observedRuntimeNames = [
     ...new Set(objects.map((plugin) => plugin.name)),
   ].sort();
   if (
-    entry.runtimeNames.some((name) => /(?:^|-)stub$/i.test(name)) ||
     objects.some((plugin) => /(?:^|-)stub$/i.test(plugin.name))
   ) {
     throw new Error("ALICE_CAPABILITY_STUB_REJECTED");
@@ -267,7 +287,6 @@ async function buildPackageEntry(root, entry) {
   if (!implementationCallable) {
     throw new Error("ALICE_CAPABILITY_CORE_SURFACE_EMPTY");
   }
-  const files = packageFileRecords(pkgRoot);
   return {
     id: entry.id,
     classification: entry.classification,
@@ -280,7 +299,7 @@ async function buildPackageEntry(root, entry) {
     policyState: entry.policyState,
     files,
     packageSha256: packageRecordsDigest(files),
-    entrypointSha256: sha256(fs.readFileSync(entrypoint)),
+    entrypointSha256: sha256(entrypointBytes),
   };
 }
 

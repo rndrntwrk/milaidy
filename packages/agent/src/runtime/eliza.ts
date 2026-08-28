@@ -63,7 +63,6 @@ import {
 } from "@elizaos/core";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginForm from "@elizaos/plugin-form";
-import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginSql from "@elizaos/plugin-sql";
 import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
 import {
@@ -283,7 +282,12 @@ export const STATIC_ELIZA_PLUGINS: Record<
   unknown | StaticPluginModuleLoader
 > = {
   "@elizaos/plugin-sql": pluginSql,
-  "@elizaos/plugin-local-embedding": pluginLocalEmbedding,
+  ...(!isAliceFullRuntimeProfile(process.env)
+    ? {
+        "@elizaos/plugin-local-embedding": () =>
+          import("@elizaos/plugin-local-embedding"),
+      }
+    : {}),
   "@elizaos/plugin-form": pluginForm,
   ...(pluginAgentOrchestrator
     ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
