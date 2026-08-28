@@ -374,15 +374,31 @@ function mockRuntime(
     if (url.pathname === "/" && authenticated) {
       if (failRoot) return new Response("bad", { status: 200 });
       if (paused) return json({ ok: false, code: "RUNTIME_PAUSED", blockingScopes: ["all"] }, 503);
-      const nonce = "acceptance_nonce_1234567890";
-      const html = `<!doctype html><main data-program-digest="${data.binding.programDigest}" data-release-digest="${data.binding.releaseDigest}" data-policy-hash="${data.binding.policyHash}" data-deployment-manifest-sha256="${data.programAdmission.deploymentManifestSha256}" data-access-config-sha256="${data.manifest.cloudflare.accessConfigSha256}" data-access-policy-config-sha256="${data.manifest.cloudflare.accessPolicyConfigSha256}"><ol id="alice-transcript"></ol><form id="alice-chat"><textarea id="alice-prompt"></textarea></form><script nonce="${nonce}">fetch("/v1/chat/completions")</script></main>`;
+      const html = '<!doctype html><html><body><div id="root"></div><script type="module" src="/assets/full-alice.js"></script></body></html>';
       return new Response(html, {
         status: 200,
         headers: {
           "content-type": "text/html; charset=utf-8",
-          "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'`,
+          "content-security-policy": "default-src 'self'; script-src 'self'",
         },
       });
+    }
+    if (
+      authenticated &&
+      (url.pathname === "/companion" ||
+        url.pathname === "/broadcast/alice-cam")
+    ) {
+      if (paused) return json({ ok: false, code: "RUNTIME_PAUSED", blockingScopes: ["all"] }, 503);
+      return new Response(
+        '<!doctype html><html><body><div id="root"></div><script type="module" src="/assets/full-alice.js"></script></body></html>',
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "content-security-policy": "default-src 'self'; script-src 'self'",
+          },
+        },
+      );
     }
     if (url.pathname === "/control/health") {
       return json({
@@ -406,20 +422,58 @@ function mockRuntime(
     }
     if (url.pathname === "/api/health") {
       return json({
-        ok: true,
         ready: true,
         runtime: "ok",
-        release: { ...data.expected.release, ...data.binding },
+        database: "ok",
+        plugins: { loaded: 42, failed: 0 },
+        coordinator: "ok",
+        connectors: { discord: "configured", telegram: "configured" },
+        uptime: 42,
+        agentState: "running",
+        startup: { phase: "ready", attempt: 1 },
+        aliceRelease: { ...data.expected.release, ...data.binding },
       });
+    }
+    if (url.pathname === "/health/ready") {
+      return json({ ok: true, ready: true, agentState: "running", uptime: 42 });
     }
     if (url.pathname === "/api/alice-production/proof") {
       return json({
-        schemaVersion: "alice.runtime-boundary-proof.v1",
+        schemaVersion: "alice.full-runtime-boundary-proof.v1",
         authorityMode: "proposer-only",
-        actionExecution: "disabled",
-        actionPlanning: false,
-        backgroundAuthorityWorkers: "absent",
+        runtimeProfile: "full-gated",
+        bridgePlugin: "eliza",
+        actionPlanning: true,
+        coreComposition: [
+          "bridge:eliza",
+          "capabilities:basic",
+          "security:core-hooks",
+          "memory:sql",
+          "skills:agent-skills",
+          "hooks:eliza",
+          "connectors:eliza",
+        ],
+        requiredConfiguredPluginPackages: [
+          "eliza",
+          "@elizaos/plugin-sql",
+          "@elizaos/plugin-agent-skills",
+          "@elizaos/plugin-openai",
+        ],
+        requiredRuntimePluginNames: [
+          "@elizaos/plugin-agent-skills",
+          "basic-capabilities",
+          "core-security-hooks",
+          "eliza",
+          "openai",
+          "sql",
+        ],
         release: { ...data.expected.release, ...data.binding },
+      });
+    }
+    if (url.pathname === "/api/companion/stage") {
+      return json({
+        ok: true,
+        state: { camera: { zoom: 0.25, yaw: 0, pitch: 0, pan: 0 } },
       });
     }
     if (url.pathname === "/control/api/v1/capabilities/grant") {
@@ -440,12 +494,11 @@ function mockRuntime(
     if (url.pathname === "/v1/chat/completions") {
       if (paused) return json({ ok: false, code: "RUNTIME_PAUSED", blockingScopes: ["all"] }, 503);
       chatValue ??= {
+        id: "chatcmpl-acceptance",
+        object: "chat.completion",
+        created: Math.floor(nowMs / 1000),
+        model: "alice-production",
         choices: [{ message: { content: "Acknowledged." } }],
-        alice_boundary: {
-          authorityMode: "proposer-only",
-          actionExecution: "disabled",
-          tools: "disabled",
-        },
       };
       return json(chatValue, 200, {
         "x-alice-durable-session-id": sessionId,
@@ -549,6 +602,13 @@ describe("Alice terminal production acceptance", () => {
     expect(evidence.publicOrEconomicActionExecuted).toBe(false);
     expect(evidence.durableChat.idempotentReplay).toBe(true);
     expect(evidence.durableChat.recoveredAfterPauseResume).toBe(true);
+    expect(evidence.runtimeProfile).toBe("full-gated");
+    expect(evidence.productSurfaces).toEqual({
+      root: "full-milady",
+      companion: "full-companion",
+      broadcast: "alice-cam",
+      companionStage: "durable",
+    });
     expect(evidence.failClosedGates.pauseAll).toBe("chat-denied");
     expect(evidence.provenance.modalForwardProviderVersion).toBe(53);
     expect(evidence.evidence.requiredKinds).toEqual({
