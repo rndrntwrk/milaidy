@@ -3,7 +3,10 @@ import type {
   AliceInternalServiceConfigSource,
 } from "./runtime-config";
 
-export type AliceInternalService = "access-gateway" | "ai-gateway";
+export type AliceInternalService =
+  | "access-gateway"
+  | "ai-gateway"
+  | "connector-plane";
 
 const encoder = new TextEncoder();
 
@@ -26,12 +29,14 @@ export function authorizeEmergencyRecovery(
   const deploymentPause = config.ALICE_DEPLOYMENT_PAUSE_TOKEN;
   const access = config.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN;
   const ai = config.ALICE_AI_GATEWAY_SERVICE_TOKEN;
+  const connector = config.ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN;
   if (
     typeof recovery !== "string" ||
     recovery.length < 32 ||
     recovery === deploymentPause ||
     recovery === access ||
-    recovery === ai
+    recovery === ai ||
+    recovery === connector
   ) {
     return false;
   }
@@ -46,12 +51,14 @@ export function authorizeDeploymentPause(
   const recovery = config.ALICE_CONTROL_RECOVERY_TOKEN;
   const access = config.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN;
   const ai = config.ALICE_AI_GATEWAY_SERVICE_TOKEN;
+  const connector = config.ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN;
   if (
     typeof deploymentPause !== "string" ||
     deploymentPause.length < 32 ||
     deploymentPause === recovery ||
     deploymentPause === access ||
-    deploymentPause === ai
+    deploymentPause === ai ||
+    deploymentPause === connector
   ) {
     return false;
   }
@@ -82,6 +89,12 @@ export function requiredInternalService(
   if (method === "POST" && path === "/control/internal/v1/model/reserve") {
     return "ai-gateway";
   }
+  if (
+    method === "POST" &&
+    path === "/control/internal/v1/connectors/authorize"
+  ) {
+    return "connector-plane";
+  }
   return null;
 }
 
@@ -90,16 +103,19 @@ export function authorizeInternalService(
   presentedToken: string,
   config: AliceInternalServiceConfigSource,
 ): boolean {
-  const expected = service === "access-gateway"
-    ? config.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN
-    : config.ALICE_AI_GATEWAY_SERVICE_TOKEN;
-  const other = service === "access-gateway"
-    ? config.ALICE_AI_GATEWAY_SERVICE_TOKEN
-    : config.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN;
+  const tokens = {
+    "access-gateway": config.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN,
+    "ai-gateway": config.ALICE_AI_GATEWAY_SERVICE_TOKEN,
+    "connector-plane": config.ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN,
+  } satisfies Record<AliceInternalService, string>;
+  const expected = tokens[service];
+  const other = Object.entries(tokens).filter(
+    ([name]) => name !== service,
+  ).map(([, token]) => token);
   if (
     typeof expected !== "string" ||
     expected.length < 32 ||
-    (typeof other === "string" && expected === other)
+    other.some((token) => typeof token === "string" && expected === token)
   ) {
     return false;
   }
