@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   buildAliceAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceStatePlaneEffectiveConfig,
   encodeAliceDeploymentManifest,
 } from "../../alice-effective-config.js";
 import {
@@ -37,6 +39,7 @@ const TEST_DEPLOYMENT_MANIFEST = await buildAliceDeploymentManifest({
   elizaCommit: "6".repeat(40),
   runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"7".repeat(64)}`,
   runtimeBuildManifestSha256: `sha256:${"8".repeat(64)}`,
+  capabilityBomSha256: `sha256:${"9".repeat(64)}`,
   modalRevision: 49,
   policyHash: RELEASE_BINDING.policyHash,
   rollbackBoundary: "modal:alice-runtime:v49",
@@ -61,6 +64,12 @@ const TEST_DEPLOYMENT_MANIFEST = await buildAliceDeploymentManifest({
     releaseServiceTokenIdSha256: "R".repeat(43),
   }),
   aiGatewayEffectiveConfig: buildAliceAiGatewayEffectiveConfig(),
+  statePlaneEffectiveConfig: buildAliceStatePlaneEffectiveConfig({
+    databaseId: "11111111-2222-3333-4444-555555555555",
+  }),
+  connectorPlaneEffectiveConfig: buildAliceConnectorPlaneEffectiveConfig({
+    providerActivation: "disabled",
+  }),
 });
 const TEST_DEPLOYMENT_MANIFEST_BYTES = serializeAliceDeploymentManifest(
   TEST_DEPLOYMENT_MANIFEST,
