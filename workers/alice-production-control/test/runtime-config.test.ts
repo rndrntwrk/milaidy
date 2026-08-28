@@ -52,6 +52,7 @@ async function fixture() {
   const deploymentManifest = await buildAliceDeploymentManifest({
     releaseEpoch: 1,
     ...releaseSource,
+    capabilityBomSha256: `sha256:${"f".repeat(64)}`,
     modalRevision: 49,
     policyHash: `sha256:${"b".repeat(64)}`,
     rollbackBoundary: "modal:alice-runtime:v49",

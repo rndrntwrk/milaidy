@@ -38,6 +38,11 @@ const repoRoot = path.resolve(
 );
 const appDir = path.join(repoRoot, "apps", "app");
 const requiredBunVersion = "1.3.13";
+const isAliceFullGatedBuild = process.env.ALICE_RUNTIME_PROFILE === "full-gated";
+
+if (isAliceFullGatedBuild && (process.env.ELIZA_SKIP_PLUGINS ?? "").trim()) {
+  throw new Error("ALICE_PRODUCTION_BUILD_STUB_FORBIDDEN");
+}
 
 // ── alice: real Node binary even when started via `bun run` ────────────────
 function resolveNodeExec() {
@@ -140,9 +145,13 @@ if (isLocalElizaDisabled()) {
   }
 
   // Upstream: elizaOS patch scripts that prepare the workspace for build
-  await run(node, ["scripts/ensure-elizaos-optional-app-stubs.mjs"]);
+  if (!isAliceFullGatedBuild) {
+    await run(node, ["scripts/ensure-elizaos-optional-app-stubs.mjs"]);
+  }
   await run(node, ["scripts/patch-elizaos-package-styles.mjs"]);
-  await run(node, ["scripts/patch-elizaos-plugin-browser-bridge-package.mjs"]);
+  if (!isAliceFullGatedBuild) {
+    await run(node, ["scripts/patch-elizaos-plugin-browser-bridge-package.mjs"]);
+  }
 
   // Current official Eliza exports UI and app-core browser entrypoints from
   // dist/. A clean Alice checkout must build those pinned workspace packages

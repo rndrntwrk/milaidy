@@ -1,0 +1,714 @@
+{
+  "schemaVersion": "alice.capability-policy.v1",
+  "entries": [
+    {
+      "id": "adapter:cloudflare-workflows",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "cloudflareWorkflowsAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "cloudflare-workflows",
+      "policyState": "delegated",
+      "prohibitedPackages": [
+        "@elizaos/plugin-cron",
+        "@elizaos/plugin-todo"
+      ]
+    },
+    {
+      "id": "adapter:remote-model-execution",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "remoteModelExecutionAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "remote-model-execution",
+      "policyState": "delegated",
+      "prohibitedPackages": [
+        "@elizaos/plugin-local-embedding",
+        "@huggingface/transformers",
+        "@huggingface/tokenizers",
+        "onnxruntime-node"
+      ]
+    },
+    {
+      "id": "adapter:remote-training",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "remoteTrainingAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "remote-training",
+      "policyState": "delegated",
+      "prohibitedPackages": [
+        "@elizaos/app-training"
+      ]
+    },
+    {
+      "id": "internal:alice-full-runtime",
+      "classification": "core",
+      "source": {
+        "type": "internal",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "aliceFullRuntimeCapability",
+        "identity": "alice-full-runtime"
+      },
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "internal:alice-full-ui",
+      "classification": "core",
+      "source": {
+        "type": "internal",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "aliceFullUiCapability",
+        "identity": "alice-full-ui"
+      },
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "internal:alice-knowledge-runtime",
+      "classification": "core",
+      "source": {
+        "type": "internal",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "aliceKnowledgeRuntimeCapability",
+        "identity": "alice-knowledge-runtime"
+      },
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "internal:alice-task-coordinator",
+      "classification": "core",
+      "source": {
+        "type": "internal",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "aliceTaskCoordinatorCapability",
+        "identity": "alice-task-coordinator"
+      },
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/app-core",
+      "classification": "core",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/app-core",
+        "entrypoint": "."
+      },
+      "surface": "module",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-agent-orchestrator",
+      "classification": "core",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-agent-orchestrator",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-agent-skills",
+      "classification": "core",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-agent-skills",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [
+        "@elizaos/plugin-agent-skills"
+      ],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-anthropic",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-anthropic",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-aosp-local-inference",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-aosp-local-inference",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-bluebubbles",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-bluebubbles",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-browser",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-browser",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-capacitor-bridge",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-capacitor-bridge",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-coding-tools",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-coding-tools",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-commands",
+      "classification": "core",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-commands",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-computeruse",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-computeruse",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-discord",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-discord",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-edge-tts",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-edge-tts",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-elizacloud",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-elizacloud",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-evm",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-evm",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-experience",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-experience",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-form",
+      "classification": "core",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-form",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-google-genai",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-google-genai",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-imessage",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-imessage",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-local-inference",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-local-inference",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-mcp",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-mcp",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-music-library",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-music-library",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-music-player",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-music-player",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-ollama",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-ollama",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-openai",
+      "classification": "core",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-openai",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [
+        "@elizaos/plugin-openai",
+        "openai"
+      ],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-openrouter",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-openrouter",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-pdf",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-pdf",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-personality",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-personality",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-pi-ai",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-pi-ai",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-plugin-manager",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-plugin-manager",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-scratchpad",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-scratchpad",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-secrets-manager",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-secrets-manager",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-shell",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-shell",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-signal",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-signal",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-sql",
+      "classification": "core",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-sql",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [
+        "@elizaos/plugin-sql",
+        "sql"
+      ],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-streaming",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-streaming",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-telegram",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-telegram",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-trust",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-trust",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-whatsapp",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-whatsapp",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-workflow",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-workflow",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-x402",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-x402",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@miladyai/app-core",
+      "classification": "core",
+      "source": {
+        "type": "package",
+        "package": "@miladyai/app-core",
+        "entrypoint": "."
+      },
+      "surface": "module",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "enabled"
+    },
+    {
+      "id": "package:@miladyai/plugin-selfcontrol",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@miladyai/plugin-selfcontrol",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@rndrntwrk/plugin-555stream",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@rndrntwrk/plugin-555stream",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "platform:browser-onnx-runtime",
+      "classification": "platform-incompatible",
+      "source": {
+        "type": "platform",
+        "platform": "browser"
+      },
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "unavailable",
+      "prohibitedPackages": [
+        "onnxruntime-web"
+      ]
+    },
+    {
+      "id": "platform:darwin-activity-tracker",
+      "classification": "platform-incompatible",
+      "source": {
+        "type": "platform",
+        "platform": "darwin"
+      },
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "unavailable",
+      "prohibitedPackages": [
+        "@elizaos/native-activity-tracker"
+      ]
+    }
+  ]
+}

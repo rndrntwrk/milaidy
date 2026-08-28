@@ -72,8 +72,9 @@ export type AliceRuntimeConfig = AliceOwnerAccessConfig &
   AliceAuthoritySafetyConfig & {
   envelope: ProgramEnvelope;
   binding: ReleaseBinding;
-  modalRevision: number;
-  deploymentManifestSha256: string;
+    modalRevision: number;
+    deploymentManifestSha256: string;
+    capabilityBomSha256: string;
 };
 
 export type AliceTrustPins = {
@@ -252,6 +253,9 @@ export async function loadRuntimeConfig(
   });
   const manifestRelease = manifest.release as Record<string, unknown>;
   const manifestSource = manifest.source as Record<string, unknown>;
+  if (!/^sha256:[a-f0-9]{64}$/.test(String(manifestSource.capabilityBomSha256 ?? ""))) {
+    throw new Error("ALICE_RELEASE_MANIFEST_MISMATCH");
+  }
   const programReleaseIdentity = {
     releaseEpoch: envelope.release.releaseEpoch,
     modalRevision: envelope.release.modalRevision,
@@ -313,5 +317,6 @@ export async function loadRuntimeConfig(
     },
     modalRevision,
     deploymentManifestSha256: envelope.release.deploymentManifestSha256,
+    capabilityBomSha256: String(manifestSource.capabilityBomSha256),
   };
 }

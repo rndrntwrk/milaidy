@@ -74,6 +74,7 @@ describe("GET /api/health", () => {
       "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
       `sha256:${"8".repeat(64)}`,
     );
+    vi.stubEnv("ALICE_CAPABILITY_BOM_SHA256", `sha256:${"a".repeat(64)}`);
     vi.stubEnv("ALICE_DEPLOYMENT_MANIFEST_SHA256", `sha256:${"9".repeat(64)}`);
     vi.stubEnv("ALICE_ELIZA_COMMIT", "a21d401bf7429bc8c794698b20832512b5315187");
     vi.stubEnv("ALICE_MODAL_REVISION", "49");
@@ -87,6 +88,7 @@ describe("GET /api/health", () => {
       deploymentControllerCommit: "6".repeat(40),
       runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"4".repeat(64)}`,
       runtimeBuildManifestSha256: `sha256:${"8".repeat(64)}`,
+      capabilityBomSha256: `sha256:${"a".repeat(64)}`,
       elizaCommit: "a21d401bf7429bc8c794698b20832512b5315187",
       modalRevision: 49,
     });

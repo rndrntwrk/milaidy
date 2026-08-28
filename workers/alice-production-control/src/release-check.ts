@@ -6,6 +6,7 @@ export type AliceReleaseDetails = {
   deploymentControllerCommit: string;
   runtimeImage: string;
   runtimeBuildManifestSha256: string;
+  capabilityBomSha256: string;
   elizaCommit: string;
   modalRevision: number;
   deploymentManifestSha256: string;

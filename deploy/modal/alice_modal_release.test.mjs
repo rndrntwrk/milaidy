@@ -28,6 +28,7 @@ const release = {
   deploymentControllerCommit: "5".repeat(40),
   runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"6".repeat(64)}`,
   runtimeBuildManifestSha256: `sha256:${"7".repeat(64)}`,
+  capabilityBomSha256: `sha256:${"a".repeat(64)}`,
   deploymentManifestSha256: `sha256:${"8".repeat(64)}`,
   elizaCommit: "9".repeat(40),
   modalRevision: 49,
@@ -76,6 +77,7 @@ test("builds one create-only digest-named Modal secret with the exact allowlist"
   });
   assert.equal(built.name, `alice-production-core-${"2".repeat(64)}-12345-1`);
   assert.deepEqual(Object.keys(built.values).sort(), [
+    "ALICE_CAPABILITY_BOM_SHA256",
     "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
     "ALICE_DEPLOYMENT_MANIFEST_SHA256",
     "ALICE_ELIZA_COMMIT",

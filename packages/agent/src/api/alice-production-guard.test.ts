@@ -50,6 +50,7 @@ describe("Alice production runtime guard", () => {
       ["GET", "/broadcast/alice-cam"],
       ["GET", "/api/broadcast/alice-cam/scene"],
       ["GET", "/api/conversations"],
+      ["GET", "/api/alice-production/capabilities"],
       ["POST", "/api/conversations"],
       ["POST", "/api/conversations/7/messages"],
       ["POST", "/api/companion/stage"],
@@ -85,6 +86,7 @@ describe("Alice production runtime guard", () => {
       ["GET", "/api/sandbox/browser"],
       ["GET", "/api/unreviewed/read"],
       ["GET", "/ws"],
+      ["GET", "/api/alice-production/capabilities/nearby"],
     ]) {
       expect(
         evaluateAliceProductionRequest(method, pathname, fullAliceEnv),

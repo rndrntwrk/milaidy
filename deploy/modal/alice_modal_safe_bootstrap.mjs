@@ -94,6 +94,7 @@ function validRelease(value) {
       "deploymentControllerCommit",
       "runtimeImage",
       "runtimeBuildManifestSha256",
+      "capabilityBomSha256",
       "deploymentManifestSha256",
       "elizaCommit",
       "modalRevision",
@@ -105,6 +106,7 @@ function validRelease(value) {
     COMMIT.test(value.deploymentControllerCommit ?? "") &&
     IMAGE.test(value.runtimeImage ?? "") &&
     DIGEST.test(value.runtimeBuildManifestSha256 ?? "") &&
+    DIGEST.test(value.capabilityBomSha256 ?? "") &&
     DIGEST.test(value.deploymentManifestSha256 ?? "") &&
     COMMIT.test(value.elizaCommit ?? "") &&
     Number.isSafeInteger(value.modalRevision) &&

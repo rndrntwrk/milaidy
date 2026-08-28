@@ -64,6 +64,7 @@ function candidateFromAdmission(admission) {
     deploymentControllerCommit: admission?.deploymentControllerCommit,
     runtimeImage: admission?.runtimeImage,
     runtimeBuildManifestSha256: admission?.runtimeBuildManifestSha256,
+    capabilityBomSha256: admission?.capabilityBomSha256,
     elizaCommit: admission?.elizaCommit,
     modalRevision: admission?.modalRevision,
     deploymentManifestSha256: admission?.deploymentManifestSha256,

@@ -61,6 +61,7 @@ const valid = {
   elizaCommit: "3".repeat(40),
   runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"4".repeat(64)}`,
   runtimeBuildManifestSha256: `sha256:${"5".repeat(64)}`,
+  capabilityBomSha256: `sha256:${"7".repeat(64)}`,
   modalRevision: 49,
   policyHash: `sha256:${"6".repeat(64)}`,
   rollbackBoundary: "modal:alice-runtime:v49",
@@ -75,6 +76,7 @@ const valid = {
 
 test("builds one non-self-referential production deployment manifest from canonical effective configs", async () => {
   const manifest = await buildAliceDeploymentManifest(valid);
+  assert.equal(manifest.source.capabilityBomSha256, valid.capabilityBomSha256);
   assert.deepEqual(manifest.cloudflare, {
     accountId: "036df6c823669b8fa2f66cf4c16eeb29",
     accessDomain: "alice.rndrntwrk.com",

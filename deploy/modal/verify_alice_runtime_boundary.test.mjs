@@ -33,6 +33,7 @@ const safeProof = {
     deploymentControllerCommit: "7".repeat(40),
     runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"5".repeat(64)}`,
     runtimeBuildManifestSha256: `sha256:${"8".repeat(64)}`,
+    capabilityBomSha256: `sha256:${"a".repeat(64)}`,
     deploymentManifestSha256: `sha256:${"9".repeat(64)}`,
     elizaCommit: "6".repeat(40),
     modalRevision: 49,
@@ -56,6 +57,58 @@ test("accepts only the exact post-init response-only closure", () => {
     taskWorkerCount: 0,
     releaseDigest: safeProof.release.releaseDigest,
   });
+});
+
+test("accepts the exact full-gated proof core markers and capability digest", () => {
+  const proof = {
+    schemaVersion: "alice.full-runtime-boundary-proof.v1",
+    authorityMode: "proposer-only",
+    runtimeProfile: "full-gated",
+    bridgePlugin: "eliza",
+    actionPlanning: true,
+    coreComposition: [
+      "bridge:eliza",
+      "capabilities:basic",
+      "security:core-hooks",
+      "memory:sql",
+      "skills:agent-skills",
+      "hooks:eliza",
+      "connectors:eliza",
+    ],
+    requiredConfiguredPluginPackages: [
+      "eliza",
+      "@elizaos/plugin-sql",
+      "@elizaos/plugin-agent-skills",
+      "@elizaos/plugin-openai",
+    ],
+    requiredRuntimePluginNames: [
+      "@elizaos/plugin-agent-skills",
+      "basic-capabilities",
+      "core-security-hooks",
+      "eliza",
+      "openai",
+      "sql",
+    ],
+    release: safeProof.release,
+  };
+  assert.deepEqual(
+    verifyAliceRuntimeBoundary(proof, {
+      capabilityBomSha256: safeProof.release.capabilityBomSha256,
+    }),
+    {
+      ok: true,
+      runtimeProfile: "full-gated",
+      coreMarkerCount: 7,
+      releaseDigest: safeProof.release.releaseDigest,
+      capabilityBomSha256: safeProof.release.capabilityBomSha256,
+    },
+  );
+  assert.throws(() =>
+    verifyAliceRuntimeBoundary({
+      ...proof,
+      coreComposition: [...proof.coreComposition, "unreviewed:core"],
+    }),
+  );
 });
 
 test("rejects every unexpected plugin, action, worker, service, or release identity", () => {

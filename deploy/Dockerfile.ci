@@ -133,9 +133,8 @@ RUN set -x; \
     cp eliza/plugins/plugin-form/package.json node_modules/@elizaos/plugin-form/; \
     cp -a eliza/plugins/plugin-form/dist node_modules/@elizaos/plugin-form/dist; \
     ls node_modules/@elizaos/plugin-form/dist/index.js 2>/dev/null && echo "@elizaos/plugin-form dist OK" || echo "WARN: form dist missing"; \
-    # @elizaos/plugin-commands: Alice's compiled entry imports the official
-    # catalog directly, so retain the exact pinned build instead of the guarded
-    # optional fallback used for distributions where the package is absent.
+    # @elizaos/plugin-commands: Alice's compiled entry imports the real package
+    # from the exact reviewed Eliza pin. Never substitute a stub or npm bytes.
     rm -rf node_modules/@elizaos/plugin-commands; \
     mkdir -p node_modules/@elizaos/plugin-commands; \
     cp eliza/plugins/plugin-commands/package.json node_modules/@elizaos/plugin-commands/; \
@@ -437,299 +436,16 @@ RUN if [ -n "${VERSION_CLEAN}" ]; then \
   "; \
   fi
 
-# Stub heavy native ML deps that plugin-local-embedding imports at boot.
-# onnxruntime-node is a large native binary (~100MB) not needed in cloud.
-# Create no-op stubs so the import succeeds without crashing the agent.
-RUN node - <<'__STUBS__'
-const fs = require('fs');
-// ESM stub: exports a Proxy default + common named exports so both
-// `import pkg` and `import { AutoTokenizer }` resolve without crashing.
-const esmStub = `
-const handler = { get: () => new Proxy(() => {}, { get: () => new Proxy(() => {}, { apply: () => Promise.resolve({}), get: () => () => {} }) }) };
-const stub = new Proxy({}, handler);
-export default stub;
-export const AutoTokenizer = stub;
-export const PreTrainedTokenizer = stub;
-export const env = stub;
-`;
-const nativeActivityTrackerStub = `
-export function isSupportedPlatform() { return false; }
-export function startActivityCollector() { throw new Error('[activity-tracker] Native collector only runs on Darwin.'); }
-export const __internal = { parseEventLine: () => null };
-export default { isSupportedPlatform, startActivityCollector, __internal };
-`;
-// CJS stub for packages that don't need named ESM exports
-const cjsNoop = 'const stub = new Proxy({}, { get: () => new Proxy(()=>{},{get:()=>new Proxy(()=>{},{apply:()=>Promise.resolve({}),get:()=>()=>{}})}) }); module.exports = stub; module.exports.default = stub;';
-const pkgs = [
-  ['@huggingface/transformers', esmStub, true],
-  ['@huggingface/tokenizers', esmStub, true],
-  ['@elizaos/native-activity-tracker', nativeActivityTrackerStub, true],
-  ['onnxruntime-node', cjsNoop, false],
-  ['onnxruntime-web', cjsNoop, false],
-];
-for (const [name, code, esm] of pkgs) {
-  const dir = 'node_modules/' + name;
-  if (!fs.existsSync(dir + '/package.json')) {
-    const scope = name.startsWith('@') ? name.split('/')[0] : null;
-    if (scope) fs.mkdirSync('node_modules/' + scope, {recursive:true});
-    fs.mkdirSync(dir, {recursive:true});
-    const pkg = {name, version:'0.0.0-cloud-stub'};
-    if (esm) {
-      pkg.type = 'module';
-      pkg.main = 'index.mjs';
-      fs.writeFileSync(dir + '/index.mjs', code);
-    } else {
-      pkg.main = 'index.js';
-      fs.writeFileSync(dir + '/index.js', code);
-    }
-    fs.writeFileSync(dir + '/package.json', JSON.stringify(pkg));
-    console.log('stubbed: ' + name + (esm ? ' (esm)' : ' (cjs)'));
-  } else {
-    console.log('present: ' + name);
-  }
-}
-__STUBS__
-
-# Stub missing @elizaos/app-* packages used by registerAppRoutePlugins.
-# They are dynamically imported for optional route registration; empty plugin stubs
-# prevent the import from throwing.
-RUN node - <<'__APP_STUBS__'
-const fs = require('fs');
-const emptyPlugin = `export const vincentPlugin = { name: 'vincent-stub', routes: [] };
-export const shopifyPlugin = { name: 'shopify-stub', routes: [] };
-export const stewardPlugin = { name: 'steward-stub', routes: [] };
-export const elizamakerPlugin = { name: 'elizamaker-stub', routes: [] };
-export class DropService {}
-export async function handleDropRoutes() { return false; }
-export default { routes: [] };
-`;
-// app-knowledge: stub for routes + service-loader subpaths
-const knowledgeRoutes = `export async function handleKnowledgeRoutes() { return false; }
-export default { handleKnowledgeRoutes };
-`;
-const knowledgeServiceLoader = `export function getKnowledgeService() { return null; }
-export function getKnowledgeTimeoutMs() { return 30000; }
-export default { getKnowledgeService, getKnowledgeTimeoutMs };
-`;
-// Generic plugin-style apps (vincent/shopify/steward)
-const apps = [
-  '@elizaos/app-elizamaker',
-  '@elizaos/app-vincent',
-  '@elizaos/app-shopify',
-  '@elizaos/app-steward',
-];
-for (const name of apps) {
-  const dir = 'node_modules/' + name;
-  if (fs.existsSync(dir + '/package.json')) { console.log('present: ' + name); continue; }
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(dir + '/plugin.mjs', emptyPlugin);
-  // app-steward has extra subpath imports from dist/api/server.js
-  if (name === '@elizaos/app-steward') {
-    const routeStub = `export async function resolveWalletExportRejection() { return null; }\nexport async function handleWalletCoreRoutes() { return false; }\nexport default {};`;
-    const secStub = `export async function hydrateWalletKeysFromNodePlatformSecureStore() { return null; }\nexport async function deleteWalletSecretsFromOsStore() { return null; }\nexport default {};`;
-    const txServiceStub = `export class TxService {}\nexport default {};`;
-    fs.writeFileSync(dir + '/routes-stub.mjs', routeStub);
-    fs.writeFileSync(dir + '/security-stub.mjs', secStub);
-    fs.writeFileSync(dir + '/tx-service-stub.mjs', txServiceStub);
-    fs.writeFileSync(dir + '/package.json', JSON.stringify({
-      name, version: '0.0.0-cloud-stub', type: 'module',
-      exports: {
-        './plugin': './plugin.mjs', '.': './plugin.mjs',
-        './api/tx-service': './tx-service-stub.mjs',
-        './routes/server-wallet-trade': './routes-stub.mjs',
-        './routes/wallet-core-routes': './routes-stub.mjs',
-        './security/hydrate-wallet-keys-from-platform-store': './security-stub.mjs',
-        './security/wallet-os-store-actions': './security-stub.mjs',
-      }
-    }));
-  } else {
-    fs.writeFileSync(dir + '/package.json', JSON.stringify({
-      name, version: '0.0.0-cloud-stub', type: 'module',
-      exports: { './plugin': './plugin.mjs', '.': './plugin.mjs' }
-    }));
-  }
-  console.log('stubbed: ' + name);
-}
-// app-knowledge with subpath exports
-const knDir = 'node_modules/@elizaos/app-knowledge';
-if (!fs.existsSync(knDir + '/package.json')) {
-  fs.mkdirSync(knDir, { recursive: true });
-  fs.writeFileSync(knDir + '/routes.mjs', knowledgeRoutes);
-  fs.writeFileSync(knDir + '/service-loader.mjs', knowledgeServiceLoader);
-  fs.writeFileSync(knDir + '/index.mjs', 'export * from "./routes.mjs"; export * from "./service-loader.mjs";');
-  fs.writeFileSync(knDir + '/package.json', JSON.stringify({
-    name: '@elizaos/app-knowledge', version: '0.0.0-cloud-stub', type: 'module',
-    exports: {
-      '.': './index.mjs',
-      './routes': './routes.mjs',
-      './service-loader': './service-loader.mjs'
-    }
-  }));
-  console.log('stubbed: @elizaos/app-knowledge');
-}
-// app-task-coordinator: 9 subpaths imported across agent/src/api/*
-const tcDir = 'node_modules/@elizaos/app-task-coordinator';
-if (!fs.existsSync(tcDir + '/package.json')) {
-  fs.mkdirSync(tcDir + '/api', { recursive: true });
-  fs.mkdirSync(tcDir + '/evals', { recursive: true });
-  const noopStub = `export default {};`;
-  // All subpaths get a no-op stub exporting the known named exports
-  // Known named exports per the real @elizaos/app-task-coordinator src.
-  // All functions are no-ops; classes/types get empty Proxies.
-  const stubs = {
-    'api/coordinator-types': `export const coordinatorTypes = {};\nexport default {};`,
-    'api/coordinator-wiring': `export async function wireCoordinatorBridgesWhenReady() { return { disposed: true, dispose: () => {} }; }\nexport default {};`,
-    'api/task-agent-message-routing': `export async function routeTaskAgentTextToConnector() { return false; }\nexport async function routeTaskAgentMessage() { return null; }\nexport default {};`,
-    'api/coding-agents-auth-sanitize': `export function sanitizeAuthResult(input) { return { ok: false, redacted: null }; }\nexport default {};`,
-    'api/coding-agents-preflight-normalize': `export function normalizePreflightAuth() { return { status: 'unknown' }; }\nexport default {};`,
-    'evals/coordinator-eval-client': `export function resolveCoordinatorEvalBaseUrl() { return ''; }\nexport class CoordinatorEvalClient {}\nexport default {};`,
-    'evals/coordinator-live-runner': `export async function runCoordinatorLiveScenarios() { return { checks: [] }; }\nexport default {};`,
-    'evals/coordinator-preflight': `export async function runCoordinatorPreflight() { return { checks: [], channels: [] }; }\nexport default {};`,
-    'evals/coordinator-scenarios': `export const coordinatorScenarios = [];\nexport const coordinatorScenarioById = new Map();\nexport function listCoordinatorScenarios() { return []; }\nexport function countCoordinatorScenariosByFamily() { return {}; }\nexport default {};`,
-  };
-  const exportsMap = { '.': './index.mjs' };
-  for (const [subpath, code] of Object.entries(stubs)) {
-    fs.writeFileSync(tcDir + '/' + subpath + '.mjs', code);
-    exportsMap['./' + subpath] = './' + subpath + '.mjs';
-  }
-  fs.writeFileSync(tcDir + '/index.mjs', 'export * from "./api/coordinator-types.mjs";');
-  fs.writeFileSync(tcDir + '/package.json', JSON.stringify({
-    name: '@elizaos/app-task-coordinator', version: '0.0.0-cloud-stub', type: 'module',
-    exports: exportsMap
-  }));
-  console.log('stubbed: @elizaos/app-task-coordinator (9 subpaths)');
-}
-// app-training: imported by agent/src/api/server.ts for training/trajectory routes
-const trDir = 'node_modules/@elizaos/app-training';
-if (!fs.existsSync(trDir + '/package.json')) {
-  fs.mkdirSync(trDir + '/routes', { recursive: true });
-  const trainingStub = `export function handleTrainingRoutes() { return null; }\nexport default {};`;
-  const trajectoryStub = `export function handleTrajectoryRoute() { return null; }\nexport default {};`;
-  fs.writeFileSync(trDir + '/routes/training.mjs', trainingStub);
-  fs.writeFileSync(trDir + '/routes/trajectory.mjs', trajectoryStub);
-  fs.writeFileSync(trDir + '/index.mjs', 'export default {};');
-  fs.writeFileSync(trDir + '/package.json', JSON.stringify({
-    name: '@elizaos/app-training', version: '0.0.0-cloud-stub', type: 'module',
-    exports: {
-      '.': './index.mjs',
-      './routes/training': './routes/training.mjs',
-      './routes/trajectory': './routes/trajectory.mjs',
-    }
-  }));
-  console.log('stubbed: @elizaos/app-training');
-}
-// plugin-telegram: LifeOps imports its account auth helpers even on cloud Linux.
-const tgDir = 'node_modules/@elizaos/plugin-telegram';
-if (!fs.existsSync(tgDir + '/package.json')) {
-  fs.mkdirSync(tgDir, { recursive: true });
-  fs.writeFileSync(tgDir + '/index.mjs', 'export default { name: "telegram-stub", routes: [] };');
-  fs.writeFileSync(tgDir + '/account-auth-service.mjs', `
-export const defaultTelegramAccountDeviceModel = 'Milady Cloud';
-export const defaultTelegramAccountSystemVersion = 'Linux';
-export function loadTelegramAccountSessionString() { return ''; }
-export class TelegramAccountAuthSession {
-  constructor() {}
-  snapshot() { return { state: 'idle', error: null, identity: null }; }
-  async begin() { return this.snapshot(); }
-  async submitCode() { return this.snapshot(); }
-  async submitPassword() { return this.snapshot(); }
-  async cancel() { return undefined; }
-}
-export default { TelegramAccountAuthSession, loadTelegramAccountSessionString, defaultTelegramAccountDeviceModel, defaultTelegramAccountSystemVersion };
-`);
-  fs.writeFileSync(tgDir + '/package.json', JSON.stringify({
-    name: '@elizaos/plugin-telegram', version: '0.0.0-cloud-stub', type: 'module',
-    exports: {
-      '.': './index.mjs',
-      './account-auth-service': './account-auth-service.mjs'
-    }
-  }));
-  console.log('stubbed: @elizaos/plugin-telegram');
-}
-__APP_STUBS__
-
-# Stub workspace-only plugins that are referenced via guarded runtime require().
-# Cloud builds can omit their workspace symlinks entirely, and some published
-# tarballs have incomplete dist/ output, so provide a dual ESM/CJS no-op module.
-RUN node - <<'__PLUGIN_STUBS__'
-const fs = require('fs');
-const plugins = [
-  {
-    name: '@elizaos/plugin-cron',
-    exportName: 'cronPlugin',
-    extraEsm: `export class CronService {}\n`,
-    extraCjs: `module.exports.CronService = class CronService {};\n`,
-  },
-  {
-    name: '@elizaos/plugin-shell',
-    exportName: 'shellPlugin',
-    extraEsm: `export class ShellService {}\n`,
-    extraCjs: `module.exports.ShellService = class ShellService {};\n`,
-  },
-  {
-    name: '@elizaos/plugin-commands',
-    exportName: 'commandsPlugin',
-    extraEsm: `
-const commandStore = new Map();
-export function registerCommand(cmd) {
-  if (!cmd || typeof cmd !== 'object') return;
-  const key = typeof cmd.key === 'string' ? cmd.key : String(commandStore.size);
-  commandStore.set(key, cmd);
-}
-export function initForRuntime() {}
-export function getRegisteredCommands() { return Array.from(commandStore.values()); }
-`,
-    extraCjs: `
-const commandStore = new Map();
-module.exports.registerCommand = function registerCommand(cmd) {
-  if (!cmd || typeof cmd !== 'object') return;
-  const key = typeof cmd.key === 'string' ? cmd.key : String(commandStore.size);
-  commandStore.set(key, cmd);
-};
-module.exports.initForRuntime = function initForRuntime() {};
-module.exports.getRegisteredCommands = function getRegisteredCommands() { return Array.from(commandStore.values()); };
-`,
-  },
-];
-for (const { name, exportName, extraEsm = '', extraCjs = '' } of plugins) {
-  const dir = 'node_modules/' + name;
-  if (fs.existsSync(dir + '/package.json')) {
-    console.log('present: ' + name);
-    continue;
-  }
-  const scope = name.startsWith('@') ? name.split('/')[0] : null;
-  if (scope) fs.mkdirSync('node_modules/' + scope, { recursive: true });
-  fs.mkdirSync(dir, { recursive: true });
-  const shortName = name.split('/').pop().replace(/^plugin-/, '');
-  const stubName = shortName + '-stub';
-  const esm = `const stub = { name: '${stubName}', description: '${stubName} cloud fallback', routes: [], actions: [], providers: [], evaluators: [], services: [] };
-export const ${exportName} = stub;
-export default stub;
-${extraEsm}`;
-  const cjs = `const stub = { name: '${stubName}', description: '${stubName} cloud fallback', routes: [], actions: [], providers: [], evaluators: [], services: [] };
-module.exports = stub;
-module.exports.default = stub;
-module.exports.${exportName} = stub;
-${extraCjs}`;
-  fs.writeFileSync(dir + '/index.mjs', esm);
-  fs.writeFileSync(dir + '/index.cjs', cjs);
-  fs.writeFileSync(dir + '/package.json', JSON.stringify({
-    name,
-    version: '0.0.0-cloud-stub',
-    type: 'module',
-    main: './index.cjs',
-    module: './index.mjs',
-    exports: {
-      '.': {
-        import: './index.mjs',
-        require: './index.cjs',
-        default: './index.mjs'
-      }
-    }
-  }));
-  console.log('stubbed: ' + name);
-}
-__PLUGIN_STUBS__
+# Remove implementations that the checked capability policy delegates or classifies as non-Linux.
+RUN rm -rf \
+  node_modules/@huggingface/transformers \
+  node_modules/@huggingface/tokenizers \
+  node_modules/@elizaos/native-activity-tracker \
+  node_modules/@elizaos/plugin-cron \
+  node_modules/@elizaos/plugin-local-embedding \
+  node_modules/@elizaos/plugin-todo \
+  node_modules/onnxruntime-node \
+  node_modules/onnxruntime-web
 
 # Fix @ai-sdk/provider-utils version conflict:
 # @ai-sdk/google@3.x needs provider-utils@4.x (exports convertToBase64),
@@ -804,7 +520,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=python-runtime /usr/local /usr/local
 WORKDIR /app
 COPY --from=pruner /app /app
-RUN REVISION="${REVISION}" ELIZA_REVISION="${ELIZA_REVISION}" \
+RUN node deploy/modal/alice_capability_bom.mjs \
+  && ALICE_CAPABILITY_BOM_SHA256="$(node --input-type=module -e 'import fs from "node:fs"; import crypto from "node:crypto"; const bytes = fs.readFileSync("alice-capability-bom.json"); process.stdout.write(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`);')" \
+  REVISION="${REVISION}" ELIZA_REVISION="${ELIZA_REVISION}" \
   node deploy/modal/write_alice_runtime_build_manifest.mjs
 
 # NOTE: Do NOT install esbuild globally. tsx bundles its own esbuild.

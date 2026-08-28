@@ -23,10 +23,12 @@ test("binds exact source, Eliza, and every admitted runtime path", () => {
       root,
       sourceCommit: "4".repeat(40),
       elizaCommit: "6".repeat(40),
+      capabilityBomSha256: `sha256:${"7".repeat(64)}`,
     });
     assert.equal(manifest.schemaVersion, "alice.runtime-build-manifest.v1");
     assert.equal(manifest.sourceCommit, "4".repeat(40));
     assert.equal(manifest.elizaCommit, "6".repeat(40));
+    assert.equal(manifest.capabilityBomSha256, `sha256:${"7".repeat(64)}`);
     assert.deepEqual(
       manifest.runtimePaths.map((entry) => entry.path),
       REQUIRED_RUNTIME_PATHS.map((entry) => `/app/${entry}`),
@@ -44,10 +46,11 @@ test("binds exact source, Eliza, and every admitted runtime path", () => {
 
 test("fails closed on missing paths, non-commits, or path escape", () => {
   assert.throws(() =>
-    buildAliceRuntimeBuildManifest({
-      root: "/tmp",
-      sourceCommit: "not-a-commit",
-      elizaCommit: "6".repeat(40),
+      buildAliceRuntimeBuildManifest({
+        root: "/tmp",
+        sourceCommit: "not-a-commit",
+        elizaCommit: "6".repeat(40),
+        capabilityBomSha256: `sha256:${"7".repeat(64)}`,
     }),
   );
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "alice-build-manifest-"));
@@ -76,6 +79,7 @@ test("verifies the manifest bytes and every runtime path against signed expectat
       root,
       sourceCommit: "4".repeat(40),
       elizaCommit: "6".repeat(40),
+      capabilityBomSha256: `sha256:${"7".repeat(64)}`,
     });
     const manifestBytes = `${JSON.stringify(manifest, null, 2)}\n`;
     fs.writeFileSync(path.join(root, "alice-runtime-build-manifest.json"), manifestBytes);
@@ -85,6 +89,7 @@ test("verifies the manifest bytes and every runtime path against signed expectat
         root,
         expectedSourceCommit: "4".repeat(40),
         expectedElizaCommit: "6".repeat(40),
+        expectedCapabilityBomSha256: `sha256:${"7".repeat(64)}`,
         expectedManifestSha256: manifestSha256,
       }),
       {
@@ -92,6 +97,7 @@ test("verifies the manifest bytes and every runtime path against signed expectat
         manifestSha256,
         sourceCommit: "4".repeat(40),
         elizaCommit: "6".repeat(40),
+        capabilityBomSha256: `sha256:${"7".repeat(64)}`,
         runtimePathCount: REQUIRED_RUNTIME_PATHS.length,
       },
     );
@@ -101,6 +107,7 @@ test("verifies the manifest bytes and every runtime path against signed expectat
         root,
         expectedSourceCommit: "4".repeat(40),
         expectedElizaCommit: "6".repeat(40),
+        expectedCapabilityBomSha256: `sha256:${"7".repeat(64)}`,
         expectedManifestSha256: manifestSha256,
       }),
     );

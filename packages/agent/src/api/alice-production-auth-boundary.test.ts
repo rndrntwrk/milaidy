@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("Alice production direct-origin authentication boundary", () => {
-  it("exempts process liveness only and keeps detailed health, readiness, and proof authenticated", () => {
+  it("exempts process liveness only and keeps detailed health, readiness, proof, and capabilities authenticated", () => {
     const source = readFileSync(new URL("./server.ts", import.meta.url), "utf8");
     const livenessDefinition = source.slice(
       source.indexOf("const isHealthEndpoint"),
@@ -12,6 +12,9 @@ describe("Alice production direct-origin authentication boundary", () => {
     expect(livenessDefinition).not.toContain('pathname === "/api/health"');
     expect(livenessDefinition).not.toContain('pathname === "/health/ready"');
     expect(livenessDefinition).not.toContain('pathname === "/health"');
+    expect(livenessDefinition).not.toContain(
+      'pathname === "/api/alice-production/capabilities"',
+    );
   });
 
   it("uses only process liveness for the image healthcheck and smoke probe", () => {
@@ -32,6 +35,7 @@ describe("Alice production direct-origin authentication boundary", () => {
       "/health",
       "/health/ready",
       "/api/alice-production/proof",
+      "/api/alice-production/capabilities",
     ]) {
       expect(workflow).toContain(JSON.stringify(pathname));
     }

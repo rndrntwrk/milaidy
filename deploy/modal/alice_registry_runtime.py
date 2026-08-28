@@ -7,7 +7,6 @@ the exact coherent production-core bundle recorded by the deployment manifest.
 
 import os
 import re
-from pathlib import Path
 
 import modal
 
@@ -32,12 +31,6 @@ if not re.fullmatch(
     raise RuntimeError(
         "ALICE_MODAL_RELEASE_SECRET_NAME must bind one exact release run"
     )
-
-DENIED_PLUGINS = tuple(
-    line.strip()
-    for line in (Path(__file__).with_name("alice-denied-plugins.txt")).read_text().splitlines()
-    if line.strip() and not line.lstrip().startswith("#")
-)
 
 def _require_registry_image(environ):
     """Read one protected, pre-verified immutable image without source self-reference."""
@@ -103,8 +96,8 @@ RUNTIME_ENV = {
     "OPENAI_EMBEDDING_MODEL": "@cf/baai/bge-m3",
     "OPENAI_EMBEDDING_DIMENSIONS": "1024",
     "ALICE_RUNTIME_AUTHORITY_MODE": "proposer-only",
+    "ALICE_RUNTIME_PROFILE": "full-gated",
     "MILADY_TRUST_CLOUDFLARE_ACCESS": "1",
-    "ELIZA_SKIP_PLUGINS": ",".join(DENIED_PLUGINS),
     "STREAM555_CONTROL_PLUGIN_ENABLED": "false",
     "STREAM_PLUGIN_ENABLED": "false",
     "STREAM555_REQUIRE_APPROVALS": "true",
@@ -146,6 +139,7 @@ RELEASE_METADATA_KEYS = {
     "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
     "ALICE_RUNTIME_IMAGE",
     "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
+    "ALICE_CAPABILITY_BOM_SHA256",
     "ALICE_DEPLOYMENT_MANIFEST_SHA256",
     "ALICE_ELIZA_COMMIT",
     "ALICE_MODAL_REVISION",
@@ -219,6 +213,18 @@ def _verify_runtime_binding(environ, subprocess_module):
     if not RELEASE_SECRET_NAME.startswith(expected_secret_prefix):
         raise RuntimeError("Alice release secret binding mismatch")
     try:
+        subprocess_module.run(
+            [
+                "node",
+                "/app/deploy/modal/verify_alice_capability_bom.mjs",
+            ],
+            cwd="/app",
+            env=environ,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         subprocess_module.run(
             [
                 "node",

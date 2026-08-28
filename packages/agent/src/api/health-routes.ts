@@ -6,7 +6,12 @@ import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { resolveCloudApiKey } from "./wallet-rpc.js";
 import { readAliceReleaseMetadata } from "./alice-release-metadata.js";
 import { buildAliceProductionProof } from "./alice-production-proof.js";
-import { isAliceProductionRuntime } from "./alice-production-guard.js";
+import {
+  isAliceFullRuntimeProfile,
+  isAliceProductionRuntime,
+} from "./alice-production-guard.js";
+import { buildAliceProductionCapabilities } from "./alice-production-capabilities.js";
+import { readAliceCapabilityBom } from "../runtime/alice-capability-inventory.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -515,6 +520,37 @@ export async function handleHealthRoutes(
       json(res, buildAliceProductionProof(state.runtime, process.env));
     } catch {
       error(res, "Alice production proof unavailable", 503);
+    }
+    return true;
+  }
+
+  // ── GET /api/alice-production/capabilities ────────────────────────────
+  if (
+    method === "GET" &&
+    pathname === "/api/alice-production/capabilities"
+  ) {
+    if (
+      !isAliceProductionRuntime(process.env) ||
+      !isAliceFullRuntimeProfile(process.env) ||
+      state.agentState !== "running" ||
+      !state.runtime
+    ) {
+      error(res, "Alice production capabilities unavailable", 503);
+      return true;
+    }
+    try {
+      const { bom, bomSha256 } = readAliceCapabilityBom(process.env);
+      json(
+        res,
+        buildAliceProductionCapabilities({
+          bom,
+          bomSha256,
+          environment: process.env,
+          runtimePlugins: state.runtime.plugins,
+        }),
+      );
+    } catch {
+      error(res, "Alice production capabilities unavailable", 503);
     }
     return true;
   }

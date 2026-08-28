@@ -16,9 +16,6 @@ class AliceModalContractTest(unittest.TestCase):
         cls.launcher = (ROOT / "deploy/modal/alice_registry_runtime.py").read_text()
         cls.runbook = (ROOT / "deploy/modal/README.md").read_text()
         cls.receipt = json.loads((ROOT / "deploy/modal/release.json").read_text())
-        cls.denied_plugins = (
-            ROOT / "deploy/modal/alice-denied-plugins.txt"
-        ).read_text().splitlines()
 
     def test_historical_rollback_release_is_preserved_and_launcher_is_digest_pinned(self):
         release = self.receipt["release"]
@@ -139,22 +136,9 @@ class AliceModalContractTest(unittest.TestCase):
             '"WORKSPACE_ENABLED": "false"',
         ):
             self.assertIn(disabled_setting, self.launcher)
-        self.assertIn('"ELIZA_SKIP_PLUGINS":', self.launcher)
-        for forbidden_plugin in (
-            "@rndrntwrk/plugin-555stream",
-            "@elizaos/plugin-evm",
-            "@elizaos/plugin-solana",
-            "@elizaos/plugin-agent-orchestrator",
-            "@elizaos/plugin-agent-skills",
-            "@elizaos/plugin-commands",
-            "@elizaos/plugin-shell",
-            "@elizaos/plugin-code",
-            "@elizaos/plugin-twitter",
-            "@elizaos/plugin-discord",
-            "@elizaos/plugin-telegram",
-            "@elizaos/plugin-x402",
-        ):
-            self.assertIn(forbidden_plugin, self.denied_plugins)
+        self.assertIn('"ALICE_RUNTIME_PROFILE": "full-gated"', self.launcher)
+        self.assertNotIn("ELIZA_SKIP_PLUGINS", self.launcher)
+        self.assertNotIn("alice-denied-plugins", self.launcher)
         self.assertNotIn('"ELIZA_ALLOWED_HOSTS": "*"', self.launcher)
         self.assertIn(
             '"MILADY_ALLOWED_ORIGINS": "https://alice.rndrntwrk.com"',
@@ -182,6 +166,7 @@ class AliceModalContractTest(unittest.TestCase):
             '"ALICE_DEPLOYMENT_CONTROLLER_COMMIT"',
             '"ALICE_RUNTIME_IMAGE"',
             '"ALICE_RUNTIME_BUILD_MANIFEST_SHA256"',
+            '"ALICE_CAPABILITY_BOM_SHA256"',
             '"ALICE_DEPLOYMENT_MANIFEST_SHA256"',
             '"ALICE_ELIZA_COMMIT"',
             '"ALICE_MODAL_REVISION"',

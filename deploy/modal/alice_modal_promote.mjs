@@ -70,6 +70,7 @@ function validRelease(value) {
       "deploymentControllerCommit",
       "runtimeImage",
       "runtimeBuildManifestSha256",
+      "capabilityBomSha256",
       "deploymentManifestSha256",
       "elizaCommit",
       "modalRevision",
@@ -83,6 +84,7 @@ function validRelease(value) {
       value.runtimeImage ?? "",
     ) &&
     DIGEST.test(value.runtimeBuildManifestSha256 ?? "") &&
+    DIGEST.test(value.capabilityBomSha256 ?? "") &&
     DIGEST.test(value.deploymentManifestSha256 ?? "") &&
     COMMIT.test(value.elizaCommit ?? "") &&
     Number.isSafeInteger(value.modalRevision) &&
@@ -193,6 +195,7 @@ function exactReleaseFromEvidence(evidence, manifest, deploymentManifestSha256) 
     deploymentControllerCommit: evidence?.deploymentControllerCommit,
     runtimeImage: evidence?.runtimeImage,
     runtimeBuildManifestSha256: evidence?.runtimeBuildManifestSha256,
+    capabilityBomSha256: evidence?.capabilityBomSha256,
     deploymentManifestSha256: evidence?.deploymentManifestSha256,
     elizaCommit: evidence?.elizaCommit,
     modalRevision: evidence?.modalRevision,
@@ -206,6 +209,7 @@ function exactReleaseFromEvidence(evidence, manifest, deploymentManifestSha256) 
     release.runtimeImage !== manifest.source.runtimeImage ||
     release.runtimeBuildManifestSha256 !==
       manifest.source.runtimeBuildManifestSha256 ||
+    release.capabilityBomSha256 !== manifest.source.capabilityBomSha256 ||
     release.elizaCommit !== manifest.source.elizaCommit ||
     release.policyHash !== manifest.release.policyHash ||
     release.modalRevision !== manifest.release.modalRevision ||

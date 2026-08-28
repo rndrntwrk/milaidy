@@ -52,6 +52,7 @@ function fixture() {
       elizaCommit: "5".repeat(40),
       runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"6".repeat(64)}`,
       runtimeBuildManifestSha256: `sha256:${"7".repeat(64)}`,
+      capabilityBomSha256: `sha256:${"a".repeat(64)}`,
     },
     cloudflare: {
       accessConfigSha256: `sha256:${"8".repeat(64)}`,
@@ -66,6 +67,7 @@ function fixture() {
     elizaCommit: manifest.source.elizaCommit,
     runtimeImage: manifest.source.runtimeImage,
     runtimeBuildManifestSha256: manifest.source.runtimeBuildManifestSha256,
+    capabilityBomSha256: manifest.source.capabilityBomSha256,
     deploymentManifestSha256,
     ...binding,
     releaseEpoch: 1,
@@ -80,6 +82,7 @@ function fixture() {
       deploymentControllerCommit: manifest.source.deploymentControllerCommit,
       runtimeImage: manifest.source.runtimeImage,
       runtimeBuildManifestSha256: manifest.source.runtimeBuildManifestSha256,
+      capabilityBomSha256: manifest.source.capabilityBomSha256,
       elizaCommit: manifest.source.elizaCommit,
       modalRevision: 50,
       deploymentManifestSha256,

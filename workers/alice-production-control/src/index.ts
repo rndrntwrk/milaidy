@@ -642,6 +642,7 @@ async function handleOwnerApi(
             runtimeImage: admitted.config.envelope.release.runtimeImage,
             runtimeBuildManifestSha256:
               admitted.config.envelope.release.runtimeBuildManifestSha256,
+            capabilityBomSha256: admitted.config.capabilityBomSha256,
             elizaCommit: admitted.config.envelope.release.elizaCommit,
             programDigest: admitted.config.binding.programDigest,
             releaseDigest: admitted.config.binding.releaseDigest,

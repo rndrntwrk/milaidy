@@ -94,6 +94,7 @@ const manifest = await buildAliceDeploymentManifest({
   elizaCommit: "3".repeat(40),
   runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"4".repeat(64)}`,
   runtimeBuildManifestSha256: `sha256:${"5".repeat(64)}`,
+  capabilityBomSha256: `sha256:${"a".repeat(64)}`,
   modalRevision: 49,
   policyHash: `sha256:${"6".repeat(64)}`,
   rollbackBoundary: "modal:alice-runtime:v49",

@@ -69,6 +69,7 @@ function releaseExpected(admission: Record<string, any>) {
     deploymentControllerCommit: admission.deploymentControllerCommit,
     runtimeImage: admission.runtimeImage,
     runtimeBuildManifestSha256: admission.runtimeBuildManifestSha256,
+    capabilityBomSha256: admission.capabilityBomSha256,
     elizaCommit: admission.elizaCommit,
     modalRevision: admission.modalRevision,
     deploymentManifestSha256: admission.deploymentManifestSha256,
@@ -77,6 +78,7 @@ function releaseExpected(admission: Record<string, any>) {
     admission.schemaVersion !== "alice.program-admission.v1" ||
     ![binding.programDigest, binding.releaseDigest, binding.policyHash,
       release.runtimeBuildManifestSha256,
+      release.capabilityBomSha256,
       release.deploymentManifestSha256].every((value) => DIGEST.test(value)) ||
     ![release.sourceCommit, release.deploymentControllerCommit,
       release.elizaCommit].every((value) => COMMIT.test(value)) ||

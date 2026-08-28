@@ -7,6 +7,7 @@ export const REQUIRED_RUNTIME_PATHS = Object.freeze([
   "milady.mjs",
   "deploy/modal/write_alice_runtime_build_manifest.mjs",
   "deploy/modal/verify_alice_runtime_build_manifest.mjs",
+  "alice-capability-bom.json",
   "eliza/packages/app-core/scripts/docker-entrypoint.sh",
   "node_modules/@miladyai/agent/src/api/alice-production-chat.ts",
   "node_modules/@miladyai/agent/src/api/alice-production-proof.ts",
@@ -19,8 +20,17 @@ function fileDigest(absolutePath) {
   return `sha256:${crypto.createHash("sha256").update(fs.readFileSync(absolutePath)).digest("hex")}`;
 }
 
-export function buildAliceRuntimeBuildManifest({ root, sourceCommit, elizaCommit }) {
-  if (!COMMIT.test(sourceCommit) || !COMMIT.test(elizaCommit)) {
+export function buildAliceRuntimeBuildManifest({
+  root,
+  sourceCommit,
+  elizaCommit,
+  capabilityBomSha256,
+}) {
+  if (
+    !COMMIT.test(sourceCommit) ||
+    !COMMIT.test(elizaCommit) ||
+    !/^sha256:[a-f0-9]{64}$/.test(capabilityBomSha256)
+  ) {
     throw new Error("ALICE_RUNTIME_BUILD_IDENTITY_INVALID");
   }
   const canonicalRoot = fs.realpathSync(root);
@@ -41,6 +51,7 @@ export function buildAliceRuntimeBuildManifest({ root, sourceCommit, elizaCommit
     schemaVersion: "alice.runtime-build-manifest.v1",
     sourceCommit,
     elizaCommit,
+    capabilityBomSha256,
     runtimePaths,
   };
 }
@@ -55,6 +66,7 @@ if (invokedPath === import.meta.url) {
       root,
       sourceCommit: process.env.REVISION || "",
       elizaCommit: process.env.ELIZA_REVISION || "",
+      capabilityBomSha256: process.env.ALICE_CAPABILITY_BOM_SHA256 || "",
     });
     const outputPath = path.join(root, "alice-runtime-build-manifest.json");
     fs.writeFileSync(outputPath, `${JSON.stringify(manifest, null, 2)}\n`, {

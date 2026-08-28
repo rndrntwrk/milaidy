@@ -16,6 +16,7 @@ const release = {
   deploymentControllerCommit: "5".repeat(40),
   runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"6".repeat(64)}`,
   runtimeBuildManifestSha256: `sha256:${"7".repeat(64)}`,
+  capabilityBomSha256: `sha256:${"a".repeat(64)}`,
   deploymentManifestSha256: `sha256:${"8".repeat(64)}`,
   elizaCommit: "9".repeat(40),
   modalRevision: 49,
