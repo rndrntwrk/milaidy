@@ -54,16 +54,22 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
       access: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       control: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       aiGateway: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      statePlane: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      connectorPlane: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
     },
     rollbackVersions: {
       access: "11111111-1111-4111-8111-111111111111",
       control: "22222222-2222-4222-8222-222222222222",
       aiGateway: "33333333-3333-4333-8333-333333333333",
+      statePlane: "44444444-4444-4444-8444-444444444444",
+      connectorPlane: "55555555-5555-4555-8555-555555555555",
     },
   });
   assert.deepEqual(commands.uploads.map((command) => command.role), [
     "control",
+    "statePlane",
     "aiGateway",
+    "connectorPlane",
     "access",
   ]);
   for (const command of commands.uploads) {
@@ -75,7 +81,9 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   }
   assert.deepEqual(commands.promotions.map((command) => command.role), [
     "control",
+    "statePlane",
     "aiGateway",
+    "connectorPlane",
     "access",
   ]);
   assert.deepEqual(
@@ -85,7 +93,9 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     ]),
     [
       ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "100"],
+      ["dddddddd-dddd-4ddd-8ddd-dddddddddddd", "100"],
       ["cccccccc-cccc-4ccc-8ccc-cccccccccccc", "100"],
+      ["eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "100"],
       ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "100"],
     ],
   );
@@ -96,8 +106,10 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   );
   assert.deepEqual(commands.rollbacks.map((command) => command.role), [
     "access",
+    "connectorPlane",
     "aiGateway",
     "control",
+    "statePlane",
   ]);
   for (const command of commands.rollbacks) {
     assert.deepEqual(command.argv.slice(0, 2), ["versions", "deploy"]);
@@ -109,6 +121,14 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     assert.equal(command.argv.includes("rollback"), false);
   }
   assert.equal("triggers" in commands, false);
+  const serializedCommands = JSON.stringify(commands);
+  for (const destructiveD1Operation of [
+    "d1 delete",
+    "d1 migrations apply",
+    "d1 execute",
+  ]) {
+    assert.equal(serializedCommands.includes(destructiveD1Operation), false);
+  }
 });
 
 test("rejects the exact failed single-outfile serialization and admits only exact module bytes", () => {
@@ -201,11 +221,19 @@ test(
     assert.equal(path.isAbsolute(wranglerBin), true);
     assert.match(sourceCommit ?? "", /^[a-f0-9]{40}$/);
 
-    const roles = ["access", "control", "aiGateway"];
+    const roles = [
+      "access",
+      "control",
+      "aiGateway",
+      "statePlane",
+      "connectorPlane",
+    ];
     const workers = {
       access: "alice-access-gateway",
       control: "alice-production-control",
       aiGateway: "alice-ai-gateway",
+      statePlane: "alice-state-plane",
+      connectorPlane: "alice-connector-plane",
     };
     const runnerA = fs.mkdtempSync(
       path.join(os.tmpdir(), "alice-contract-runner-a."),
@@ -766,6 +794,8 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
           access: { enabled: false, previewsEnabled: false },
           control: { enabled: false, previewsEnabled: false },
           aiGateway: { enabled: true, previewsEnabled: false },
+          statePlane: { enabled: false, previewsEnabled: false },
+          connectorPlane: { enabled: false, previewsEnabled: false },
         },
       },
       workflowVersions,
@@ -784,6 +814,16 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
           "alice-ai-gateway",
           "33333333-3333-4333-8333-333333333331",
           "33333333-3333-4333-8333-333333333333",
+        ),
+        statePlane: worker(
+          "alice-state-plane",
+          "44444444-4444-4444-8444-444444444441",
+          "44444444-4444-4444-8444-444444444444",
+        ),
+        connectorPlane: worker(
+          "alice-connector-plane",
+          "55555555-5555-4555-8555-555555555551",
+          "55555555-5555-4555-8555-555555555555",
         ),
       },
     },
@@ -816,6 +856,8 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     access: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     control: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     aiGateway: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    statePlane: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    connectorPlane: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
   };
   const prepared = verifyAliceCloudflarePreparedState({
     anchor,
@@ -1022,7 +1064,13 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
   };
   const workflowVersions = [previousWorkflowVersion, candidateWorkflowVersion];
   const trafficState = { routes: [], customDomains: [], subdomains: {} };
-  const workerState = { access: {}, control: {}, aiGateway: {} };
+  const workerState = {
+    access: {},
+    control: {},
+    aiGateway: {},
+    statePlane: {},
+    connectorPlane: {},
+  };
   const mutations = [];
   let workflowRead = 0;
   const evidence = await executeAliceCloudflareRollbacks({
@@ -1031,8 +1079,10 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
     commands: {
       rollbacks: [
         { role: "access", argv: ["access"] },
+        { role: "connectorPlane", argv: ["connector"] },
         { role: "aiGateway", argv: ["ai"] },
         { role: "control", argv: ["control"] },
+        { role: "statePlane", argv: ["state"] },
       ],
     },
     commandEnv: {},
@@ -1077,8 +1127,10 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
   assert.deepEqual(mutations, [
     "queue-paused",
     "worker:access",
+    "worker:connectorPlane",
     "worker:aiGateway",
     "worker:control",
+    "worker:statePlane",
     "traffic-restored",
     "workers-verified",
     "continuity-unpaused",

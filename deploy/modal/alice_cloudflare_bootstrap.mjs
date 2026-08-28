@@ -40,6 +40,9 @@ const CONTROL_DIRECTORY = "alice-production-control";
 const PROTECTED_BRANCH = "release/alice-production-core-2026-08-22";
 const REPOSITORY = "rndrntwrk/milaidy";
 const BOOTSTRAP_RESOURCE_KEYS = [
+  "accessWorker",
+  "statePlaneWorker",
+  "connectorPlaneWorker",
   "controlWorker",
   "evidenceBucket",
   "evidenceDeadLetterQueue",
@@ -47,6 +50,51 @@ const BOOTSTRAP_RESOURCE_KEYS = [
   "evidenceQueueConsumer",
   "evidenceSentinel",
 ];
+const ROLES = [
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+];
+const BOOTSTRAP_IDENTITY_ROLES = [
+  "control",
+  "statePlane",
+  "connectorPlane",
+  "access",
+];
+const ROLE_WORKERS = Object.freeze({
+  access: ALICE_CLOUDFLARE_TARGET.accessWorker,
+  control: ALICE_CLOUDFLARE_TARGET.controlWorker,
+  aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
+  statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
+  connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
+});
+const EXPECTED_DURABLE_OBJECT_BINDINGS = Object.freeze({
+  access: Object.freeze([
+    Object.freeze({
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+    }),
+  ]),
+  control: Object.freeze([
+    Object.freeze({ className: "AliceAuthority", name: "ALICE_AUTHORITY" }),
+    Object.freeze({ className: "AliceSession", name: "ALICE_SESSIONS" }),
+  ]),
+  aiGateway: Object.freeze([]),
+  statePlane: Object.freeze([
+    Object.freeze({
+      className: "AliceStateCoordination",
+      name: "ALICE_COORDINATION",
+    }),
+  ]),
+  connectorPlane: Object.freeze([
+    Object.freeze({
+      className: "AliceConnectorOutboundCoordination",
+      name: "ALICE_CONNECTOR_OUTBOUND",
+    }),
+  ]),
+});
 const TRANSIENT_ROUTE_READ_ATTEMPTS = 3;
 const TRANSIENT_ROUTE_READ_DELAY_MS = 100;
 
@@ -694,11 +742,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
   );
 
   const workers = {};
-  for (const workerName of [
-    ALICE_CLOUDFLARE_TARGET.accessWorker,
-    ALICE_CLOUDFLARE_TARGET.controlWorker,
-    ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
-  ]) {
+  for (const workerName of ROLES.map((role) => ROLE_WORKERS[role])) {
     const workerPath =
       `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${workerName}`;
     const state = {
@@ -866,6 +910,56 @@ export function buildAliceBootstrapControlConfig({
   return config;
 }
 
+export function buildAliceBootstrapPrivateWorkerConfig({
+  role,
+  sourceConfig,
+  deploymentMainPath,
+}) {
+  if (
+    !["access", "statePlane", "connectorPlane"].includes(role) ||
+    !sourceConfig ||
+    sourceConfig.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
+    sourceConfig.name !== ROLE_WORKERS[role] ||
+    !absolute(deploymentMainPath)
+  ) {
+    invalid();
+  }
+  const expectedBindings = EXPECTED_DURABLE_OBJECT_BINDINGS[role];
+  const observedBindings = sourceConfig.durable_objects?.bindings;
+  if (
+    !Array.isArray(observedBindings) ||
+    canonicalAliceJson(
+      observedBindings
+        .map((binding) => ({
+          className: binding?.class_name,
+          name: binding?.name,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ) !== canonicalAliceJson(expectedBindings)
+  ) {
+    invalid();
+  }
+  const config = JSON.parse(JSON.stringify(sourceConfig));
+  config.main = deploymentMainPath;
+  config.routes = [];
+  config.workers_dev = false;
+  config.preview_urls = false;
+  config.secrets = { required: [] };
+  for (const key of [
+    "ai",
+    "assets",
+    "containers",
+    "d1_databases",
+    "queues",
+    "r2_buckets",
+    "services",
+    "vectorize",
+  ]) {
+    delete config[key];
+  }
+  return config;
+}
+
 export function buildAliceBootstrapCreationCommand({
   controlMain,
   configPath,
@@ -925,10 +1019,12 @@ export function buildAliceBootstrapPromotionCommand({ versionId, configPath }) {
   ];
 }
 
-export function extractAliceBootstrapNamespaceIds(version) {
+function extractAliceBootstrapRoleNamespaceIds(role, version) {
+  if (!ROLES.includes(role)) invalid();
+  if (role === "aiGateway" && version === null) return [];
   const bindings = version?.resources?.bindings;
   if (!Array.isArray(bindings)) invalid();
-  const control = bindings
+  const namespaces = bindings
     .filter((binding) => binding?.type === "durable_object_namespace")
     .map((binding) => ({
       className: binding.class_name,
@@ -936,18 +1032,41 @@ export function extractAliceBootstrapNamespaceIds(version) {
       namespaceId: binding.namespace_id,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
+  const identity = namespaces.map(({ className, name }) => ({ className, name }));
   if (
-    control.length !== 2 ||
-    control[0]?.name !== "ALICE_AUTHORITY" ||
-    control[0]?.className !== "AliceAuthority" ||
-    control[1]?.name !== "ALICE_SESSIONS" ||
-    control[1]?.className !== "AliceSession" ||
-    control.some((binding) => !NAMESPACE_ID.test(binding.namespaceId ?? "")) ||
-    new Set(control.map((binding) => binding.namespaceId)).size !== 2
+    canonicalAliceJson(identity) !==
+      canonicalAliceJson(EXPECTED_DURABLE_OBJECT_BINDINGS[role]) ||
+    namespaces.some(
+      (binding) => !NAMESPACE_ID.test(binding.namespaceId ?? ""),
+    ) ||
+    new Set(namespaces.map((binding) => binding.namespaceId)).size !==
+      namespaces.length
   ) {
     invalid();
   }
-  return { access: [], aiGateway: [], control };
+  return namespaces;
+}
+
+export function extractAliceBootstrapNamespaceIds(versions) {
+  if (
+    !versions ||
+    typeof versions !== "object" ||
+    Array.isArray(versions) ||
+    canonicalAliceJson(Object.keys(versions).sort()) !==
+      canonicalAliceJson([...ROLES].sort())
+  ) {
+    invalid();
+  }
+  const result = {};
+  const namespaceIds = new Set();
+  for (const role of ROLES) {
+    result[role] = extractAliceBootstrapRoleNamespaceIds(role, versions[role]);
+    for (const binding of result[role]) {
+      if (namespaceIds.has(binding.namespaceId)) invalid();
+      namespaceIds.add(binding.namespaceId);
+    }
+  }
+  return result;
 }
 
 async function ensureConsumer({ fetchImpl, apiToken, queue }) {
@@ -1021,14 +1140,15 @@ export function verifyAliceBootstrapQueueConsumer(consumer) {
   return consumer;
 }
 
-export async function fetchAliceActiveControlVersionId({ fetchImpl, apiToken }) {
+async function fetchAliceActiveWorkerVersionId({ fetchImpl, apiToken, role }) {
+  if (!BOOTSTRAP_IDENTITY_ROLES.includes(role)) invalid();
   const deployments = await api({
     fetchImpl,
     apiToken,
     method: "GET",
-    operation: "GET_CONTROL_DEPLOYMENTS",
+    operation: `GET_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_DEPLOYMENTS`,
     pathname:
-      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/deployments`,
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ROLE_WORKERS[role]}/deployments`,
   });
   if (deployments === null) return null;
   if (!Array.isArray(deployments?.deployments)) invalid();
@@ -1043,6 +1163,10 @@ export async function fetchAliceActiveControlVersionId({ fetchImpl, apiToken }) 
     invalid();
   }
   return active.versions[0].version_id;
+}
+
+export async function fetchAliceActiveControlVersionId(options) {
+  return fetchAliceActiveWorkerVersionId({ ...options, role: "control" });
 }
 
 export function verifyAliceBootstrapReentryBoundary({
@@ -1063,7 +1187,13 @@ export function verifyAliceBootstrapReentryBoundary({
   }
   return {
     versionId: expectedVersionId,
-    namespaceIds: extractAliceBootstrapNamespaceIds(version),
+    namespaceIds: {
+      access: [],
+      control: extractAliceBootstrapRoleNamespaceIds("control", version),
+      aiGateway: [],
+      statePlane: [],
+      connectorPlane: [],
+    },
   };
 }
 
@@ -1129,6 +1259,40 @@ async function main() {
     flag: "wx",
     mode: 0o444,
   });
+  const bootstrapIdentityConfigs = {
+    control: {
+      configPath: controlConfigPath,
+      deploymentMainPath: controlMain,
+    },
+  };
+  for (const role of ["statePlane", "connectorPlane", "access"]) {
+    const workerName = ROLE_WORKERS[role];
+    const deploymentMainPath = path.join(artifactRoot, workerName, "index.js");
+    const configPathForRole = path.join(
+      outputDir,
+      `${role}.bootstrap.wrangler.json`,
+    );
+    const roleSourceConfig = JSON.parse(
+      fs.readFileSync(
+        path.join(sourceRoot, "workers", workerName, "wrangler.jsonc"),
+        "utf8",
+      ),
+    );
+    const roleBootstrapConfig = buildAliceBootstrapPrivateWorkerConfig({
+      role,
+      sourceConfig: roleSourceConfig,
+      deploymentMainPath,
+    });
+    fs.writeFileSync(
+      configPathForRole,
+      `${JSON.stringify(roleBootstrapConfig)}\n`,
+      { encoding: "utf8", flag: "wx", mode: 0o444 },
+    );
+    bootstrapIdentityConfigs[role] = {
+      configPath: configPathForRole,
+      deploymentMainPath,
+    };
+  }
   const deployCredentialIdSha256 = await verifyAliceBootstrapDeployToken({
     fetchImpl: globalThis.fetch,
     apiToken,
@@ -1147,15 +1311,24 @@ async function main() {
     invalid("ALICE_CLOUDFLARE_BOOTSTRAP_PREFLIGHT_DRIFT");
   }
   writeReadonly(bootstrapPreflightPath, preflightSecond);
-  const priorVersionId = await fetchAliceActiveControlVersionId({
-    fetchImpl: globalThis.fetch,
-    apiToken,
-  });
+  const priorVersionIds = {};
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    priorVersionIds[role] = await fetchAliceActiveWorkerVersionId({
+      fetchImpl: globalThis.fetch,
+      apiToken,
+      role,
+    });
+  }
+  const priorVersionId = priorVersionIds.control;
   verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
-  let versionId = priorVersionId;
+  const versionIds = { ...priorVersionIds };
+  let versionId = versionIds.control;
   let mode = "release";
   let queue;
   const createdByRun = {
+    accessWorker: false,
+    statePlaneWorker: false,
+    connectorPlaneWorker: false,
     controlWorker: false,
     evidenceQueue: false,
     evidenceDeadLetterQueue: false,
@@ -1199,17 +1372,42 @@ async function main() {
       },
     );
     versionId = parseAliceWranglerDeployVersionId(output);
+    versionIds.control = versionId;
     createdByRun.controlWorker = true;
   }
-  const version = await api({
-    fetchImpl: globalThis.fetch,
-    apiToken,
-    method: "GET",
-    operation: "GET_CONTROL_VERSION",
-    pathname:
-      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ALICE_CLOUDFLARE_TARGET.controlWorker}/versions/${versionId}`,
-  });
-  const namespaceIds = extractAliceBootstrapNamespaceIds(version);
+  for (const role of ["statePlane", "connectorPlane", "access"]) {
+    if (versionIds[role] !== null) continue;
+    const identity = bootstrapIdentityConfigs[role];
+    const output = run(
+      wranglerBin,
+      buildAliceBootstrapCreationCommand({
+        controlMain: identity.deploymentMainPath,
+        configPath: identity.configPath,
+        sourceCommit,
+        releaseRunId,
+      }),
+      {
+        cwd: sourceRoot,
+        env: aliceCloudflareCommandEnv(),
+        errorCode: `ALICE_CLOUDFLARE_${role.toUpperCase()}_BOOTSTRAP_UPLOAD_FAILED`,
+      },
+    );
+    versionIds[role] = parseAliceWranglerDeployVersionId(output);
+    createdByRun[`${role}Worker`] = true;
+  }
+  const versions = { aiGateway: null };
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    versions[role] = await api({
+      fetchImpl: globalThis.fetch,
+      apiToken,
+      method: "GET",
+      operation: `GET_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
+      pathname:
+        `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ROLE_WORKERS[role]}/versions/${versionIds[role]}`,
+    });
+  }
+  const namespaceIds = extractAliceBootstrapNamespaceIds(versions);
+  const version = versions.control;
   const versionTag = version?.annotations?.["workers/tag"];
   if (priorVersionId !== null) {
     mode =
@@ -1219,21 +1417,26 @@ async function main() {
         ? "bootstrap"
         : "release";
   }
-  if (priorVersionId === null) {
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    if (priorVersionIds[role] !== null) continue;
     run(
       wranglerBin,
-      buildAliceBootstrapPromotionCommand({ versionId, configPath: controlConfigPath }),
+      buildAliceBootstrapPromotionCommand({
+        versionId: versionIds[role],
+        configPath: bootstrapIdentityConfigs[role].configPath,
+      }),
       {
         cwd: sourceRoot,
         env: aliceCloudflareCommandEnv(),
-        errorCode: "ALICE_CLOUDFLARE_BOOTSTRAP_PROMOTION_FAILED",
+        errorCode: `ALICE_CLOUDFLARE_${role.toUpperCase()}_BOOTSTRAP_PROMOTION_FAILED`,
       },
     );
-    const deployedVersionId = await fetchAliceActiveControlVersionId({
+    const deployedVersionId = await fetchAliceActiveWorkerVersionId({
       fetchImpl: globalThis.fetch,
       apiToken,
+      role,
     });
-    if (deployedVersionId !== versionId) invalid();
+    if (deployedVersionId !== versionIds[role]) invalid();
   }
   if (mode === "bootstrap") {
     if (queue === undefined) {
@@ -1283,6 +1486,12 @@ async function main() {
     mode,
     activeVersionId: versionId,
     preexisting: {
+      accessWorker:
+        preflightSecond.workers[ROLE_WORKERS.access]?.present === true,
+      statePlaneWorker:
+        preflightSecond.workers[ROLE_WORKERS.statePlane]?.present === true,
+      connectorPlaneWorker:
+        preflightSecond.workers[ROLE_WORKERS.connectorPlane]?.present === true,
       evidenceQueue: preflightSecond.queues.evidence !== null,
       evidenceDeadLetterQueue: preflightSecond.queues.deadLetter !== null,
       evidenceBucket: preflightSecond.bucket !== null,

@@ -4,11 +4,26 @@ import {
 } from "../../workers/alice-effective-config.js";
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
-const ROLES = ["access", "control", "aiGateway"];
+const ROLES = [
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+];
+const RESTORE_ORDER = [
+  "access",
+  "connectorPlane",
+  "aiGateway",
+  "control",
+  "statePlane",
+];
 const WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
   control: ALICE_CLOUDFLARE_TARGET.controlWorker,
   aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
+  statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
+  connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
 });
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -180,6 +195,7 @@ export function normalizeAliceCloudflareScriptSettings(value) {
 
 const BINDING_KEYS = Object.freeze({
   ai: { required: ["name", "type"], optional: ["project"] },
+  d1: { required: ["database_id", "name", "type"], optional: ["id"] },
   durable_object_namespace: {
     required: ["name", "type"],
     optional: [
@@ -206,6 +222,7 @@ const BINDING_KEYS = Object.freeze({
     optional: ["entrypoint", "environment"],
   },
   version_metadata: { required: ["name", "type"], optional: [] },
+  vectorize: { required: ["index_name", "name", "type"], optional: [] },
   workflow: {
     required: ["name", "type", "workflow_name"],
     optional: ["class_name", "script_name"],
@@ -693,7 +710,7 @@ export async function restoreAliceCloudflareWorkerRollbackState({
   verifyAliceCloudflareWorkerRollbackStateSnapshot(expected);
   if (!validInputs({ fetchImpl, apiToken, accountId, baseUrl })) invalid();
   const client = { fetchImpl, apiToken, accountId, baseUrl };
-  for (const role of ROLES) {
+  for (const role of RESTORE_ORDER) {
     const root = `/accounts/${accountId}/workers/scripts/${WORKERS[role]}`;
     const patched = normalizeAliceCloudflareScriptSettings(
       await apiRequest(

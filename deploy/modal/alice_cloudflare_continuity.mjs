@@ -10,7 +10,38 @@ const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-
 const NAMESPACE_ID = /^[a-f0-9]{32}$/;
 const ETAG = /^[A-Za-z0-9_-]{16,128}$/;
 const SENTINEL_KEY = "continuity/alice-production-core-v1";
-const ROLES = ["access", "aiGateway", "control"];
+const ROLES = [
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+];
+const EXPECTED_DURABLE_OBJECT_BINDINGS = Object.freeze({
+  access: Object.freeze([
+    Object.freeze({
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+    }),
+  ]),
+  control: Object.freeze([
+    Object.freeze({ className: "AliceAuthority", name: "ALICE_AUTHORITY" }),
+    Object.freeze({ className: "AliceSession", name: "ALICE_SESSIONS" }),
+  ]),
+  aiGateway: Object.freeze([]),
+  statePlane: Object.freeze([
+    Object.freeze({
+      className: "AliceStateCoordination",
+      name: "ALICE_COORDINATION",
+    }),
+  ]),
+  connectorPlane: Object.freeze([
+    Object.freeze({
+      className: "AliceConnectorOutboundCoordination",
+      name: "ALICE_CONNECTOR_OUTBOUND",
+    }),
+  ]),
+});
 
 export function aliceCloudflareContinuitySentinelBytes() {
   return `${canonicalAliceJson({
@@ -80,20 +111,19 @@ function normalizeNamespaceIds(value) {
       }),
     );
   }
-  if (
-    result.access.length !== 0 ||
-    result.aiGateway.length !== 0 ||
-    canonicalAliceJson(
-      result.control.map(({ className, name }) => ({ className, name })),
-    ) !==
+  const namespaceIds = new Set();
+  for (const role of ROLES) {
+    if (
       canonicalAliceJson(
-        sorted([
-          { className: "AliceAuthority", name: "ALICE_AUTHORITY" },
-          { className: "AliceSession", name: "ALICE_SESSIONS" },
-        ]),
-      )
-  ) {
-    invalid();
+        result[role].map(({ className, name }) => ({ className, name })),
+      ) !== canonicalAliceJson(sorted(EXPECTED_DURABLE_OBJECT_BINDINGS[role]))
+    ) {
+      invalid();
+    }
+    for (const binding of result[role]) {
+      if (namespaceIds.has(binding.namespaceId)) invalid();
+      namespaceIds.add(binding.namespaceId);
+    }
   }
   return result;
 }

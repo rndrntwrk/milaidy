@@ -13,6 +13,9 @@ const bootstrapState = {
   mode: "bootstrap",
   activeVersionId: "11111111-1111-4111-8111-111111111111",
   preexisting: {
+    accessWorker: false,
+    statePlaneWorker: false,
+    connectorPlaneWorker: false,
     evidenceQueue: false,
     evidenceDeadLetterQueue: false,
     evidenceBucket: false,
@@ -20,6 +23,9 @@ const bootstrapState = {
     evidenceQueueConsumer: false,
   },
   createdByRun: {
+    accessWorker: true,
+    statePlaneWorker: true,
+    connectorPlaneWorker: true,
     controlWorker: true,
     evidenceQueue: true,
     evidenceDeadLetterQueue: true,
