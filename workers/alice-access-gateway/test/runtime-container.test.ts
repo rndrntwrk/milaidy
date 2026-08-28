@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { readAliceReleaseMetadata } from "../../../packages/agent/src/api/alice-release-metadata";
 import * as runtimeContainer from "../src/alice-runtime-host";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -27,6 +28,7 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     ALICE_DEPLOYMENT_CONTROLLER_COMMIT: "5".repeat(40),
     ALICE_RUNTIME_IMAGE: `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"6".repeat(64)}`,
     ALICE_RUNTIME_BUILD_MANIFEST_SHA256: digest("7"),
+    ALICE_CAPABILITY_BOM_SHA256: digest("a"),
     ALICE_DEPLOYMENT_MANIFEST_SHA256: digest("8"),
     ALICE_ELIZA_COMMIT: "9".repeat(40),
     ALICE_RUNTIME_REVISION: "49",
@@ -48,8 +50,12 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     ELIZA_VAULT_PASSPHRASE: "runtime-vault-passphrase-with-at-least-32-bytes",
     ALICE_PROGRAM_DIGEST: digest("1"),
     ALICE_RELEASE_DIGEST: digest("2"),
+    ALICE_CAPABILITY_BOM_SHA256: digest("a"),
     ALICE_RUNTIME_REVISION: "49",
   });
+  expect(readAliceReleaseMetadata(result)?.capabilityBomSha256).toBe(
+    digest("a"),
+  );
   expect("ALICE_MODAL_REVISION" in result).toBe(false);
   expect("ALICE_STATE_PLANE_SERVICE_TOKEN" in result).toBe(false);
   expect("ELIZA_SKIP_PLUGINS" in result).toBe(false);

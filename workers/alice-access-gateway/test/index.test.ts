@@ -302,6 +302,7 @@ async function environment(options: EnvironmentOptions = {}) {
     ALICE_RUNTIME_IMAGE: release.runtimeImage,
     ALICE_RUNTIME_BUILD_MANIFEST_SHA256:
       release.runtimeBuildManifestSha256,
+    ALICE_CAPABILITY_BOM_SHA256: release.capabilityBomSha256,
     ALICE_ELIZA_COMMIT: release.elizaCommit,
     ALICE_RUNTIME_REVISION: String(release.runtimeRevision),
     ALICE_AI_GATEWAY: {
@@ -758,6 +759,27 @@ describe("Alice Access gateway", () => {
     expect(await response.json()).toMatchObject({
       ok: false,
       code: "ACCESS_GATEWAY_FAIL_CLOSED",
+    });
+    expect(calls).toBe(0);
+  });
+
+  test("rejects a valid but unadmitted Container capability BOM before ingress", async () => {
+    const env = await environment();
+    env.ALICE_CAPABILITY_BOM_SHA256 = `sha256:${"0".repeat(64)}`;
+    let calls = 0;
+    const response = await invokeGateway(
+      new Request("https://alice.rndrntwrk.com/api/health"),
+      env,
+      async () => {
+        calls += 1;
+        return Response.json({ unreachable: true });
+      },
+      now,
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "ACCESS_GATEWAY_CONFIG_INVALID",
     });
     expect(calls).toBe(0);
   });

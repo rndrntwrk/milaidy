@@ -28,6 +28,7 @@ export type AliceAccessGatewayEnv = {
   ALICE_DEPLOYMENT_CONTROLLER_COMMIT: string;
   ALICE_RUNTIME_IMAGE: string;
   ALICE_RUNTIME_BUILD_MANIFEST_SHA256: string;
+  ALICE_CAPABILITY_BOM_SHA256: string;
   ALICE_ELIZA_COMMIT: string;
   ALICE_RUNTIME_REVISION: string;
   ALICE_CONTROL: Fetcher;
@@ -215,6 +216,12 @@ async function loadConfig(env: AliceAccessGatewayEnv) {
       runtimeImage: env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
     }),
   });
+  if (
+    env.ALICE_CAPABILITY_BOM_SHA256 !==
+    (manifest.source as Record<string, unknown>).capabilityBomSha256
+  ) {
+    throw new Error("ACCESS_GATEWAY_CONFIG_INVALID");
+  }
   return { manifest };
 }
 

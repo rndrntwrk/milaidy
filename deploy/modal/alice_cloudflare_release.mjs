@@ -1163,6 +1163,7 @@ function secretFiles(configs, secretOverrides = {}) {
     "ALICE_RUNTIME_RELEASE_TOKEN_SHA256",
     ...(containerMode
       ? [
+          "ALICE_CAPABILITY_BOM_SHA256",
           "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
           "ALICE_ELIZA_COMMIT",
           "ALICE_POLICY_HASH",
@@ -1730,6 +1731,8 @@ async function main() {
         admission.credential.saltedSha256,
       ...(containerMode
         ? {
+            ALICE_CAPABILITY_BOM_SHA256:
+              admission.evidence.capabilityBomSha256,
             ALICE_DEPLOYMENT_CONTROLLER_COMMIT:
               admission.evidence.deploymentControllerCommit,
             ALICE_ELIZA_COMMIT: admission.evidence.elizaCommit,
