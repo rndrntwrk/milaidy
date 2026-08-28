@@ -6,6 +6,9 @@ import {
   type UUID,
 } from "@elizaos/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  ALICE_FULL_GATED_SAFE_ACTION_NAMES,
+} from "../../runtime/alice-high-risk-action-boundary";
 import { generateChatResponse } from "../chat-routes";
 
 function createRuntimeForChatRouteTests(options?: {
@@ -166,9 +169,28 @@ describe("generateChatResponse fallback recovery", () => {
       "PROMOTE_RELEASE",
       "RESTART_AGENT",
       "LAUNCH_APP",
+      "APPROVE_MILADY_WALLET_REQUEST",
+      "MANAGE_MILADY_BROWSER_WORKSPACE",
     ].map((name) => ({ name, handler: vi.fn(async () => true) }));
-    const safeHandler = vi.fn(async () => true);
-    const lateCredentialHandler = vi.fn(async (..._args: unknown[]) => true);
+    const safeActionNames = [
+      "REPLY",
+      "IGNORE",
+      "STOP",
+      "NONE",
+      "CHECK_BALANCE",
+      "READ_ENTITY",
+      "SEARCH_ENTITY",
+      "READ_CHANNEL",
+      "SEARCH_CONVERSATIONS",
+      "WEB_SEARCH",
+      "PLAY_EMOTE",
+    ];
+    expect(ALICE_FULL_GATED_SAFE_ACTION_NAMES).toEqual(safeActionNames);
+    const safeHandlers = safeActionNames.map((name) => ({
+      name,
+      handler: vi.fn(async () => true),
+    }));
+    const lateUnknownHandler = vi.fn(async (..._args: unknown[]) => true);
     const runtime = createRuntimeForChatRouteTests({
       actions: [
         ...privilegedHandlers.map(({ name, handler }) => ({
@@ -176,19 +198,19 @@ describe("generateChatResponse fallback recovery", () => {
           validate: async () => true,
           handler,
         })),
-        {
-          name: "CHECK_BALANCE",
+        ...safeHandlers.map(({ name, handler }) => ({
+          name,
           validate: async () => true,
-          handler: safeHandler,
-        },
+          handler,
+        })),
       ],
       handleMessage: async (activeRuntime) => {
         activeRuntime.registerAction({
-          name: "DELETE_CREDENTIAL",
-          description: "Test-only late privileged action",
+          name: "FUTURE_UNREVIEWED_ACTION",
+          description: "Test-only late unreviewed action",
           validate: async () => true,
           handler: async (...args) => {
-            await lateCredentialHandler(...args);
+            await lateUnknownHandler(...args);
             return { success: true };
           },
         });
@@ -211,8 +233,10 @@ describe("generateChatResponse fallback recovery", () => {
     for (const { handler } of privilegedHandlers) {
       expect(handler).not.toHaveBeenCalled();
     }
-    expect(lateCredentialHandler).not.toHaveBeenCalled();
-    expect(safeHandler).toHaveBeenCalledTimes(1);
+    expect(lateUnknownHandler).not.toHaveBeenCalled();
+    for (const { handler } of safeHandlers) {
+      expect(handler).toHaveBeenCalledTimes(1);
+    }
   });
 
   it("does not warn about unexecuted fallback recovery for REPLY-only payloads", async () => {

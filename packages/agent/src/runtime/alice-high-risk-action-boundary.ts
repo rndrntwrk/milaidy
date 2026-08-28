@@ -14,85 +14,36 @@ type GuardableRuntime = Pick<AgentRuntime, "actions" | "logger"> & {
   registerAction?: AgentRuntime["registerAction"];
 };
 
-function actionTokens(name: string): Set<string> {
-  return new Set(
-    name
-      .trim()
-      .toUpperCase()
-      .split(/[^A-Z0-9]+/)
-      .filter(Boolean),
-  );
-}
+/**
+ * Task 1 has no independently verified capability-grant verifier at the
+ * action-handler boundary. Keep execution fail-closed and admit only these
+ * reviewed response, read-only, and presentation actions by exact name.
+ */
+export const ALICE_FULL_GATED_SAFE_ACTION_NAMES = Object.freeze([
+  "REPLY",
+  "IGNORE",
+  "STOP",
+  "NONE",
+  "CHECK_BALANCE",
+  "READ_ENTITY",
+  "SEARCH_ENTITY",
+  "READ_CHANNEL",
+  "SEARCH_CONVERSATIONS",
+  "WEB_SEARCH",
+  "PLAY_EMOTE",
+] as const);
 
-export function isAliceHighRiskActionName(name: string): boolean {
-  const tokens = actionTokens(name);
-  if (
-    [
-      "ADMIN",
-      "CREDENTIAL",
-      "SECRET",
-      "TRANSFER",
-      "TRADE",
-      "SWAP",
-      "WITHDRAW",
-      "BRIDGE",
-      "SIGN",
-      "DEPLOY",
-      "MERGE",
-      "RELEASE",
-      "PROMOTE",
-      "ROLLBACK",
-      "PUBLISH",
-      "POST",
-      "TWEET",
-    ].some((token) => tokens.has(token))
-  ) {
-    return true;
-  }
-  if (
-    tokens.has("SEND") &&
-    ["MESSAGE", "TOKEN", "FUNDS", "COIN", "TWEET"].some((token) =>
-      tokens.has(token),
-    )
-  ) {
-    return true;
-  }
-  if (
-    tokens.has("RISK") &&
-    ["INCREASE", "RAISE", "CHANGE", "SET", "UPDATE", "MODIFY"].some((token) =>
-      tokens.has(token),
-    )
-  ) {
-    return true;
-  }
-  if (
-    (tokens.has("GO") &&
-      ["LIVE", "ONLINE", "OFFLINE"].some((token) => tokens.has(token))) ||
-    (["STREAM", "BROADCAST"].some((token) => tokens.has(token)) &&
-      ["START", "PUBLIC", "PUBLISH", "LIVE"].some((t) => tokens.has(t)))
-  ) {
-    return true;
-  }
-  if (
-    ["SHELL", "TERMINAL", "SANDBOX"].some((token) => tokens.has(token)) ||
-    (tokens.has("SKILL") &&
-      ["COMMAND", "RUN", "EXECUTE"].some((token) => tokens.has(token))) ||
-    (tokens.has("ROLE") &&
-      ["UPDATE", "SET", "ADD", "REMOVE", "DELETE"].some((token) =>
-        tokens.has(token),
-      )) ||
-    (tokens.has("APP") &&
-      ["LAUNCH", "START", "STOP"].some((token) => tokens.has(token))) ||
-    (tokens.has("AGENT") && tokens.has("RESTART"))
-  ) {
-    return true;
-  }
-  return tokens.has("GMAIL") && tokens.has("ACTION");
+const ALICE_FULL_GATED_SAFE_ACTION_SET = new Set<string>(
+  ALICE_FULL_GATED_SAFE_ACTION_NAMES,
+);
+
+export function isAliceFullGatedSafeActionName(name: string): boolean {
+  return ALICE_FULL_GATED_SAFE_ACTION_SET.has(name);
 }
 
 function guardAction(action: Action): Action {
   const marked = action as Action & { [ACTION_GUARDED]?: true };
-  if (marked[ACTION_GUARDED] || !isAliceHighRiskActionName(action.name)) {
+  if (marked[ACTION_GUARDED] || isAliceFullGatedSafeActionName(action.name)) {
     return action;
   }
   action.handler = async (...args: Parameters<Action["handler"]>) => {
