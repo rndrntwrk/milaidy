@@ -619,6 +619,21 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     /\/api\/onboarding\/status/,
     "the Companion-required onboarding status cannot be treated as a forbidden full-gated read",
   );
+  assert.doesNotMatch(
+    deniedReadsBlock,
+    /\/api\/broadcast\/alice-cam\/scene|\/broadcast\/alice-cam/,
+    "reviewed full-gated broadcast reads cannot be treated as forbidden",
+  );
+  assert.match(
+    smokeStep,
+    /const broadcastSceneResponse = await fetch\(`\$\{base\}\/api\/broadcast\/alice-cam\/scene`, \{ headers: authHeaders \}\);[\s\S]*?broadcastSceneResponse\.status !== 200[\s\S]*?broadcastScene\.ok !== true[\s\S]*?broadcastScene\.channel !== "alice-cam"[\s\S]*?broadcastSceneKeys\.length !== 3[\s\S]*?sceneKeys\.length !== 3[\s\S]*?typeof broadcastScene\.scene\.hasCustomBackground !== "boolean"[\s\S]*?typeof broadcastScene\.scene\.hasCustomVrm !== "boolean"[\s\S]*?Number\.isInteger\(broadcastScene\.scene\.selectedVrmIndex\)/,
+    "the exact-image smoke must prove the authenticated safe broadcast-scene shape",
+  );
+  assert.match(
+    smokeStep,
+    /const broadcastShellResponse = await fetch\(`\$\{base\}\/broadcast\/alice-cam`, \{ headers: authHeaders \}\);[\s\S]*?broadcastShellResponse\.status !== 200[\s\S]*?!broadcastContentType\.startsWith\("text\/html"\)[\s\S]*?broadcastHtml\.includes\(process\.env\.MILADY_API_TOKEN\)/,
+    "the exact-image smoke must prove the authenticated broadcast shell without leaking its bearer",
+  );
   for (const forbiddenPath of [
     "/api/plugins/install",
     "/api/wallet/import",
@@ -627,7 +642,6 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     "/api/terminal/run",
     "/api/wallet/keys",
     "/api/secrets",
-    "/api/broadcast/alice-cam/scene",
   ]) {
     assert.ok(workflow.includes(forbiddenPath), `missing live deny probe ${forbiddenPath}`);
   }
@@ -915,7 +929,7 @@ test("cloud builds bind both server and browser bundles to Alice app-core", () =
   );
 });
 
-test("candidate image smoke proves public broadcast is disabled and VRM bytes remain valid", () => {
+test("candidate image smoke keeps direct broadcast auth-gated and VRM bytes valid", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
