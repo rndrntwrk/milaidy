@@ -51,7 +51,7 @@ const envelope: ProgramEnvelope = {
   },
 };
 
-async function signingFixture() {
+async function signingFixture(candidate: ProgramEnvelope = envelope) {
   const keyPair = await crypto.subtle.generateKey(
     {
       name: "RSASSA-PKCS1-v1_5",
@@ -65,7 +65,7 @@ async function signingFixture() {
   const signature = await crypto.subtle.sign(
     "RSASSA-PKCS1-v1_5",
     keyPair.privateKey,
-    new TextEncoder().encode(canonicalJson(envelope)),
+    new TextEncoder().encode(canonicalJson(candidate)),
   );
   return {
     publicJwk: await crypto.subtle.exportKey("jwk", keyPair.publicKey),
@@ -89,6 +89,33 @@ describe("signed Alice ProgramEnvelope", () => {
       programDigest: await digestProgramEnvelope(envelope),
     });
     expect(await digestReleaseIdentity(envelope)).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  test("verifies a native Container v2 release tuple without Modal vocabulary", async () => {
+    const { modalRevision: _legacyRevision, ...commonRelease } = envelope.release;
+    const containerEnvelope: ProgramEnvelope = {
+      ...envelope,
+      schemaVersion: "alice.program-envelope.v2",
+      release: {
+        ...commonRelease,
+        runtimeImage:
+          `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"a".repeat(64)}`,
+        runtimeRevision: 49,
+        rollbackBoundary: "container:alice-runtime:v49",
+      },
+    };
+    const fixture = await signingFixture(containerEnvelope);
+    await expect(
+      verifyProgramEnvelope(
+        containerEnvelope,
+        fixture.signature,
+        fixture.publicJwk,
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      programDigest: await digestProgramEnvelope(containerEnvelope),
+    });
+    expect("modalRevision" in containerEnvelope.release).toBe(false);
   });
 
   test("rejects tampering, malformed signatures, and invalid envelope constraints", async () => {

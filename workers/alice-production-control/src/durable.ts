@@ -116,7 +116,7 @@ function releaseDetails(config: AliceRuntimeConfig) {
       config.envelope.release.runtimeBuildManifestSha256,
     capabilityBomSha256: config.capabilityBomSha256,
     elizaCommit: config.envelope.release.elizaCommit,
-    modalRevision: config.modalRevision,
+    runtimeRevision: config.runtimeRevision,
     deploymentManifestSha256: config.deploymentManifestSha256,
   };
 }
@@ -472,7 +472,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
                 previousReleaseEpoch: before.activeReleaseEpoch,
                 releaseEpoch: candidate.releaseEpoch,
                 rollbackBoundary: candidate.rollbackBoundary,
-                modalRevision: config.modalRevision,
+                runtimeRevision: config.runtimeRevision,
                 rollbackReceiptHash: rollbackAuthorization?.receiptHash ?? null,
               },
             }),

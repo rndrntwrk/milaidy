@@ -1,12 +1,14 @@
 import {
   canonicalJson,
   digestReleaseIdentity,
+  normalizedRuntimeRelease,
   verifyProgramEnvelope,
   type ProgramEnvelope,
 } from "./program";
 import type { ReleaseBinding } from "./policy";
 import {
   buildAliceControlEffectiveConfig,
+  buildAliceContainerControlEffectiveConfig,
   verifyAliceDeploymentManifestBinding,
   verifyAliceEffectiveConfigBinding,
 } from "../../alice-effective-config.js";
@@ -46,7 +48,8 @@ export type AliceRuntimeConfigSource = AliceOwnerAccessConfigSource &
   ALICE_PROGRAM_ENVELOPE_B64: string;
   ALICE_PROGRAM_SIGNATURE_B64: string;
   ALICE_PROGRAM_PUBLIC_JWK_B64: string;
-  ALICE_MODAL_REVISION: string;
+  ALICE_MODAL_REVISION?: string;
+  ALICE_RUNTIME_REVISION?: string;
   ALICE_DEPLOYMENT_MANIFEST_SHA256: string;
   ALICE_DEPLOYMENT_MANIFEST_B64: string;
 };
@@ -70,12 +73,12 @@ export type AliceDeploymentControllerAccessConfig = {
 
 export type AliceRuntimeConfig = AliceOwnerAccessConfig &
   AliceAuthoritySafetyConfig & {
-  envelope: ProgramEnvelope;
-  binding: ReleaseBinding;
-    modalRevision: number;
+    envelope: ProgramEnvelope;
+    binding: ReleaseBinding;
+    runtimeRevision: number;
     deploymentManifestSha256: string;
     capabilityBomSha256: string;
-};
+  };
 
 export type AliceTrustPins = {
   programPublicJwkSha256: string;
@@ -195,19 +198,22 @@ export async function loadRuntimeConfig(
   const authoritySafety = loadAuthoritySafetyConfig(env);
   const deploymentControllerAccess =
     loadDeploymentControllerAccessConfig(env);
-  const modalRevision = Number(env.ALICE_MODAL_REVISION);
+  const envelope = decodeBase64UrlJson<ProgramEnvelope>(env.ALICE_PROGRAM_ENVELOPE_B64);
+  const publicJwk = decodeBase64UrlJson<JsonWebKey>(env.ALICE_PROGRAM_PUBLIC_JWK_B64);
+  if (!envelope) throw new Error("ALICE_RUNTIME_CONFIG_INVALID");
+  const containerMode = envelope.schemaVersion === "alice.program-envelope.v2";
+  const runtimeRevision = Number(
+    containerMode ? env.ALICE_RUNTIME_REVISION : env.ALICE_MODAL_REVISION,
+  );
   if (
-    !Number.isInteger(modalRevision) ||
-    modalRevision < 49 ||
+    !Number.isInteger(runtimeRevision) ||
+    runtimeRevision < 49 ||
     !/^sha256:[a-f0-9]{64}$/.test(env.ALICE_DEPLOYMENT_MANIFEST_SHA256)
   ) {
     throw new Error("ALICE_RUNTIME_CONFIG_INVALID");
   }
 
-  const envelope = decodeBase64UrlJson<ProgramEnvelope>(env.ALICE_PROGRAM_ENVELOPE_B64);
-  const publicJwk = decodeBase64UrlJson<JsonWebKey>(env.ALICE_PROGRAM_PUBLIC_JWK_B64);
   if (
-    !envelope ||
     !publicJwk ||
     publicJwk.kty !== "RSA" ||
     typeof publicJwk.n !== "string" ||
@@ -228,7 +234,7 @@ export async function loadRuntimeConfig(
     throw new Error("ALICE_POLICY_TRUST_PIN_MISMATCH");
   }
   if (
-    modalRevision !== envelope.release.modalRevision ||
+    runtimeRevision !== normalizedRuntimeRelease(envelope).runtimeRevision ||
     env.ALICE_DEPLOYMENT_MANIFEST_SHA256 !== envelope.release.deploymentManifestSha256
   ) {
     throw new Error("ALICE_RUNTIME_CONFIG_INVALID");
@@ -256,9 +262,12 @@ export async function loadRuntimeConfig(
   if (!/^sha256:[a-f0-9]{64}$/.test(String(manifestSource.capabilityBomSha256 ?? ""))) {
     throw new Error("ALICE_RELEASE_MANIFEST_MISMATCH");
   }
-  const programReleaseIdentity = {
+  const containerManifest = manifest.schemaVersion === "alice.deployment-manifest.v2";
+  if (containerManifest !== containerMode) {
+    throw new Error("ALICE_RELEASE_MANIFEST_MISMATCH");
+  }
+  const commonProgramReleaseIdentity = {
     releaseEpoch: envelope.release.releaseEpoch,
-    modalRevision: envelope.release.modalRevision,
     policyHash: envelope.release.policyHash,
     rollbackBoundary: envelope.release.rollbackBoundary,
     sourceCommit: envelope.release.sourceCommit,
@@ -269,9 +278,17 @@ export async function loadRuntimeConfig(
     runtimeBuildManifestSha256:
       envelope.release.runtimeBuildManifestSha256,
   };
+  const programReleaseIdentity = {
+    ...commonProgramReleaseIdentity,
+    ...(containerMode
+      ? { runtimeRevision: envelope.release.runtimeRevision }
+      : { modalRevision: envelope.release.modalRevision }),
+  };
   const manifestReleaseIdentity = {
     releaseEpoch: manifestRelease.releaseEpoch,
-    modalRevision: manifestRelease.modalRevision,
+    ...(containerManifest
+      ? { runtimeRevision: manifestRelease.runtimeRevision }
+      : { modalRevision: manifestRelease.modalRevision }),
     policyHash: manifestRelease.policyHash,
     rollbackBoundary: manifestRelease.rollbackBoundary,
     sourceCommit: manifestSource.sourceCommit,
@@ -289,21 +306,33 @@ export async function loadRuntimeConfig(
     throw new Error("ALICE_RELEASE_MANIFEST_MISMATCH");
   }
 
+  const controlEffectiveConfig = containerMode
+    ? buildAliceContainerControlEffectiveConfig({
+        accessIssuer: ownerAccess.accessIssuer,
+        accessAudience: ownerAccess.accessAudience,
+        ownerEmailSha256: ownerAccess.ownerEmailSha256,
+        modelDailyBudgetUnits: authoritySafety.modelDailyBudgetUnits,
+        runtimeRevision,
+        releaseAccessAudience: deploymentControllerAccess.accessAudience,
+        releaseServiceTokenIdSha256:
+          deploymentControllerAccess.serviceClientIdSha256,
+      })
+    : buildAliceControlEffectiveConfig({
+        accessIssuer: ownerAccess.accessIssuer,
+        accessAudience: ownerAccess.accessAudience,
+        ownerEmailSha256: ownerAccess.ownerEmailSha256,
+        modelDailyBudgetUnits: authoritySafety.modelDailyBudgetUnits,
+        modalRevision: runtimeRevision,
+        releaseAccessAudience: deploymentControllerAccess.accessAudience,
+        releaseServiceTokenIdSha256:
+          deploymentControllerAccess.serviceClientIdSha256,
+      });
+
   await verifyAliceEffectiveConfigBinding({
     encodedManifest: env.ALICE_DEPLOYMENT_MANIFEST_B64,
     expectedManifestSha256: env.ALICE_DEPLOYMENT_MANIFEST_SHA256,
     role: "control",
-    effectiveConfig: buildAliceControlEffectiveConfig({
-      accessIssuer: ownerAccess.accessIssuer,
-      accessAudience: ownerAccess.accessAudience,
-      ownerEmailSha256: ownerAccess.ownerEmailSha256,
-      modelDailyBudgetUnits: authoritySafety.modelDailyBudgetUnits,
-      modalRevision,
-      releaseAccessAudience:
-        deploymentControllerAccess.accessAudience,
-      releaseServiceTokenIdSha256:
-        deploymentControllerAccess.serviceClientIdSha256,
-    }),
+    effectiveConfig: controlEffectiveConfig,
   });
 
   return {
@@ -315,7 +344,7 @@ export async function loadRuntimeConfig(
       releaseDigest: await digestReleaseIdentity(envelope),
       policyHash: envelope.release.policyHash,
     },
-    modalRevision,
+    runtimeRevision,
     deploymentManifestSha256: envelope.release.deploymentManifestSha256,
     capabilityBomSha256: String(manifestSource.capabilityBomSha256),
   };

@@ -216,7 +216,7 @@ describe("Alice runtime configuration", () => {
       policyHash: envelope.release.policyHash,
     });
     expect(config.modelDailyBudgetUnits).toBe(10000);
-    expect(config.modalRevision).toBe(envelope.release.modalRevision);
+    expect(config.runtimeRevision).toBe(envelope.release.modalRevision);
     expect(config.deploymentManifestSha256).toBe(envelope.release.deploymentManifestSha256);
   });
 

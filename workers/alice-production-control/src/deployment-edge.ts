@@ -38,6 +38,9 @@ function canonical(value: unknown): string {
 
 function releaseFromConfig(config: AliceRuntimeConfig) {
   const release = config.envelope.release;
+  const runtimeRevision =
+    config.runtimeRevision ??
+    (config as AliceRuntimeConfig & { modalRevision?: number }).modalRevision;
   return {
     releaseEpoch: release.releaseEpoch,
     sourceCommit: release.sourceCommit,
@@ -46,12 +49,23 @@ function releaseFromConfig(config: AliceRuntimeConfig) {
     runtimeBuildManifestSha256: release.runtimeBuildManifestSha256,
     capabilityBomSha256: config.capabilityBomSha256,
     elizaCommit: release.elizaCommit,
-    modalRevision: config.modalRevision,
+    ...(config.envelope.schemaVersion === "alice.program-envelope.v2"
+      ? { runtimeRevision }
+      : { modalRevision: runtimeRevision }),
     deploymentManifestSha256: config.deploymentManifestSha256,
   };
 }
 
 function validServingCandidate(value: unknown): boolean {
+  const releaseValue =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>).release
+      : undefined;
+  const containerMode = Boolean(
+    releaseValue &&
+      typeof releaseValue === "object" &&
+      "runtimeRevision" in releaseValue,
+  );
   if (
     !exactKeys(value, ["binding", "release", "rollbackBoundary"]) ||
     !exactKeys(value.binding, ["policyHash", "programDigest", "releaseDigest"]) ||
@@ -60,7 +74,7 @@ function validServingCandidate(value: unknown): boolean {
       "deploymentManifestSha256",
       "capabilityBomSha256",
       "elizaCommit",
-      "modalRevision",
+      containerMode ? "runtimeRevision" : "modalRevision",
       "releaseEpoch",
       "runtimeBuildManifestSha256",
       "runtimeImage",
@@ -75,8 +89,10 @@ function validServingCandidate(value: unknown): boolean {
     ) &&
     Number.isSafeInteger(release.releaseEpoch) &&
     Number(release.releaseEpoch) > 0 &&
-    Number.isSafeInteger(release.modalRevision) &&
-    Number(release.modalRevision) >= 49 &&
+    Number.isSafeInteger(
+      containerMode ? release.runtimeRevision : release.modalRevision,
+    ) &&
+    Number(containerMode ? release.runtimeRevision : release.modalRevision) >= 49 &&
     [
       release.sourceCommit,
       release.deploymentControllerCommit,
@@ -88,10 +104,12 @@ function validServingCandidate(value: unknown): boolean {
       release.deploymentManifestSha256,
     ].every((digest) => typeof digest === "string" && DIGEST.test(digest)) &&
     typeof release.runtimeImage === "string" &&
-    /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/.test(
-      release.runtimeImage,
-    ) &&
-    value.rollbackBoundary === `modal:alice-runtime:v${release.modalRevision}`
+    (containerMode
+      ? /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/.test(release.runtimeImage)
+      : /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/.test(release.runtimeImage)) &&
+    value.rollbackBoundary === `${containerMode ? "container" : "modal"}:alice-runtime:v${
+      containerMode ? release.runtimeRevision : release.modalRevision
+    }`
   );
 }
 

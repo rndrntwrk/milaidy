@@ -4,7 +4,8 @@ import { pathToFileURL } from "node:url";
 
 import {
   ALICE_CLOUDFLARE_TARGET,
-  buildAliceAccessEffectiveConfig,
+  buildAliceContainerAccessEffectiveConfig,
+  buildAliceContainerControlEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceControlEffectiveConfig,
   canonicalAliceJson,
@@ -18,7 +19,7 @@ import {
 
 const ROLES = ["access", "control", "aiGateway"];
 const CANONICAL_MAIN = Object.freeze({
-  access: "src/index.ts",
+  access: "src/worker.ts",
   control: "src/index.ts",
   aiGateway: "src/index.mjs",
 });
@@ -28,7 +29,7 @@ const WORKER_DIRECTORIES = Object.freeze({
   aiGateway: "alice-ai-gateway",
 });
 const SOURCE_MAIN = Object.freeze({
-  access: "src/index.ts",
+  access: "src/worker.ts",
   control: "src/index.ts",
   aiGateway: "src/index.mjs",
 });
@@ -116,15 +117,40 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
     identityConfig = { ...config, main: CANONICAL_MAIN[role] };
   }
   if (role === "access") {
+    const common = commonBindings(identityConfig);
     return {
-      schemaVersion: "alice.access-effective-config.v1",
+      schemaVersion: "alice.container-access-effective-config.v1",
       worker: baseWorker(identityConfig),
-      bindings: commonBindings(identityConfig),
+      bindings: {
+        services: common.services,
+        durableObjects: (identityConfig.durable_objects?.bindings ?? []).map(
+          (binding) => ({
+            binding: binding.name,
+            className: binding.class_name,
+          }),
+        ),
+        migrations: (identityConfig.migrations ?? []).map((migration) => ({
+          tag: migration.tag,
+          newSqliteClasses: migration.new_sqlite_classes,
+        })),
+        containers: (identityConfig.containers ?? []).map((container) => ({
+          name: container.name,
+          className: container.class_name,
+          image: container.image,
+          instanceType: container.instance_type,
+          maxInstances: container.max_instances,
+        })),
+        versionMetadata: common.versionMetadata,
+        secretNames: common.secretNames,
+      },
       values: {
         accessIssuer: identityConfig.vars?.ALICE_ACCESS_ISSUER,
         accessAudience: identityConfig.vars?.ALICE_ACCESS_AUDIENCE,
         ownerEmailSha256: identityConfig.vars?.ALICE_OWNER_EMAIL_SHA256,
-        upstreamOrigin: identityConfig.vars?.ALICE_UPSTREAM_ORIGIN,
+        runtimeImage: identityConfig.vars?.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+        runtimeContainerName: identityConfig.containers?.[0]?.name,
+        runtimePort: 2138,
+        runtimeEgress: "deny-by-default",
       },
       observability: observabilityFromWrangler(identityConfig.observability),
     };
@@ -132,7 +158,7 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
   if (role === "control") {
     const common = commonBindings(identityConfig);
     return {
-      schemaVersion: "alice.control-effective-config.v1",
+      schemaVersion: "alice.container-control-effective-config.v1",
       worker: baseWorker(identityConfig),
       bindings: {
         durableObjects: (identityConfig.durable_objects?.bindings ?? []).map((binding) => ({
@@ -176,7 +202,7 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
         modelDailyBudgetUnits: Number(
           identityConfig.vars?.ALICE_MODEL_DAILY_BUDGET_UNITS,
         ),
-        modalRevision: Number(identityConfig.vars?.ALICE_MODAL_REVISION),
+        runtimeRevision: Number(identityConfig.vars?.ALICE_RUNTIME_REVISION),
         releaseAccessAudience:
           identityConfig.vars?.ALICE_RELEASE_ACCESS_AUDIENCE,
         releaseServiceTokenIdSha256:
@@ -303,14 +329,18 @@ export function materializeAliceWranglerConfig(role, sourceConfig, values) {
   }
   config.vars ??= {};
   if (role === "access") {
+    if (!Array.isArray(config.containers) || config.containers.length !== 1) {
+      throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
+    }
     Object.assign(config.vars, {
       ALICE_ACCESS_ISSUER: values.accessIssuer,
       ALICE_ACCESS_AUDIENCE: values.accessAudience,
       ALICE_OWNER_EMAIL_SHA256: values.ownerEmailSha256,
-      ALICE_UPSTREAM_ORIGIN: values.upstreamOrigin,
+      ALICE_CLOUDFLARE_RUNTIME_IMAGE: values.runtimeImage,
       ALICE_DEPLOYMENT_MANIFEST_SHA256: values.deploymentManifestSha256,
       ALICE_DEPLOYMENT_MANIFEST_B64: values.deploymentManifestB64,
     });
+    config.containers[0].image = values.runtimeImage;
   } else if (role === "control") {
     Object.assign(config.vars, {
       ALICE_ACCESS_ISSUER: values.accessIssuer,
@@ -323,7 +353,7 @@ export function materializeAliceWranglerConfig(role, sourceConfig, values) {
       ALICE_PROGRAM_ENVELOPE_B64: values.programEnvelopeB64,
       ALICE_PROGRAM_SIGNATURE_B64: values.programSignatureB64,
       ALICE_PROGRAM_PUBLIC_JWK_B64: values.programPublicJwkB64,
-      ALICE_MODAL_REVISION: String(values.modalRevision),
+      ALICE_RUNTIME_REVISION: String(values.runtimeRevision),
       ALICE_DEPLOYMENT_MANIFEST_SHA256: values.deploymentManifestSha256,
       ALICE_DEPLOYMENT_MANIFEST_B64: values.deploymentManifestB64,
     });
@@ -394,20 +424,20 @@ if (invokedPath === import.meta.url) {
       deploymentManifestB64,
     };
     const expected = {
-      access: buildAliceAccessEffectiveConfig({
+      access: buildAliceContainerAccessEffectiveConfig({
         accessIssuer: commonValues.accessIssuer,
         accessAudience: commonValues.accessAudience,
         ownerEmailSha256: commonValues.ownerEmailSha256,
-        upstreamOrigin: process.env.ALICE_UPSTREAM_ORIGIN,
+        runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
       }),
-      control: buildAliceControlEffectiveConfig({
+      control: buildAliceContainerControlEffectiveConfig({
         accessIssuer: commonValues.accessIssuer,
         accessAudience: commonValues.accessAudience,
         ownerEmailSha256: commonValues.ownerEmailSha256,
         modelDailyBudgetUnits: Number(
           process.env.ALICE_MODEL_DAILY_BUDGET_UNITS,
         ),
-        modalRevision: Number(process.env.ALICE_MODAL_REVISION),
+        runtimeRevision: Number(process.env.ALICE_RUNTIME_REVISION),
         releaseAccessAudience: process.env.ALICE_RELEASE_ACCESS_AUDIENCE,
         releaseServiceTokenIdSha256:
           process.env.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256,
@@ -428,14 +458,17 @@ if (invokedPath === import.meta.url) {
     fs.mkdirSync(outputDir, { recursive: false });
     for (const role of ROLES) {
       const roleValues = role === "access"
-        ? { ...commonValues, upstreamOrigin: process.env.ALICE_UPSTREAM_ORIGIN }
+        ? {
+            ...commonValues,
+            runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+          }
         : role === "control"
           ? {
               ...commonValues,
               modelDailyBudgetUnits: Number(
                 process.env.ALICE_MODEL_DAILY_BUDGET_UNITS,
               ),
-              modalRevision: Number(process.env.ALICE_MODAL_REVISION),
+              runtimeRevision: Number(process.env.ALICE_RUNTIME_REVISION),
               releaseAccessAudience:
                 process.env.ALICE_RELEASE_ACCESS_AUDIENCE,
               releaseServiceTokenIdSha256:

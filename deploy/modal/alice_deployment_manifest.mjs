@@ -7,6 +7,7 @@ import {
   buildAliceAccessEffectiveConfig,
   buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceContainerControlEffectiveConfig,
   buildAliceControlEffectiveConfig,
   canonicalAliceJson,
   digestAliceEffectiveConfig,
@@ -31,8 +32,9 @@ import {
 
 const COMMIT = /^[a-f0-9]{40}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
-const IMAGE = /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/;
-const INPUT_KEYS = [
+const LEGACY_IMAGE = /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/;
+const CONTAINER_IMAGE = /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
+const COMMON_INPUT_KEYS = [
   "accessEffectiveConfig",
   "accessPolicyReadback",
   "aiGatewayEffectiveConfig",
@@ -42,7 +44,6 @@ const INPUT_KEYS = [
   "capabilityBomSha256",
   "deploymentControllerCommit",
   "elizaCommit",
-  "modalRevision",
   "policyHash",
   "releaseEpoch",
   "rollbackBoundary",
@@ -51,6 +52,8 @@ const INPUT_KEYS = [
   "sourceCommit",
   "workerBundleArtifact",
 ];
+const LEGACY_INPUT_KEYS = [...COMMON_INPUT_KEYS, "modalRevision"];
+const CONTAINER_INPUT_KEYS = [...COMMON_INPUT_KEYS, "runtimeRevision"];
 
 function exactKeys(value, expected) {
   return (
@@ -80,12 +83,19 @@ function effectiveConfigsAreCanonical(value) {
             ownerEmailSha256: accessValues?.ownerEmailSha256,
             upstreamOrigin: accessValues?.upstreamOrigin,
           });
-    const expectedControl = buildAliceControlEffectiveConfig({
+    const expectedControl = (
+      value.accessEffectiveConfig?.schemaVersion ===
+      "alice.container-access-effective-config.v1"
+        ? buildAliceContainerControlEffectiveConfig
+        : buildAliceControlEffectiveConfig
+    )({
       accessIssuer: controlValues?.accessIssuer,
       accessAudience: controlValues?.accessAudience,
       ownerEmailSha256: controlValues?.ownerEmailSha256,
       modelDailyBudgetUnits: controlValues?.modelDailyBudgetUnits,
-      modalRevision: controlValues?.modalRevision,
+      ...(controlValues?.runtimeRevision === undefined
+        ? { modalRevision: controlValues?.modalRevision }
+        : { runtimeRevision: controlValues.runtimeRevision }),
       releaseAccessAudience: controlValues?.releaseAccessAudience,
       releaseServiceTokenIdSha256:
         controlValues?.releaseServiceTokenIdSha256,
@@ -105,6 +115,9 @@ function effectiveConfigsAreCanonical(value) {
 }
 
 async function validInputs(value) {
+  const containerMode =
+    value?.accessEffectiveConfig?.schemaVersion ===
+    "alice.container-access-effective-config.v1";
   let providerConfigsValid = false;
   let continuityConfigValid = false;
   let workerBundleArtifactValid = false;
@@ -140,31 +153,39 @@ async function validInputs(value) {
     workerBundleArtifactValid = false;
   }
   return (
-    exactKeys(value, INPUT_KEYS) &&
+    exactKeys(value, containerMode ? CONTAINER_INPUT_KEYS : LEGACY_INPUT_KEYS) &&
     Number.isSafeInteger(value.releaseEpoch) &&
     value.releaseEpoch > 0 &&
     COMMIT.test(value.sourceCommit) &&
     COMMIT.test(value.deploymentControllerCommit) &&
     COMMIT.test(value.elizaCommit) &&
-    IMAGE.test(value.runtimeImage) &&
+    (containerMode ? CONTAINER_IMAGE : LEGACY_IMAGE).test(value.runtimeImage) &&
+    (!containerMode ||
+      value.runtimeImage === value.accessEffectiveConfig.values.runtimeImage) &&
     DIGEST.test(value.runtimeBuildManifestSha256) &&
     DIGEST.test(value.capabilityBomSha256) &&
-    Number.isInteger(value.modalRevision) &&
-    value.modalRevision >= 49 &&
+    Number.isInteger(
+      containerMode ? value.runtimeRevision : value.modalRevision,
+    ) &&
+    (containerMode ? value.runtimeRevision : value.modalRevision) >= 49 &&
     DIGEST.test(value.policyHash) &&
     providerConfigsValid &&
     continuityConfigValid &&
     workerBundleArtifactValid &&
     typeof value.rollbackBoundary === "string" &&
-    value.rollbackBoundary === `modal:alice-runtime:v${value.modalRevision}` &&
+    value.rollbackBoundary ===
+      `${containerMode ? "container" : "modal"}:alice-runtime:v${
+        containerMode ? value.runtimeRevision : value.modalRevision
+      }` &&
     effectiveConfigsAreCanonical(value)
   );
 }
 
 function validManifest(value) {
+  const containerMode = value?.schemaVersion === "alice.deployment-manifest.v2";
   if (
     !exactKeys(value, ["schemaVersion", "release", "source", "cloudflare"]) ||
-    value.schemaVersion !== "alice.deployment-manifest.v1" ||
+    (!containerMode && value.schemaVersion !== "alice.deployment-manifest.v1") ||
     !exactKeys(value.source, [
       "deploymentControllerCommit",
       "capabilityBomSha256",
@@ -173,12 +194,12 @@ function validManifest(value) {
       "runtimeImage",
       "sourceCommit",
     ]) ||
-    !exactKeys(value.release, [
-      "modalRevision",
-      "policyHash",
-      "releaseEpoch",
-      "rollbackBoundary",
-    ]) ||
+    !exactKeys(
+      value.release,
+      containerMode
+        ? ["runtimeRevision", "policyHash", "releaseEpoch", "rollbackBoundary"]
+        : ["modalRevision", "policyHash", "releaseEpoch", "rollbackBoundary"],
+    ) ||
     !exactKeys(value.cloudflare, [
       ...Object.keys(ALICE_CLOUDFLARE_TARGET),
       "accessConfigSha256",
@@ -202,7 +223,9 @@ function validManifest(value) {
     runtimeImage: value.source.runtimeImage,
     runtimeBuildManifestSha256: value.source.runtimeBuildManifestSha256,
     capabilityBomSha256: value.source.capabilityBomSha256,
-    modalRevision: value.release.modalRevision,
+    runtimeRevision: containerMode
+      ? value.release.runtimeRevision
+      : value.release.modalRevision,
     policyHash: value.release.policyHash,
     rollbackBoundary: value.release.rollbackBoundary,
     accessEffectiveConfig: value.__effectiveConfigs?.access,
@@ -215,14 +238,18 @@ function validManifest(value) {
     COMMIT.test(reconstructed.sourceCommit) &&
     COMMIT.test(reconstructed.deploymentControllerCommit) &&
     COMMIT.test(reconstructed.elizaCommit) &&
-    IMAGE.test(reconstructed.runtimeImage) &&
+    (containerMode ? CONTAINER_IMAGE : LEGACY_IMAGE).test(
+      reconstructed.runtimeImage,
+    ) &&
     DIGEST.test(reconstructed.runtimeBuildManifestSha256) &&
     DIGEST.test(reconstructed.capabilityBomSha256) &&
-    Number.isInteger(reconstructed.modalRevision) &&
-    reconstructed.modalRevision >= 49 &&
+    Number.isInteger(reconstructed.runtimeRevision) &&
+    reconstructed.runtimeRevision >= 49 &&
     DIGEST.test(reconstructed.policyHash) &&
     reconstructed.rollbackBoundary ===
-      `modal:alice-runtime:v${reconstructed.modalRevision}` &&
+      `${containerMode ? "container" : "modal"}:alice-runtime:v${
+        reconstructed.runtimeRevision
+      }` &&
     DIGEST.test(value.cloudflare.accessConfigSha256) &&
     DIGEST.test(value.cloudflare.accessPolicyConfigSha256) &&
     DIGEST.test(value.cloudflare.controlConfigSha256) &&
@@ -252,11 +279,18 @@ export async function buildAliceDeploymentManifest(inputs) {
   const continuityConfig = buildAliceCloudflareContinuityConfig(
     inputs.cloudflareContinuityReadback,
   );
+  const containerMode =
+    inputs.accessEffectiveConfig.schemaVersion ===
+    "alice.container-access-effective-config.v1";
   return {
-    schemaVersion: "alice.deployment-manifest.v1",
+    schemaVersion: containerMode
+      ? "alice.deployment-manifest.v2"
+      : "alice.deployment-manifest.v1",
     release: {
       releaseEpoch: inputs.releaseEpoch,
-      modalRevision: inputs.modalRevision,
+      ...(containerMode
+        ? { runtimeRevision: inputs.runtimeRevision }
+        : { modalRevision: inputs.modalRevision }),
       policyHash: inputs.policyHash,
       rollbackBoundary: inputs.rollbackBoundary,
     },
@@ -335,19 +369,19 @@ const invokedPath = process.argv[1]
   : "";
 if (invokedPath === import.meta.url) {
   try {
-    const modalRevision = Number(process.env.ALICE_MODAL_REVISION);
+    const runtimeRevision = Number(process.env.ALICE_RUNTIME_REVISION);
     const accessEffectiveConfig = buildAliceContainerAccessEffectiveConfig({
       accessIssuer: process.env.ALICE_ACCESS_ISSUER,
       accessAudience: process.env.ALICE_ACCESS_AUDIENCE,
       ownerEmailSha256: process.env.ALICE_OWNER_EMAIL_SHA256,
       runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
     });
-    const controlEffectiveConfig = buildAliceControlEffectiveConfig({
+    const controlEffectiveConfig = buildAliceContainerControlEffectiveConfig({
       accessIssuer: process.env.ALICE_ACCESS_ISSUER,
       accessAudience: process.env.ALICE_ACCESS_AUDIENCE,
       ownerEmailSha256: process.env.ALICE_OWNER_EMAIL_SHA256,
       modelDailyBudgetUnits: Number(process.env.ALICE_MODEL_DAILY_BUDGET_UNITS),
-      modalRevision,
+      runtimeRevision,
       releaseAccessAudience: process.env.ALICE_RELEASE_ACCESS_AUDIENCE,
       releaseServiceTokenIdSha256:
         process.env.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256,
@@ -400,11 +434,11 @@ if (invokedPath === import.meta.url) {
       deploymentControllerCommit:
         process.env.ALICE_DEPLOYMENT_CONTROLLER_COMMIT,
       elizaCommit: process.env.ALICE_ELIZA_COMMIT,
-      runtimeImage: process.env.ALICE_RUNTIME_IMAGE,
+      runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
       runtimeBuildManifestSha256:
         process.env.ALICE_RUNTIME_BUILD_MANIFEST_SHA256,
       capabilityBomSha256: process.env.ALICE_CAPABILITY_BOM_SHA256,
-      modalRevision,
+      runtimeRevision,
       policyHash: process.env.ALICE_POLICY_HASH,
       rollbackBoundary: process.env.ALICE_ROLLBACK_BOUNDARY,
       accessPolicyReadback: providerState.accessPolicyReadback,

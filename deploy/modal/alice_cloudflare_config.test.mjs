@@ -7,7 +7,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  buildAliceAccessEffectiveConfig,
+  buildAliceContainerAccessEffectiveConfig,
+  buildAliceContainerControlEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceControlEffectiveConfig,
 } from "../../workers/alice-effective-config.js";
@@ -24,6 +25,8 @@ const repoRoot = path.resolve(
 );
 
 const owner = "A".repeat(43);
+const runtimeContainerImage =
+  `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"9".repeat(64)}`;
 const commonValues = {
   accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
   accessAudience: "alice-access-audience",
@@ -54,18 +57,18 @@ const source = {
   ),
 };
 const expected = {
-  access: buildAliceAccessEffectiveConfig({
+  access: buildAliceContainerAccessEffectiveConfig({
     accessIssuer: commonValues.accessIssuer,
     accessAudience: commonValues.accessAudience,
     ownerEmailSha256: owner,
-    upstreamOrigin: "https://rndrntwrk--alice.modal.run",
+    runtimeImage: runtimeContainerImage,
   }),
-  control: buildAliceControlEffectiveConfig({
+  control: buildAliceContainerControlEffectiveConfig({
     accessIssuer: commonValues.accessIssuer,
     accessAudience: commonValues.accessAudience,
     ownerEmailSha256: owner,
     modelDailyBudgetUnits: 10_000,
-    modalRevision: 49,
+    runtimeRevision: 49,
     releaseAccessAudience: commonValues.releaseAccessAudience,
     releaseServiceTokenIdSha256:
       commonValues.releaseServiceTokenIdSha256,
@@ -75,12 +78,12 @@ const expected = {
 
 function rendered(role) {
   const values = role === "access"
-    ? { ...commonValues, upstreamOrigin: "https://rndrntwrk--alice.modal.run" }
+    ? { ...commonValues, runtimeImage: runtimeContainerImage }
     : role === "control"
       ? {
           ...commonValues,
           modelDailyBudgetUnits: 10_000,
-          modalRevision: 49,
+          runtimeRevision: 49,
           releaseAccessAudience: commonValues.releaseAccessAudience,
           releaseServiceTokenIdSha256:
             commonValues.releaseServiceTokenIdSha256,
@@ -94,12 +97,12 @@ function rendered(role) {
 
 function valuesForRole(role) {
   return role === "access"
-    ? { ...commonValues, upstreamOrigin: "https://rndrntwrk--alice.modal.run" }
+    ? { ...commonValues, runtimeImage: runtimeContainerImage }
     : role === "control"
       ? {
           ...commonValues,
           modelDailyBudgetUnits: 10_000,
-          modalRevision: 49,
+          runtimeRevision: 49,
           releaseAccessAudience: commonValues.releaseAccessAudience,
           releaseServiceTokenIdSha256:
             commonValues.releaseServiceTokenIdSha256,
@@ -121,6 +124,14 @@ test("renders every canonical effective config from its deployable Wrangler file
       expected[role],
     );
   }
+});
+
+test("materializes one immutable Container image into the runtime var and Container binding", () => {
+  const config = rendered("access");
+  assert.equal(config.vars.ALICE_CLOUDFLARE_RUNTIME_IMAGE, runtimeContainerImage);
+  assert.equal(config.containers.length, 1);
+  assert.equal(config.containers[0].image, runtimeContainerImage);
+  assert.equal("ALICE_UPSTREAM_ORIGIN" in config.vars, false);
 });
 
 test("rejects a deployment-time service binding substitution", () => {

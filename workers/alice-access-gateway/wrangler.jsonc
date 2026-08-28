@@ -25,13 +25,29 @@
   "secrets": {
     "required": [
       "ALICE_ACCESS_PROXY_SECRET",
-      "ALICE_ACCESS_CONTROL_SERVICE_TOKEN"
+      "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
+      "ALICE_RUNTIME_API_TOKEN",
+      "ALICE_RUNTIME_RELEASE_TOKEN",
+      "ALICE_RUNTIME_VAULT_PASSPHRASE",
+      "ALICE_PROGRAM_DIGEST",
+      "ALICE_RELEASE_DIGEST",
+      "ALICE_POLICY_HASH",
+      "ALICE_SOURCE_COMMIT",
+      "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
+      "ALICE_RUNTIME_IMAGE",
+      "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
+      "ALICE_ELIZA_COMMIT",
+      "ALICE_RUNTIME_REVISION"
     ]
   },
   "services": [
     {
       "binding": "ALICE_CONTROL",
       "service": "alice-production-control"
+    },
+    {
+      "binding": "ALICE_AI_GATEWAY",
+      "service": "alice-ai-gateway"
     }
   ],
   "durable_objects": {
