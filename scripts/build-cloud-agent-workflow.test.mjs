@@ -564,6 +564,50 @@ test("cloud builds port Alice's operator bridge before compiling the official ag
   );
 });
 
+test("cloud builds Alice's capability descriptors before the production image", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const buildMiladyAgent = workflow.indexOf(
+    "- name: Build @miladyai/agent capability descriptors",
+  );
+  const buildImage = workflow.indexOf("- name: Build and push Docker image");
+
+  assert.ok(buildMiladyAgent >= 0, "the Milady capability build step must exist");
+  assert.ok(
+    buildImage > buildMiladyAgent,
+    "the immutable image must build only after the Milady capability descriptors",
+  );
+
+  const nextStep = workflow.indexOf("\n      - name:", buildMiladyAgent + 1);
+  assert.ok(nextStep > buildMiladyAgent, "the Milady capability build step must be bounded");
+  const buildStep = workflow.slice(buildMiladyAgent, nextStep);
+  assert.match(
+    buildStep,
+    /rm -rf packages\/agent\/dist/,
+    "the descriptor build must not admit stale compiler output",
+  );
+  assert.match(
+    buildStep,
+    /\.\/node_modules\/\.bin\/tsc --noCheck --ignoreDeprecations 6\.0 -p packages\/agent\/tsconfig\.build\.json/,
+  );
+  assert.match(
+    buildStep,
+    /node scripts\/prepare-package-dist\.mjs packages\/agent --compiled-prefix=packages\/agent\/src/,
+  );
+  for (const descriptor of [
+    "packages/agent/dist/packages/agent/src/runtime/alice-capability-inventory.js",
+    "packages/agent/dist/packages/agent/src/runtime/alice-runtime-profile.js",
+  ]) {
+    assert.match(
+      buildStep,
+      new RegExp(`test -f ${descriptor.replaceAll(".", "\\.")}`),
+      `${descriptor} must be mandatory before the image build`,
+    );
+  }
+});
+
 test("cloud builds port and materialize Alice product plugins before runtime compilation", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
