@@ -971,12 +971,51 @@ jobs:
                   console.error(JSON.stringify({ onboardingStatus: onboardingResponse.status, onboarding }));
                   process.exit(5);
                 }
+                const broadcastSceneResponse = await fetch(`${base}/api/broadcast/alice-cam/scene`, { headers: authHeaders });
+                const broadcastScene = await broadcastSceneResponse.json();
+                const broadcastSceneKeys = Object.keys(broadcastScene).sort();
+                const sceneKeys = Object.keys(broadcastScene?.scene ?? {}).sort();
+                if (
+                  broadcastSceneResponse.status !== 200 ||
+                  broadcastScene.ok !== true ||
+                  broadcastScene.channel !== "alice-cam" ||
+                  broadcastSceneKeys.length !== 3 ||
+                  broadcastSceneKeys[0] !== "channel" ||
+                  broadcastSceneKeys[1] !== "ok" ||
+                  broadcastSceneKeys[2] !== "scene" ||
+                  sceneKeys.length !== 3 ||
+                  sceneKeys[0] !== "hasCustomBackground" ||
+                  sceneKeys[1] !== "hasCustomVrm" ||
+                  sceneKeys[2] !== "selectedVrmIndex" ||
+                  typeof broadcastScene.scene.hasCustomBackground !== "boolean" ||
+                  typeof broadcastScene.scene.hasCustomVrm !== "boolean" ||
+                  !(
+                    broadcastScene.scene.selectedVrmIndex === null ||
+                    Number.isInteger(broadcastScene.scene.selectedVrmIndex)
+                  )
+                ) {
+                  console.error(JSON.stringify({ broadcastSceneStatus: broadcastSceneResponse.status, broadcastScene }));
+                  process.exit(5);
+                }
+                const broadcastShellResponse = await fetch(`${base}/broadcast/alice-cam`, { headers: authHeaders });
+                const broadcastContentType = broadcastShellResponse.headers.get("content-type") ?? "";
+                const broadcastHtml = await broadcastShellResponse.text();
+                if (
+                  broadcastShellResponse.status !== 200 ||
+                  !broadcastContentType.startsWith("text/html") ||
+                  broadcastHtml.includes(process.env.MILADY_API_TOKEN)
+                ) {
+                  console.error(JSON.stringify({
+                    broadcastShellStatus: broadcastShellResponse.status,
+                    broadcastContentType,
+                    leakedBearer: broadcastHtml.includes(process.env.MILADY_API_TOKEN),
+                  }));
+                  process.exit(5);
+                }
                 const deniedReads = [
                   "/api/wallet/keys",
                   "/api/secrets",
                   "/api/runtime",
-                  "/api/broadcast/alice-cam/scene",
-                  "/broadcast/alice-cam",
                 ];
                 for (const pathname of deniedReads) {
                   const denied = await fetch(`${base}${pathname}`, { headers: authHeaders });
