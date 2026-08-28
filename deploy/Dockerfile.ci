@@ -478,6 +478,11 @@ if (fs.existsSync(bunDir)) {
 }
 __AISDK_FIX__
 
+# Bun keeps reviewed workspace packages as links back into the source checkout.
+# Convert only exact policy packages whose root lock record names that exact
+# workspace into physical node_modules bytes before the strict capability BOM.
+RUN node deploy/modal/alice_capability_bom.mjs --materialize-policy-workspaces
+
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \

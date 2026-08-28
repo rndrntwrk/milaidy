@@ -73,6 +73,163 @@ function packageRoot(root, packageName) {
   return resolved;
 }
 
+function exactWorkspacePath(lockBytes, packageName) {
+  const escapedName = packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = [
+    ...lockBytes.matchAll(
+      new RegExp(
+        `^    "${escapedName}": \\["${escapedName}@workspace:([^"\\]]+)"\\],$`,
+        "gm",
+      ),
+    ),
+  ];
+  if (matches.length === 0) return null;
+  if (matches.length !== 1) {
+    throw new Error("ALICE_CAPABILITY_WORKSPACE_LOCK_INVALID");
+  }
+  const workspacePath = matches[0][1];
+  if (
+    !workspacePath ||
+    path.isAbsolute(workspacePath) ||
+    workspacePath.includes("\\") ||
+    workspacePath.split("/").some((part) => !part || part === "." || part === "..")
+  ) {
+    throw new Error("ALICE_CAPABILITY_WORKSPACE_LOCK_INVALID");
+  }
+  return workspacePath;
+}
+
+function assertPhysicalPackageSource(packageRootPath) {
+  const visit = (directory) => {
+    for (const name of fs.readdirSync(directory).sort()) {
+      if (name === "node_modules" || name === ".git") continue;
+      const candidate = path.join(directory, name);
+      const stat = fs.lstatSync(candidate);
+      if (stat.isSymbolicLink()) {
+        throw new Error("ALICE_CAPABILITY_PACKAGE_SYMLINK_INVALID");
+      }
+      if (stat.isDirectory()) visit(candidate);
+    }
+  };
+  visit(packageRootPath);
+}
+
+export function materializeAliceCapabilityWorkspacePackages({ root, policy }) {
+  const canonicalRoot = fs.realpathSync(root);
+  const nodeModulesRoot = fs.realpathSync(path.join(canonicalRoot, "node_modules"));
+  if (!within(canonicalRoot, nodeModulesRoot)) {
+    throw new Error("ALICE_CAPABILITY_PACKAGE_PATH_ESCAPE");
+  }
+  validatePolicy(policy);
+  const lockBytes = fs.readFileSync(path.join(canonicalRoot, "bun.lock"), "utf8");
+  const packageNames = [
+    ...new Set(
+      policy.entries
+        .filter((entry) => entry.source.type === "package")
+        .map((entry) => entry.source.package),
+    ),
+  ].sort();
+  const materializedPackages = [];
+  const preservedPackages = [];
+  const missingPackages = [];
+
+  for (const packageName of packageNames) {
+    const installedRoot = path.resolve(
+      nodeModulesRoot,
+      ...packageName.split("/"),
+    );
+    if (!within(nodeModulesRoot, installedRoot)) {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_PATH_ESCAPE");
+    }
+    let installedStat;
+    let resolvedRoot;
+    try {
+      installedStat = fs.lstatSync(installedRoot);
+    } catch {
+      missingPackages.push(packageName);
+      continue;
+    }
+    try {
+      resolvedRoot = fs.realpathSync(installedRoot);
+    } catch {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_MISSING");
+    }
+    if (within(nodeModulesRoot, resolvedRoot)) {
+      preservedPackages.push(packageName);
+      continue;
+    }
+    if (!installedStat.isSymbolicLink() || !within(canonicalRoot, resolvedRoot)) {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_PATH_ESCAPE");
+    }
+
+    const workspacePath = exactWorkspacePath(lockBytes, packageName);
+    if (!workspacePath) {
+      throw new Error("ALICE_CAPABILITY_WORKSPACE_LOCK_INVALID");
+    }
+    const expectedRoot = path.resolve(canonicalRoot, workspacePath);
+    if (!within(canonicalRoot, expectedRoot)) {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_PATH_ESCAPE");
+    }
+    let canonicalExpectedRoot;
+    try {
+      canonicalExpectedRoot = fs.realpathSync(expectedRoot);
+    } catch {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_MISSING");
+    }
+    if (resolvedRoot !== canonicalExpectedRoot) {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_PATH_ESCAPE");
+    }
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(resolvedRoot, "package.json"), "utf8"),
+    );
+    if (packageJson.name !== packageName) {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_NAME_MISMATCH");
+    }
+    assertPhysicalPackageSource(resolvedRoot);
+
+    const temporaryRoot = `${installedRoot}.alice-materializing`;
+    const backupLink = `${installedRoot}.alice-workspace-link`;
+    if (fs.existsSync(temporaryRoot) || fs.existsSync(backupLink)) {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_MATERIALIZATION_INVALID");
+    }
+    try {
+      fs.cpSync(resolvedRoot, temporaryRoot, {
+        recursive: true,
+        errorOnExist: true,
+        force: false,
+        filter(source) {
+          const relative = path.relative(resolvedRoot, source);
+          const first = relative.split(path.sep)[0];
+          return first !== "node_modules" && first !== ".git";
+        },
+      });
+      fs.renameSync(installedRoot, backupLink);
+      fs.renameSync(temporaryRoot, installedRoot);
+      fs.rmSync(backupLink, { force: true });
+    } catch {
+      if (!fs.existsSync(installedRoot) && fs.existsSync(backupLink)) {
+        fs.renameSync(backupLink, installedRoot);
+      }
+      fs.rmSync(temporaryRoot, { recursive: true, force: true });
+      throw new Error("ALICE_CAPABILITY_PACKAGE_MATERIALIZATION_INVALID");
+    }
+    const finalRoot = fs.realpathSync(installedRoot);
+    if (
+      fs.lstatSync(installedRoot).isSymbolicLink() ||
+      !within(nodeModulesRoot, finalRoot)
+    ) {
+      throw new Error("ALICE_CAPABILITY_PACKAGE_MATERIALIZATION_INVALID");
+    }
+    materializedPackages.push(packageName);
+  }
+
+  return {
+    materializedPackages,
+    preservedPackages,
+    missingPackages,
+  };
+}
+
 function selectExportTarget(value) {
   if (typeof value === "string") return value;
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -412,6 +569,14 @@ if (invokedPath === import.meta.url) {
     const root = fs.realpathSync(process.env.ALICE_BUILD_ROOT || "/app");
     const policyPath = path.join(root, "deploy/alice/alice-capability-policy.v1.json");
     const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+    if (process.argv[2] === "--materialize-policy-workspaces") {
+      const result = materializeAliceCapabilityWorkspacePackages({ root, policy });
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      process.exit(0);
+    }
+    if (process.argv.length > 2) {
+      throw new Error("ALICE_CAPABILITY_BOM_INVALID");
+    }
     const bom = await generateAliceCapabilityBom({ root, policy });
     const bytes = canonicalAliceCapabilityBom(bom);
     const outputPath = path.join(root, "alice-capability-bom.json");

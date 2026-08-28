@@ -608,6 +608,74 @@ test("cloud builds Alice's capability descriptors before the production image", 
   }
 });
 
+test("cloud builds and physically materializes every policy-bound workspace package before the BOM", () => {
+  const workflow = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
+    "utf8",
+  );
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  const buildStep = workflow.match(
+    /- name: Build Alice policy workspace packages[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  const blueBubblesBuildStep = workflow.match(
+    /- name: Build @elizaos\/plugin-bluebubbles policy package[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  const expectedBuilds = new Map([
+    ["eliza/plugins/plugin-browser", "dist/index.js"],
+    ["eliza/plugins/plugin-capacitor-bridge", "dist/index.js"],
+    ["eliza/plugins/plugin-coding-tools", "dist/index.js"],
+    ["eliza/plugins/plugin-computeruse", "dist/index.js"],
+    ["eliza/plugins/plugin-discord", "dist/index.js"],
+    ["eliza/plugins/plugin-google-genai", "dist/node/index.node.js"],
+    ["eliza/plugins/plugin-imessage", "dist/index.js"],
+    ["eliza/plugins/plugin-mcp", "dist/node/index.js"],
+    ["packages/plugin-music-library", "dist/index.js"],
+    ["packages/plugin-music-player", "dist/index.js"],
+    ["eliza/plugins/plugin-pdf", "dist/node/index.node.js"],
+    ["eliza/plugins/plugin-signal", "dist/index.js"],
+    ["eliza/plugins/plugin-telegram", "dist/index.js"],
+    ["eliza/plugins/plugin-whatsapp", "dist/index.js"],
+    ["eliza/plugins/plugin-workflow", "dist/index.js"],
+  ]);
+
+  assert.ok(buildStep, "the policy workspace build step must exist");
+  assert.ok(
+    blueBubblesBuildStep,
+    "the BlueBubbles policy package build step must exist",
+  );
+  assert.match(
+    blueBubblesBuildStep,
+    /plugins\/plugin-bluebubbles\/typescript\/node_modules\/\.bin\/tsc\s+\\?\s+-p plugins\/plugin-bluebubbles\/typescript\/tsconfig\.json\s+\\?\s+--noCheck/,
+    "BlueBubbles runtime bytes must use the established noCheck compiler mode for the pinned core",
+  );
+  assert.match(
+    blueBubblesBuildStep,
+    /test -f plugins\/plugin-bluebubbles\/typescript\/dist\/index\.js/,
+  );
+  assert.doesNotMatch(
+    buildStep,
+    /plugins\/plugin-bluebubbles\/typescript/,
+    "the generic build matrix must not rerun BlueBubbles' incompatible declaration check",
+  );
+  for (const [workspace, entrypoint] of expectedBuilds) {
+    assert.match(buildStep, new RegExp(`${workspace.replaceAll("/", "\\/")}\\|${entrypoint.replaceAll(".", "\\.")}`));
+  }
+  assert.match(buildStep, /bun run --cwd "\$workspace" build/);
+  assert.match(buildStep, /test -f "\$workspace\/\$entrypoint"/);
+
+  const materialize = dockerfile.indexOf(
+    "node deploy/modal/alice_capability_bom.mjs --materialize-policy-workspaces",
+  );
+  const finalBom = dockerfile.lastIndexOf(
+    "RUN node deploy/modal/alice_capability_bom.mjs \\",
+  );
+  assert.ok(materialize >= 0, "the policy workspace materializer must run in the image");
+  assert.ok(finalBom > materialize, "workspace links must become physical before the final BOM");
+});
+
 test("cloud builds port and materialize Alice product plugins before runtime compilation", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

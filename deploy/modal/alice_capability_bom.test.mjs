@@ -10,6 +10,7 @@ import {
   discoverAliceCapabilityInputs,
   digestAliceCapabilityBom,
   generateAliceCapabilityBom,
+  materializeAliceCapabilityWorkspacePackages,
 } from "./alice_capability_bom.mjs";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
@@ -412,6 +413,261 @@ test("package hashing excludes nested dependency links from Bun's installed layo
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("materializes exact lock-bound Bun workspace packages before the final-image BOM", async () => {
+  const root = fixtureRoot();
+  try {
+    const workspaceRoot = path.join(root, "eliza/plugins");
+    const workspacePackages = [
+      ["@elizaos/plugin-agent-skills", "plugin-agent-skills", "agent-skills"],
+      ["@elizaos/plugin-anthropic", "plugin-anthropic", "anthropic"],
+    ];
+    for (const [name, directory, runtimeName] of workspacePackages) {
+      const sourceRoot = path.join(workspaceRoot, directory);
+      fs.mkdirSync(sourceRoot, { recursive: true });
+      fs.writeFileSync(
+        path.join(sourceRoot, "package.json"),
+        `${JSON.stringify({
+          name,
+          version: "2.0.3-beta.7",
+          type: "module",
+          exports: { ".": "./dist/index.js" },
+        })}\n`,
+      );
+      fs.mkdirSync(path.join(sourceRoot, "dist"), { recursive: true });
+      fs.writeFileSync(
+        path.join(sourceRoot, "dist/index.js"),
+        `export default { name: "${runtimeName}", actions: [{ name: "REAL" }] };\n`,
+      );
+      const installed = path.join(root, "node_modules", ...name.split("/"));
+      fs.mkdirSync(path.dirname(installed), { recursive: true });
+      fs.symlinkSync(path.relative(path.dirname(installed), sourceRoot), installed, "dir");
+    }
+    const registryRoot = writePackage(root, "@fixture/plugin-registry", {
+      runtimeName: "registry",
+    });
+    const checkedPolicy = policy([
+      packageEntry("@elizaos/plugin-agent-skills", "core", {
+        runtimeName: "agent-skills",
+      }),
+      packageEntry("@elizaos/plugin-anthropic", "core", {
+        runtimeName: "anthropic",
+      }),
+      packageEntry("@fixture/plugin-registry", "core", {
+        runtimeName: "registry",
+      }),
+    ]);
+    fs.writeFileSync(
+      path.join(root, "bun.lock"),
+      `${[
+        '[packages]',
+        '    "@elizaos/plugin-agent-skills": ["@elizaos/plugin-agent-skills@workspace:eliza/plugins/plugin-agent-skills"],',
+        '    "@elizaos/plugin-anthropic": ["@elizaos/plugin-anthropic@workspace:eliza/plugins/plugin-anthropic"],',
+      ].join("\n")}\n`,
+    );
+
+    await assert.rejects(
+      generateAliceCapabilityBom({
+        root,
+        policy: checkedPolicy,
+        discovery: {
+          packageNames: [
+            "@elizaos/plugin-agent-skills",
+            "@elizaos/plugin-anthropic",
+            "@fixture/plugin-registry",
+          ],
+          internalCapabilityIds: [],
+        },
+      }),
+      /ALICE_CAPABILITY_PACKAGE_PATH_ESCAPE/,
+    );
+
+    const result = materializeAliceCapabilityWorkspacePackages({
+      root,
+      policy: checkedPolicy,
+    });
+    assert.deepEqual(result.materializedPackages, [
+      "@elizaos/plugin-agent-skills",
+      "@elizaos/plugin-anthropic",
+    ]);
+    assert.equal(result.preservedPackages.includes("@fixture/plugin-registry"), true);
+    for (const [name] of workspacePackages) {
+      const installed = path.join(root, "node_modules", ...name.split("/"));
+      assert.equal(fs.lstatSync(installed).isSymbolicLink(), false);
+      assert.ok(fs.realpathSync(installed).startsWith(`${fs.realpathSync(path.join(root, "node_modules"))}${path.sep}`));
+    }
+    assert.equal(
+      fs.realpathSync(path.join(root, "node_modules/@fixture/plugin-registry")),
+      fs.realpathSync(registryRoot),
+    );
+
+    const bom = await generateAliceCapabilityBom({
+      root,
+      policy: checkedPolicy,
+      discovery: {
+        packageNames: [
+          "@elizaos/plugin-agent-skills",
+          "@elizaos/plugin-anthropic",
+          "@fixture/plugin-registry",
+        ],
+        internalCapabilityIds: [],
+      },
+    });
+    assert.equal(bom.entries.length, 3);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("workspace package materialization rejects every unbound or escaping source", () => {
+  for (const defect of ["wrong-target", "name-mismatch", "nested-symlink"]) {
+    const root = fixtureRoot();
+    try {
+      const expectedRoot = path.join(root, "eliza/plugins/plugin-agent-skills");
+      const actualRoot =
+        defect === "wrong-target"
+          ? path.join(root, "eliza/plugins/plugin-other")
+          : expectedRoot;
+      fs.mkdirSync(actualRoot, { recursive: true });
+      fs.writeFileSync(
+        path.join(actualRoot, "package.json"),
+        `${JSON.stringify({
+          name: defect === "name-mismatch" ? "@elizaos/plugin-other" : "@elizaos/plugin-agent-skills",
+          version: "2.0.3-beta.7",
+          type: "module",
+          exports: { ".": "./dist/index.js" },
+        })}\n`,
+      );
+      fs.mkdirSync(path.join(actualRoot, "dist"), { recursive: true });
+      fs.writeFileSync(path.join(actualRoot, "dist/index.js"), "export default {};\n");
+      if (defect === "wrong-target") {
+        fs.mkdirSync(path.join(expectedRoot, "dist"), { recursive: true });
+        fs.writeFileSync(
+          path.join(expectedRoot, "package.json"),
+          `${JSON.stringify({
+            name: "@elizaos/plugin-agent-skills",
+            version: "2.0.3-beta.7",
+            type: "module",
+            exports: { ".": "./dist/index.js" },
+          })}\n`,
+        );
+        fs.writeFileSync(path.join(expectedRoot, "dist/index.js"), "export default {};\n");
+      }
+      if (defect === "nested-symlink") {
+        fs.writeFileSync(path.join(root, "outside.js"), "export default {};\n");
+        fs.symlinkSync(path.join(root, "outside.js"), path.join(actualRoot, "dist/escape.js"));
+      }
+      const installed = path.join(root, "node_modules/@elizaos/plugin-agent-skills");
+      fs.mkdirSync(path.dirname(installed), { recursive: true });
+      fs.symlinkSync(path.relative(path.dirname(installed), actualRoot), installed, "dir");
+      fs.writeFileSync(
+        path.join(root, "bun.lock"),
+        '[packages]\n    "@elizaos/plugin-agent-skills": ["@elizaos/plugin-agent-skills@workspace:eliza/plugins/plugin-agent-skills"],\n',
+      );
+      assert.throws(
+        () => materializeAliceCapabilityWorkspacePackages({
+          root,
+          policy: policy([
+            packageEntry("@elizaos/plugin-agent-skills", "core", {
+              runtimeName: "agent-skills",
+            }),
+          ]),
+        }),
+        /ALICE_CAPABILITY_(?:PACKAGE_PATH_ESCAPE|PACKAGE_NAME_MISMATCH|PACKAGE_SYMLINK_INVALID)/,
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("workspace package materialization rejects a broken installed workspace link", () => {
+  const root = fixtureRoot();
+  try {
+    const installed = path.join(
+      root,
+      "node_modules/@elizaos/plugin-agent-skills",
+    );
+    const expectedRoot = path.join(
+      root,
+      "eliza/plugins/plugin-agent-skills",
+    );
+    fs.mkdirSync(path.dirname(installed), { recursive: true });
+    fs.symlinkSync(
+      path.relative(path.dirname(installed), expectedRoot),
+      installed,
+      "dir",
+    );
+    fs.writeFileSync(
+      path.join(root, "bun.lock"),
+      '[packages]\n    "@elizaos/plugin-agent-skills": ["@elizaos/plugin-agent-skills@workspace:eliza/plugins/plugin-agent-skills"],\n',
+    );
+
+    assert.throws(
+      () =>
+        materializeAliceCapabilityWorkspacePackages({
+          root,
+          policy: policy([
+            packageEntry("@elizaos/plugin-agent-skills", "core", {
+              runtimeName: "agent-skills",
+            }),
+          ]),
+        }),
+      /ALICE_CAPABILITY_PACKAGE_MISSING/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("workspace package materialization rejects a workspace link outside the build root", () => {
+  const root = fixtureRoot();
+  const externalRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "alice-capability-external-"),
+  );
+  try {
+    fs.writeFileSync(
+      path.join(externalRoot, "package.json"),
+      `${JSON.stringify({
+        name: "@elizaos/plugin-agent-skills",
+        version: "2.0.3-beta.7",
+        type: "module",
+        exports: { ".": "./dist/index.js" },
+      })}\n`,
+    );
+    fs.mkdirSync(path.join(externalRoot, "dist"));
+    fs.writeFileSync(
+      path.join(externalRoot, "dist/index.js"),
+      "export default {};\n",
+    );
+    const installed = path.join(
+      root,
+      "node_modules/@elizaos/plugin-agent-skills",
+    );
+    fs.mkdirSync(path.dirname(installed), { recursive: true });
+    fs.symlinkSync(externalRoot, installed, "dir");
+    fs.writeFileSync(
+      path.join(root, "bun.lock"),
+      '[packages]\n    "@elizaos/plugin-agent-skills": ["@elizaos/plugin-agent-skills@workspace:eliza/plugins/plugin-agent-skills"],\n',
+    );
+
+    assert.throws(
+      () =>
+        materializeAliceCapabilityWorkspacePackages({
+          root,
+          policy: policy([
+            packageEntry("@elizaos/plugin-agent-skills", "core", {
+              runtimeName: "agent-skills",
+            }),
+          ]),
+        }),
+      /ALICE_CAPABILITY_PACKAGE_PATH_ESCAPE/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(externalRoot, { recursive: true, force: true });
   }
 });
 
