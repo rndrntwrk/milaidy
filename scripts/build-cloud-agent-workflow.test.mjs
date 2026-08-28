@@ -495,6 +495,16 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
   assert.doesNotMatch(workflow, /ELIZA_SKIP_PLUGINS/);
   assert.match(workflow, /ALICE_RUNTIME_AUTHORITY_MODE=proposer-only/);
   assert.match(workflow, /ALICE_RUNTIME_PROFILE=full-gated/);
+  assert.match(
+    workflow,
+    /--env ALICE_STATE_PLANE_URL=http:\/\/alice-state-plane\.internal\/v1\/eliza-database/,
+    "the full-gated candidate smoke must boot against the exact private state-plane URL used by production",
+  );
+  assert.match(
+    workflow,
+    /--env ALICE_STATE_OWNER_ID=alice-owner-production/,
+    "the full-gated candidate smoke must use the exact production state owner identity",
+  );
   assert.match(workflow, /ALICE_CAPABILITY_BOM_SHA256/);
   assert.match(workflow, /alice-capability-bom\.json/);
   assert.match(workflow, /\/api\/alice-production\/capabilities/);

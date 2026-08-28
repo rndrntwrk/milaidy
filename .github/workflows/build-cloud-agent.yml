@@ -772,6 +772,8 @@ jobs:
             --env MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET=alice-cloud-smoke-access-proxy-secret \
             --env ALICE_RUNTIME_AUTHORITY_MODE=proposer-only \
             --env ALICE_RUNTIME_PROFILE=full-gated \
+            --env ALICE_STATE_PLANE_URL=http://alice-state-plane.internal/v1/eliza-database \
+            --env ALICE_STATE_OWNER_ID=alice-owner-production \
             --env ENABLE_AUTONOMY=false \
             --env ELIZA_TRIGGERS_ENABLED=false \
             --env MILADY_ALLOWED_ORIGINS=https://alice.rndrntwrk.com \
