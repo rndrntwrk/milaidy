@@ -16,6 +16,7 @@ const ENV_KEYS = [
   "ELIZA_WORKSPACE_ROOT",
   "ELIZA_SKIP_PLUGINS",
   "ALICE_RUNTIME_AUTHORITY_MODE",
+  "ALICE_RUNTIME_PROFILE",
 ] as const;
 const envBackup = new Map<string, string | undefined>();
 
@@ -366,6 +367,35 @@ describe("importPluginModuleFromPath", () => {
 
     expect(stagedDependencyStat.isSymbolicLink()).toBe(true);
   });
+
+  it("does not rewrite Telegram compatibility through proposer-only staged imports", async () => {
+    const packageName = "@acme/plugin-hot-reload";
+    const installPath = path.join(tempRoot, "plugin-hot-reload");
+    const telegramRoot = path.join(
+      installPath,
+      "node_modules",
+      "@elizaos",
+      "plugin-telegram",
+    );
+    const packageJsonPath = path.join(telegramRoot, "package.json");
+    const originalPackageJson = '{"name":"@elizaos/plugin-telegram","type":"module"}\n';
+    await writePluginPackage({
+      packageRoot: installPath,
+      packageName,
+      dependencyValue: "dependency",
+      versionValue: "v1",
+    });
+    await writeFile(packageJsonPath, originalPackageJson);
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+
+    await importPluginModuleFromPath(installPath, packageName);
+
+    expect(await fs.readFile(packageJsonPath, "utf8")).toBe(originalPackageJson);
+    await expect(
+      fs.stat(path.join(telegramRoot, "dist", "account-auth-service.js")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
 });
 
 describe("resolvePlugins", () => {
@@ -515,7 +545,7 @@ describe("resolvePlugins", () => {
     ).rejects.toThrow("ALICE_FULL_GATED_SKIP_PLUGINS_FORBIDDEN");
   });
 
-  it("does not rewrite denied Telegram package files in proposer-only production", async () => {
+  it("does not rewrite denied Telegram package files in proposer-only full-gated production", async () => {
     const previousCwd = process.cwd();
     const telegramRoot = path.join(
       tempRoot,
@@ -527,6 +557,7 @@ describe("resolvePlugins", () => {
     const originalPackageJson = '{"name":"@elizaos/plugin-telegram","type":"module"}\n';
     await writeFile(packageJsonPath, originalPackageJson);
     process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.env.ALICE_RUNTIME_PROFILE = "full-gated";
     process.chdir(tempRoot);
     try {
       await resolvePlugins({ plugins: { allow: [] } } as never, { quiet: true });
@@ -538,5 +569,36 @@ describe("resolvePlugins", () => {
     await expect(
       fs.stat(path.join(telegramRoot, "dist", "account-auth-service.js")),
     ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("retains Telegram account-auth compatibility for ordinary Milady", async () => {
+    const previousCwd = process.cwd();
+    const telegramRoot = path.join(
+      tempRoot,
+      "node_modules",
+      "@elizaos",
+      "plugin-telegram",
+    );
+    const packageJsonPath = path.join(telegramRoot, "package.json");
+    await writeFile(
+      packageJsonPath,
+      '{"name":"@elizaos/plugin-telegram","type":"module"}\n',
+    );
+    delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+    delete process.env.ALICE_RUNTIME_PROFILE;
+    process.chdir(tempRoot);
+    try {
+      await resolvePlugins({ plugins: { allow: [] } } as never, { quiet: true });
+    } finally {
+      process.chdir(previousCwd);
+    }
+
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf8"));
+    expect(packageJson.exports["./account-auth-service"]).toBe(
+      "./dist/account-auth-service.js",
+    );
+    await expect(
+      fs.stat(path.join(telegramRoot, "dist", "account-auth-service.js")),
+    ).resolves.toBeDefined();
   });
 });
