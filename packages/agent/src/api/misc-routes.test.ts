@@ -39,3 +39,109 @@ describe("misc-routes LTCG removal regression guard", () => {
     expect(source.toLowerCase()).not.toContain("lunchtable");
   });
 });
+
+describe("Companion durable stage route", () => {
+  it("uses one injected durable store for authenticated Companion and public broadcast reads", async () => {
+    const { handleMiscRoutes } = await import("./misc-routes");
+    const durable = {
+      camera: { zoom: 0.9, yaw: 0.25, pitch: 0, pan: -1 },
+    };
+    const reads: string[] = [];
+    const responses: unknown[] = [];
+    const base = {
+      req: {},
+      res: {},
+      url: new URL("https://alice.rndrntwrk.com/"),
+      state: {},
+      json: (_res: unknown, value: unknown) => responses.push(value),
+      error: () => {
+        throw new Error("unexpected route error");
+      },
+      readJsonBody: async () => null,
+      AGENT_EVENT_ALLOWED_STREAMS: new Set<string>(),
+      resolveTerminalRunRejection: () => null,
+      resolveTerminalRunClientId: () => null,
+      isSharedTerminalClientId: () => false,
+      activeTerminalRunCount: 0,
+      setActiveTerminalRunCount: () => undefined,
+      companionStageStore: {
+        async read() {
+          reads.push("read");
+          return durable;
+        },
+        async write() {
+          throw new Error("unexpected write");
+        },
+      },
+    };
+    expect(
+      await handleMiscRoutes({
+        ...base,
+        method: "GET",
+        pathname: "/api/companion/stage",
+      } as never),
+    ).toBe(true);
+    expect(
+      await handleMiscRoutes({
+        ...base,
+        method: "GET",
+        pathname: "/api/broadcast/alice-cam/stage",
+      } as never),
+    ).toBe(true);
+    expect(reads).toEqual(["read", "read"]);
+    expect(responses).toEqual([
+      { ok: true, state: durable },
+      { ok: true, channel: "alice-cam", state: durable },
+    ]);
+  });
+
+  it("persists a sanitized Companion stage before broadcasting it", async () => {
+    const { handleMiscRoutes } = await import("./misc-routes");
+    const effects: string[] = [];
+    const writes: unknown[] = [];
+    const responses: unknown[] = [];
+    const handled = await handleMiscRoutes({
+      req: {},
+      res: {},
+      method: "POST",
+      pathname: "/api/companion/stage",
+      url: new URL("https://alice.rndrntwrk.com/api/companion/stage"),
+      state: {
+        broadcastWs(value: unknown) {
+          effects.push("broadcast");
+          expect(value).toMatchObject({ type: "companion-stage-state" });
+        },
+      },
+      json: (_res: unknown, value: unknown) => responses.push(value),
+      error: () => {
+        throw new Error("unexpected route error");
+      },
+      readJsonBody: async () => ({
+        patch: { camera: { zoom: 2, yaw: -10 } },
+      }),
+      AGENT_EVENT_ALLOWED_STREAMS: new Set<string>(),
+      resolveTerminalRunRejection: () => null,
+      resolveTerminalRunClientId: () => null,
+      isSharedTerminalClientId: () => false,
+      activeTerminalRunCount: 0,
+      setActiveTerminalRunCount: () => undefined,
+      companionStageStore: {
+        async read() {
+          return {
+            camera: { zoom: 0.25, yaw: 0, pitch: 0, pan: 0 },
+          };
+        },
+        async write(value: unknown) {
+          effects.push("write");
+          writes.push(value);
+        },
+      },
+    } as never);
+    expect(handled).toBe(true);
+    expect(effects).toEqual(["write", "broadcast"]);
+    expect(writes).toEqual([
+      { camera: { zoom: 1, yaw: -Math.PI, pitch: 0, pan: 0 } },
+    ]);
+    expect(responses).toEqual([{ ok: true, state: writes[0] }]);
+  });
+});

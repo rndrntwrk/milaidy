@@ -18,6 +18,10 @@ import {
   ensurePrivyWalletsForCustomUser,
   isPrivyWalletProvisioningEnabled,
 } from "../services/privy-wallets.js";
+import {
+  type AliceCompanionStageStore,
+  createCompanionStageStoreFromEnvironment,
+} from "./alice-companion-state-store.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
 
 // ---------------------------------------------------------------------------
@@ -58,33 +62,16 @@ const DEFAULT_COMPANION_STAGE_STATE: CompanionStageState = {
 };
 
 /**
- * Persistence root for the companion stage state file.
+ * Persistence boundary for the companion stage state.
  *
- * Resolution order:
- *   1. `MILAIDY_HOME` — the alice-bot k8s deployment mounts its PVC at
- *      `/home/node/.milaidy` and exports this env var to every process
- *      in the container. This is the ONLY path that survives pod
- *      rollouts and restarts.
- *   2. `ELIZA_DATA_DIR` — legacy fallback used by `stream-persistence.ts`
- *      and other persistence modules. Not currently set on the
- *      alice-bot pod (both variables are resolved, but the first wins).
- *   3. `process.cwd() + "/data"` — final fallback for local development
- *      (where neither env var is set). Lands in the repo checkout, not
- *      in a shared volume — fine for dev, wrong for production.
- *
- * Phase 1 of the companion stage service shipped with only options
- * (2) and (3). On the alice-bot pod that put the file at
- * `/app/milaidy/data/companion/stage.json`, inside the container's
- * ephemeral writable layer — functional within a session but wiped on
- * every deploy. Fixed here by preferring `MILAIDY_HOME` first.
+ * Cloud production supplies `ALICE_STATE_PLANE_URL` and
+ * `ALICE_STATE_OWNER_ID`; the store then uses the private Task 3 service
+ * boundary and never treats the Container filesystem as canonical.
+ * Local development retains the existing MILAIDY_HOME / ELIZA_DATA_DIR /
+ * cwd fallback without changing the Companion, PiP, or broadcast routes.
  */
-const COMPANION_STAGE_DIR = path.join(
-  process.env.MILAIDY_HOME ||
-    process.env.ELIZA_DATA_DIR ||
-    path.join(process.cwd(), "data"),
-  "companion",
-);
-const COMPANION_STAGE_FILE = path.join(COMPANION_STAGE_DIR, "stage.json");
+const DEFAULT_COMPANION_STAGE_STORE =
+  createCompanionStageStoreFromEnvironment();
 
 function clamp01(value: unknown, fallback: number): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
@@ -125,41 +112,6 @@ function sanitizeCompanionStageState(
       pan: clampFinite(rawCamera.pan, 0, -5, 5),
     },
   };
-}
-
-function readCompanionStageState(): CompanionStageState {
-  try {
-    if (fs.existsSync(COMPANION_STAGE_FILE)) {
-      const raw = JSON.parse(
-        fs.readFileSync(COMPANION_STAGE_FILE, "utf-8"),
-      );
-      return sanitizeCompanionStageState(raw);
-    }
-  } catch (err) {
-    logger.warn(
-      `[companion-stage] Failed to read ${COMPANION_STAGE_FILE}: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
-  return { ...DEFAULT_COMPANION_STAGE_STATE };
-}
-
-function writeCompanionStageState(next: CompanionStageState): void {
-  try {
-    fs.mkdirSync(COMPANION_STAGE_DIR, { recursive: true });
-    fs.writeFileSync(
-      COMPANION_STAGE_FILE,
-      JSON.stringify(next, null, 2),
-      "utf-8",
-    );
-  } catch (err) {
-    logger.warn(
-      `[companion-stage] Failed to persist ${COMPANION_STAGE_FILE}: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
 }
 
 function mergeCompanionStagePatch(
@@ -243,6 +195,7 @@ export interface MiscRouteContext {
   isSharedTerminalClientId: (clientId: string) => boolean;
   activeTerminalRunCount: number;
   setActiveTerminalRunCount: (delta: number) => void;
+  companionStageStore?: AliceCompanionStageStore;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +207,8 @@ export async function handleMiscRoutes(
 ): Promise<boolean> {
   const { req, res, method, pathname, url, state, json, error, readJsonBody } =
     ctx;
+  const companionStageStore =
+    ctx.companionStageStore ?? DEFAULT_COMPANION_STAGE_STORE;
 
   // ── POST /api/restart ───────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/restart") {
@@ -426,7 +381,17 @@ export async function handleMiscRoutes(
   // `alice.rndrntwrk.com/broadcast/*` cannot reach this — they use
   // `/api/broadcast/:channel/stage` below instead.
   if (method === "GET" && pathname === "/api/companion/stage") {
-    json(res, { ok: true, state: readCompanionStageState() });
+    try {
+      const stored = await companionStageStore.read();
+      json(res, {
+        ok: true,
+        state: sanitizeCompanionStageState(
+          stored ?? DEFAULT_COMPANION_STAGE_STATE,
+        ),
+      });
+    } catch {
+      error(res, "Companion stage state unavailable", 503);
+    }
     return true;
   }
 
@@ -459,7 +424,18 @@ export async function handleMiscRoutes(
         error(res, "Unknown broadcast channel", 404);
         return true;
       }
-      json(res, { ok: true, channel, state: readCompanionStageState() });
+      try {
+        const stored = await companionStageStore.read();
+        json(res, {
+          ok: true,
+          channel,
+          state: sanitizeCompanionStageState(
+            stored ?? DEFAULT_COMPANION_STAGE_STATE,
+          ),
+        });
+      } catch {
+        error(res, "Companion stage state unavailable", 503);
+      }
       return true;
     }
   }
@@ -657,7 +633,7 @@ export async function handleMiscRoutes(
   // The route deep-merges the patch into the current state, sanitizes
   // the result (defensive clamping against NaN/Infinity and
   // out-of-range values), persists the merged state to
-  // `$ELIZA_DATA_DIR/companion/stage.json`, and broadcasts the new
+  // the configured durable Companion-stage store, and broadcasts the new
   // full state to every connected `/ws` client as a
   // `"companion-stage-state"` message.
   //
@@ -676,11 +652,24 @@ export async function handleMiscRoutes(
       error(res, "Missing 'patch' field", 400);
       return true;
     }
-    const current = readCompanionStageState();
+    let current: CompanionStageState;
+    try {
+      current = sanitizeCompanionStageState(
+        (await companionStageStore.read()) ?? DEFAULT_COMPANION_STAGE_STATE,
+      );
+    } catch {
+      error(res, "Companion stage state unavailable", 503);
+      return true;
+    }
     const merged = sanitizeCompanionStageState(
       mergeCompanionStagePatch(current, body.patch),
     );
-    writeCompanionStageState(merged);
+    try {
+      await companionStageStore.write(merged);
+    } catch {
+      error(res, "Companion stage state unavailable", 503);
+      return true;
+    }
     state.broadcastWs?.({
       type: "companion-stage-state",
       state: merged,
