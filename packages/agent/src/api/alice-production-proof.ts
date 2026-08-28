@@ -29,6 +29,14 @@ const FULL_REQUIRED_RUNTIME_PLUGINS = [
   "openai",
   "sql",
 ] as const;
+const FULL_OBSERVED_RUNTIME_PLUGINS = [
+  "@elizaos/plugin-agent-skills",
+  "basic-capabilities",
+  "core-security-hooks",
+  "eliza",
+  "openai",
+  "@elizaos/plugin-sql",
+] as const;
 const FULL_CORE_COMPOSITION = [
   "bridge:eliza",
   "capabilities:basic",
@@ -197,7 +205,7 @@ export function stampAliceProductionRuntimeBoundary(
       !FULL_REQUIRED_CONFIGURED_PLUGINS.every((name) =>
         configured.includes(name),
       ) ||
-      !FULL_REQUIRED_RUNTIME_PLUGINS.every((name) =>
+      !FULL_OBSERVED_RUNTIME_PLUGINS.every((name) =>
         runtimePluginNames.includes(name),
       ) ||
       runtimePluginNames.includes("alice-production-response-only") ||
@@ -281,7 +289,7 @@ export function buildAliceProductionProof(
     }
     const runtimePluginNames = inventory(runtime.plugins);
     if (
-      !FULL_REQUIRED_RUNTIME_PLUGINS.every((name) =>
+      !FULL_OBSERVED_RUNTIME_PLUGINS.every((name) =>
         runtimePluginNames.includes(name),
       ) ||
       runtimePluginNames.includes("alice-production-response-only") ||
