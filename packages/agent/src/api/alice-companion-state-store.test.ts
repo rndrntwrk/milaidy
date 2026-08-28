@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AliceCompanionStageState,
   createAliceCompanionStageStore,
+  createCompanionStageStoreFromEnvironment,
 } from "./alice-companion-state-store";
 
 const ownerId = "owner-production-001";
@@ -43,14 +44,14 @@ describe("Alice Companion durable stage store", () => {
     const service = durableStateService();
     const firstProcess = createAliceCompanionStageStore({
       ownerId,
-      statePlaneUrl: "http://alice-state-plane.internal/v1/state",
+      statePlaneUrl: "http://alice-state-plane.internal/v1/companion-state",
       fetchImpl: service.fetch,
     });
     await firstProcess.write(state, 1_777_000_000_000);
 
     const replacementProcess = createAliceCompanionStageStore({
       ownerId,
-      statePlaneUrl: "http://alice-state-plane.internal/v1/state",
+      statePlaneUrl: "http://alice-state-plane.internal/v1/companion-state",
       fetchImpl: service.fetch,
     });
     expect(await replacementProcess.read()).toEqual(state);
@@ -75,7 +76,7 @@ describe("Alice Companion durable stage store", () => {
     );
     const store = createAliceCompanionStageStore({
       ownerId,
-      statePlaneUrl: "http://alice-state-plane.internal/v1/state",
+      statePlaneUrl: "http://alice-state-plane.internal/v1/companion-state",
       fetchImpl: async () =>
         Response.json({
           ok: true,
@@ -90,11 +91,31 @@ describe("Alice Companion durable stage store", () => {
     await expect(store.read()).rejects.toThrow("ALICE_COMPANION_STATE_INVALID");
   });
 
+  it("uses a dedicated Companion state URL and never reuses the Eliza database URL", () => {
+    expect(() =>
+      createCompanionStageStoreFromEnvironment({
+        ALICE_STATE_OWNER_ID: ownerId,
+        ALICE_STATE_PLANE_URL:
+          "http://alice-state-plane.internal/v1/eliza-database",
+      } as NodeJS.ProcessEnv),
+    ).toThrow("ALICE_COMPANION_STATE_CONFIG_INVALID");
+
+    expect(() =>
+      createCompanionStageStoreFromEnvironment({
+        ALICE_STATE_OWNER_ID: ownerId,
+        ALICE_STATE_PLANE_URL:
+          "http://alice-state-plane.internal/v1/eliza-database",
+        ALICE_COMPANION_STATE_URL:
+          "http://alice-state-plane.internal/v1/companion-state",
+      } as NodeJS.ProcessEnv),
+    ).not.toThrow();
+  });
+
   it("uses a distinct idempotency claim when the same stage is intentionally written later", async () => {
     const service = durableStateService();
     const store = createAliceCompanionStageStore({
       ownerId,
-      statePlaneUrl: "http://alice-state-plane.internal/v1/state",
+      statePlaneUrl: "http://alice-state-plane.internal/v1/companion-state",
       fetchImpl: service.fetch,
     });
     await store.write(state, 1_777_000_000_000);

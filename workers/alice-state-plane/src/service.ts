@@ -25,6 +25,68 @@ type CoordinationService = {
 
 const MAX_OPERATION_BYTES = 65_536;
 const MAX_ELIZA_OPERATION_BYTES = 100_100_000;
+const CONTAINER_SCOPE_HEADER = "x-alice-container-state-scope";
+const CONTAINER_OWNER_HEADER = "x-alice-state-owner";
+
+function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  return Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
+
+function validCompanionStagePayload(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  if (
+    !exactKeys(payload, ["schemaVersion", "state"]) ||
+    payload.schemaVersion !== "alice.companion-stage-state.v1" ||
+    !payload.state ||
+    typeof payload.state !== "object" ||
+    Array.isArray(payload.state)
+  ) return false;
+  const state = payload.state as Record<string, unknown>;
+  if (!exactKeys(state, ["camera"]) || !state.camera || typeof state.camera !== "object" || Array.isArray(state.camera)) return false;
+  const camera = state.camera as Record<string, unknown>;
+  if (!exactKeys(camera, ["pan", "pitch", "yaw", "zoom"])) return false;
+  return (
+    typeof camera.zoom === "number" && Number.isFinite(camera.zoom) && camera.zoom >= 0 && camera.zoom <= 1 &&
+    typeof camera.yaw === "number" && Number.isFinite(camera.yaw) && camera.yaw >= -Math.PI && camera.yaw <= Math.PI &&
+    typeof camera.pitch === "number" && Number.isFinite(camera.pitch) && camera.pitch >= -Math.PI / 2 && camera.pitch <= Math.PI / 2 &&
+    typeof camera.pan === "number" && Number.isFinite(camera.pan) && camera.pan >= -5 && camera.pan <= 5
+  );
+}
+
+function containerScopeAllows(
+  request: Request,
+  pathname: string,
+  operation: Record<string, unknown>,
+): boolean {
+  const scope = request.headers.get(CONTAINER_SCOPE_HEADER);
+  const ownerId = request.headers.get(CONTAINER_OWNER_HEADER);
+  if (scope === null && ownerId === null) return true;
+  if (
+    ownerId !== "alice-owner-production" ||
+    operation.ownerId !== ownerId
+  ) return false;
+  if (scope === "eliza-database") {
+    return pathname === "/v1/eliza-database" &&
+      (operation.operation === "eliza.load" || operation.operation === "eliza.commit");
+  }
+  if (
+    scope !== "companion-stage" ||
+    pathname !== "/v1/state" ||
+    operation.kind !== "configVersion" ||
+    operation.recordId !== "companion-stage-v1"
+  ) return false;
+  if (operation.operation === "record.get") {
+    return exactKeys(operation, ["kind", "operation", "ownerId", "recordId"]);
+  }
+  return operation.operation === "record.put" &&
+    exactKeys(operation, [
+      "idempotencyKey", "kind", "operation", "ownerId", "payload",
+      "recordId", "sessionId", "updatedAt",
+    ]) &&
+    operation.sessionId === "companion-production" &&
+    validCompanionStagePayload(operation.payload);
+}
 
 function response(value: unknown, status: number): Response {
   return new Response(JSON.stringify(value), {
@@ -100,6 +162,9 @@ export function createAliceStateService(input: {
         if (url.pathname === "/v1/eliza-database") {
           if (!input.elizaDatabase) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
           const operation = validateElizaDatabaseOperation(body);
+          if (!containerScopeAllows(request, url.pathname, operation as unknown as Record<string, unknown>)) {
+            return response({ ok: false, code: "STATE_CONTAINER_SCOPE_INVALID" }, 403);
+          }
           if (operation.operation === "eliza.load") {
             const { operation: _operation, ...load } = operation;
             return response({ ok: true, ...await input.elizaDatabase.load(load) }, 200);
@@ -108,6 +173,9 @@ export function createAliceStateService(input: {
           return response({ ok: true, ...await input.elizaDatabase.commit(commit) }, 200);
         }
         const operation = validateStateOperation(body);
+        if (!containerScopeAllows(request, url.pathname, operation as unknown as Record<string, unknown>)) {
+          return response({ ok: false, code: "STATE_CONTAINER_SCOPE_INVALID" }, 403);
+        }
         if (operation.operation === "record.get") {
           const record = await input.adapter.getRecord(operation.kind as AliceStateKind, operation.recordId, operation.ownerId);
           return response({ ok: true, record }, 200);

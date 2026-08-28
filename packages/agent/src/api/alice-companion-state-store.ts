@@ -20,7 +20,8 @@ export interface AliceCompanionStageStore {
 
 type FetchImplementation = (request: Request) => Promise<Response>;
 
-const INTERNAL_STATE_URL = "http://alice-state-plane.internal/v1/state";
+const INTERNAL_STATE_URL =
+  "http://alice-state-plane.internal/v1/companion-state";
 const OWNER_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
 const RECORD_ID = "companion-stage-v1";
 const SCHEMA_VERSION = "alice.companion-stage-state.v1";
@@ -188,8 +189,8 @@ export function createCompanionStageStoreFromEnvironment(
   env: NodeJS.ProcessEnv = process.env,
 ): AliceCompanionStageStore {
   const ownerId = env.ALICE_STATE_OWNER_ID?.trim();
-  const statePlaneUrl = env.ALICE_STATE_PLANE_URL?.trim();
-  if (ownerId || statePlaneUrl) {
+  const statePlaneUrl = env.ALICE_COMPANION_STATE_URL?.trim();
+  if (ownerId || statePlaneUrl || env.ALICE_STATE_PLANE_URL?.trim()) {
     return createAliceCompanionStageStore({ ownerId, statePlaneUrl });
   }
   const root =
