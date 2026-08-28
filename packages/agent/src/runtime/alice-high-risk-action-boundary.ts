@@ -41,29 +41,38 @@ export function isAliceFullGatedSafeActionName(name: string): boolean {
   return ALICE_FULL_GATED_SAFE_ACTION_SET.has(name);
 }
 
-function guardAction(action: Action): Action {
-  const marked = action as Action & { [ACTION_GUARDED]?: true };
+export function enforceAliceActionExecutionBoundary<T extends Action>(
+  action: T,
+  environment: AliceRuntimeProfileEnv = process.env,
+): T {
+  if (!isAliceFullRuntimeProfile(environment)) return action;
+
+  const marked = action as T & { [ACTION_GUARDED]?: true };
   if (marked[ACTION_GUARDED] || isAliceFullGatedSafeActionName(action.name)) {
     return action;
   }
-  action.handler = async (...args: Parameters<Action["handler"]>) => {
-    const text = `ALICE_HIGH_RISK_ACTION_DENIED: ${action.name} requires an independently verified capability grant.`;
-    const callback = args[4];
-    if (callback) {
-      await callback({
-        text,
-        action: "ALICE_HIGH_RISK_ACTION_DENIED",
-      } as Content);
-    }
-    return { success: false, text, error: "ALICE_HIGH_RISK_ACTION_DENIED" };
-  };
-  Object.defineProperty(marked, ACTION_GUARDED, {
+  const guarded = {
+    ...action,
+    validate: async () => true,
+    handler: async (...args: Parameters<Action["handler"]>) => {
+      const text = `ALICE_HIGH_RISK_ACTION_DENIED: ${action.name} requires an independently verified capability grant.`;
+      const callback = args[4];
+      if (callback) {
+        await callback({
+          text,
+          action: "ALICE_HIGH_RISK_ACTION_DENIED",
+        } as Content);
+      }
+      return { success: false, text, error: "ALICE_HIGH_RISK_ACTION_DENIED" };
+    },
+  } as T & { [ACTION_GUARDED]?: true };
+  Object.defineProperty(guarded, ACTION_GUARDED, {
     value: true,
     enumerable: false,
     configurable: false,
     writable: false,
   });
-  return action;
+  return guarded;
 }
 
 export function installAliceHighRiskActionBoundary(
@@ -71,7 +80,12 @@ export function installAliceHighRiskActionBoundary(
   environment: AliceRuntimeProfileEnv = process.env,
 ): void {
   if (!isAliceFullRuntimeProfile(environment)) return;
-  for (const action of runtime.actions) guardAction(action);
+  for (let index = 0; index < runtime.actions.length; index += 1) {
+    runtime.actions[index] = enforceAliceActionExecutionBoundary(
+      runtime.actions[index],
+      environment,
+    );
+  }
 
   const marked = runtime as GuardableRuntime & {
     [RUNTIME_GUARD_INSTALLED]?: true;
@@ -84,7 +98,7 @@ export function installAliceHighRiskActionBoundary(
   }
   const registerAction = runtime.registerAction.bind(runtime);
   runtime.registerAction = (action: Action): void => {
-    registerAction(guardAction(action));
+    registerAction(enforceAliceActionExecutionBoundary(action, environment));
   };
   Object.defineProperty(marked, RUNTIME_GUARD_INSTALLED, {
     value: true,

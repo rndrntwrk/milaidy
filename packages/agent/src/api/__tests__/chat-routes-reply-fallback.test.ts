@@ -11,6 +11,36 @@ import {
 } from "../../runtime/alice-high-risk-action-boundary";
 import { generateChatResponse } from "../chat-routes";
 
+const selfControlActionMocks = vi.hoisted(() => ({
+  block: vi.fn(async (..._args: unknown[]) => ({
+    success: true,
+    text: "Unsafe website block executed.",
+  })),
+  permission: vi.fn(async (..._args: unknown[]) => ({
+    success: true,
+    text: "Unsafe permission request executed.",
+  })),
+}));
+
+vi.mock("@miladyai/plugin-selfcontrol", () => ({
+  selfControlBlockWebsitesAction: {
+    name: "BLOCK_WEBSITES",
+    validate: async () => true,
+    handler: selfControlActionMocks.block,
+  },
+  selfControlRequestPermissionAction: {
+    name: "REQUEST_WEBSITE_BLOCKING_PERMISSION",
+    validate: async () => true,
+    handler: selfControlActionMocks.permission,
+  },
+}));
+
+vi.mock("@miladyai/plugin-selfcontrol/selfcontrol", () => ({
+  getSelfControlStatus: async () => ({ active: true }),
+  hasWebsiteBlockDeferralIntent: () => false,
+  hasWebsiteBlockIntent: (text: string) => /\bblock\b/i.test(text),
+}));
+
 function createRuntimeForChatRouteTests(options?: {
   handleMessage?: (
     runtime: AgentRuntime,
@@ -117,8 +147,75 @@ function createUserMessage(text: string) {
 
 describe("generateChatResponse fallback recovery", () => {
   afterEach(() => {
+    vi.clearAllMocks();
     vi.unstubAllEnvs();
   });
+
+  it.each([
+    {
+      actionName: "BLOCK_WEBSITES",
+      prompt: "Block websites x.com now",
+      originalHandler: selfControlActionMocks.block,
+    },
+    {
+      actionName: "REQUEST_WEBSITE_BLOCKING_PERMISSION",
+      prompt: "Request permission to enable website blocking",
+      originalHandler: selfControlActionMocks.permission,
+    },
+  ])(
+    "denies dynamically resolved $actionName through full-gated chat",
+    async ({ originalHandler, prompt }) => {
+      vi.stubEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+      vi.stubEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+      const runtime = createRuntimeForChatRouteTests({
+        handleMessage: async () => ({
+          responseContent: { text: "I will handle that now.", actions: [] },
+          mode: "none",
+        }),
+      });
+
+      const result = await generateChatResponse(
+        runtime,
+        createUserMessage(prompt),
+        "ChatRouteAgent",
+      );
+
+      expect(originalHandler).not.toHaveBeenCalled();
+      expect(result.text).toContain("ALICE_HIGH_RISK_ACTION_DENIED");
+    },
+  );
+
+  it.each([
+    {
+      actionName: "BLOCK_WEBSITES",
+      prompt: "Block websites x.com now",
+      originalHandler: selfControlActionMocks.block,
+    },
+    {
+      actionName: "REQUEST_WEBSITE_BLOCKING_PERMISSION",
+      prompt: "Request permission to enable website blocking",
+      originalHandler: selfControlActionMocks.permission,
+    },
+  ])(
+    "preserves non-full dynamic $actionName execution",
+    async ({ originalHandler, prompt }) => {
+      const runtime = createRuntimeForChatRouteTests({
+        handleMessage: async () => ({
+          responseContent: { text: "I will handle that now.", actions: [] },
+          mode: "none",
+        }),
+      });
+
+      const result = await generateChatResponse(
+        runtime,
+        createUserMessage(prompt),
+        "ChatRouteAgent",
+      );
+
+      expect(originalHandler).toHaveBeenCalledTimes(1);
+      expect(result.text).toContain("Unsafe");
+    },
+  );
 
   it("denies chat-initiated wallet execution in full-gated Alice without a verified grant", async () => {
     vi.stubEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
