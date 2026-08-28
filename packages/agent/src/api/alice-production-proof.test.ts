@@ -34,7 +34,7 @@ describe("Alice sanitized runtime-boundary proof", () => {
         { name: "core-security-hooks" },
         { name: "@elizaos/plugin-agent-skills" },
         { name: "eliza" },
-        { name: "sql" },
+        { name: "@elizaos/plugin-sql" },
         { name: "openai" },
       ],
       actions: [{ name: "REPLY" }],
@@ -101,6 +101,37 @@ describe("Alice sanitized runtime-boundary proof", () => {
         deploymentManifestSha256: `sha256:${"9".repeat(64)}`,
       },
     });
+  });
+
+  it("refuses the response-only SQL alias in a full-gated runtime", () => {
+    const runtime = {
+      plugins: [
+        { name: "basic-capabilities" },
+        { name: "core-security-hooks" },
+        { name: "@elizaos/plugin-agent-skills" },
+        { name: "eliza" },
+        { name: "sql" },
+        { name: "openai" },
+      ],
+      actions: [{ name: "REPLY" }],
+    };
+    const environment = {
+      ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+      ALICE_RUNTIME_PROFILE: "full-gated",
+    };
+
+    expect(() =>
+      stampAliceProductionRuntimeBoundary(
+        runtime,
+        [
+          "eliza",
+          "@elizaos/plugin-sql",
+          "@elizaos/plugin-agent-skills",
+          "@elizaos/plugin-openai",
+        ],
+        environment,
+      ),
+    ).toThrow("ALICE_PRODUCTION_EXECUTION_SURFACE_INVALID");
   });
 
   it("refuses to stamp full-gated runtimes missing a required core marker", () => {
