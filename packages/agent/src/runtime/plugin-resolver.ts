@@ -32,7 +32,10 @@ import {
   enforceAliceFullGatedCapabilityPolicy,
   readAliceCapabilityBom,
 } from "./alice-capability-inventory.js";
-import { isAliceFullRuntimeProfile } from "./alice-runtime-profile.js";
+import {
+  isAliceFullRuntimeProfile,
+  isAliceProductionRuntime,
+} from "./alice-runtime-profile.js";
 import {
   enforceAliceProductionPluginPolicy,
   isAliceProductionPluginPolicyEnabled,
@@ -95,6 +98,9 @@ export default { TelegramAccountAuthSession, loadTelegramAccountSessionString, d
 async function ensureTelegramAccountAuthExportCompat(
   installRoot: string,
 ): Promise<void> {
+  if (isAliceProductionRuntime(process.env)) {
+    return;
+  }
   const packageJsonPath = path.join(
     installRoot,
     "node_modules",
