@@ -700,6 +700,8 @@ function runProgramAdmissionPreflight({
   const envelope = release.configs.control.vars?.ALICE_PROGRAM_ENVELOPE_B64;
   const signature = release.configs.control.vars?.ALICE_PROGRAM_SIGNATURE_B64;
   const publicJwk = release.configs.control.vars?.ALICE_PROGRAM_PUBLIC_JWK_B64;
+  const containerMode = release.manifest.schemaVersion ===
+    "alice.deployment-manifest.v2";
   if (
     !exactKeys(evidence, [
       "accessProxySecretFormatVerified",
@@ -707,9 +709,10 @@ function runProgramAdmissionPreflight({
       "deploymentControllerCommit",
       "deploymentManifestSha256",
       "elizaCommit",
-      "modalRevision",
-      "modalProxyTokenPairVerified",
-      "modalRuntimeSecretMappingsVerified",
+      containerMode ? "runtimeRevision" : "modalRevision",
+      ...(containerMode
+        ? ["containerRuntimeSecretMappingsVerified"]
+        : ["modalProxyTokenPairVerified", "modalRuntimeSecretMappingsVerified"]),
       "policyHash",
       "programDigest",
       "programPublicJwkSha256",
@@ -725,7 +728,8 @@ function runProgramAdmissionPreflight({
       "serviceTokenPairsVerified",
       "sourceCommit",
     ]) ||
-    evidence.schemaVersion !== "alice.program-admission.v1" ||
+    evidence.schemaVersion !==
+      (containerMode ? "alice.program-admission.v2" : "alice.program-admission.v1") ||
     !canonicalIsoTimestamp(evidence.admittedAt) ||
     evidence.sourceCommit !== release.manifest.source.sourceCommit ||
     evidence.deploymentControllerCommit !==
@@ -740,7 +744,10 @@ function runProgramAdmissionPreflight({
       release.deploymentManifestSha256 ||
     evidence.policyHash !== release.manifest.release.policyHash ||
     evidence.releaseEpoch !== release.manifest.release.releaseEpoch ||
-    evidence.modalRevision !== release.manifest.release.modalRevision ||
+    evidence[containerMode ? "runtimeRevision" : "modalRevision"] !==
+      release.manifest.release[
+        containerMode ? "runtimeRevision" : "modalRevision"
+      ] ||
     evidence.rollbackBoundary !== release.manifest.release.rollbackBoundary ||
     !DIGEST.test(evidence.programPublicJwkSha256 ?? "") ||
     !DIGEST.test(evidence.programDigest ?? "") ||
@@ -748,8 +755,10 @@ function runProgramAdmissionPreflight({
     evidence.serviceTokenPairsVerified !== true ||
     evidence.runtimeReleaseTokenBindingVerified !== true ||
     evidence.accessProxySecretFormatVerified !== true ||
-    evidence.modalProxyTokenPairVerified !== true ||
-    evidence.modalRuntimeSecretMappingsVerified !== true ||
+    (containerMode
+      ? evidence.containerRuntimeSecretMappingsVerified !== true
+      : evidence.modalProxyTokenPairVerified !== true ||
+        evidence.modalRuntimeSecretMappingsVerified !== true) ||
     evidence.recoveryKeyUnavailableToDeployment !== true ||
     typeof envelope !== "string" ||
     typeof signature !== "string" ||
@@ -1041,11 +1050,31 @@ export function verifyAliceCloudflarePrepareEvidence(
 }
 
 function secretFiles(configs, secretOverrides = {}) {
+  const containerMode = configs?.access?.secrets?.required?.includes(
+    "ALICE_RUNTIME_IMAGE",
+  );
+  const expectedOverrides = [
+    "ALICE_EVIDENCE_QUEUE_HMAC_KEY",
+    "ALICE_RUNTIME_RELEASE_TOKEN_SHA256",
+    ...(containerMode
+      ? [
+          "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
+          "ALICE_ELIZA_COMMIT",
+          "ALICE_POLICY_HASH",
+          "ALICE_PROGRAM_DIGEST",
+          "ALICE_RELEASE_DIGEST",
+          "ALICE_RUNTIME_API_TOKEN",
+          "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
+          "ALICE_RUNTIME_IMAGE",
+          "ALICE_RUNTIME_RELEASE_TOKEN",
+          "ALICE_RUNTIME_REVISION",
+          "ALICE_RUNTIME_VAULT_PASSPHRASE",
+          "ALICE_SOURCE_COMMIT",
+        ]
+      : []),
+  ];
   if (
-    !exactKeys(secretOverrides, [
-      "ALICE_EVIDENCE_QUEUE_HMAC_KEY",
-      "ALICE_RUNTIME_RELEASE_TOKEN_SHA256",
-    ])
+    !exactKeys(secretOverrides, expectedOverrides)
   ) {
     releaseInvalid("ALICE_RELEASE_SECRETS_INVALID");
   }
@@ -1073,7 +1102,9 @@ function secretFiles(configs, secretOverrides = {}) {
         if (
           !/^[A-Z][A-Z0-9_]+$/.test(name) ||
           typeof value !== "string" ||
-          value.length < 16
+          (name === "ALICE_RUNTIME_REVISION"
+            ? !/^(?:49|[5-9][0-9]|[1-9][0-9]{2,})$/.test(value)
+            : value.length < 16)
         ) {
           releaseInvalid("ALICE_RELEASE_SECRETS_INVALID");
         }
@@ -1583,11 +1614,34 @@ async function main() {
   }
 
   if (phase === "prepare") {
+    const containerMode = release.manifest.schemaVersion ===
+      "alice.deployment-manifest.v2";
     const secrets = secretFiles(release.configs, {
       ALICE_EVIDENCE_QUEUE_HMAC_KEY:
         admission.credential.evidenceQueueHmacKey,
       ALICE_RUNTIME_RELEASE_TOKEN_SHA256:
         admission.credential.saltedSha256,
+      ...(containerMode
+        ? {
+            ALICE_DEPLOYMENT_CONTROLLER_COMMIT:
+              admission.evidence.deploymentControllerCommit,
+            ALICE_ELIZA_COMMIT: admission.evidence.elizaCommit,
+            ALICE_POLICY_HASH: admission.evidence.policyHash,
+            ALICE_PROGRAM_DIGEST: admission.evidence.programDigest,
+            ALICE_RELEASE_DIGEST: admission.evidence.releaseDigest,
+            ALICE_RUNTIME_API_TOKEN: process.env.MILADY_API_TOKEN,
+            ALICE_RUNTIME_BUILD_MANIFEST_SHA256:
+              admission.evidence.runtimeBuildManifestSha256,
+            ALICE_RUNTIME_IMAGE: admission.evidence.runtimeImage,
+            ALICE_RUNTIME_RELEASE_TOKEN: admission.credential.token,
+            ALICE_RUNTIME_REVISION: String(
+              admission.evidence.runtimeRevision,
+            ),
+            ALICE_RUNTIME_VAULT_PASSPHRASE:
+              process.env.ELIZA_VAULT_PASSPHRASE,
+            ALICE_SOURCE_COMMIT: admission.evidence.sourceCommit,
+          }
+        : {}),
     });
     let rollbackRequired = false;
     try {
@@ -1733,6 +1787,8 @@ async function main() {
       deploymentManifestSha256: release.deploymentManifestSha256,
     },
   );
+  const containerMode = admission.evidence.schemaVersion ===
+    "alice.program-admission.v2";
   const candidateExpected = {
     binding: {
       programDigest: admission.evidence.programDigest,
@@ -1749,7 +1805,9 @@ async function main() {
         admission.evidence.runtimeBuildManifestSha256,
       capabilityBomSha256: admission.evidence.capabilityBomSha256,
       elizaCommit: admission.evidence.elizaCommit,
-      modalRevision: admission.evidence.modalRevision,
+      ...(containerMode
+        ? { runtimeRevision: admission.evidence.runtimeRevision }
+        : { modalRevision: admission.evidence.modalRevision }),
       deploymentManifestSha256:
         admission.evidence.deploymentManifestSha256,
     },

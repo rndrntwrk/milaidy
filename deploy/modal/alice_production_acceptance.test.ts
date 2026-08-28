@@ -183,6 +183,64 @@ function fixture() {
   };
 }
 
+function containerFixture() {
+  const data: any = fixture();
+  const runtimeImage =
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"6".repeat(64)}`;
+  data.manifest.schemaVersion = "alice.deployment-manifest.v2";
+  data.manifest.source.runtimeImage = runtimeImage;
+  delete data.manifest.release.modalRevision;
+  data.manifest.release.runtimeRevision = 50;
+  data.manifest.release.rollbackBoundary = "container:alice-runtime:v50";
+  const deploymentManifestSha256 = sha(
+    `${canonicalAliceJson(data.manifest)}\n`,
+  );
+  data.programAdmission = {
+    ...data.programAdmission,
+    schemaVersion: "alice.program-admission.v2",
+    runtimeImage,
+    deploymentManifestSha256,
+    runtimeRevision: 50,
+    rollbackBoundary: "container:alice-runtime:v50",
+  };
+  delete data.programAdmission.modalRevision;
+  data.expected = {
+    ...data.expected,
+    release: {
+      ...data.expected.release,
+      runtimeImage,
+      deploymentManifestSha256,
+      runtimeRevision: 50,
+    },
+    rollbackBoundary: "container:alice-runtime:v50",
+  };
+  delete data.expected.release.modalRevision;
+  data.deploymentPauseEvidence = {
+    ...data.deploymentPauseEvidence,
+    candidateExpected: data.expected,
+  };
+  data.containerImageEvidence = {
+    schemaVersion: "alice.cloudflare-container-image.v1",
+    accountId: "036df6c823669b8fa2f66cf4c16eeb29",
+    observedAt: "2026-08-27T12:00:00.000Z",
+    sourceCommit: data.expected.release.sourceCommit,
+    sourceImage:
+      `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"b".repeat(64)}`,
+    sourceDigest: `sha256:${"b".repeat(64)}`,
+    runtimeImage,
+    runtimeDigest: `sha256:${"6".repeat(64)}`,
+    runtimeRevision: 50,
+    runtimeBuildManifestSha256:
+      data.expected.release.runtimeBuildManifestSha256,
+    capabilityBomSha256: data.expected.release.capabilityBomSha256,
+    tag: `alice-${data.expected.release.sourceCommit.slice(0, 12)}-123456789-1`,
+    registryReadbackVerified: true,
+    buildReusedWithoutRebuild: true,
+  };
+  delete data.modalPromotionEvidence;
+  return data;
+}
+
 function json(value: unknown, status = 200, headers: Record<string, string> = {}) {
   return Response.json(value, { status, headers });
 }
@@ -244,7 +302,7 @@ function mockRuntime(
     deploymentManifestSha256: data.programAdmission.deploymentManifestSha256,
     admissionGeneration: 4 + pauseCount,
     activeReleaseEpoch: 1,
-    rollbackBoundary: "modal:alice-runtime:v50",
+    rollbackBoundary: data.expected.rollbackBoundary,
     pausedScopes: paused
       ? ["all"]
       : terminalScopedPause && resumeCount >= 2
@@ -276,7 +334,7 @@ function mockRuntime(
     pausedAt: nowMs + pauseCount,
     binding: data.binding,
     deploymentManifestSha256: data.programAdmission.deploymentManifestSha256,
-    rollbackBoundary: "modal:alice-runtime:v50",
+    rollbackBoundary: data.expected.rollbackBoundary,
   });
   const fetchImpl = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input));
@@ -466,6 +524,21 @@ function acceptanceInput(data: ReturnType<typeof fixture>, runtime: ReturnType<t
 }
 
 describe("Alice terminal production acceptance", () => {
+  test("accepts Container Program v2 with exact Cloudflare image provenance", async () => {
+    const data = containerFixture();
+    const runtime = mockRuntime(data);
+    const evidence = await runAliceProductionAcceptance(
+      acceptanceInput(data, runtime),
+    );
+    expect(evidence.runtimeRevision).toBe(50);
+    expect(evidence.provenance.runtimeImage).toBe(
+      data.containerImageEvidence.runtimeImage,
+    );
+    expect(evidence.provenance.containerImageEvidenceSha256).toMatch(
+      /^sha256:[a-f0-9]{64}$/,
+    );
+  });
+
   test("proves authenticated UI, durable chat/task recovery, gates, pause, rollback, and provenance", async () => {
     const data = fixture();
     const runtime = mockRuntime(data);

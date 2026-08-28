@@ -53,6 +53,7 @@ function writeReadonly(filePath, value) {
 }
 
 function candidateFromAdmission(admission) {
+  const containerMode = admission?.schemaVersion === "alice.program-admission.v2";
   const binding = {
     programDigest: admission?.programDigest,
     releaseDigest: admission?.releaseDigest,
@@ -66,15 +67,20 @@ function candidateFromAdmission(admission) {
     runtimeBuildManifestSha256: admission?.runtimeBuildManifestSha256,
     capabilityBomSha256: admission?.capabilityBomSha256,
     elizaCommit: admission?.elizaCommit,
-    modalRevision: admission?.modalRevision,
+    ...(containerMode
+      ? { runtimeRevision: admission?.runtimeRevision }
+      : { modalRevision: admission?.modalRevision }),
     deploymentManifestSha256: admission?.deploymentManifestSha256,
   };
   const rollbackBoundary = admission?.rollbackBoundary;
   if (
-    admission?.schemaVersion !== "alice.program-admission.v1" ||
+    (!containerMode && admission?.schemaVersion !== "alice.program-admission.v1") ||
     !COMMIT.test(release.sourceCommit ?? "") ||
     !DIGEST.test(release.deploymentManifestSha256 ?? "") ||
-    rollbackBoundary !== `modal:alice-runtime:v${release.modalRevision}`
+    rollbackBoundary !==
+      `${containerMode ? "container" : "modal"}:alice-runtime:v${
+        containerMode ? release.runtimeRevision : release.modalRevision
+      }`
   ) invalid("ALICE_PROGRAM_ADMISSION_INVALID");
   return { binding, release, rollbackBoundary };
 }

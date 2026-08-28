@@ -15,6 +15,8 @@ import {
   resolveAliceCandidateWorkflowVersion,
   runAliceWorkflowBindingCanary,
 } from "./alice_workflow_binding_canary.mjs";
+import { verifyAliceCloudflareContainerImageEvidence } from
+  "./alice_cloudflare_container_image.mjs";
 
 const OWNER_ORIGIN = "https://alice.rndrntwrk.com";
 const ACCOUNT_ID = "036df6c823669b8fa2f66cf4c16eeb29";
@@ -58,12 +60,13 @@ function digestBytes(bytes: Uint8Array | string): string {
 }
 
 function releaseExpected(admission: Record<string, any>) {
+  const containerMode = admission.schemaVersion === "alice.program-admission.v2";
   const binding = {
     programDigest: admission.programDigest,
     releaseDigest: admission.releaseDigest,
     policyHash: admission.policyHash,
   };
-  const release = {
+  const release: Record<string, any> = {
     releaseEpoch: admission.releaseEpoch,
     sourceCommit: admission.sourceCommit,
     deploymentControllerCommit: admission.deploymentControllerCommit,
@@ -71,11 +74,13 @@ function releaseExpected(admission: Record<string, any>) {
     runtimeBuildManifestSha256: admission.runtimeBuildManifestSha256,
     capabilityBomSha256: admission.capabilityBomSha256,
     elizaCommit: admission.elizaCommit,
-    modalRevision: admission.modalRevision,
+    ...(containerMode
+      ? { runtimeRevision: admission.runtimeRevision }
+      : { modalRevision: admission.modalRevision }),
     deploymentManifestSha256: admission.deploymentManifestSha256,
   };
   if (
-    admission.schemaVersion !== "alice.program-admission.v1" ||
+    (!containerMode && admission.schemaVersion !== "alice.program-admission.v1") ||
     ![binding.programDigest, binding.releaseDigest, binding.policyHash,
       release.runtimeBuildManifestSha256,
       release.capabilityBomSha256,
@@ -83,9 +88,15 @@ function releaseExpected(admission: Record<string, any>) {
     ![release.sourceCommit, release.deploymentControllerCommit,
       release.elizaCommit].every((value) => COMMIT.test(value)) ||
     !Number.isSafeInteger(release.releaseEpoch) || release.releaseEpoch < 1 ||
-    !Number.isSafeInteger(release.modalRevision) || release.modalRevision < 49 ||
+    !Number.isSafeInteger(
+      containerMode ? release.runtimeRevision : release.modalRevision,
+    ) ||
+    (containerMode ? release.runtimeRevision : release.modalRevision) < 49 ||
     release.runtimeImage !== admission.runtimeImage ||
-    admission.rollbackBoundary !== `modal:alice-runtime:v${release.modalRevision}`
+    admission.rollbackBoundary !==
+      `${containerMode ? "container" : "modal"}:alice-runtime:v${
+        containerMode ? release.runtimeRevision : release.modalRevision
+      }`
   ) invalid();
   return { binding, release, rollbackBoundary: admission.rollbackBoundary };
 }
@@ -154,7 +165,7 @@ function assertCandidateState(
   value: Record<string, any>,
   expected: any,
   expectedPausedScopes: string[],
-) {
+): Record<string, any> {
   const authority = value.authority;
   const observedPausedScopes = normalizedPausedScopes(authority?.pausedScopes);
   const intendedPausedScopes = normalizedPausedScopes(expectedPausedScopes);
@@ -316,11 +327,13 @@ async function resumePause({
 function validateProviderRollbackForward(
   cloudflareRollback: Record<string, any>,
   cloudflareLive: Record<string, any>,
-  modalPromotion: Record<string, any>,
+  providerPromotion: Record<string, any>,
   expected: any,
 ) {
-  const modalProof = modalPromotion.rollbackForwardProof;
-  const modalRelease = modalPromotion.release;
+  const containerMode = Object.hasOwn(expected.release, "runtimeRevision");
+  const modalPromotion = containerMode ? null : providerPromotion;
+  const modalProof = modalPromotion?.rollbackForwardProof;
+  const modalRelease = modalPromotion?.release;
   if (
     cloudflareRollback.schemaVersion !==
       "alice.cloudflare-rollback-evidence.v1" ||
@@ -332,24 +345,45 @@ function validateProviderRollbackForward(
     !object(cloudflareLive.workers) ||
     !["access", "control", "aiGateway"].every((role) =>
       object(cloudflareLive.workers[role])) ||
-    modalPromotion.schemaVersion !== "alice.modal-promotion-evidence.v1" ||
-    !object(modalRelease) ||
-    modalRelease.sourceCommit !== expected.release.sourceCommit ||
-    modalRelease.releaseDigest !== expected.binding.releaseDigest ||
-    modalRelease.deploymentManifestSha256 !==
-      expected.release.deploymentManifestSha256 ||
-    !object(modalProof) ||
-    modalProof.schemaVersion !== "alice.modal-rollback-forward-proof.v1" ||
-    ![modalProof.previousProviderVersion, modalProof.candidateProviderVersion,
-      modalProof.rollbackProviderVersion, modalProof.forwardProviderVersion]
-      .every((value) => Number.isSafeInteger(value) && value > 0) ||
-    !(modalProof.previousProviderVersion < modalProof.candidateProviderVersion &&
-      modalProof.candidateProviderVersion < modalProof.rollbackProviderVersion &&
-      modalProof.rollbackProviderVersion < modalProof.forwardProviderVersion) ||
-    !DIGEST.test(modalProof.previousGraphSha256 ?? "") ||
-    !DIGEST.test(modalProof.candidateGraphSha256 ?? "") ||
-    modalPromotion.terminalProviderVersion !== modalProof.forwardProviderVersion
+    (!containerMode &&
+      (modalPromotion?.schemaVersion !== "alice.modal-promotion-evidence.v1" ||
+        !object(modalRelease) ||
+        modalRelease.sourceCommit !== expected.release.sourceCommit ||
+        modalRelease.releaseDigest !== expected.binding.releaseDigest ||
+        modalRelease.deploymentManifestSha256 !==
+          expected.release.deploymentManifestSha256 ||
+        !object(modalProof) ||
+        modalProof.schemaVersion !== "alice.modal-rollback-forward-proof.v1" ||
+        ![modalProof.previousProviderVersion, modalProof.candidateProviderVersion,
+          modalProof.rollbackProviderVersion, modalProof.forwardProviderVersion]
+          .every((value) => Number.isSafeInteger(value) && value > 0) ||
+        !(modalProof.previousProviderVersion < modalProof.candidateProviderVersion &&
+          modalProof.candidateProviderVersion < modalProof.rollbackProviderVersion &&
+          modalProof.rollbackProviderVersion < modalProof.forwardProviderVersion) ||
+        !DIGEST.test(modalProof.previousGraphSha256 ?? "") ||
+        !DIGEST.test(modalProof.candidateGraphSha256 ?? "") ||
+        modalPromotion.terminalProviderVersion !== modalProof.forwardProviderVersion))
   ) invalid();
+  if (containerMode) {
+    const container = verifyAliceCloudflareContainerImageEvidence(
+      providerPromotion,
+    );
+    if (
+      container.sourceCommit !== expected.release.sourceCommit ||
+      container.runtimeImage !== expected.release.runtimeImage ||
+      container.runtimeRevision !== expected.release.runtimeRevision ||
+      container.runtimeBuildManifestSha256 !==
+        expected.release.runtimeBuildManifestSha256 ||
+      container.capabilityBomSha256 !== expected.release.capabilityBomSha256
+    ) invalid();
+    return {
+      cloudflareRollbackSha256: digestBytes(canonicalAliceJson(cloudflareRollback)),
+      cloudflareLiveReadbackSha256: digestBytes(canonicalAliceJson(cloudflareLive)),
+      containerImageEvidenceSha256: digestBytes(canonicalAliceJson(container)),
+      runtimeImage: container.runtimeImage,
+      runtimeRevision: container.runtimeRevision,
+    };
+  }
   return {
     cloudflareRollbackSha256: digestBytes(canonicalAliceJson(cloudflareRollback)),
     cloudflareLiveReadbackSha256: digestBytes(canonicalAliceJson(cloudflareLive)),
@@ -426,6 +460,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     cloudflareRollbackProof,
     cloudflareLiveReadback,
     modalPromotionEvidence,
+    containerImageEvidence,
   } = input;
   if (
     typeof fetchImpl !== "function" || typeof sleepImpl !== "function" ||
@@ -445,19 +480,27 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     expectedWorkflowConclusion !== "success" ||
     !object(ownerAccess) || !object(manifest) || !object(programAdmission) ||
     !object(deploymentPauseEvidence) || !object(rollbackAnchor) ||
-    !object(cloudflareRollbackProof) || !object(cloudflareLiveReadback) ||
-    !object(modalPromotionEvidence)
+    !object(cloudflareRollbackProof) || !object(cloudflareLiveReadback)
   ) invalid();
 
   const expected = releaseExpected(programAdmission);
+  const containerMode = Object.hasOwn(expected.release, "runtimeRevision");
+  const providerPromotionEvidence = containerMode
+    ? containerImageEvidence
+    : modalPromotionEvidence;
+  if (!object(providerPromotionEvidence)) invalid();
   if (
-    manifest.schemaVersion !== "alice.deployment-manifest.v1" ||
+    manifest.schemaVersion !==
+      (containerMode
+        ? "alice.deployment-manifest.v2"
+        : "alice.deployment-manifest.v1") ||
     manifest.source.sourceCommit !== expected.release.sourceCommit ||
     manifest.source.deploymentControllerCommit !==
       expected.release.deploymentControllerCommit ||
     manifest.source.runtimeImage !== expected.release.runtimeImage ||
     manifest.release.releaseEpoch !== expected.release.releaseEpoch ||
-    manifest.release.modalRevision !== expected.release.modalRevision ||
+    manifest.release[containerMode ? "runtimeRevision" : "modalRevision"] !==
+      expected.release[containerMode ? "runtimeRevision" : "modalRevision"] ||
     manifest.release.policyHash !== expected.binding.policyHash ||
     deploymentPauseEvidence.schemaVersion !==
       "alice.deployment-pause-evidence.v1" ||
@@ -478,7 +521,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
   const providerProof = validateProviderRollbackForward(
     cloudflareRollbackProof,
     cloudflareLiveReadback,
-    modalPromotionEvidence,
+    providerPromotionEvidence,
     expected,
   );
   const workflowId = cloudflareLiveReadback.provider?.continuityConfig?.workflow?.id;
@@ -877,7 +920,9 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         expected.release.deploymentManifestSha256,
       binding: expected.binding,
       releaseEpoch: expected.release.releaseEpoch,
-      modalRevision: expected.release.modalRevision,
+      ...(containerMode
+        ? { runtimeRevision: expected.release.runtimeRevision }
+        : { modalRevision: expected.release.modalRevision }),
       deploymentRun: {
         id: deploymentRunId,
         attempt: deploymentRunAttempt,
@@ -999,6 +1044,11 @@ function writeReadonly(filePath: string, value: unknown) {
 }
 
 async function main() {
+  const programAdmission = readJson(
+    process.env.ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH ?? "",
+  );
+  const containerMode = programAdmission.schemaVersion ===
+    "alice.program-admission.v2";
   const evidence = await runAliceProductionAcceptance({
     ownerAuthorization: process.env.ALICE_OWNER_AUTHORIZATION,
     ownerAccess: {
@@ -1020,9 +1070,7 @@ async function main() {
     recoveryOperatorJob: process.env.ALICE_RECOVERY_OPERATOR_JOB,
     expectedWorkflowConclusion: process.env.ALICE_EXPECTED_WORKFLOW_CONCLUSION,
     manifest: readJson(process.env.ALICE_DEPLOYMENT_MANIFEST_PATH ?? ""),
-    programAdmission: readJson(
-      process.env.ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH ?? "",
-    ),
+    programAdmission,
     deploymentPauseEvidence: readJson(
       process.env.ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH ?? "",
     ),
@@ -1035,9 +1083,17 @@ async function main() {
     cloudflareLiveReadback: readJson(
       process.env.ALICE_CLOUDFLARE_READBACK_PATH ?? "",
     ),
-    modalPromotionEvidence: readJson(
-      process.env.ALICE_MODAL_PROMOTION_EVIDENCE_PATH ?? "",
-    ),
+    ...(containerMode
+      ? {
+          containerImageEvidence: readJson(
+            process.env.ALICE_CONTAINER_IMAGE_EVIDENCE_PATH ?? "",
+          ),
+        }
+      : {
+          modalPromotionEvidence: readJson(
+            process.env.ALICE_MODAL_PROMOTION_EVIDENCE_PATH ?? "",
+          ),
+        }),
   });
   writeReadonly(process.env.ALICE_PRODUCTION_ACCEPTANCE_PATH ?? "", evidence);
 }
