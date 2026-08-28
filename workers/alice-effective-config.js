@@ -1,6 +1,8 @@
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const BASE64_URL_SHA256 = /^[A-Za-z0-9_-]{43}$/;
 const ACCESS_AUDIENCE = /^[A-Za-z0-9_-]{8,128}$/;
+const CLOUDFLARE_CONTAINER_IMAGE =
+  /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
 
 export const ALICE_CLOUDFLARE_TARGET = Object.freeze({
   accountId: "036df6c823669b8fa2f66cf4c16eeb29",
@@ -196,6 +198,77 @@ export function buildAliceAccessEffectiveConfig(inputs) {
       accessAudience: inputs.accessAudience,
       ownerEmailSha256: inputs.ownerEmailSha256,
       upstreamOrigin: inputs.upstreamOrigin,
+    },
+    observability: aliceObservability(),
+  };
+}
+
+export function buildAliceContainerAccessEffectiveConfig(inputs) {
+  if (
+    !validateOwnerInputs(inputs, [
+      "accessAudience",
+      "accessIssuer",
+      "ownerEmailSha256",
+      "runtimeImage",
+    ]) ||
+    !CLOUDFLARE_CONTAINER_IMAGE.test(inputs.runtimeImage)
+  ) {
+    throw new Error("ALICE_CONTAINER_ACCESS_EFFECTIVE_CONFIG_INVALID");
+  }
+  return {
+    schemaVersion: "alice.container-access-effective-config.v1",
+    worker: {
+      accountId: ALICE_CLOUDFLARE_TARGET.accountId,
+      name: ALICE_CLOUDFLARE_TARGET.accessWorker,
+      main: "src/worker.ts",
+      compatibilityDate: "2026-08-22",
+      workersDev: false,
+      previewUrls: false,
+      minify: true,
+      uploadSourceMaps: true,
+      routes: [
+        {
+          pattern: `${ALICE_CLOUDFLARE_TARGET.accessDomain}/*`,
+          zoneName: "rndrntwrk.com",
+        },
+      ],
+    },
+    bindings: {
+      services: [
+        {
+          binding: "ALICE_CONTROL",
+          service: ALICE_CLOUDFLARE_TARGET.controlWorker,
+        },
+      ],
+      durableObjects: [
+        {
+          binding: "ALICE_RUNTIME_CONTAINER",
+          className: "AliceRuntimeContainer",
+        },
+      ],
+      containers: [
+        {
+          name: "alice-production-runtime",
+          className: "AliceRuntimeContainer",
+          image: inputs.runtimeImage,
+          instanceType: "standard-1",
+          maxInstances: 1,
+        },
+      ],
+      versionMetadata: { binding: "ALICE_VERSION" },
+      secretNames: [
+        "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
+        "ALICE_ACCESS_PROXY_SECRET",
+      ],
+    },
+    values: {
+      accessIssuer: inputs.accessIssuer,
+      accessAudience: inputs.accessAudience,
+      ownerEmailSha256: inputs.ownerEmailSha256,
+      runtimeImage: inputs.runtimeImage,
+      runtimeContainerName: "alice-production-runtime",
+      runtimePort: 2138,
+      runtimeEgress: "deny-by-default",
     },
     observability: aliceObservability(),
   };

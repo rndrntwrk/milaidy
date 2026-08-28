@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import {
   ALICE_CLOUDFLARE_TARGET,
   buildAliceAccessEffectiveConfig,
+  buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceControlEffectiveConfig,
   canonicalAliceJson,
@@ -64,12 +65,21 @@ function effectiveConfigsAreCanonical(value) {
   try {
     const accessValues = value.accessEffectiveConfig?.values;
     const controlValues = value.controlEffectiveConfig?.values;
-    const expectedAccess = buildAliceAccessEffectiveConfig({
-      accessIssuer: accessValues?.accessIssuer,
-      accessAudience: accessValues?.accessAudience,
-      ownerEmailSha256: accessValues?.ownerEmailSha256,
-      upstreamOrigin: accessValues?.upstreamOrigin,
-    });
+    const expectedAccess =
+      value.accessEffectiveConfig?.schemaVersion ===
+      "alice.container-access-effective-config.v1"
+        ? buildAliceContainerAccessEffectiveConfig({
+            accessIssuer: accessValues?.accessIssuer,
+            accessAudience: accessValues?.accessAudience,
+            ownerEmailSha256: accessValues?.ownerEmailSha256,
+            runtimeImage: accessValues?.runtimeImage,
+          })
+        : buildAliceAccessEffectiveConfig({
+            accessIssuer: accessValues?.accessIssuer,
+            accessAudience: accessValues?.accessAudience,
+            ownerEmailSha256: accessValues?.ownerEmailSha256,
+            upstreamOrigin: accessValues?.upstreamOrigin,
+          });
     const expectedControl = buildAliceControlEffectiveConfig({
       accessIssuer: controlValues?.accessIssuer,
       accessAudience: controlValues?.accessAudience,
@@ -326,11 +336,11 @@ const invokedPath = process.argv[1]
 if (invokedPath === import.meta.url) {
   try {
     const modalRevision = Number(process.env.ALICE_MODAL_REVISION);
-    const accessEffectiveConfig = buildAliceAccessEffectiveConfig({
+    const accessEffectiveConfig = buildAliceContainerAccessEffectiveConfig({
       accessIssuer: process.env.ALICE_ACCESS_ISSUER,
       accessAudience: process.env.ALICE_ACCESS_AUDIENCE,
       ownerEmailSha256: process.env.ALICE_OWNER_EMAIL_SHA256,
-      upstreamOrigin: process.env.ALICE_UPSTREAM_ORIGIN,
+      runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
     });
     const controlEffectiveConfig = buildAliceControlEffectiveConfig({
       accessIssuer: process.env.ALICE_ACCESS_ISSUER,

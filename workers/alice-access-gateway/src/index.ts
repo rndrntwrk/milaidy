@@ -1,20 +1,23 @@
 import { verifyAccessJwt } from "../../alice-production-control/src/access";
 import { jsonResponse } from "../../alice-production-control/src/http";
 import {
-  buildAliceAccessEffectiveConfig,
+  buildAliceContainerAccessEffectiveConfig,
   verifyAliceEffectiveConfigBinding,
 } from "../../alice-effective-config.js";
+import {
+  fetchAliceRuntimeContainer,
+  type AliceRuntimeContainerNamespace,
+} from "./alice-runtime-host";
 
 export type AliceAccessGatewayEnv = {
   ALICE_ACCESS_ISSUER: string;
   ALICE_ACCESS_AUDIENCE: string;
   ALICE_OWNER_EMAIL_SHA256: string;
+  ALICE_CLOUDFLARE_RUNTIME_IMAGE: string;
   ALICE_ACCESS_PROXY_SECRET: string;
   ALICE_ACCESS_CONTROL_SERVICE_TOKEN: string;
-  ALICE_MODAL_PROXY_KEY: string;
-  ALICE_MODAL_PROXY_SECRET: string;
   ALICE_CONTROL: Fetcher;
-  ALICE_UPSTREAM_ORIGIN: string;
+  ALICE_RUNTIME_CONTAINER: AliceRuntimeContainerNamespace;
   ALICE_DEPLOYMENT_MANIFEST_SHA256: string;
   ALICE_DEPLOYMENT_MANIFEST_B64: string;
   ALICE_VERSION: WorkerVersionMetadata;
@@ -165,12 +168,6 @@ function validIssuer(value: string): boolean {
 }
 
 async function loadConfig(env: AliceAccessGatewayEnv) {
-  let upstream: URL;
-  try {
-    upstream = new URL(env.ALICE_UPSTREAM_ORIGIN);
-  } catch {
-    throw new Error("ACCESS_GATEWAY_CONFIG_INVALID");
-  }
   if (
     !validIssuer(env.ALICE_ACCESS_ISSUER) ||
     !/^[A-Za-z0-9_-]{8,128}$/.test(env.ALICE_ACCESS_AUDIENCE) ||
@@ -179,17 +176,14 @@ async function loadConfig(env: AliceAccessGatewayEnv) {
     env.ALICE_ACCESS_PROXY_SECRET.length < 32 ||
     typeof env.ALICE_ACCESS_CONTROL_SERVICE_TOKEN !== "string" ||
     env.ALICE_ACCESS_CONTROL_SERVICE_TOKEN.length < 32 ||
-    !/^wk-[A-Za-z0-9_-]{16,256}$/.test(env.ALICE_MODAL_PROXY_KEY) ||
-    !/^ws-[A-Za-z0-9_-]{16,256}$/.test(env.ALICE_MODAL_PROXY_SECRET) ||
-    env.ALICE_MODAL_PROXY_KEY === env.ALICE_MODAL_PROXY_SECRET ||
     !env.ALICE_CONTROL ||
     typeof env.ALICE_CONTROL.fetch !== "function" ||
-    !/^sha256:[a-f0-9]{64}$/.test(env.ALICE_DEPLOYMENT_MANIFEST_SHA256) ||
-    upstream.protocol !== "https:" ||
-    upstream.pathname !== "/" ||
-    upstream.search !== "" ||
-    upstream.hash !== "" ||
-    !upstream.hostname.endsWith(".modal.run")
+    !env.ALICE_RUNTIME_CONTAINER ||
+    typeof env.ALICE_RUNTIME_CONTAINER.getByName !== "function" ||
+    !/^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/.test(
+      env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+    ) ||
+    !/^sha256:[a-f0-9]{64}$/.test(env.ALICE_DEPLOYMENT_MANIFEST_SHA256)
   ) {
     throw new Error("ACCESS_GATEWAY_CONFIG_INVALID");
   }
@@ -197,14 +191,14 @@ async function loadConfig(env: AliceAccessGatewayEnv) {
     encodedManifest: env.ALICE_DEPLOYMENT_MANIFEST_B64,
     expectedManifestSha256: env.ALICE_DEPLOYMENT_MANIFEST_SHA256,
     role: "access",
-    effectiveConfig: buildAliceAccessEffectiveConfig({
+    effectiveConfig: buildAliceContainerAccessEffectiveConfig({
       accessIssuer: env.ALICE_ACCESS_ISSUER,
       accessAudience: env.ALICE_ACCESS_AUDIENCE,
       ownerEmailSha256: env.ALICE_OWNER_EMAIL_SHA256,
-      upstreamOrigin: env.ALICE_UPSTREAM_ORIGIN,
+      runtimeImage: env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
     }),
   });
-  return { manifest, upstream };
+  return { manifest };
 }
 
 async function loadJwks(
@@ -224,13 +218,28 @@ async function loadJwks(
 
 function upstreamHeaders(request: Request, env: AliceAccessGatewayEnv): Headers {
   const headers = new Headers();
-  for (const name of ["accept", "accept-language", "content-type"]) {
+  const names = ["accept", "accept-language", "content-type"];
+  if (
+    request.method === "GET" &&
+    request.headers.get("upgrade")?.trim().toLowerCase() === "websocket" &&
+    request.headers.get("connection")
+      ?.split(",")
+      .some((token) => token.trim().toLowerCase() === "upgrade") === true
+  ) {
+    names.push(
+      "connection",
+      "sec-websocket-extensions",
+      "sec-websocket-key",
+      "sec-websocket-protocol",
+      "sec-websocket-version",
+      "upgrade",
+    );
+  }
+  for (const name of names) {
     const value = request.headers.get(name);
     if (value !== null) headers.set(name, value);
   }
   headers.set("cf-access-authenticated-user-email", "alice-owner-verified.invalid");
-  headers.set("modal-key", env.ALICE_MODAL_PROXY_KEY);
-  headers.set("modal-secret", env.ALICE_MODAL_PROXY_SECRET);
   headers.set("x-milady-cloudflare-access-secret", env.ALICE_ACCESS_PROXY_SECRET);
   headers.set("x-forwarded-host", "alice.rndrntwrk.com");
   headers.set("x-forwarded-proto", "https");
@@ -482,7 +491,8 @@ function runtimeReleaseMatches(
         ]) &&
       exactRuntimePluginClosure(proof.runtimePluginNames) &&
       ["actionNames", "evaluatorNames", "serviceTypes", "taskWorkerNames"].every(
-        (key) => Array.isArray(proof[key]) && proof[key].length === 0,
+        (key) =>
+          Array.isArray(proof[key]) && (proof[key] as unknown[]).length === 0,
       ) &&
       release &&
       hasExactKeys(release, [
@@ -517,10 +527,8 @@ function runtimeReleaseMatches(
 
 async function verifyUpstreamRelease(
   request: Request,
-  upstream: URL,
   admission: RuntimeAdmission,
   env: AliceAccessGatewayEnv,
-  fetchImpl: FetchImplementation,
 ): Promise<
   { ok: true; proof: Record<string, any> } | { ok: false; response: Response }
 > {
@@ -530,9 +538,10 @@ async function verifyUpstreamRelease(
       response: jsonResponse({ ok: false, code: "RUNTIME_RELEASE_MISMATCH" }, 503),
     };
   }
-  const proofUrl = new URL(upstream);
+  const proofUrl = new URL("https://alice-runtime.internal");
   proofUrl.pathname = "/api/alice-production/proof";
-  const response = await fetchImpl(
+  const response = await fetchAliceRuntimeContainer(
+    env.ALICE_RUNTIME_CONTAINER,
     new Request(proofUrl, {
       method: "GET",
       headers: upstreamHeaders(request, env),
@@ -995,8 +1004,6 @@ async function persistDurableChatResponse(
   admission: RuntimeAdmission,
   env: AliceAccessGatewayEnv,
   request: Request,
-  upstream: URL,
-  fetchImpl: FetchImplementation,
   fullRuntime: boolean,
 ): Promise<Response> {
   if (!response.ok) {
@@ -1063,10 +1070,8 @@ async function persistDurableChatResponse(
   }
   const currentProof = await verifyUpstreamRelease(
     request,
-    upstream,
     currentAdmission.admission,
     env,
-    fetchImpl,
   );
   if (!currentProof.ok) return currentProof.response;
   if (isFullRuntimeProof(currentProof.proof) !== fullRuntime) {
@@ -1187,6 +1192,17 @@ function isFullRuntimeRequest(method: string, pathname: string): boolean {
   return FULL_RUNTIME_WRITES.some((pattern) => pattern.test(pathname));
 }
 
+function isFullRuntimeWebSocketRequest(request: Request, pathname: string): boolean {
+  return (
+    request.method === "GET" &&
+    pathname === "/ws" &&
+    request.headers.get("upgrade")?.trim().toLowerCase() === "websocket" &&
+    request.headers.get("connection")
+      ?.split(",")
+      .some((token) => token.trim().toLowerCase() === "upgrade") === true
+  );
+}
+
 function isFullRuntimeProductApi(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
   if (normalized === "GET" || normalized === "HEAD") {
@@ -1245,7 +1261,7 @@ export async function handleRequest(
 ): Promise<Response> {
   const requestId = crypto.randomUUID();
   try {
-    const { manifest, upstream } = await loadConfig(env);
+    const { manifest } = await loadConfig(env);
     const requestUrl = new URL(request.url);
     if (requestUrl.origin !== ALICE_ACCESS_ORIGIN) {
       return jsonResponse({ ok: false, code: "ACCESS_GATEWAY_HOST_DENIED" }, 404);
@@ -1275,17 +1291,16 @@ export async function handleRequest(
       return jsonResponse({ ok: false, code: verified.code }, status);
     }
 
-    if (!isAdmittedRuntimeRequest(request.method, path)) {
+    const fullRuntimeWebSocket = isFullRuntimeWebSocketRequest(request, path);
+    if (!isAdmittedRuntimeRequest(request.method, path) && !fullRuntimeWebSocket) {
       return jsonResponse({ ok: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" }, 403);
     }
     const admission = await checkRuntimeAdmission(env);
     if (!admission.ok) return admission.response;
     const upstreamProof = await verifyUpstreamRelease(
       request,
-      upstream,
       admission.admission,
       env,
-      fetchImpl,
     );
     if (!upstreamProof.ok) return upstreamProof.response;
 
@@ -1303,7 +1318,7 @@ export async function handleRequest(
     }
     if (
       fullRuntime
-        ? !isFullRuntimeRequest(request.method, path)
+        ? !isFullRuntimeRequest(request.method, path) && !fullRuntimeWebSocket
         : !(
             (request.method === "POST" && path === "/v1/chat/completions") ||
             (request.method === "GET" &&
@@ -1330,7 +1345,7 @@ export async function handleRequest(
         ok: true,
         service: "alice-access-gateway",
         authentication: "cloudflare-access-owner-jwt",
-        upstream: upstream.hostname,
+        upstream: "alice-production-runtime",
         releaseDigest: admission.admission.binding.releaseDigest,
         deploymentManifestSha256: env.ALICE_DEPLOYMENT_MANIFEST_SHA256,
         workerVersion: env.ALICE_VERSION,
@@ -1344,7 +1359,7 @@ export async function handleRequest(
     // Assign path and query components on a clone of the pinned upstream.
     // Resolving a user-controlled string beginning with `//` would otherwise
     // reinterpret it as a network-path reference and replace the Modal host.
-    const target = new URL(upstream);
+    const target = new URL("https://alice-runtime.internal");
     target.pathname = requestUrl.pathname;
     target.search = requestUrl.search;
     const init: RequestInit = {
@@ -1381,10 +1396,8 @@ export async function handleRequest(
         }
         const replayProof = await verifyUpstreamRelease(
           request,
-          upstream,
           replayAdmission.admission,
           env,
-          fetchImpl,
         );
         if (!replayProof.ok) return replayProof.response;
         if (isFullRuntimeProof(replayProof.proof) !== fullRuntime) {
@@ -1400,7 +1413,11 @@ export async function handleRequest(
     } else if (request.method !== "GET" && request.method !== "HEAD") {
       init.body = request.body;
     }
-    const upstreamResponse = await fetchImpl(new Request(target, init));
+    const runtimeRequest = new Request(target, init);
+    const upstreamResponse = await fetchAliceRuntimeContainer(
+      env.ALICE_RUNTIME_CONTAINER,
+      runtimeRequest,
+    );
     if (!durableChat) {
       const finalAdmission = await checkRuntimeAdmission(env);
       if (!finalAdmission.ok) return finalAdmission.response;
@@ -1412,10 +1429,8 @@ export async function handleRequest(
       }
       const finalProof = await verifyUpstreamRelease(
         request,
-        upstream,
         finalAdmission.admission,
         env,
-        fetchImpl,
       );
       if (!finalProof.ok) return finalProof.response;
       if (isFullRuntimeProof(finalProof.proof) !== fullRuntime) {
@@ -1440,8 +1455,6 @@ export async function handleRequest(
           admission.admission,
           env,
           request,
-          upstream,
-          fetchImpl,
           fullRuntime,
         )
       : upstreamResponse;
