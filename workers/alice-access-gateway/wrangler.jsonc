@@ -29,6 +29,7 @@
       "ALICE_RUNTIME_API_TOKEN",
       "ALICE_RUNTIME_RELEASE_TOKEN",
       "ALICE_RUNTIME_VAULT_PASSPHRASE",
+      "ALICE_STATE_PLANE_SERVICE_TOKEN",
       "ALICE_PROGRAM_DIGEST",
       "ALICE_RELEASE_DIGEST",
       "ALICE_POLICY_HASH",
@@ -48,6 +49,10 @@
     {
       "binding": "ALICE_AI_GATEWAY",
       "service": "alice-ai-gateway"
+    },
+    {
+      "binding": "ALICE_STATE_PLANE",
+      "service": "alice-state-plane"
     }
   ],
   "durable_objects": {

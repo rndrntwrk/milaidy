@@ -118,6 +118,7 @@ import {
   type SandboxMode,
 } from "../services/sandbox-manager.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
+import { createAliceFullRuntimeDatabaseAdapter } from "./alice-d1-database-adapter.js";
 import { seedBundledKnowledge } from "./default-knowledge.js";
 import discordLocalPlugin from "./discord-local-plugin.js";
 import { stampAliceProductionRuntimeBoundary } from "../api/alice-production-proof.js";
@@ -3907,8 +3908,12 @@ export async function startEliza(
     ...pluginsForRuntime,
   ]);
 
+  const aliceD1Adapter = createAliceFullRuntimeDatabaseAdapter({
+    env: process.env,
+  });
   let runtime = new AgentRuntime({
     character,
+    ...(aliceD1Adapter ? { adapter: aliceD1Adapter } : {}),
     // advancedCapabilities: true,
     actionPlanning: !aliceResponseOnly,
     // advancedMemory is enabled via character.advancedMemory
@@ -4491,8 +4496,14 @@ export async function startEliza(
                 }
               }
             }
+            const freshAliceD1Adapter = createAliceFullRuntimeDatabaseAdapter({
+              env: process.env,
+            });
             const newRuntime = new AgentRuntime({
               character: freshCharacter,
+              ...(freshAliceD1Adapter
+                ? { adapter: freshAliceD1Adapter }
+                : {}),
               plugins: [freshElizaPlugin, ...freshPluginsForRuntime],
               ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
               settings: {
