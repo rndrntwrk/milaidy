@@ -31,12 +31,26 @@ export function aliceTestVerifiedWorkerBundleArtifact({
     access: "alice-access-gateway",
     control: "alice-production-control",
     aiGateway: "alice-ai-gateway",
+    statePlane: "alice-state-plane",
+    connectorPlane: "alice-connector-plane",
   };
   for (const [role, worker] of Object.entries(roles)) {
     fs.mkdirSync(path.join(root, worker));
     fs.writeFileSync(
       path.join(root, worker, "index.js"),
       workerModules[role] ?? `export default ${JSON.stringify(role)};\n`,
+    );
+  }
+  const migrationsRoot = path.join(root, "alice-state-plane", "migrations");
+  fs.mkdirSync(migrationsRoot);
+  for (const migration of [
+    "0001_alice_state.sql",
+    "0002_execution_records.sql",
+    "0003_eliza_database.sql",
+  ]) {
+    fs.writeFileSync(
+      path.join(migrationsRoot, migration),
+      `-- ${migration}\nSELECT 1;\n`,
     );
   }
   const serialized = serializeAliceWorkerBundleArtifact(

@@ -12,12 +12,17 @@ import {
   buildAliceAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceContainerAccessEffectiveConfig,
+  buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceStatePlaneEffectiveConfig,
   digestAliceEffectiveConfig,
   encodeAliceDeploymentManifest,
   verifyAliceEffectiveConfigBinding,
 } from "../../workers/alice-effective-config.js";
+import {
+  aliceWorkerMigrationSetDigest,
+} from "./alice_worker_bundle_artifact.mjs";
 import {
   buildAliceAccessPolicyProviderConfig,
   buildAliceAiGatewayProviderConfig,
@@ -51,6 +56,12 @@ const controlEffectiveConfig = buildAliceControlEffectiveConfig({
   releaseServiceTokenIdSha256: "R".repeat(43),
 });
 const aiGatewayEffectiveConfig = buildAliceAiGatewayEffectiveConfig();
+const statePlaneEffectiveConfig = buildAliceStatePlaneEffectiveConfig({
+  databaseId: "11111111-2222-3333-4444-555555555555",
+});
+const connectorPlaneEffectiveConfig = buildAliceConnectorPlaneEffectiveConfig({
+  providerActivation: "disabled",
+});
 const workerBundleArtifact = aliceTestVerifiedWorkerBundleArtifact({
   sourceCommit: "1".repeat(40),
 });
@@ -77,6 +88,8 @@ const valid = {
   accessEffectiveConfig,
   controlEffectiveConfig,
   aiGatewayEffectiveConfig,
+  statePlaneEffectiveConfig,
+  connectorPlaneEffectiveConfig,
   accessPolicyReadback,
   aiGatewayProviderReadback,
   cloudflareContinuityReadback,
@@ -93,11 +106,18 @@ test("builds one non-self-referential production deployment manifest from canoni
     accessWorker: "alice-access-gateway",
     controlWorker: "alice-production-control",
     aiGatewayWorker: "alice-ai-gateway",
+    statePlaneWorker: "alice-state-plane",
+    connectorPlaneWorker: "alice-connector-plane",
     aiGateway: "alice-production",
     evidenceBucket: "alice-production-evidence",
     evidenceQueue: "alice-production-evidence-v1",
     evidenceDlq: "alice-production-evidence-dlq-v1",
     planWorkflow: "alice-production-plans",
+    stateDatabase: "alice-production-state",
+    stateObjectsBucket: "alice-production-state-objects",
+    memoryIndex: "alice-memory-v1",
+    workQueue: "alice-production-work-v1",
+    workDlq: "alice-production-work-dlq-v1",
     accessPolicyConfigSha256: await digestAliceEffectiveConfig(
       await buildAliceAccessPolicyProviderConfig(accessPolicyReadback),
     ),
@@ -111,6 +131,18 @@ test("builds one non-self-referential production deployment manifest from canoni
       ),
     aiGatewayWorkerBundleSha256: workerBundleArtifact.bundles.aiGateway.sha256,
     controlWorkerBundleSha256: workerBundleArtifact.bundles.control.sha256,
+    statePlaneConfigSha256: await digestAliceEffectiveConfig(
+      statePlaneEffectiveConfig,
+    ),
+    connectorPlaneConfigSha256: await digestAliceEffectiveConfig(
+      connectorPlaneEffectiveConfig,
+    ),
+    statePlaneWorkerBundleSha256:
+      workerBundleArtifact.bundles.statePlane.sha256,
+    connectorPlaneWorkerBundleSha256:
+      workerBundleArtifact.bundles.connectorPlane.sha256,
+    stateMigrationSetSha256:
+      aliceWorkerMigrationSetDigest(workerBundleArtifact),
     continuityConfigSha256: digestAliceCloudflareContinuityConfig(
       buildAliceCloudflareContinuityConfig(cloudflareContinuityReadback),
     ),
@@ -126,12 +158,20 @@ test("builds one non-self-referential production deployment manifest from canoni
     `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`,
   );
   assert.deepEqual(verifyAliceDeploymentManifest(bytes), manifest);
-  await verifyAliceEffectiveConfigBinding({
-    encodedManifest: encodeAliceDeploymentManifest(bytes),
-    expectedManifestSha256: digestAliceDeploymentManifest(bytes),
-    role: "access",
-    effectiveConfig: accessEffectiveConfig,
-  });
+  for (const [role, effectiveConfig] of Object.entries({
+    access: accessEffectiveConfig,
+    control: controlEffectiveConfig,
+    aiGateway: aiGatewayEffectiveConfig,
+    statePlane: statePlaneEffectiveConfig,
+    connectorPlane: connectorPlaneEffectiveConfig,
+  })) {
+    await verifyAliceEffectiveConfigBinding({
+      encodedManifest: encodeAliceDeploymentManifest(bytes),
+      expectedManifestSha256: digestAliceDeploymentManifest(bytes),
+      role,
+      effectiveConfig,
+    });
+  }
 });
 
 test("builds a Container manifest without Modal release vocabulary", async () => {
@@ -185,6 +225,16 @@ test("rejects substituted targets, ambiguous bytes, and self-referential fields"
       },
     }),
   );
+  const { statePlaneEffectiveConfig: _missingStatePlane, ...missingStatePlane } =
+    valid;
+  await assert.rejects(
+    () => buildAliceDeploymentManifest(missingStatePlane),
+    /ALICE_DEPLOYMENT_MANIFEST_INPUT_INVALID/,
+  );
+  await assert.rejects(
+    () => buildAliceDeploymentManifest({ ...valid, unexpected: true }),
+    /ALICE_DEPLOYMENT_MANIFEST_INPUT_INVALID/,
+  );
   await assert.rejects(() =>
     buildAliceDeploymentManifest({
       ...valid,
@@ -227,6 +277,14 @@ test("rejects substituted targets, ambiguous bytes, and self-referential fields"
     ),
   );
   assert.throws(() => verifyAliceDeploymentManifest(JSON.stringify(manifest)));
+  assert.throws(() =>
+    verifyAliceDeploymentManifest(
+      `${JSON.stringify({
+        ...manifest,
+        cloudflare: { ...manifest.cloudflare, unexpected: true },
+      })}\n`,
+    ),
+  );
 });
 
 test("fails closed on every one-field effective-config substitution", async () => {
@@ -262,6 +320,32 @@ test("fails closed on every one-field effective-config substitution", async () =
         values: {
           ...aiGatewayEffectiveConfig.values,
           aiGatewayId: "alice-substituted",
+        },
+      },
+    },
+    {
+      role: "statePlane",
+      config: {
+        ...statePlaneEffectiveConfig,
+        bindings: {
+          ...statePlaneEffectiveConfig.bindings,
+          d1: [{
+            ...statePlaneEffectiveConfig.bindings.d1[0],
+            databaseId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+          }],
+        },
+      },
+    },
+    {
+      role: "connectorPlane",
+      config: {
+        ...connectorPlaneEffectiveConfig,
+        values: {
+          ...connectorPlaneEffectiveConfig.values,
+          providerActivation: {
+            ...connectorPlaneEffectiveConfig.values.providerActivation,
+            discord: "enabled",
+          },
         },
       },
     },

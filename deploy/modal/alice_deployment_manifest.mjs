@@ -7,8 +7,10 @@ import {
   buildAliceAccessEffectiveConfig,
   buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceConnectorPlaneEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceStatePlaneEffectiveConfig,
   canonicalAliceJson,
   digestAliceEffectiveConfig,
 } from "../../workers/alice-effective-config.js";
@@ -23,6 +25,7 @@ import {
 } from "./alice_cloudflare_continuity.mjs";
 import {
   aliceWorkerBundleDigests,
+  aliceWorkerMigrationSetDigest,
   verifyAliceWorkerBundleArtifact,
 } from "./alice_worker_bundle_artifact.mjs";
 import {
@@ -40,6 +43,7 @@ const COMMON_INPUT_KEYS = [
   "aiGatewayEffectiveConfig",
   "aiGatewayProviderReadback",
   "controlEffectiveConfig",
+  "connectorPlaneEffectiveConfig",
   "cloudflareContinuityReadback",
   "capabilityBomSha256",
   "deploymentControllerCommit",
@@ -50,6 +54,7 @@ const COMMON_INPUT_KEYS = [
   "runtimeBuildManifestSha256",
   "runtimeImage",
   "sourceCommit",
+  "statePlaneEffectiveConfig",
   "workerBundleArtifact",
 ];
 const LEGACY_INPUT_KEYS = [...COMMON_INPUT_KEYS, "modalRevision"];
@@ -101,13 +106,30 @@ function effectiveConfigsAreCanonical(value) {
         controlValues?.releaseServiceTokenIdSha256,
     });
     const expectedAiGateway = buildAliceAiGatewayEffectiveConfig();
+    const expectedStatePlane = buildAliceStatePlaneEffectiveConfig({
+      databaseId:
+        value.statePlaneEffectiveConfig?.bindings?.d1?.[0]?.databaseId,
+    });
+    const expectedConnectorPlane = buildAliceConnectorPlaneEffectiveConfig({
+      providerActivation:
+        value.connectorPlaneEffectiveConfig?.values?.providerActivation
+          ?.discord === "disabled" &&
+          value.connectorPlaneEffectiveConfig?.values?.providerActivation
+            ?.telegram === "disabled"
+          ? "disabled"
+          : undefined,
+    });
     return (
       canonicalAliceJson(value.accessEffectiveConfig) ===
         canonicalAliceJson(expectedAccess) &&
       canonicalAliceJson(value.controlEffectiveConfig) ===
         canonicalAliceJson(expectedControl) &&
       canonicalAliceJson(value.aiGatewayEffectiveConfig) ===
-        canonicalAliceJson(expectedAiGateway)
+        canonicalAliceJson(expectedAiGateway) &&
+      canonicalAliceJson(value.statePlaneEffectiveConfig) ===
+        canonicalAliceJson(expectedStatePlane) &&
+      canonicalAliceJson(value.connectorPlaneEffectiveConfig) ===
+        canonicalAliceJson(expectedConnectorPlane)
     );
   } catch {
     return false;
@@ -146,7 +168,7 @@ async function validInputs(value) {
     const bundleDigests = aliceWorkerBundleDigests(value.workerBundleArtifact);
     workerBundleArtifactValid =
       value.workerBundleArtifact.sourceCommit === value.sourceCommit &&
-      ["access", "control", "aiGateway"].every(
+      ["access", "control", "aiGateway", "statePlane", "connectorPlane"].every(
         (role) => DIGEST.test(bundleDigests[role] ?? ""),
       );
   } catch {
@@ -206,11 +228,16 @@ function validManifest(value) {
       "accessPolicyConfigSha256",
       "accessWorkerBundleSha256",
       "controlConfigSha256",
+      "connectorPlaneConfigSha256",
+      "connectorPlaneWorkerBundleSha256",
       "aiGatewayConfigSha256",
       "aiGatewayProviderConfigSha256",
       "aiGatewayWorkerBundleSha256",
       "controlWorkerBundleSha256",
       "continuityConfigSha256",
+      "stateMigrationSetSha256",
+      "statePlaneConfigSha256",
+      "statePlaneWorkerBundleSha256",
     ])
   ) {
     return false;
@@ -231,6 +258,8 @@ function validManifest(value) {
     accessEffectiveConfig: value.__effectiveConfigs?.access,
     controlEffectiveConfig: value.__effectiveConfigs?.control,
     aiGatewayEffectiveConfig: value.__effectiveConfigs?.aiGateway,
+    statePlaneEffectiveConfig: value.__effectiveConfigs?.statePlane,
+    connectorPlaneEffectiveConfig: value.__effectiveConfigs?.connectorPlane,
   };
   return (
     Number.isSafeInteger(reconstructed.releaseEpoch) &&
@@ -259,6 +288,11 @@ function validManifest(value) {
     DIGEST.test(value.cloudflare.controlWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.continuityConfigSha256) &&
     DIGEST.test(value.cloudflare.aiGatewayWorkerBundleSha256) &&
+    DIGEST.test(value.cloudflare.statePlaneConfigSha256) &&
+    DIGEST.test(value.cloudflare.connectorPlaneConfigSha256) &&
+    DIGEST.test(value.cloudflare.statePlaneWorkerBundleSha256) &&
+    DIGEST.test(value.cloudflare.connectorPlaneWorkerBundleSha256) &&
+    DIGEST.test(value.cloudflare.stateMigrationSetSha256) &&
     Object.entries(ALICE_CLOUDFLARE_TARGET).every(
       ([key, expected]) => value.cloudflare[key] === expected,
     )
@@ -321,6 +355,17 @@ export async function buildAliceDeploymentManifest(inputs) {
         await digestAliceEffectiveConfig(aiGatewayProviderConfig),
       aiGatewayWorkerBundleSha256: workerBundleDigests.aiGateway,
       controlWorkerBundleSha256: workerBundleDigests.control,
+      statePlaneConfigSha256: await digestAliceEffectiveConfig(
+        inputs.statePlaneEffectiveConfig,
+      ),
+      connectorPlaneConfigSha256: await digestAliceEffectiveConfig(
+        inputs.connectorPlaneEffectiveConfig,
+      ),
+      statePlaneWorkerBundleSha256: workerBundleDigests.statePlane,
+      connectorPlaneWorkerBundleSha256: workerBundleDigests.connectorPlane,
+      stateMigrationSetSha256: aliceWorkerMigrationSetDigest(
+        inputs.workerBundleArtifact,
+      ),
       continuityConfigSha256:
         digestAliceCloudflareContinuityConfig(continuityConfig),
     },
@@ -386,6 +431,13 @@ if (invokedPath === import.meta.url) {
       releaseServiceTokenIdSha256:
         process.env.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256,
     });
+    const statePlaneEffectiveConfig = buildAliceStatePlaneEffectiveConfig({
+      databaseId: process.env.ALICE_STATE_DATABASE_ID,
+    });
+    const connectorPlaneEffectiveConfig =
+      buildAliceConnectorPlaneEffectiveConfig({
+        providerActivation: "disabled",
+      });
     const providerReadbackPath =
       process.env.ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH;
     const namespaceIdsPath =
@@ -448,6 +500,8 @@ if (invokedPath === import.meta.url) {
       accessEffectiveConfig,
       controlEffectiveConfig,
       aiGatewayEffectiveConfig: buildAliceAiGatewayEffectiveConfig(),
+      statePlaneEffectiveConfig,
+      connectorPlaneEffectiveConfig,
     });
     const bytes = serializeAliceDeploymentManifest(manifest);
     const outputPath = process.env.ALICE_DEPLOYMENT_MANIFEST_PATH;

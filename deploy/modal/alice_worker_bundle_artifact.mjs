@@ -22,7 +22,20 @@ const BUNDLES = Object.freeze({
     path: "alice-ai-gateway/index.js",
     manifestField: "aiGatewayWorkerBundleSha256",
   }),
+  statePlane: Object.freeze({
+    path: "alice-state-plane/index.js",
+    manifestField: "statePlaneWorkerBundleSha256",
+  }),
+  connectorPlane: Object.freeze({
+    path: "alice-connector-plane/index.js",
+    manifestField: "connectorPlaneWorkerBundleSha256",
+  }),
 });
+const MIGRATIONS = Object.freeze([
+  "alice-state-plane/migrations/0001_alice_state.sql",
+  "alice-state-plane/migrations/0002_execution_records.sql",
+  "alice-state-plane/migrations/0003_eliza_database.sql",
+]);
 
 function artifactInvalid() {
   throw new Error("ALICE_WORKER_BUNDLE_ARTIFACT_INVALID");
@@ -61,10 +74,40 @@ function bundleFile(root, relativePath) {
   return candidate;
 }
 
+function validateMigrationDirectory(root) {
+  if (typeof root !== "string" || !path.isAbsolute(root)) artifactInvalid();
+  const relativeDirectory = path.dirname(MIGRATIONS[0]);
+  const directory = path.join(root, relativeDirectory);
+  let stat;
+  let entries;
+  try {
+    stat = fs.lstatSync(directory);
+    entries = fs.readdirSync(directory).sort();
+  } catch {
+    artifactInvalid();
+  }
+  const expected = MIGRATIONS.map((migrationPath) =>
+    path.basename(migrationPath)
+  ).sort();
+  if (
+    !stat.isDirectory() ||
+    stat.isSymbolicLink() ||
+    JSON.stringify(entries) !== JSON.stringify(expected)
+  ) {
+    artifactInvalid();
+  }
+}
+
 function validArtifactShape(value) {
   return (
-    exactKeys(value, ["schemaVersion", "sourceCommit", "wranglerVersion", "bundles"]) &&
-    value.schemaVersion === "alice.worker-bundle-artifact.v1" &&
+    exactKeys(value, [
+      "schemaVersion",
+      "sourceCommit",
+      "wranglerVersion",
+      "bundles",
+      "migrations",
+    ]) &&
+    value.schemaVersion === "alice.worker-bundle-artifact.v2" &&
     COMMIT.test(value.sourceCommit ?? "") &&
     value.wranglerVersion === WRANGLER_VERSION &&
     exactKeys(value.bundles, Object.keys(BUNDLES)) &&
@@ -72,6 +115,14 @@ function validArtifactShape(value) {
       exactKeys(value.bundles[role], ["path", "sha256"]) &&
       value.bundles[role].path === expected.path &&
       DIGEST.test(value.bundles[role].sha256 ?? ""),
+    ) &&
+    Array.isArray(value.migrations) &&
+    value.migrations.length === MIGRATIONS.length &&
+    value.migrations.every(
+      (migration, index) =>
+        exactKeys(migration, ["path", "sha256"]) &&
+        migration.path === MIGRATIONS[index] &&
+        DIGEST.test(migration.sha256 ?? ""),
     )
   );
 }
@@ -94,11 +145,16 @@ export function buildAliceWorkerBundleArtifact({
       sha256: digestFile(bundleFile(root, expected.path)),
     };
   }
+  validateMigrationDirectory(root);
   return {
-    schemaVersion: "alice.worker-bundle-artifact.v1",
+    schemaVersion: "alice.worker-bundle-artifact.v2",
     sourceCommit,
     wranglerVersion,
     bundles,
+    migrations: MIGRATIONS.map((migrationPath) => ({
+      path: migrationPath,
+      sha256: digestFile(bundleFile(root, migrationPath)),
+    })),
   };
 }
 
@@ -139,6 +195,14 @@ export function verifyAliceWorkerBundleArtifact(
       artifactInvalid();
     }
   }
+  validateMigrationDirectory(root);
+  for (const migration of artifact.migrations) {
+    if (
+      digestFile(bundleFile(root, migration.path)) !== migration.sha256
+    ) {
+      artifactInvalid();
+    }
+  }
   verifiedArtifacts.add(artifact);
   return artifact;
 }
@@ -153,6 +217,16 @@ export function aliceWorkerBundleDigests(artifact) {
       bundle.sha256,
     ]),
   );
+}
+
+export function aliceWorkerMigrationSetDigest(artifact) {
+  if (!verifiedArtifacts.has(artifact) || !validArtifactShape(artifact)) {
+    artifactInvalid();
+  }
+  return `sha256:${crypto
+    .createHash("sha256")
+    .update(canonicalAliceJson(artifact.migrations))
+    .digest("hex")}`;
 }
 
 export function assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
@@ -176,6 +250,12 @@ export function assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
     ) {
       throw new Error("ALICE_WORKER_BUNDLE_MANIFEST_MISMATCH");
     }
+  }
+  if (
+    manifest?.cloudflare?.stateMigrationSetSha256 !==
+      aliceWorkerMigrationSetDigest(artifact)
+  ) {
+    throw new Error("ALICE_WORKER_BUNDLE_MANIFEST_MISMATCH");
   }
   return artifact;
 }

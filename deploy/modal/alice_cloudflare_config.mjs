@@ -7,7 +7,9 @@ import {
   buildAliceContainerAccessEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceStatePlaneEffectiveConfig,
   canonicalAliceJson,
   encodeAliceDeploymentManifest,
   verifyAliceEffectiveConfigBinding,
@@ -17,21 +19,33 @@ import {
   verifyAliceDeploymentManifest,
 } from "./alice_deployment_manifest.mjs";
 
-const ROLES = ["access", "control", "aiGateway"];
+const ROLES = [
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+];
 const CANONICAL_MAIN = Object.freeze({
   access: "src/worker.ts",
   control: "src/index.ts",
   aiGateway: "src/index.mjs",
+  statePlane: "src/index.ts",
+  connectorPlane: "src/index.ts",
 });
 const WORKER_DIRECTORIES = Object.freeze({
   access: "alice-access-gateway",
   control: "alice-production-control",
   aiGateway: "alice-ai-gateway",
+  statePlane: "alice-state-plane",
+  connectorPlane: "alice-connector-plane",
 });
 const SOURCE_MAIN = Object.freeze({
   access: "src/worker.ts",
   control: "src/index.ts",
   aiGateway: "src/index.mjs",
+  statePlane: "src/index.ts",
+  connectorPlane: "src/index.ts",
 });
 
 function canonicalArtifactMain(role) {
@@ -41,6 +55,16 @@ function canonicalArtifactMain(role) {
     "alice-worker-bundles",
     WORKER_DIRECTORIES[role],
     "index.js",
+  );
+}
+
+function canonicalArtifactMigrationDir() {
+  return path.join(
+    "..",
+    "..",
+    "alice-worker-bundles",
+    WORKER_DIRECTORIES.statePlane,
+    "migrations",
   );
 }
 
@@ -86,6 +110,33 @@ function baseWorker(config, includeRoutes = true) {
   return worker;
 }
 
+function privatePlaneWorker(config) {
+  return {
+    accountId: config.account_id,
+    name: config.name,
+    main: config.main,
+    compatibilityDate: config.compatibility_date,
+    workersDev: config.workers_dev,
+    previewUrls: config.preview_urls,
+    routes: (config.routes ?? []).map((route) => ({
+      pattern: route.pattern,
+      zoneName: route.zone_name,
+    })),
+  };
+}
+
+function privatePlaneObservabilityFromWrangler(value) {
+  return {
+    enabled: value?.enabled,
+    headSamplingRate: value?.head_sampling_rate,
+    logs: {
+      enabled: value?.logs?.enabled,
+      headSamplingRate: value?.logs?.head_sampling_rate,
+      invocationLogs: value?.logs?.invocation_logs,
+    },
+  };
+}
+
 function commonBindings(config) {
   return {
     services: (config.services ?? []).map((binding) => ({
@@ -97,6 +148,37 @@ function commonBindings(config) {
   };
 }
 
+function durableObjectBindings(config) {
+  return (config.durable_objects?.bindings ?? []).map((binding) => ({
+    name: binding.name,
+    className: binding.class_name,
+  }));
+}
+
+function durableObjectMigrations(config) {
+  return (config.migrations ?? []).map((migration) => ({
+    tag: migration.tag,
+    newSqliteClasses: migration.new_sqlite_classes,
+  }));
+}
+
+function connectorProviderActivation(config) {
+  const secretNames = new Set(config.secrets?.required ?? []);
+  return {
+    discord:
+      Object.hasOwn(config.vars ?? {}, "ALICE_DISCORD_PRIVATE_DESTINATION_ID") ||
+        secretNames.has("DISCORD_API_TOKEN") ||
+        secretNames.has("DISCORD_APPLICATION_ID")
+        ? "configured"
+        : "disabled",
+    telegram:
+      Object.hasOwn(config.vars ?? {}, "ALICE_TELEGRAM_PRIVATE_DESTINATION_ID") ||
+        secretNames.has("TELEGRAM_BOT_TOKEN")
+        ? "configured"
+        : "disabled",
+  };
+}
+
 export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
   if (!ROLES.includes(role) || !config || typeof config !== "object") {
     throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
@@ -104,7 +186,10 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
   let identityConfig = config;
   if (options.artifactRoot !== undefined || options.configPath !== undefined) {
     resolveAliceWranglerDeploymentEntrypoint(role, config, options);
-    identityConfig = { ...config, main: CANONICAL_MAIN[role] };
+    identityConfig = { ...clone(config), main: CANONICAL_MAIN[role] };
+    if (role === "statePlane") {
+      identityConfig.d1_databases[0].migrations_dir = "migrations";
+    }
   } else if (options.deploymentMainPath !== undefined) {
     if (
       typeof options.deploymentMainPath !== "string" ||
@@ -214,6 +299,65 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
       observability: observabilityFromWrangler(identityConfig.observability),
     };
   }
+  if (role === "statePlane") {
+    const common = commonBindings(identityConfig);
+    return {
+      schemaVersion: "alice.state-plane-effective-config.v1",
+      worker: privatePlaneWorker(identityConfig),
+      bindings: {
+        d1: (identityConfig.d1_databases ?? []).map((database) => ({
+          binding: database.binding,
+          databaseName: database.database_name,
+          databaseId: database.database_id,
+          migrationsDir: database.migrations_dir,
+        })),
+        vectorize: (identityConfig.vectorize ?? []).map((index) => ({
+          binding: index.binding,
+          indexName: index.index_name,
+        })),
+        r2: (identityConfig.r2_buckets ?? []).map((bucket) => ({
+          binding: bucket.binding,
+          bucketName: bucket.bucket_name,
+        })),
+        durableObjects: durableObjectBindings(identityConfig),
+        migrations: durableObjectMigrations(identityConfig),
+        services: common.services,
+        secretNames: common.secretNames,
+      },
+      values: {
+        vectorIndexName: identityConfig.vars?.ALICE_VECTOR_INDEX_NAME,
+        vectorModel: identityConfig.vars?.ALICE_VECTOR_MODEL,
+        vectorDimensions: Number(
+          identityConfig.vars?.ALICE_VECTOR_DIMENSIONS,
+        ),
+      },
+      observability: privatePlaneObservabilityFromWrangler(
+        identityConfig.observability,
+      ),
+    };
+  }
+  if (role === "connectorPlane") {
+    const common = commonBindings(identityConfig);
+    return {
+      schemaVersion: "alice.connector-plane-effective-config.v1",
+      worker: privatePlaneWorker(identityConfig),
+      bindings: {
+        services: common.services,
+        durableObjects: durableObjectBindings(identityConfig),
+        migrations: durableObjectMigrations(identityConfig),
+        secretNames: common.secretNames,
+      },
+      values: {
+        stateOwnerId: identityConfig.vars?.ALICE_STATE_OWNER_ID,
+        connectorSessionId:
+          identityConfig.vars?.ALICE_CONNECTOR_SESSION_ID,
+        providerActivation: connectorProviderActivation(identityConfig),
+      },
+      observability: privatePlaneObservabilityFromWrangler(
+        identityConfig.observability,
+      ),
+    };
+  }
   const common = commonBindings(identityConfig);
   return {
     schemaVersion: "alice.ai-gateway-effective-config.v1",
@@ -250,6 +394,49 @@ export function resolveAliceWranglerDeploymentEntrypoint(
     !path.isAbsolute(configPath)
   ) {
     throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+  }
+  if (role === "statePlane") {
+    const databases = config.d1_databases;
+    if (
+      !Array.isArray(databases) ||
+      databases.length !== 1 ||
+      typeof databases[0]?.migrations_dir !== "string" ||
+      databases[0].migrations_dir.length === 0 ||
+      path.isAbsolute(databases[0].migrations_dir)
+    ) {
+      throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+    }
+    const migrationDir = path.resolve(
+      path.dirname(configPath),
+      databases[0].migrations_dir,
+    );
+    const migrationRelative = path.relative(artifactRoot, migrationDir);
+    let migrationRootReal;
+    let migrationDirReal;
+    let migrationStat;
+    try {
+      migrationRootReal = fs.realpathSync(artifactRoot);
+      migrationDirReal = fs.realpathSync(migrationDir);
+      migrationStat = fs.lstatSync(migrationDir);
+    } catch {
+      throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+    }
+    if (
+      databases[0].migrations_dir !==
+        path.relative(path.dirname(configPath), migrationDir) ||
+      path.isAbsolute(migrationRelative) ||
+      migrationRelative !==
+        path.join(WORKER_DIRECTORIES.statePlane, "migrations") ||
+      migrationDirReal !== path.join(
+        migrationRootReal,
+        WORKER_DIRECTORIES.statePlane,
+        "migrations",
+      ) ||
+      !migrationStat.isDirectory() ||
+      migrationStat.isSymbolicLink()
+    ) {
+      throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+    }
   }
   const resolved = path.resolve(path.dirname(configPath), config.main);
   const relative = path.relative(artifactRoot, resolved);
@@ -311,6 +498,29 @@ export function bindAliceWranglerDeploymentEntrypoint(
     ...clone(config),
     main: path.relative(path.dirname(options.configPath), deploymentMainPath),
   };
+  if (role === "statePlane") {
+    if (
+      !Array.isArray(rendered.d1_databases) ||
+      rendered.d1_databases.length !== 1
+    ) {
+      throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+    }
+    rendered.d1_databases[0].migrations_dir = path.relative(
+      path.dirname(options.configPath),
+      path.join(
+        options.artifactRoot,
+        WORKER_DIRECTORIES.statePlane,
+        "migrations",
+      ),
+    );
+    if (
+      rendered.d1_databases[0].migrations_dir !==
+        canonicalArtifactMigrationDir() &&
+      path.basename(options.artifactRoot) === "alice-worker-bundles"
+    ) {
+      throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
+    }
+  }
   const resolved = resolveAliceWranglerDeploymentEntrypoint(
     role,
     rendered,
@@ -357,6 +567,37 @@ export function materializeAliceWranglerConfig(role, sourceConfig, values) {
       ALICE_PROGRAM_SIGNATURE_B64: values.programSignatureB64,
       ALICE_PROGRAM_PUBLIC_JWK_B64: values.programPublicJwkB64,
       ALICE_RUNTIME_REVISION: String(values.runtimeRevision),
+      ALICE_DEPLOYMENT_MANIFEST_SHA256: values.deploymentManifestSha256,
+      ALICE_DEPLOYMENT_MANIFEST_B64: values.deploymentManifestB64,
+    });
+  } else if (role === "statePlane") {
+    buildAliceStatePlaneEffectiveConfig({ databaseId: values.stateDatabaseId });
+    if (!Array.isArray(config.d1_databases) || config.d1_databases.length !== 1) {
+      throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
+    }
+    config.d1_databases[0].database_id = values.stateDatabaseId;
+    Object.assign(config.vars, {
+      ALICE_DEPLOYMENT_MANIFEST_SHA256: values.deploymentManifestSha256,
+      ALICE_DEPLOYMENT_MANIFEST_B64: values.deploymentManifestB64,
+    });
+  } else if (role === "connectorPlane") {
+    buildAliceConnectorPlaneEffectiveConfig({
+      providerActivation: values.providerActivation,
+    });
+    delete config.vars.ALICE_DISCORD_PRIVATE_DESTINATION_ID;
+    delete config.vars.ALICE_TELEGRAM_PRIVATE_DESTINATION_ID;
+    if (!Array.isArray(config.secrets?.required)) {
+      throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
+    }
+    const providerSecretNames = new Set([
+      "DISCORD_API_TOKEN",
+      "DISCORD_APPLICATION_ID",
+      "TELEGRAM_BOT_TOKEN",
+    ]);
+    config.secrets.required = config.secrets.required.filter(
+      (secretName) => !providerSecretNames.has(secretName),
+    );
+    Object.assign(config.vars, {
       ALICE_DEPLOYMENT_MANIFEST_SHA256: values.deploymentManifestSha256,
       ALICE_DEPLOYMENT_MANIFEST_B64: values.deploymentManifestB64,
     });
@@ -446,6 +687,12 @@ if (invokedPath === import.meta.url) {
           process.env.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256,
       }),
       aiGateway: buildAliceAiGatewayEffectiveConfig(),
+      statePlane: buildAliceStatePlaneEffectiveConfig({
+        databaseId: process.env.ALICE_STATE_DATABASE_ID,
+      }),
+      connectorPlane: buildAliceConnectorPlaneEffectiveConfig({
+        providerActivation: "disabled",
+      }),
     };
     const sources = {
       access: loadJson(
@@ -456,6 +703,12 @@ if (invokedPath === import.meta.url) {
       ),
       aiGateway: loadJson(
         path.join(sourceRoot, "workers/alice-ai-gateway/wrangler.jsonc"),
+      ),
+      statePlane: loadJson(
+        path.join(sourceRoot, "workers/alice-state-plane/wrangler.jsonc"),
+      ),
+      connectorPlane: loadJson(
+        path.join(sourceRoot, "workers/alice-connector-plane/wrangler.jsonc"),
       ),
     };
     fs.mkdirSync(outputDir, { recursive: false });
@@ -480,6 +733,16 @@ if (invokedPath === import.meta.url) {
               programSignatureB64: process.env.ALICE_PROGRAM_SIGNATURE_B64,
               programPublicJwkB64: process.env.ALICE_PROGRAM_PUBLIC_JWK_B64,
             }
+          : role === "statePlane"
+            ? {
+                ...commonValues,
+                stateDatabaseId: process.env.ALICE_STATE_DATABASE_ID,
+              }
+            : role === "connectorPlane"
+              ? {
+                  ...commonValues,
+                  providerActivation: "disabled",
+                }
           : commonValues;
       const renderedIdentity = materializeAliceWranglerConfig(
         role,
