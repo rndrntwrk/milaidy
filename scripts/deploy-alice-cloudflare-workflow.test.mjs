@@ -531,7 +531,7 @@ test("every direct gh boundary receives only a step-local GitHub token", () => {
 });
 
 test("temporary pre-import materializes one exact release without production promotion", () => {
-  const expectedTemporaryBranch = "ops/alice-preimport-e5bfd4a-20260828";
+  const expectedTemporaryBranch = "ops/alice-preimport-18372c5-20260828";
   assert.match(preimportWorkflow, /^name: Alice Cloudflare Pre-import and Materialize$/m);
   assert.match(preimportWorkflow, /^on:\n  workflow_dispatch:\n/m);
   assert.doesNotMatch(preimportWorkflow, /^  (?:push|pull_request|schedule):/m);
@@ -710,7 +710,7 @@ test("temporary pre-import materializes one exact release without production pro
 });
 
 test("temporary pre-import locks the exact workflow authority before credentials and tears it down in order", () => {
-  const expectedTemporaryBranch = "ops/alice-preimport-e5bfd4a-20260828";
+  const expectedTemporaryBranch = "ops/alice-preimport-18372c5-20260828";
   const dispatchInputs = preimportWorkflow
     .slice(
       preimportWorkflow.indexOf("    inputs:"),
@@ -804,10 +804,10 @@ test("temporary pre-import locks the exact workflow authority before credentials
     "alice-production/deployment-branch-policies/MATERIALIZE_POLICY_ID",
   );
   const protectionDelete = contract.indexOf(
-    "branches/ops%2Falice-preimport-e5bfd4a-20260828/protection",
+    "branches/ops%2Falice-preimport-18372c5-20260828/protection",
   );
   const branchDelete = contract.indexOf(
-    "git push origin --delete ops/alice-preimport-e5bfd4a-20260828",
+    "git push origin --delete ops/alice-preimport-18372c5-20260828",
   );
   assert.ok(importPolicyDelete >= 0 && materializePolicyDelete >= 0);
   assert.ok(protectionDelete > Math.max(importPolicyDelete, materializePolicyDelete));

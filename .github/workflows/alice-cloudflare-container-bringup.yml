@@ -1,6 +1,6 @@
 # Temporary two-environment deployment-policy contract:
 # Owner: Alice pre-import protected-branch operator.
-# Allowed ref: ops/alice-preimport-e5bfd4a-20260828 only.
+# Allowed ref: ops/alice-preimport-18372c5-20260828 only.
 # Before dispatch: protect that exact branch with enforce_admins=true, lock_branch=true, allow_force_pushes=false, allow_deletions=false;
 # record its sanitized sha256-and-UTC evidence input, then and only then add
 # both environment policies.
@@ -9,8 +9,8 @@
 # Ordered teardown runbook (replace IDs with unique exact-name readbacks):
 #   gh api --method DELETE repos/rndrntwrk/milaidy/environments/alice-cloudflare-bringup/deployment-branch-policies/IMPORT_POLICY_ID
 #   gh api --method DELETE repos/rndrntwrk/milaidy/environments/alice-production/deployment-branch-policies/MATERIALIZE_POLICY_ID
-#   gh api --method DELETE repos/rndrntwrk/milaidy/branches/ops%2Falice-preimport-e5bfd4a-20260828/protection
-#   git push origin --delete ops/alice-preimport-e5bfd4a-20260828
+#   gh api --method DELETE repos/rndrntwrk/milaidy/branches/ops%2Falice-preimport-18372c5-20260828/protection
+#   git push origin --delete ops/alice-preimport-18372c5-20260828
 # Completion evidence: terminal run, sanitized one-day artifact, exact Cloudflare
 # registry digest/inventory readback, both branch-policy absences, branch-
 # protection absence, and branch absence.
@@ -114,13 +114,13 @@ jobs:
           {
             echo "### Alice exact-image pre-import contract"
             echo "- Owner: Alice pre-import protected-branch operator"
-            echo "- Temporary allowed ref: \`ops/alice-preimport-e5bfd4a-20260828\` only"
+            echo "- Temporary allowed ref: \`ops/alice-preimport-18372c5-20260828\` only"
             echo "- Authority: exact branch read-only with enforce_admins=true, lock_branch=true, allow_force_pushes=false, allow_deletions=false before environment policies"
             echo "- Branch-protection readback: \`${WORKFLOW_PROTECTION_SHA256}\` observed \`${WORKFLOW_PROTECTION_OBSERVED_AT}\`"
             echo "- Absolute UTC hard expiry: ${expires_at} (no later than two hours after branch-protection creation)"
             echo "- Provider mutation: retain one exact \`alice-runtime\` registry tag for the protected deploy"
             echo "- Forbidden: Worker/route/Modal/runtime promotion, signing, or credential mutation"
-            echo "- Ordered teardown: remove both exact environment policies; delete exact branch protection; then \`git push origin --delete ops/alice-preimport-e5bfd4a-20260828\`"
+            echo "- Ordered teardown: remove both exact environment policies; delete exact branch protection; then \`git push origin --delete ops/alice-preimport-18372c5-20260828\`"
             echo "- Completion evidence: exact digest/inventory plus sanitized one-day materialization artifact"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -142,8 +142,8 @@ jobs:
           RELEASE_EPOCH: ${{ inputs.release_epoch }}
           RUNTIME_REVISION: ${{ inputs.runtime_revision }}
           POLICY_HASH: ${{ inputs.policy_hash }}
-          EXPECTED_WORKFLOW_BRANCH: ops/alice-preimport-e5bfd4a-20260828
-          EXPECTED_WORKFLOW_REF: refs/heads/ops/alice-preimport-e5bfd4a-20260828
+          EXPECTED_WORKFLOW_BRANCH: ops/alice-preimport-18372c5-20260828
+          EXPECTED_WORKFLOW_REF: refs/heads/ops/alice-preimport-18372c5-20260828
           GITHUB_REF_PROTECTED_CONTEXT: ${{ github.ref_protected }}
           WORKFLOW_PROTECTION_EVIDENCE: ${{ inputs.workflow_protection_evidence }}
         shell: bash
@@ -380,8 +380,8 @@ jobs:
           RELEASE_EPOCH: ${{ inputs.release_epoch }}
           RUNTIME_REVISION: ${{ inputs.runtime_revision }}
           POLICY_HASH: ${{ inputs.policy_hash }}
-          EXPECTED_WORKFLOW_BRANCH: ops/alice-preimport-e5bfd4a-20260828
-          EXPECTED_WORKFLOW_REF: refs/heads/ops/alice-preimport-e5bfd4a-20260828
+          EXPECTED_WORKFLOW_BRANCH: ops/alice-preimport-18372c5-20260828
+          EXPECTED_WORKFLOW_REF: refs/heads/ops/alice-preimport-18372c5-20260828
           GITHUB_REF_PROTECTED_CONTEXT: ${{ github.ref_protected }}
           WORKFLOW_PROTECTION_EVIDENCE: ${{ inputs.workflow_protection_evidence }}
           IMPORT_ARTIFACT_ID: ${{ needs.import_runtime.outputs.artifact_id }}
