@@ -31,6 +31,8 @@ function fixture() {
       access: { serving: { versionId: "access-version" } },
       control: { serving: { versionId: "control-version" } },
       aiGateway: { serving: { versionId: "ai-version" } },
+      statePlane: { serving: { versionId: "state-version" } },
+      connectorPlane: { serving: { versionId: "connector-version" } },
     },
     terminalSnapshotStable: true,
   };
@@ -134,6 +136,18 @@ function fixture() {
       ),
     },
     finalAuthority: { pausedScopes: [] },
+    authenticatedRoot: "full-milady-companion-ui",
+    runtimeProfile: "full-gated",
+    productSurfaces: {
+      root: "full-milady",
+      companion: "full-companion",
+      broadcast: "alice-cam",
+      companionStage: "durable",
+    },
+    productSurfaceDigests: {
+      companionHtmlSha256: `sha256:${"a".repeat(64)}`,
+      broadcastHtmlSha256: `sha256:${"b".repeat(64)}`,
+    },
     provenance: {
       cloudflareLiveReadbackSha256: digest(cloudflareLiveReadback),
       cloudflareRollbackSha256: digest(cloudflareRollbackProof),
@@ -242,6 +256,24 @@ test("rejects source, run, attempt, provider digest, and terminal pause drift", 
     (input) => { input.workflowRun.run_attempt = 2; },
     (input) => { input.acceptance.provenance.modalPromotionSha256 = `sha256:${"9".repeat(64)}`; },
     (input) => { input.acceptance.finalAuthority.pausedScopes = ["model"]; },
+  ]) {
+    const input = fixture();
+    mutate(input);
+    assert.throws(
+      () => verifyAliceTerminalPublication(input),
+      /ALICE_TERMINAL_PUBLICATION_INVALID/,
+    );
+  }
+});
+
+test("rejects reduced UI evidence or a live readback missing either private Worker", () => {
+  for (const mutate of [
+    (input) => { input.acceptance.authenticatedRoot = "approved-nonce-csp-chat-ui"; },
+    (input) => { input.acceptance.runtimeProfile = "proposer-only"; },
+    (input) => { delete input.acceptance.productSurfaces.companion; },
+    (input) => { input.acceptance.productSurfaceDigests.companionHtmlSha256 = "invalid"; },
+    (input) => { delete input.cloudflareLiveReadback.workers.statePlane; },
+    (input) => { delete input.currentCloudflareLiveReadback.workers.connectorPlane; },
   ]) {
     const input = fixture();
     mutate(input);
