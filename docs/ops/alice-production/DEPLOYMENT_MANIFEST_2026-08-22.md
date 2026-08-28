@@ -16,10 +16,10 @@ other.
 - Candidate base: `521c1697089e43e10158acad0582f2b000514520`
 - Eliza fork: `rndrntwrk/eliza`
 - Intended protected Eliza merge target: `alice/runtime-stable-2026-08-22`
-- Canonical reviewed Eliza source ref: `refs/pull/5/head` (PR #5; remote and
+- Canonical reviewed Eliza source ref: `refs/pull/6/head` (PR #6; remote and
   independently reviewed, but unmerged because the one-account fork's branch
   rule requires approval from someone other than the last pusher)
-- Exact Eliza gitlink: `a21d401bf7429bc8c794698b20832512b5315187`
+- Exact Eliza gitlink: `c23902bf3f43969736bb9a0f52c99f32239b8aab`
 - Stream source evidence only: `d0d227d6`; Stream is not deployed or changed by
   this release.
 
