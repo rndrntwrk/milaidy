@@ -21,6 +21,10 @@ const replaySource = fs.readFileSync(
   path.join(repoRoot, "deploy/modal/alice_cloudflare_release.test.mjs"),
   "utf8",
 );
+const releaseSource = fs.readFileSync(
+  path.join(repoRoot, "deploy/modal/alice_cloudflare_release.mjs"),
+  "utf8",
+);
 
 function namedWorkflowSteps(source) {
   const headings = [...source.matchAll(/^      - name: (.+)$/gm)];
@@ -216,6 +220,25 @@ test("deployment attests every module in the five-role Worker artifact", () => {
       `missing immutable attestation verification for ${migration}`,
     );
   }
+});
+
+test("the signed state migrations are remotely applied and verified before state mutation", () => {
+  const preparePhase = releaseSource.indexOf('if (phase === "prepare")');
+  const migrationGate = releaseSource.indexOf(
+    "applyAliceStateMigrationsBeforeWorkerMutation({",
+    preparePhase,
+  );
+  const stateUpload = releaseSource.indexOf(
+    "for (const command of commands.uploads)",
+    preparePhase,
+  );
+  assert.ok(preparePhase >= 0);
+  assert.ok(migrationGate > preparePhase);
+  assert.ok(stateUpload > migrationGate);
+  assert.match(
+    releaseSource,
+    /0001_alice_state\.sql[\s\S]*0002_execution_records\.sql[\s\S]*0003_eliza_database\.sql/,
+  );
 });
 
 test("state and connector configs stay private and receive only their scoped inputs", () => {
