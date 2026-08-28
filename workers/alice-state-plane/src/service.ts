@@ -6,6 +6,10 @@ import {
   type AliceVectorStore,
   type D1AliceStateAdapter,
 } from "./state-plane";
+import {
+  validateElizaDatabaseOperation,
+  type ElizaDatabaseAdapter,
+} from "./eliza-database";
 
 type PortableAdapter = Pick<
   D1AliceStateAdapter,
@@ -20,6 +24,7 @@ type CoordinationService = {
 };
 
 const MAX_OPERATION_BYTES = 65_536;
+const MAX_ELIZA_OPERATION_BYTES = 100_100_000;
 
 function response(value: unknown, status: number): Response {
   return new Response(JSON.stringify(value), {
@@ -32,9 +37,12 @@ function response(value: unknown, status: number): Response {
   });
 }
 
-async function readBoundedJson(request: Request): Promise<unknown> {
+async function readBoundedJson(
+  request: Request,
+  maxBytes = MAX_OPERATION_BYTES,
+): Promise<unknown> {
   const declared = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > MAX_OPERATION_BYTES) throw new Error("STATE_OPERATION_TOO_LARGE");
+  if (Number.isFinite(declared) && declared > maxBytes) throw new Error("STATE_OPERATION_TOO_LARGE");
   if (!request.body) throw new Error("STATE_OPERATION_INVALID");
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -44,7 +52,7 @@ async function readBoundedJson(request: Request): Promise<unknown> {
       const { done, value } = await reader.read();
       if (done) break;
       length += value.byteLength;
-      if (length > MAX_OPERATION_BYTES) throw new Error("STATE_OPERATION_TOO_LARGE");
+      if (length > maxBytes) throw new Error("STATE_OPERATION_TOO_LARGE");
       chunks.push(value);
     }
   } finally {
@@ -68,19 +76,38 @@ export function createAliceStateService(input: {
   vectorStore?: Pick<AliceVectorStore, "upsert" | "query">;
   objectStore?: Pick<AliceObjectStore, "put">;
   coordination?: CoordinationService;
+  elizaDatabase?: ElizaDatabaseAdapter;
   token: string;
 }) {
   return {
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
-      if (url.pathname !== "/v1/state") return response({ ok: false, code: "STATE_ROUTE_NOT_FOUND" }, 404);
+      if (url.pathname !== "/v1/state" && url.pathname !== "/v1/eliza-database") {
+        return response({ ok: false, code: "STATE_ROUTE_NOT_FOUND" }, 404);
+      }
       if (request.method !== "POST") return response({ ok: false, code: "STATE_METHOD_INVALID" }, 405);
       if (!authorizeStatePlaneRequest(request, input.token)) return response({ ok: false, code: "STATE_SERVICE_UNAUTHORIZED" }, 401);
       if (request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
         return response({ ok: false, code: "STATE_CONTENT_TYPE_INVALID" }, 415);
       }
       try {
-        const operation = validateStateOperation(await readBoundedJson(request));
+        const body = await readBoundedJson(
+          request,
+          url.pathname === "/v1/eliza-database"
+            ? MAX_ELIZA_OPERATION_BYTES
+            : MAX_OPERATION_BYTES,
+        );
+        if (url.pathname === "/v1/eliza-database") {
+          if (!input.elizaDatabase) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
+          const operation = validateElizaDatabaseOperation(body);
+          if (operation.operation === "eliza.load") {
+            const { operation: _operation, ...load } = operation;
+            return response({ ok: true, ...await input.elizaDatabase.load(load) }, 200);
+          }
+          const { operation: _operation, ...commit } = operation;
+          return response({ ok: true, ...await input.elizaDatabase.commit(commit) }, 200);
+        }
+        const operation = validateStateOperation(body);
         if (operation.operation === "record.get") {
           const record = await input.adapter.getRecord(operation.kind as AliceStateKind, operation.recordId, operation.ownerId);
           return response({ ok: true, record }, 200);
@@ -132,10 +159,24 @@ export function createAliceStateService(input: {
           operation.ownerId, operation.sessionId, operation.connector, operation.cursor, operation.observedAt,
         ) }, 200);
       } catch (error) {
-        const code = error instanceof Error && /^STATE_[A-Z0-9_]+$/.test(error.message)
+        const code = error instanceof Error && /^(?:STATE|ELIZA)_[A-Z0-9_]+$/.test(error.message)
           ? error.message
           : "STATE_OPERATION_FAILED";
-        return response({ ok: false, code }, code === "STATE_OPERATION_TOO_LARGE" ? 413 : 400);
+        const elizaRoute = url.pathname === "/v1/eliza-database";
+        const status = code === "STATE_OPERATION_TOO_LARGE" || code === "ELIZA_VALUE_TOO_LARGE"
+          ? 413
+          : !elizaRoute
+            ? 400
+            : code === "ELIZA_REVISION_STALE" ||
+              code === "ELIZA_REVISION_DRIFT" ||
+              code === "ELIZA_IDEMPOTENCY_COLLISION"
+            ? 409
+            : code === "ELIZA_COMMIT_FAILED" ||
+                code === "ELIZA_LOAD_FAILED" ||
+                code === "STATE_DEPENDENCY_UNAVAILABLE"
+              ? 503
+              : 400;
+        return response({ ok: false, code }, status);
       }
     },
   };

@@ -1,6 +1,99 @@
 import { describe, expect, test } from "bun:test";
 
 describe("private Alice state service", () => {
+  test("loads an empty Eliza database through the private authenticated route", async () => {
+    const { createAliceStateService } = await import("../src/service");
+    const never = async () => { throw new Error("generic adapter must not be called"); };
+    const service = createAliceStateService({
+      adapter: { getRecord: never, putRecord: never, listRecords: never, applyAtomic: never },
+      elizaDatabase: {
+        async load(input: unknown) {
+          expect(input).toEqual({ ownerId: "owner-001", cursor: null, limit: 500 });
+          return { revision: 0, records: [], nextCursor: null };
+        },
+        async commit() { throw new Error("commit must not be called"); },
+      },
+      token: "s".repeat(48),
+    });
+    const result = await service.fetch(new Request("https://state.internal/v1/eliza-database", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-alice-state-token": "s".repeat(48),
+      },
+      body: JSON.stringify({
+        operation: "eliza.load",
+        ownerId: "owner-001",
+        cursor: null,
+        limit: 500,
+      }),
+    }));
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual({
+      ok: true,
+      revision: 0,
+      records: [],
+      nextCursor: null,
+    });
+  });
+
+  test("commits a bounded Eliza value and rejects unauthorized, extra, or secret-bearing shapes", async () => {
+    const { createAliceStateService } = await import("../src/service");
+    const never = async () => { throw new Error("generic adapter must not be called"); };
+    const calls: unknown[] = [];
+    const service = createAliceStateService({
+      adapter: { getRecord: never, putRecord: never, listRecords: never, applyAtomic: never },
+      elizaDatabase: {
+        async load() { throw new Error("load must not be called"); },
+        async commit(input: unknown) {
+          calls.push(input);
+          return { revision: 1 };
+        },
+      },
+      token: "s".repeat(48),
+    });
+    const body = {
+      operation: "eliza.commit",
+      ownerId: "owner-001",
+      operationId: "operation-001",
+      expectedRevision: 0,
+      mutations: [{
+        collection: "memories",
+        key: "memory-001",
+        deleted: false,
+        value: { text: "x".repeat(70_000) },
+      }],
+    };
+    const invoke = (value: unknown, token = "s".repeat(48)) => service.fetch(new Request(
+      "https://state.internal/v1/eliza-database",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-alice-state-token": token },
+        body: JSON.stringify(value),
+      },
+    ));
+    expect((await invoke(body, "wrong-token".repeat(4))).status).toBe(401);
+    const committed = await invoke(body);
+    expect(committed.status).toBe(200);
+    expect(await committed.json()).toEqual({ ok: true, revision: 1 });
+    expect(calls).toHaveLength(1);
+    const extra = await invoke({ ...body, unexpected: true });
+    expect(extra.status).toBe(400);
+    expect(await extra.json()).toEqual({ ok: false, code: "ELIZA_OPERATION_INVALID" });
+    const secret = await invoke({
+      ...body,
+      mutations: [{
+        collection: "memories",
+        key: "memory-secret-001",
+        deleted: false,
+        value: { authorization: "forbidden" },
+      }],
+    });
+    expect(secret.status).toBe(400);
+    expect(await secret.json()).toEqual({ ok: false, code: "ELIZA_SECRET_FIELD" });
+    expect(calls).toHaveLength(1);
+  });
+
   test("authenticates before parsing and dispatches only the explicit record contract", async () => {
     const { createAliceStateService } = await import("../src/service");
     const calls: unknown[] = [];
@@ -47,6 +140,19 @@ describe("private Alice state service", () => {
     expect((await request("https://state.internal/public", "{}")).status).toBe(404);
     expect((await request("https://state.internal/v1/state", JSON.stringify({ operation: "record.get", kind: "memory", recordId: "memory-001", ownerId: "owner-001", serviceToken: "x".repeat(40) }))).status).toBe(400);
     expect((await request("https://state.internal/v1/state", JSON.stringify({ operation: "record.get", kind: "memory", recordId: "m".repeat(70_000), ownerId: "owner-001" }))).status).toBe(413);
+    const dependencyFailure = await request("https://state.internal/v1/state", JSON.stringify({
+      operation: "vector.query",
+      ownerId: "owner-001",
+      model: "bge-base-en-v1.5",
+      dimensions: 1,
+      values: [1],
+      topK: 1,
+    }));
+    expect(dependencyFailure.status).toBe(400);
+    expect(await dependencyFailure.json()).toEqual({
+      ok: false,
+      code: "STATE_DEPENDENCY_UNAVAILABLE",
+    });
   });
 
   test("exposes put, list and explicit atomic groups without exposing SQL", async () => {
