@@ -706,11 +706,15 @@ jobs:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.cloud-image.outputs.digest }}
           EXPECTED_REVISION: ${{ steps.source_revision.outputs.sha }}
           SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          SMOKE_STATE_CONTAINER: alice-cloud-smoke-state-${{ github.run_id }}-${{ github.run_attempt }}
+          SMOKE_NETWORK: alice-cloud-smoke-net-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
 
           cleanup() {
             docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+            docker rm -f "$SMOKE_STATE_CONTAINER" >/dev/null 2>&1 || true
+            docker network rm "$SMOKE_NETWORK" >/dev/null 2>&1 || true
             if [ -n "${SMOKE_MODEL_PID:-}" ]; then
               kill "$SMOKE_MODEL_PID" >/dev/null 2>&1 || true
               wait "$SMOKE_MODEL_PID" >/dev/null 2>&1 || true
@@ -761,9 +765,39 @@ jobs:
             exit 1
           fi
 
+          docker network create "$SMOKE_NETWORK" >/dev/null
+          docker run -d \
+            --platform linux/amd64 \
+            --name "$SMOKE_STATE_CONTAINER" \
+            --network "$SMOKE_NETWORK" \
+            --network-alias alice-state-plane.internal \
+            --no-healthcheck \
+            --entrypoint node \
+            --env ALICE_SMOKE_MODEL_PORT=80 \
+            "$IMAGE" \
+            deploy/modal/alice_smoke_model_server.mjs >/dev/null
+          for attempt in $(seq 1 30); do
+            if docker exec "$SMOKE_STATE_CONTAINER" node --input-type=module -e '
+              const response = await fetch("http://127.0.0.1/__smoke/state");
+              if (response.status !== 200) process.exit(1);
+            '; then
+              break
+            fi
+            if [ "$(docker inspect "$SMOKE_STATE_CONTAINER" --format '{{ .State.Status }}')" != "running" ]; then
+              docker logs "$SMOKE_STATE_CONTAINER" >&2 || true
+              exit 1
+            fi
+            sleep 1
+          done
+          docker exec "$SMOKE_STATE_CONTAINER" node --input-type=module -e '
+            const response = await fetch("http://127.0.0.1/__smoke/state");
+            if (response.status !== 200) process.exit(1);
+          '
+
           docker run -d \
             --platform linux/amd64 \
             --name "$SMOKE_CONTAINER" \
+            --network "$SMOKE_NETWORK" \
             --add-host host.docker.internal:host-gateway \
             --env MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
             --env ELIZA_AUTH_DISABLED=0 \
@@ -773,6 +807,7 @@ jobs:
             --env ALICE_RUNTIME_AUTHORITY_MODE=proposer-only \
             --env ALICE_RUNTIME_PROFILE=full-gated \
             --env ALICE_STATE_PLANE_URL=http://alice-state-plane.internal/v1/eliza-database \
+            --env ALICE_COMPANION_STATE_URL=http://alice-state-plane.internal/v1/companion-state \
             --env ALICE_STATE_OWNER_ID=alice-owner-production \
             --env ENABLE_AUTONOMY=false \
             --env ELIZA_TRIGGERS_ENABLED=false \
@@ -866,6 +901,37 @@ jobs:
                   console.error(JSON.stringify({ emoteStatus: emoteResponse.status, emoteBody }));
                   process.exit(3);
                 }
+                const initialCompanionResponse = await fetch(`${base}/api/companion/stage`, { headers: authHeaders });
+                const initialCompanion = await initialCompanionResponse.json();
+                if (
+                  initialCompanionResponse.status !== 200 ||
+                  initialCompanion?.state?.camera?.zoom !== 0.25
+                ) {
+                  console.error(JSON.stringify({ companionReadStatus: initialCompanionResponse.status, initialCompanion }));
+                  process.exit(15);
+                }
+                const companionUpdateResponse = await fetch(`${base}/api/companion/stage`, {
+                  method: "POST",
+                  headers: { ...authHeaders, "content-type": "application/json" },
+                  body: JSON.stringify({ patch: { camera: { zoom: 0.5 } } }),
+                });
+                const companionUpdate = await companionUpdateResponse.json();
+                if (
+                  companionUpdateResponse.status !== 200 ||
+                  companionUpdate?.state?.camera?.zoom !== 0.5
+                ) {
+                  console.error(JSON.stringify({ companionWriteStatus: companionUpdateResponse.status, companionUpdate }));
+                  process.exit(16);
+                }
+                const persistedCompanionResponse = await fetch(`${base}/api/companion/stage`, { headers: authHeaders });
+                const persistedCompanion = await persistedCompanionResponse.json();
+                if (
+                  persistedCompanionResponse.status !== 200 ||
+                  persistedCompanion?.state?.camera?.zoom !== 0.5
+                ) {
+                  console.error(JSON.stringify({ companionPersistedStatus: persistedCompanionResponse.status, persistedCompanion }));
+                  process.exit(17);
+                }
                 const broadcastResponse = await fetch(`http://127.0.0.1:${port}/broadcast/alice-cam`);
                 if (broadcastResponse.status !== 401) {
                   console.error(JSON.stringify({ broadcastStatus: broadcastResponse.status }));
@@ -955,18 +1021,10 @@ jobs:
                   }),
                 });
                 const chatBody = await chatResponse.json();
-                const expectedBoundary = {
-                  schemaVersion: "alice.chat-boundary.v1",
-                  authorityMode: "proposer-only",
-                  modelInterface: "TEXT_LARGE",
-                  actionExecution: "disabled",
-                  tools: "disabled",
-                  services: "not-invoked",
-                };
                 if (
                   chatResponse.status !== 200 ||
-                  chatBody?.choices?.[0]?.message?.content !== "ALICE_EXACT_IMAGE_RESPONSE_ONLY_OK" ||
-                  JSON.stringify(chatBody.alice_boundary) !== JSON.stringify(expectedBoundary)
+                  chatBody?.choices?.[0]?.message?.content !== "ALICE_EXACT_IMAGE_FULL_GATED_OK" ||
+                  Object.hasOwn(chatBody, "alice_boundary")
                 ) {
                   console.error(JSON.stringify({ chatStatus: chatResponse.status, chatBody }));
                   process.exit(11);
@@ -981,6 +1039,18 @@ jobs:
                   console.error(JSON.stringify({ modelStateStatus: modelStateResponse.status, modelState }));
                   process.exit(12);
                 }
+                const statePlaneStateResponse = await fetch("http://alice-state-plane.internal/__smoke/state");
+                const statePlaneState = await statePlaneStateResponse.json();
+                if (
+                  statePlaneStateResponse.status !== 200 ||
+                  statePlaneState.elizaLoadRequests < 1 ||
+                  statePlaneState.elizaCommitRequests < 1 ||
+                  statePlaneState.companionGetRequests !== 3 ||
+                  statePlaneState.companionPutRequests !== 1
+                ) {
+                  console.error(JSON.stringify({ statePlaneStateStatus: statePlaneStateResponse.status, statePlaneState }));
+                  process.exit(18);
+                }
                 const vrmResponse = await fetch(`${base}/vrms/milady-9.vrm.gz`, { headers: authHeaders });
                 const compressedVrm = Buffer.from(await vrmResponse.arrayBuffer());
                 let vrmMagic = "";
@@ -993,7 +1063,7 @@ jobs:
                   console.error(JSON.stringify({ vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
                   process.exit(13);
                 }
-                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, capabilityBomSha256: capabilities.capabilityBomSha256, capabilityCount: capabilities.entries.length, emoteStatus: emoteResponse.status, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatBoundary: chatBody.alice_boundary, modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
+                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, capabilityBomSha256: capabilities.capabilityBomSha256, capabilityCount: capabilities.entries.length, emoteStatus: emoteResponse.status, companionReadStatus: initialCompanionResponse.status, companionWriteStatus: companionUpdateResponse.status, companionPersistedStatus: persistedCompanionResponse.status, statePlaneElizaLoadRequests: statePlaneState.elizaLoadRequests, statePlaneElizaCommitRequests: statePlaneState.elizaCommitRequests, statePlaneCompanionGetRequests: statePlaneState.companionGetRequests, statePlaneCompanionPutRequests: statePlaneState.companionPutRequests, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatProfile: "full-gated", modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
               ')"; then
                 runtime_snapshot="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
                   const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
@@ -1027,8 +1097,12 @@ jobs:
         if: always() && (steps.version.outputs.build_environment == 'staging' || (github.event_name == 'workflow_dispatch' && inputs.skip_rollout == true))
         env:
           SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          SMOKE_STATE_CONTAINER: alice-cloud-smoke-state-${{ github.run_id }}-${{ github.run_attempt }}
+          SMOKE_NETWORK: alice-cloud-smoke-net-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+          docker rm -f "$SMOKE_STATE_CONTAINER" >/dev/null 2>&1 || true
+          docker network rm "$SMOKE_NETWORK" >/dev/null 2>&1 || true
           if [ -s "/tmp/${SMOKE_CONTAINER}.model.pid" ]; then
             kill "$(cat "/tmp/${SMOKE_CONTAINER}.model.pid")" >/dev/null 2>&1 || true
             rm -f "/tmp/${SMOKE_CONTAINER}.model.pid"

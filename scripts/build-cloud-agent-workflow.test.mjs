@@ -505,6 +505,41 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     /--env ALICE_STATE_OWNER_ID=alice-owner-production/,
     "the full-gated candidate smoke must use the exact production state owner identity",
   );
+  assert.match(
+    workflow,
+    /--env ALICE_COMPANION_STATE_URL=http:\/\/alice-state-plane\.internal\/v1\/companion-state/,
+    "the full-gated candidate smoke must use the exact production Companion state URL",
+  );
+  assert.match(
+    workflow,
+    /docker network create "\$SMOKE_NETWORK"/,
+    "the candidate and its bounded state-plane dependency must share an isolated network",
+  );
+  assert.match(
+    workflow,
+    /--network-alias alice-state-plane\.internal/,
+    "the bounded state-plane dependency must use the exact production hostname",
+  );
+  assert.match(
+    workflow,
+    /docker rm -f "\$SMOKE_STATE_CONTAINER"/,
+    "the bounded state-plane dependency must always be removed",
+  );
+  assert.match(
+    workflow,
+    /docker network rm "\$SMOKE_NETWORK"/,
+    "the bounded smoke network must always be removed",
+  );
+  assert.match(
+    workflow,
+    /\/api\/companion\/stage[\s\S]*?method: "POST"/,
+    "the exact candidate smoke must prove durable Companion read/write through the runtime",
+  );
+  assert.match(
+    workflow,
+    /elizaLoadRequests[\s\S]*?elizaCommitRequests[\s\S]*?companionGetRequests[\s\S]*?companionPutRequests/,
+    "the exact candidate smoke must prove the private state-plane was exercised",
+  );
   assert.match(workflow, /ALICE_CAPABILITY_BOM_SHA256/);
   assert.match(workflow, /alice-capability-bom\.json/);
   assert.match(workflow, /\/api\/alice-production\/capabilities/);
@@ -512,8 +547,17 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
   assert.match(workflow, /verify_alice_runtime_boundary\.mjs/);
   assert.match(workflow, /verify_alice_runtime_build_manifest\.mjs/);
   assert.match(workflow, /ALICE_RUNTIME_BUILD_MANIFEST_SHA256/);
-  assert.match(workflow, /ALICE_EXACT_IMAGE_RESPONSE_ONLY_OK/);
-  assert.match(workflow, /alice\.chat-boundary\.v1/);
+  assert.match(workflow, /ALICE_EXACT_IMAGE_FULL_GATED_OK/);
+  assert.match(
+    workflow,
+    /Object\.hasOwn\(chatBody, "alice_boundary"\)/,
+    "the full-gated candidate must reject the diagnostic response-only boundary",
+  );
+  assert.doesNotMatch(
+    workflow,
+    /const expectedBoundary = \{[\s\S]*?alice\.chat-boundary\.v1/,
+    "the full-gated candidate smoke cannot require the response-only boundary",
+  );
   assert.match(workflow, /alice_smoke_model_server\.mjs/);
   assert.match(workflow, /ALICE_PRODUCTION_MUTATION_DENIED/);
   assert.match(workflow, /ALICE_DURABLE_CHAT_INGRESS_REQUIRED/);
