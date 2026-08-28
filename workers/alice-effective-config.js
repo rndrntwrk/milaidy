@@ -1,6 +1,7 @@
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const BASE64_URL_SHA256 = /^[A-Za-z0-9_-]{43}$/;
 const ACCESS_AUDIENCE = /^[A-Za-z0-9_-]{8,128}$/;
+const D1_DATABASE_ID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const CLOUDFLARE_CONTAINER_IMAGE =
   /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
 
@@ -11,11 +12,18 @@ export const ALICE_CLOUDFLARE_TARGET = Object.freeze({
   accessWorker: "alice-access-gateway",
   controlWorker: "alice-production-control",
   aiGatewayWorker: "alice-ai-gateway",
+  statePlaneWorker: "alice-state-plane",
+  connectorPlaneWorker: "alice-connector-plane",
   aiGateway: "alice-production",
   evidenceBucket: "alice-production-evidence",
   evidenceQueue: "alice-production-evidence-v1",
   evidenceDlq: "alice-production-evidence-dlq-v1",
   planWorkflow: "alice-production-plans",
+  stateDatabase: "alice-production-state",
+  stateObjectsBucket: "alice-production-state-objects",
+  memoryIndex: "alice-memory-v1",
+  workQueue: "alice-production-work-v1",
+  workDlq: "alice-production-work-dlq-v1",
 });
 
 export const ALICE_AI_CHAT_MODELS = Object.freeze({
@@ -496,6 +504,124 @@ export function buildAliceAiGatewayEffectiveConfig() {
   };
 }
 
+function alicePrivatePlaneObservability() {
+  return {
+    enabled: true,
+    headSamplingRate: 1,
+    logs: {
+      enabled: true,
+      headSamplingRate: 1,
+      invocationLogs: true,
+    },
+  };
+}
+
+function alicePrivatePlaneWorker(name) {
+  return {
+    accountId: ALICE_CLOUDFLARE_TARGET.accountId,
+    name,
+    main: "src/index.ts",
+    compatibilityDate: "2026-08-27",
+    workersDev: false,
+    previewUrls: false,
+    routes: [],
+  };
+}
+
+export function buildAliceStatePlaneEffectiveConfig(inputs) {
+  if (
+    !exactKeys(inputs, ["databaseId"]) ||
+    !D1_DATABASE_ID.test(inputs.databaseId)
+  ) {
+    throw new Error("ALICE_STATE_PLANE_EFFECTIVE_CONFIG_INVALID");
+  }
+  return {
+    schemaVersion: "alice.state-plane-effective-config.v1",
+    worker: alicePrivatePlaneWorker(ALICE_CLOUDFLARE_TARGET.statePlaneWorker),
+    bindings: {
+      d1: [{
+        binding: "ALICE_STATE_DB",
+        databaseName: ALICE_CLOUDFLARE_TARGET.stateDatabase,
+        databaseId: inputs.databaseId,
+        migrationsDir: "migrations",
+      }],
+      vectorize: [{
+        binding: "ALICE_MEMORY_INDEX",
+        indexName: ALICE_CLOUDFLARE_TARGET.memoryIndex,
+      }],
+      r2: [{
+        binding: "ALICE_STATE_OBJECTS",
+        bucketName: ALICE_CLOUDFLARE_TARGET.stateObjectsBucket,
+      }],
+      durableObjects: [{
+        name: "ALICE_COORDINATION",
+        className: "AliceStateCoordination",
+      }],
+      migrations: [{
+        tag: "alice-state-plane-v1",
+        newSqliteClasses: ["AliceStateCoordination"],
+      }],
+      services: [],
+      secretNames: ["ALICE_STATE_PLANE_SERVICE_TOKEN"],
+    },
+    values: {
+      vectorIndexName: ALICE_CLOUDFLARE_TARGET.memoryIndex,
+      vectorModel: "bge-base-en-v1.5",
+      vectorDimensions: 768,
+    },
+    observability: alicePrivatePlaneObservability(),
+  };
+}
+
+export function buildAliceConnectorPlaneEffectiveConfig(inputs) {
+  if (
+    !exactKeys(inputs, ["providerActivation"]) ||
+    inputs.providerActivation !== "disabled"
+  ) {
+    throw new Error("ALICE_CONNECTOR_PLANE_EFFECTIVE_CONFIG_INVALID");
+  }
+  return {
+    schemaVersion: "alice.connector-plane-effective-config.v1",
+    worker: alicePrivatePlaneWorker(
+      ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
+    ),
+    bindings: {
+      services: [
+        {
+          binding: "ALICE_STATE_PLANE",
+          service: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
+        },
+        {
+          binding: "ALICE_CONTROL",
+          service: ALICE_CLOUDFLARE_TARGET.controlWorker,
+        },
+      ],
+      durableObjects: [{
+        name: "ALICE_CONNECTOR_OUTBOUND",
+        className: "AliceConnectorOutboundCoordination",
+      }],
+      migrations: [{
+        tag: "alice-connector-plane-v1",
+        newSqliteClasses: ["AliceConnectorOutboundCoordination"],
+      }],
+      secretNames: [
+        "ALICE_CONNECTOR_SERVICE_TOKEN",
+        "ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN",
+        "ALICE_STATE_PLANE_SERVICE_TOKEN",
+      ],
+    },
+    values: {
+      stateOwnerId: "alice-owner-production",
+      connectorSessionId: "alice-connectors-production",
+      providerActivation: {
+        discord: "disabled",
+        telegram: "disabled",
+      },
+    },
+    observability: alicePrivatePlaneObservability(),
+  };
+}
+
 function decodeBase64UrlText(value) {
   if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) {
     throw new Error("ALICE_DEPLOYMENT_MANIFEST_INVALID");
@@ -532,7 +658,12 @@ function validDeploymentManifest(value) {
       "aiGatewayWorkerBundleSha256",
       "controlWorkerBundleSha256",
       "controlConfigSha256",
+      "connectorPlaneConfigSha256",
+      "connectorPlaneWorkerBundleSha256",
       "continuityConfigSha256",
+      "stateMigrationSetSha256",
+      "statePlaneConfigSha256",
+      "statePlaneWorkerBundleSha256",
     ]) &&
     Object.entries(ALICE_CLOUDFLARE_TARGET).every(
       ([key, expected]) => value.cloudflare[key] === expected,
@@ -545,6 +676,11 @@ function validDeploymentManifest(value) {
     DIGEST.test(value.cloudflare.controlWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.aiGatewayWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.controlConfigSha256) &&
+    DIGEST.test(value.cloudflare.statePlaneConfigSha256) &&
+    DIGEST.test(value.cloudflare.connectorPlaneConfigSha256) &&
+    DIGEST.test(value.cloudflare.statePlaneWorkerBundleSha256) &&
+    DIGEST.test(value.cloudflare.connectorPlaneWorkerBundleSha256) &&
+    DIGEST.test(value.cloudflare.stateMigrationSetSha256) &&
     DIGEST.test(value.cloudflare.continuityConfigSha256) &&
     exactKeys(
       value.release,
@@ -623,6 +759,8 @@ export async function verifyAliceEffectiveConfigBinding({
     access: "accessConfigSha256",
     control: "controlConfigSha256",
     aiGateway: "aiGatewayConfigSha256",
+    statePlane: "statePlaneConfigSha256",
+    connectorPlane: "connectorPlaneConfigSha256",
   }[role];
   if (
     !digestField ||

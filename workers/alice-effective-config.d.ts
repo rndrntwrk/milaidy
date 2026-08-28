@@ -1,4 +1,9 @@
-export type AliceEffectiveConfigRole = "access" | "control" | "aiGateway";
+export type AliceEffectiveConfigRole =
+  | "access"
+  | "control"
+  | "aiGateway"
+  | "statePlane"
+  | "connectorPlane";
 
 export const ALICE_CLOUDFLARE_TARGET: Readonly<Record<string, string>>;
 export const ALICE_AI_CHAT_MODELS: Readonly<Record<string, string>>;
@@ -46,6 +51,12 @@ export function buildAliceContainerControlEffectiveConfig(inputs: {
   releaseServiceTokenIdSha256: string;
 }): Record<string, unknown>;
 export function buildAliceAiGatewayEffectiveConfig(): Record<string, unknown>;
+export function buildAliceStatePlaneEffectiveConfig(inputs: {
+  databaseId: string;
+}): Record<string, unknown>;
+export function buildAliceConnectorPlaneEffectiveConfig(inputs: {
+  providerActivation: "disabled";
+}): Record<string, unknown>;
 export function verifyAliceDeploymentManifestBinding(inputs: {
   encodedManifest: string;
   expectedManifestSha256: string;
