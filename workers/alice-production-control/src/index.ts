@@ -13,6 +13,7 @@ import {
   loadRuntimeConfig,
   loadOwnerAccessConfig,
   loadDeploymentControllerAccessConfig,
+  releaseRevisionResponseFields,
   type AliceRuntimeConfig,
   type AliceOwnerAccessConfig,
 } from "./runtime-config";
@@ -647,7 +648,7 @@ async function handleOwnerApi(
             programDigest: admitted.config.binding.programDigest,
             releaseDigest: admitted.config.binding.releaseDigest,
             policyHash: admitted.config.binding.policyHash,
-            runtimeRevision: admitted.config.runtimeRevision,
+            ...releaseRevisionResponseFields(admitted.config),
             deploymentManifestSha256: admitted.config.deploymentManifestSha256,
             workerVersion: env.ALICE_VERSION,
           }

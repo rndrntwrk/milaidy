@@ -22,6 +22,7 @@ import {
   loadDeploymentControllerAccessConfig,
   loadOwnerAccessConfig,
   loadRuntimeConfig,
+  releaseRevisionResponseFields,
 } from "../src/runtime-config";
 
 function base64Url(value: string | ArrayBuffer): string {
@@ -217,6 +218,13 @@ describe("Alice runtime configuration", () => {
     });
     expect(config.modelDailyBudgetUnits).toBe(10000);
     expect(config.runtimeRevision).toBe(envelope.release.modalRevision);
+    expect(releaseRevisionResponseFields(config)).toEqual({ modalRevision: 49 });
+    expect(
+      releaseRevisionResponseFields({
+        envelope: { schemaVersion: "alice.program-envelope.v2" },
+        runtimeRevision: 50,
+      } as unknown as typeof config),
+    ).toEqual({ runtimeRevision: 50 });
     expect(config.deploymentManifestSha256).toBe(envelope.release.deploymentManifestSha256);
   });
 

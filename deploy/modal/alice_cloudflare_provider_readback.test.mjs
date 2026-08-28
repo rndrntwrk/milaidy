@@ -4,9 +4,9 @@ import fs from "node:fs";
 import test from "node:test";
 
 import {
-  buildAliceAccessEffectiveConfig,
+  buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
-  buildAliceControlEffectiveConfig,
+  buildAliceContainerControlEffectiveConfig,
 } from "../../workers/alice-effective-config.js";
 import {
   materializeAliceWranglerConfig,
@@ -47,6 +47,8 @@ const workerBundleArtifact = aliceTestVerifiedWorkerBundleArtifact({
   workerModules,
 });
 const cloudflareContinuityReadback = aliceTestCloudflareContinuityReadback();
+const runtimeContainerImage =
+  `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"4".repeat(64)}`;
 
 const source = {
   access: JSON.parse(
@@ -69,18 +71,18 @@ const source = {
   ),
 };
 const effective = {
-  access: buildAliceAccessEffectiveConfig({
+  access: buildAliceContainerAccessEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
     accessAudience: "alice-access-audience",
     ownerEmailSha256: owner,
-    upstreamOrigin: "https://rndrntwrk--alice.modal.run",
+    runtimeImage: runtimeContainerImage,
   }),
-  control: buildAliceControlEffectiveConfig({
+  control: buildAliceContainerControlEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
     accessAudience: "alice-access-audience",
     ownerEmailSha256: owner,
     modelDailyBudgetUnits: 10_000,
-    modalRevision: 49,
+    runtimeRevision: 49,
     releaseAccessAudience: "alice-release-controller-audience",
     releaseServiceTokenIdSha256: "R".repeat(43),
   }),
@@ -92,12 +94,12 @@ const manifest = await buildAliceDeploymentManifest({
   sourceCommit: "1".repeat(40),
   deploymentControllerCommit: "2".repeat(40),
   elizaCommit: "3".repeat(40),
-  runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"4".repeat(64)}`,
+  runtimeImage: runtimeContainerImage,
   runtimeBuildManifestSha256: `sha256:${"5".repeat(64)}`,
   capabilityBomSha256: `sha256:${"a".repeat(64)}`,
-  modalRevision: 49,
+  runtimeRevision: 49,
   policyHash: `sha256:${"6".repeat(64)}`,
-  rollbackBoundary: "modal:alice-runtime:v49",
+  rollbackBoundary: "container:alice-runtime:v49",
   accessEffectiveConfig: effective.access,
   controlEffectiveConfig: effective.control,
   aiGatewayEffectiveConfig: effective.aiGateway,
@@ -117,13 +119,13 @@ function deploymentValues(role) {
     deploymentManifestB64: "pending",
   };
   if (role === "access") {
-    return { ...common, upstreamOrigin: "https://rndrntwrk--alice.modal.run" };
+    return { ...common, runtimeImage: runtimeContainerImage };
   }
   if (role === "control") {
     return {
       ...common,
       modelDailyBudgetUnits: 10_000,
-      modalRevision: 49,
+      runtimeRevision: 49,
       releaseAccessAudience: "alice-release-controller-audience",
       releaseServiceTokenIdSha256: "R".repeat(43),
       programEnvelopeB64: "program-envelope",
@@ -390,11 +392,11 @@ test("rejects traffic, binding, and observability substitutions in provider stat
   }
 
   const deployConfig = fixture("access");
-  deployConfig.materializedWranglerConfig.vars.ALICE_UPSTREAM_ORIGIN =
-    "https://rndrntwrk--alice-substituted.modal.run";
+  deployConfig.materializedWranglerConfig.vars.ALICE_CLOUDFLARE_RUNTIME_IMAGE =
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"f".repeat(64)}`;
   deployConfig.version.resources.bindings.find(
-    (item) => item.name === "ALICE_UPSTREAM_ORIGIN",
-  ).text = "https://rndrntwrk--alice-substituted.modal.run";
+    (item) => item.name === "ALICE_CLOUDFLARE_RUNTIME_IMAGE",
+  ).text = `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"f".repeat(64)}`;
   await assert.rejects(
     () => verifyAliceWorkerProviderReadback(deployConfig),
     /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
