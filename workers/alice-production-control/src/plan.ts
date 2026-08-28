@@ -17,10 +17,7 @@ export type AlicePlan = {
 };
 
 const AUTONOMOUS_PLAN_ACTIONS = new Set([
-  "research.read",
-  "research.retrieve",
   "memory.read",
-  "draft.create",
   "runtime.health",
 ]);
 

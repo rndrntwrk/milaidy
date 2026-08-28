@@ -23,8 +23,8 @@ const basePlan = {
   actions: [
     {
       intentId: "intent-plan-research",
-      action: "research.read",
-      target: "source:production-health",
+      action: "runtime.health",
+      target: "alice-production-runtime",
       argumentHash: `sha256:${"4".repeat(64)}`,
       nonce: "nonce-plan-research",
       expiresAt: 1_787_400_060_000,
@@ -58,6 +58,18 @@ describe("Alice production plan admission", () => {
       },
     ]) {
       expect(validatePlan(candidate, admission, 1_787_400_001_000)).toEqual({
+        ok: false,
+        code: "PLAN_NOT_ADMITTED",
+      });
+    }
+  });
+
+  test("rejects autonomous work whose production executor is not installed", () => {
+    for (const action of ["research.read", "research.retrieve", "draft.create"]) {
+      expect(validatePlan({
+        ...basePlan,
+        actions: [{ ...basePlan.actions[0], action }],
+      }, admission, 1_787_400_001_000)).toEqual({
         ok: false,
         code: "PLAN_NOT_ADMITTED",
       });
