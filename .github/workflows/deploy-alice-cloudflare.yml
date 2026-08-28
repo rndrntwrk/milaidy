@@ -321,6 +321,7 @@ jobs:
             --entrypoint node \
             --env ALICE_CAPABILITY_BOM_SHA256="$capability_bom_sha256" \
             "$RUNTIME_IMAGE" \
+            --import ./node_modules/tsx/dist/loader.mjs \
             deploy/modal/verify_alice_capability_bom.mjs
           echo "ALICE_RUNTIME_BUILD_MANIFEST_SHA256=$runtime_build_manifest_sha256" >> "$GITHUB_ENV"
           echo "ALICE_CAPABILITY_BOM_SHA256=$capability_bom_sha256" >> "$GITHUB_ENV"

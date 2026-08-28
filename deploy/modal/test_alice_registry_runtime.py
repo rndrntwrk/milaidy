@@ -67,6 +67,13 @@ class AliceModalContractTest(unittest.TestCase):
         )
         self.assertIn("_verify_runtime_binding", self.launcher)
         self.assertIn("verify_alice_runtime_build_manifest.mjs", self.launcher)
+        self.assertRegex(
+            self.launcher,
+            re.compile(
+                r'\[\s*"node",\s*"--import",\s*"/app/node_modules/tsx/dist/loader\.mjs",\s*"/app/deploy/modal/verify_alice_capability_bom\.mjs",\s*\]',
+                re.MULTILINE,
+            ),
+        )
         self.assertIn("ALICE_RUNTIME_BUILD_MANIFEST_SHA256", self.launcher)
         self.assertIn("ALICE_RELEASE_DIGEST", self.launcher)
         self.assertIn("if environ[\"ALICE_RUNTIME_IMAGE\"] != REGISTRY_IMAGE:", self.launcher)

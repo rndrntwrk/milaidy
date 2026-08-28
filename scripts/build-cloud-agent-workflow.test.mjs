@@ -542,6 +542,11 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
   );
   assert.match(workflow, /ALICE_CAPABILITY_BOM_SHA256/);
   assert.match(workflow, /alice-capability-bom\.json/);
+  assert.match(
+    workflow,
+    /docker exec "\$SMOKE_CONTAINER" node --import \.\/node_modules\/tsx\/dist\/loader\.mjs deploy\/modal\/verify_alice_capability_bom\.mjs/,
+    "the exact-image verifier must use the same pinned TypeScript loader as the BOM producer",
+  );
   assert.match(workflow, /\/api\/alice-production\/capabilities/);
   assert.match(workflow, /\/api\/alice-production\/proof/);
   assert.match(workflow, /verify_alice_runtime_boundary\.mjs/);

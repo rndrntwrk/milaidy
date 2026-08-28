@@ -127,6 +127,11 @@ test("source image provenance, build manifest, and capability BOM are verified b
     workflow,
     /alice-capability-bom\.json[\s\S]*?ALICE_CAPABILITY_BOM_SHA256[\s\S]*?verify_alice_capability_bom\.mjs/,
   );
+  assert.match(
+    workflow,
+    /--entrypoint node[\s\S]*?"\$RUNTIME_IMAGE" \\\n+\s+--import \.\/node_modules\/tsx\/dist\/loader\.mjs \\\n+\s+deploy\/modal\/verify_alice_capability_bom\.mjs/,
+    "deploy admission must regenerate the BOM with the pinned TypeScript loader",
+  );
   assert.match(workflow, /docker pull --platform linux\/amd64 "\$RUNTIME_IMAGE"/);
   assert.doesNotMatch(workflow, /\bdocker (?:build|buildx build)\b/);
 });

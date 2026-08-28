@@ -216,6 +216,8 @@ def _verify_runtime_binding(environ, subprocess_module):
         subprocess_module.run(
             [
                 "node",
+                "--import",
+                "/app/node_modules/tsx/dist/loader.mjs",
                 "/app/deploy/modal/verify_alice_capability_bom.mjs",
             ],
             cwd="/app",
