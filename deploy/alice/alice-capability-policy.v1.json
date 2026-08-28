@@ -189,19 +189,6 @@
       "policyState": "disabled"
     },
     {
-      "id": "package:@elizaos/app-core",
-      "classification": "core",
-      "source": {
-        "type": "package",
-        "package": "@elizaos/app-core",
-        "entrypoint": "."
-      },
-      "surface": "module",
-      "runtimeNames": [],
-      "adapter": null,
-      "policyState": "enabled"
-    },
-    {
       "id": "package:@elizaos/app-phone",
       "classification": "policy-disabled",
       "source": {
