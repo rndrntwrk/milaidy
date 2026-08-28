@@ -367,6 +367,64 @@ test("policy-disabled is a real installed implementation, never a missing packag
   }
 });
 
+test("policy-disabled bytes stay inert while core package surface is evaluated", async () => {
+  const root = fixtureRoot();
+  try {
+    writePackage(root, "@fixture/plugin-disabled", {
+      source: 'throw new Error("POLICY_DISABLED_ENTRYPOINT_EVALUATED");\n',
+    });
+    writePackage(root, "@fixture/plugin-core", {
+      runtimeName: "core-real",
+      source:
+        'globalThis.__aliceCoreCapabilityEvaluations = (globalThis.__aliceCoreCapabilityEvaluations ?? 0) + 1; export default { name: "core-real", actions: [{ name: "REAL_ACTION" }] };\n',
+    });
+    globalThis.__aliceCoreCapabilityEvaluations = 0;
+
+    const bom = await generateAliceCapabilityBom({
+      root,
+      policy: policy([
+        packageEntry("@fixture/plugin-disabled", "policy-disabled", {
+          runtimeNames: [],
+        }),
+        packageEntry("@fixture/plugin-core", "core", {
+          runtimeName: "core-real",
+        }),
+      ]),
+      discovery: {
+        packageNames: [
+          "@fixture/plugin-disabled",
+          "@fixture/plugin-core",
+        ],
+        internalCapabilityIds: [],
+      },
+    });
+
+    assert.equal(globalThis.__aliceCoreCapabilityEvaluations, 1);
+    assert.deepEqual(
+      bom.entries.map(({ id, implementationCallable, runtimeNames }) => ({
+        id,
+        implementationCallable,
+        runtimeNames,
+      })),
+      [
+        {
+          id: "package:@fixture/plugin-core",
+          implementationCallable: true,
+          runtimeNames: ["core-real"],
+        },
+        {
+          id: "package:@fixture/plugin-disabled",
+          implementationCallable: false,
+          runtimeNames: [],
+        },
+      ],
+    );
+  } finally {
+    delete globalThis.__aliceCoreCapabilityEvaluations;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("BOM hashes sorted final-image package file records", async () => {
   const root = fixtureRoot();
   try {
