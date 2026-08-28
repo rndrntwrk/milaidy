@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { readFileSync } from "node:fs";
 
 type BoundStatement = {
   bind: (...values: unknown[]) => BoundStatement;
@@ -100,6 +101,37 @@ class FakeVectorIndex {
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 
 describe("portable D1 Alice state contract", () => {
+  test("migrates existing canonical and vector records before accepting execution records", () => {
+    const sqlite = new Database(":memory:");
+    sqlite.exec(readFileSync(new URL("../migrations/0001_alice_state.sql", import.meta.url), "utf8"));
+    sqlite.query(`
+      INSERT INTO alice_state_records
+        (kind, record_id, owner_id, session_id, payload_json, payload_sha256, revision, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run("memory", "memory-existing-001", "owner-001", "session-001", "{}", "a".repeat(64), 1, 1_777_000_000_000);
+    sqlite.query(`
+      INSERT INTO alice_vector_references
+        (owner_id, record_kind, record_id, vector_id, index_name, model, dimensions, namespace, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run("owner-001", "memory", "memory-existing-001", "vector-existing-001", "alice-memory-v1", "bge-base-en-v1.5", 768, "owner-001", 1_777_000_000_000);
+
+    sqlite.exec(readFileSync(new URL("../migrations/0002_execution_records.sql", import.meta.url), "utf8"));
+    sqlite.query(`
+      INSERT INTO alice_state_records
+        (kind, record_id, owner_id, session_id, payload_json, payload_sha256, revision, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run("work", "work-new-001", "owner-001", "session-001", "{}", "b".repeat(64), 1, 1_777_000_000_001);
+
+    expect(sqlite.query("SELECT kind, record_id FROM alice_state_records ORDER BY updated_at").all()).toEqual([
+      { kind: "memory", record_id: "memory-existing-001" },
+      { kind: "work", record_id: "work-new-001" },
+    ]);
+    expect(sqlite.query("SELECT vector_id FROM alice_vector_references").get()).toEqual({
+      vector_id: "vector-existing-001",
+    });
+    expect(sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+
   test("persists every admitted canonical kind and makes identical replay idempotent across adapter restart", async () => {
     const state = await import("../src/state-plane");
     const d1 = new SqliteD1Binding();
@@ -108,6 +140,7 @@ describe("portable D1 Alice state contract", () => {
     const kinds = [
       "message", "room", "world", "entity", "relationship", "memory", "task",
       "trajectory", "connectorCursor", "configVersion", "approvalReceipt",
+      "plan", "approval", "work", "attempt", "recovery",
     ] as const;
     for (const [index, kind] of kinds.entries()) {
       const input = {
@@ -125,7 +158,7 @@ describe("portable D1 Alice state contract", () => {
       expect(replayed.revision).toBe(1);
       expect(await first.getRecord(kind, input.recordId, "owner-001")).toEqual(created);
     }
-    expect(await first.listRecords({ ownerId: "owner-001", sessionId: "session-001", limit: 50 })).toHaveLength(11);
+    expect(await first.listRecords({ ownerId: "owner-001", sessionId: "session-001", limit: 50 })).toHaveLength(16);
   });
 
   test("rejects idempotency collisions, unknown kinds and arbitrary SQL or callback transactions", async () => {

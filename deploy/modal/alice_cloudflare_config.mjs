@@ -175,19 +175,22 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
           className: workflow.class_name,
           steps: workflow.limits?.steps,
         })),
-        queueProducer: {
-          binding: identityConfig.queues?.producers?.[0]?.binding,
-          queue: identityConfig.queues?.producers?.[0]?.queue,
-        },
-        queueConsumer: {
-          queue: identityConfig.queues?.consumers?.[0]?.queue,
-          maxBatchSize: identityConfig.queues?.consumers?.[0]?.max_batch_size,
-          maxBatchTimeout: identityConfig.queues?.consumers?.[0]?.max_batch_timeout,
-          maxRetries: identityConfig.queues?.consumers?.[0]?.max_retries,
-          deadLetterQueue: identityConfig.queues?.consumers?.[0]?.dead_letter_queue,
-          maxConcurrency: identityConfig.queues?.consumers?.[0]?.max_concurrency,
-          retryDelay: identityConfig.queues?.consumers?.[0]?.retry_delay,
-        },
+        services: common.services,
+        queueProducers: (identityConfig.queues?.producers ?? []).map((producer) => ({
+          binding: producer.binding,
+          queue: producer.queue,
+        })),
+        queueConsumers: (identityConfig.queues?.consumers ?? []).map((consumer) => ({
+          queue: consumer.queue,
+          maxBatchSize: consumer.max_batch_size,
+          maxBatchTimeout: consumer.max_batch_timeout,
+          maxRetries: consumer.max_retries,
+          ...(consumer.dead_letter_queue === undefined
+            ? {}
+            : { deadLetterQueue: consumer.dead_letter_queue }),
+          maxConcurrency: consumer.max_concurrency,
+          retryDelay: consumer.retry_delay,
+        })),
         r2: {
           binding: identityConfig.r2_buckets?.[0]?.binding,
           bucketName: identityConfig.r2_buckets?.[0]?.bucket_name,

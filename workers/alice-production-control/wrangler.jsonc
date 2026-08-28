@@ -39,6 +39,7 @@
       "ALICE_ACCESS_GATEWAY_SERVICE_TOKEN",
       "ALICE_AI_GATEWAY_SERVICE_TOKEN"
       ,"ALICE_EVIDENCE_QUEUE_HMAC_KEY"
+      ,"ALICE_STATE_PLANE_SERVICE_TOKEN"
     ]
   },
   "durable_objects": {
@@ -72,11 +73,21 @@
       }
     }
   ],
+  "services": [
+    {
+      "binding": "ALICE_STATE_PLANE",
+      "service": "alice-state-plane"
+    }
+  ],
   "queues": {
     "producers": [
       {
         "binding": "ALICE_EVIDENCE_QUEUE",
         "queue": "alice-production-evidence-v1"
+      },
+      {
+        "binding": "ALICE_WORK_QUEUE",
+        "queue": "alice-production-work-v1"
       }
     ],
     "consumers": [
@@ -86,6 +97,23 @@
         "max_batch_timeout": 5,
         "max_retries": 3,
         "dead_letter_queue": "alice-production-evidence-dlq-v1",
+        "max_concurrency": 1,
+        "retry_delay": 10
+      },
+      {
+        "queue": "alice-production-work-v1",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "alice-production-work-dlq-v1",
+        "max_concurrency": 1,
+        "retry_delay": 10
+      },
+      {
+        "queue": "alice-production-work-dlq-v1",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
         "max_concurrency": 1,
         "retry_delay": 10
       }
