@@ -445,6 +445,40 @@ test("binds the stable evidence HMAC secret into the signed control closure", ()
   }
 });
 
+test("binds the admitted capability BOM digest into the signed Container closure", () => {
+  assert.ok(
+    expected.access.bindings.secretNames.includes(
+      "ALICE_CAPABILITY_BOM_SHA256",
+    ),
+  );
+  assert.ok(
+    rendered("access").secrets.required.includes(
+      "ALICE_CAPABILITY_BOM_SHA256",
+    ),
+  );
+  for (const secretNames of [
+    rendered("access").secrets.required.filter(
+      (name) => name !== "ALICE_CAPABILITY_BOM_SHA256",
+    ),
+    rendered("access").secrets.required.map((name) =>
+      name === "ALICE_CAPABILITY_BOM_SHA256"
+        ? "ALICE_CAPABILITY_BOM_SHA256_SUBSTITUTED"
+        : name,
+    ),
+  ]) {
+    const changed = rendered("access");
+    changed.secrets.required = secretNames;
+    assert.throws(
+      () => assertAliceWranglerMatchesEffectiveConfig(
+        "access",
+        changed,
+        expected.access,
+      ),
+      /ALICE_WRANGLER_EFFECTIVE_CONFIG_MISMATCH/,
+    );
+  }
+});
+
 test("binds every Worker to the exact production account", () => {
   for (const role of releaseRoles) {
     assert.equal(

@@ -281,6 +281,7 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
       secretNames: [
         "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
         "ALICE_ACCESS_PROXY_SECRET",
+        "ALICE_CAPABILITY_BOM_SHA256",
         "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
         "ALICE_ELIZA_COMMIT",
         "ALICE_POLICY_HASH",
