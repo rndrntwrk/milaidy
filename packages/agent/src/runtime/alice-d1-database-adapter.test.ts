@@ -300,6 +300,11 @@ describe("Alice D1-backed Eliza database adapter", () => {
               totalTokens: 18,
               tokenCount: 18,
               apiToken: "must-not-persist",
+              authToken: "auth-must-not-persist",
+              bearerToken: "bearer-must-not-persist",
+              oauthToken: "oauth-must-not-persist",
+              secretKey: "key-must-not-persist",
+              accessTokenSecret: "compound-must-not-persist",
             },
           },
         } as Memory,
@@ -314,6 +319,15 @@ describe("Alice D1-backed Eliza database adapter", () => {
     expect(serialized).toContain('"tokenCount":18');
     expect(serialized).not.toContain("must-not-persist");
     expect(serialized).not.toContain("apiToken");
+    for (const credentialField of [
+      "authToken",
+      "bearerToken",
+      "oauthToken",
+      "secretKey",
+      "accessTokenSecret",
+    ]) {
+      expect(serialized).not.toContain(credentialField);
+    }
 
     const replacement = createAliceD1DatabaseAdapter({
       ownerId: OWNER_ID,

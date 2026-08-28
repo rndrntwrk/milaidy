@@ -35,20 +35,14 @@ export type ElizaDatabaseAdapter = {
 };
 
 const IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
-const SECRET_FIELDS = new Set([
-  "token",
-  "secret",
-  "secrets",
-  "password",
-  "authorization",
-  "cookie",
-  "privatekey",
-  "apikey",
-  "apitoken",
-  "accesstoken",
-  "refreshtoken",
-  "clientsecret",
+const TOKEN_USAGE_FIELDS = new Set([
+  "prompttokens",
+  "completiontokens",
+  "totaltokens",
+  "tokencount",
 ]);
+const SECRET_FIELD_FRAGMENT =
+  /(?:token|secret|password|authorization|cookie|privatekey|apikey)/;
 const encoder = new TextEncoder();
 
 type D1Result = {
@@ -109,7 +103,11 @@ function exactKeys(value: Record<string, unknown>, expected: string[]): boolean 
 }
 
 function isSecretField(key: string): boolean {
-  return SECRET_FIELDS.has(key.replace(/[-_]/g, "").toLowerCase());
+  const normalized = key.replace(/[-_]/g, "").toLowerCase();
+  return (
+    !TOKEN_USAGE_FIELDS.has(normalized) &&
+    SECRET_FIELD_FRAGMENT.test(normalized)
+  );
 }
 
 function containsSecretField(value: unknown): boolean {

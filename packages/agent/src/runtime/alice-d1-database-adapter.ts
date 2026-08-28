@@ -81,20 +81,14 @@ export const ALICE_ELIZA_DURABLE_COLLECTIONS = [
 const COLLECTION = /^[a-z][A-Za-z0-9]{2,63}$/;
 const OWNER = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
 const OPERATION = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
-const SECRET_FIELDS = new Set([
-  "token",
-  "secret",
-  "secrets",
-  "password",
-  "authorization",
-  "cookie",
-  "privatekey",
-  "apikey",
-  "apitoken",
-  "accesstoken",
-  "refreshtoken",
-  "clientsecret",
+const TOKEN_USAGE_FIELDS = new Set([
+  "prompttokens",
+  "completiontokens",
+  "totaltokens",
+  "tokencount",
 ]);
+const SECRET_FIELD_FRAGMENT =
+  /(?:token|secret|password|authorization|cookie|privatekey|apikey)/;
 const MAX_MUTATIONS = 100;
 const MAX_RECORD_KEY_BYTES = 1_024;
 const MAX_RECORD_VALUE_BYTES = 1_000_000;
@@ -116,7 +110,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isSecretField(key: string): boolean {
-  return SECRET_FIELDS.has(key.replace(/[-_]/g, "").toLowerCase());
+  const normalized = key.replace(/[-_]/g, "").toLowerCase();
+  return (
+    !TOKEN_USAGE_FIELDS.has(normalized) &&
+    SECRET_FIELD_FRAGMENT.test(normalized)
+  );
 }
 
 function sanitizeAgentValue(value: unknown): unknown {

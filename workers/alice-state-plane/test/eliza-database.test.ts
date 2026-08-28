@@ -355,6 +355,22 @@ describe("D1 Eliza durable database adapter", () => {
     await expect(adapter.commit(input([
       { collection: "memory", key: "secret", deleted: false, value: { apiToken: "forbidden" } },
     ]) as never)).rejects.toThrow("ELIZA_SECRET_FIELD");
+    for (const credentialField of [
+      "authToken",
+      "bearerToken",
+      "oauthToken",
+      "secretKey",
+      "accessTokenSecret",
+    ]) {
+      await expect(adapter.commit(input([
+        {
+          collection: "memory",
+          key: `secret-${credentialField}`,
+          deleted: false,
+          value: { [credentialField]: "forbidden" },
+        },
+      ]) as never)).rejects.toThrow("ELIZA_SECRET_FIELD");
+    }
     await expect(adapter.commit(input([
       { collection: "memory\n", key: "control", deleted: true },
     ]) as never)).rejects.toThrow("ELIZA_OPERATION_INVALID");
