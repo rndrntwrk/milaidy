@@ -37,7 +37,9 @@ describe("Alice sanitized runtime-boundary proof", () => {
         { name: "@elizaos/plugin-sql" },
         { name: "openai" },
       ],
-      actions: [{ name: "REPLY" }],
+      actions: Array.from({ length: 65 }, (_, index) => ({
+        name: `PRODUCTION_ACTION_${String(index + 1).padStart(2, "0")}`,
+      })),
       evaluators: [{ name: "REFLECTION" }],
       services: new Map([["MEMORY", {}]]),
     };
@@ -132,6 +134,41 @@ describe("Alice sanitized runtime-boundary proof", () => {
         environment,
       ),
     ).toThrow("ALICE_PRODUCTION_EXECUTION_SURFACE_INVALID");
+  });
+
+  it("fails closed on a malformed full-gated action beyond the serialized inventory cap", () => {
+    const runtime = {
+      plugins: [
+        { name: "basic-capabilities" },
+        { name: "core-security-hooks" },
+        { name: "@elizaos/plugin-agent-skills" },
+        { name: "eliza" },
+        { name: "@elizaos/plugin-sql" },
+        { name: "openai" },
+      ],
+      actions: [
+        ...Array.from({ length: 65 }, (_, index) => ({
+          name: `PRODUCTION_ACTION_${String(index + 1).padStart(2, "0")}`,
+        })),
+        { name: "MALFORMED ACTION" },
+      ],
+    };
+
+    expect(() =>
+      stampAliceProductionRuntimeBoundary(
+        runtime,
+        [
+          "eliza",
+          "@elizaos/plugin-sql",
+          "@elizaos/plugin-agent-skills",
+          "@elizaos/plugin-openai",
+        ],
+        {
+          ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+          ALICE_RUNTIME_PROFILE: "full-gated",
+        },
+      ),
+    ).toThrow("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
   });
 
   it("refuses to stamp full-gated runtimes missing a required core marker", () => {

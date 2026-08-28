@@ -71,26 +71,36 @@ function exactStrings(actual: string[], expected: readonly string[]): boolean {
   );
 }
 
+function inventoryName(entry: unknown): string {
+  if (!entry || typeof entry !== "object") {
+    throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
+  }
+  const name = (entry as { name?: unknown }).name;
+  if (
+    typeof name !== "string" ||
+    name.length < 1 ||
+    name.length > 128 ||
+    !/^[a-zA-Z0-9@/._:-]+$/.test(name)
+  ) {
+    throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
+  }
+  return name;
+}
+
 function inventory(entries: unknown[] | undefined): string[] {
   if (!Array.isArray(entries) || entries.length > 64) {
     throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
   }
-  const names = entries.map((entry) => {
-    if (!entry || typeof entry !== "object") {
-      throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
-    }
-    const name = (entry as { name?: unknown }).name;
-    if (
-      typeof name !== "string" ||
-      name.length < 1 ||
-      name.length > 128 ||
-      !/^[a-zA-Z0-9@/._:-]+$/.test(name)
-    ) {
-      throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
-    }
-    return name;
-  });
+  const names = entries.map(inventoryName);
   return [...new Set(names)].sort();
+}
+
+function hasActionPlanningSurface(entries: unknown[] | undefined): boolean {
+  if (!Array.isArray(entries)) {
+    throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
+  }
+  entries.forEach(inventoryName);
+  return entries.length > 0;
 }
 
 function configuredInventory(entries: string[]): string[] {
@@ -209,7 +219,7 @@ export function stampAliceProductionRuntimeBoundary(
         runtimePluginNames.includes(name),
       ) ||
       runtimePluginNames.includes("alice-production-response-only") ||
-      inventory(runtime.actions).length === 0
+      !hasActionPlanningSurface(runtime.actions)
     ) {
       throw new Error("ALICE_PRODUCTION_EXECUTION_SURFACE_INVALID");
     }
@@ -293,7 +303,7 @@ export function buildAliceProductionProof(
         runtimePluginNames.includes(name),
       ) ||
       runtimePluginNames.includes("alice-production-response-only") ||
-      inventory(runtime.actions).length === 0
+      !hasActionPlanningSurface(runtime.actions)
     ) {
       throw new Error("ALICE_PRODUCTION_PROOF_UNAVAILABLE");
     }
