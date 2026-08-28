@@ -494,6 +494,41 @@ jobs:
             echo "Using verified plugin-wallet runtime JS after declaration-only failure"
           }
 
+      - name: Build @elizaos/plugin-bluebubbles policy package
+        shell: bash
+        run: |
+          plugins/plugin-bluebubbles/typescript/node_modules/.bin/tsc \
+            -p plugins/plugin-bluebubbles/typescript/tsconfig.json \
+            --noCheck
+          test -f plugins/plugin-bluebubbles/typescript/dist/index.js
+
+      - name: Build Alice policy workspace packages
+        shell: bash
+        run: |
+          while IFS='|' read -r workspace entrypoint
+          do
+            test -n "$workspace"
+            test -n "$entrypoint"
+            bun run --cwd "$workspace" build
+            test -f "$workspace/$entrypoint"
+          done <<'ALICE_POLICY_WORKSPACES'
+          eliza/plugins/plugin-browser|dist/index.js
+          eliza/plugins/plugin-capacitor-bridge|dist/index.js
+          eliza/plugins/plugin-coding-tools|dist/index.js
+          eliza/plugins/plugin-computeruse|dist/index.js
+          eliza/plugins/plugin-discord|dist/index.js
+          eliza/plugins/plugin-google-genai|dist/node/index.node.js
+          eliza/plugins/plugin-imessage|dist/index.js
+          eliza/plugins/plugin-mcp|dist/node/index.js
+          packages/plugin-music-library|dist/index.js
+          packages/plugin-music-player|dist/index.js
+          eliza/plugins/plugin-pdf|dist/node/index.node.js
+          eliza/plugins/plugin-signal|dist/index.js
+          eliza/plugins/plugin-telegram|dist/index.js
+          eliza/plugins/plugin-whatsapp|dist/index.js
+          eliza/plugins/plugin-workflow|dist/index.js
+          ALICE_POLICY_WORKSPACES
+
       - name: Qualify Alice runtime plugin resolver
         run: bun test packages/agent/src/runtime/plugin-resolver.test.ts
 
