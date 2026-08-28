@@ -42,7 +42,7 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     OPENAI_EMBEDDING_URL: "http://alice-ai-gateway.internal/v1",
     ALICE_STATE_PLANE_URL:
       "http://alice-state-plane.internal/v1/eliza-database",
-    ALICE_STATE_OWNER_ID: "owner-rndrntwrk-alice",
+    ALICE_STATE_OWNER_ID: "alice-owner-production",
     ELIZA_VAULT_PASSPHRASE: "runtime-vault-passphrase-with-at-least-32-bytes",
     ALICE_PROGRAM_DIGEST: digest("1"),
     ALICE_RELEASE_DIGEST: digest("2"),

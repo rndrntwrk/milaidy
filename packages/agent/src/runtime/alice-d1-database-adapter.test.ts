@@ -10,7 +10,7 @@ import {
   createAliceFullRuntimeDatabaseAdapter,
 } from "./alice-d1-database-adapter";
 
-const OWNER_ID = "owner-rndrntwrk-alice";
+const OWNER_ID = "alice-owner-production";
 const AGENT_ID = "00000000-0000-4000-8000-000000000001" as UUID;
 const WORLD_ID = "00000000-0000-4000-8000-000000000002" as UUID;
 const ROOM_ID = "00000000-0000-4000-8000-000000000003" as UUID;
@@ -74,7 +74,7 @@ function world(): World {
     id: WORLD_ID,
     agentId: AGENT_ID,
     name: "Alice owner world",
-    serverId: "owner-rndrntwrk-alice",
+    serverId: OWNER_ID,
     metadata: {},
   };
 }

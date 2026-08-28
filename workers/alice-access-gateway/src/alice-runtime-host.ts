@@ -73,7 +73,7 @@ export function buildAliceRuntimeContainerEnv(
     OPENAI_EMBEDDING_URL: "http://alice-ai-gateway.internal/v1",
     ALICE_STATE_PLANE_URL:
       "http://alice-state-plane.internal/v1/eliza-database",
-    ALICE_STATE_OWNER_ID: "owner-rndrntwrk-alice",
+    ALICE_STATE_OWNER_ID: "alice-owner-production",
     ELIZA_VAULT_PASSPHRASE: env.ALICE_RUNTIME_VAULT_PASSPHRASE,
     ALICE_RUNTIME_PROFILE: "full-gated",
     ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
