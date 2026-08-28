@@ -151,3 +151,34 @@ test("routes the state host through the private service binding without exposing
     service: "alice-state-plane",
   });
 });
+
+test("admits the exact Companion state route and rejects every other state-plane path", async () => {
+  const paths: string[] = [];
+  const env = {
+    ALICE_STATE_PLANE_SERVICE_TOKEN:
+      "state-plane-service-token-with-at-least-32-bytes",
+    ALICE_STATE_PLANE: {
+      async fetch(request: Request) {
+        paths.push(new URL(request.url).pathname);
+        return Response.json({ ok: true });
+      },
+    },
+  } as any;
+  await (runtimeContainer as any).forwardToAliceStatePlane(
+    new Request("http://alice-state-plane.internal/v1/state", {
+      method: "POST",
+      body: "{}",
+    }),
+    env,
+  );
+  expect(paths).toEqual(["/v1/state"]);
+  expect(() =>
+    (runtimeContainer as any).forwardToAliceStatePlane(
+      new Request("http://alice-state-plane.internal/v1/arbitrary", {
+        method: "POST",
+        body: "{}",
+      }),
+      env,
+    ),
+  ).toThrow("ALICE_STATE_PLANE_FORWARD_INVALID");
+});

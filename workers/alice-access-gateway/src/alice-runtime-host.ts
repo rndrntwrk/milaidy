@@ -120,11 +120,12 @@ export function forwardToAliceStatePlane(
   request: Request,
   env: AliceRuntimeStatePlaneEnvironment,
 ): Promise<Response> {
+  const pathname = new URL(request.url).pathname;
   if (
     typeof env.ALICE_STATE_PLANE_SERVICE_TOKEN !== "string" ||
     env.ALICE_STATE_PLANE_SERVICE_TOKEN.length < 32 ||
     request.method !== "POST" ||
-    new URL(request.url).pathname !== "/v1/eliza-database"
+    (pathname !== "/v1/eliza-database" && pathname !== "/v1/state")
   ) {
     throw new Error("ALICE_STATE_PLANE_FORWARD_INVALID");
   }
