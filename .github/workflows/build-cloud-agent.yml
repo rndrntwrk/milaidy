@@ -830,18 +830,37 @@ jobs:
             --env ALICE_MODAL_REVISION=49 \
             "$IMAGE"
 
+          smoke_healthy=0
           for attempt in $(seq 1 72); do
             health="$(docker inspect "$SMOKE_CONTAINER" --format '{{ if .State.Health }}{{ .State.Health.Status }}{{ else }}missing{{ end }}')"
             state="$(docker inspect "$SMOKE_CONTAINER" --format '{{ .State.Status }}')"
 
             if [ "$health" = "healthy" ]; then
-              docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/steward-fi'
-              docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/test/contracts'
-              runtime_build_attestation="$(docker exec "$SMOKE_CONTAINER" node deploy/modal/verify_alice_runtime_build_manifest.mjs)"
-              printf '%s' "$runtime_build_attestation" | grep -q '"ok":true'
-              capability_bom_attestation="$(docker exec "$SMOKE_CONTAINER" node --import ./node_modules/tsx/dist/loader.mjs deploy/modal/verify_alice_capability_bom.mjs)"
-              printf '%s' "$capability_bom_attestation" | grep -q '"ok":true'
-              if readiness="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
+              smoke_healthy=1
+              break
+            fi
+
+            if [ "$state" != "running" ] || [ "$health" = "unhealthy" ]; then
+              docker logs "$SMOKE_CONTAINER" >&2 || true
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          if [ "$smoke_healthy" != 1 ]; then
+            docker logs "$SMOKE_CONTAINER" >&2 || true
+            echo "Candidate image did not become healthy before the smoke deadline" >&2
+            exit 1
+          fi
+
+          docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/steward-fi'
+          docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/test/contracts'
+          runtime_build_attestation="$(docker exec "$SMOKE_CONTAINER" node deploy/modal/verify_alice_runtime_build_manifest.mjs)"
+          printf '%s' "$runtime_build_attestation" | grep -q '"ok":true'
+          capability_bom_attestation="$(docker exec "$SMOKE_CONTAINER" node --import ./node_modules/tsx/dist/loader.mjs deploy/modal/verify_alice_capability_bom.mjs)"
+          printf '%s' "$capability_bom_attestation" | grep -q '"ok":true'
+          readiness="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
                 import { gunzipSync } from "node:zlib";
                 const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
                 const base = `http://127.0.0.1:${port}`;
@@ -937,9 +956,20 @@ jobs:
                   console.error(JSON.stringify({ broadcastStatus: broadcastResponse.status }));
                   process.exit(4);
                 }
+                const onboardingResponse = await fetch(`${base}/api/onboarding/status`, { headers: authHeaders });
+                const onboarding = await onboardingResponse.json();
+                const onboardingKeys = Object.keys(onboarding).sort();
+                if (
+                  onboardingResponse.status !== 200 ||
+                  onboarding.complete !== true ||
+                  (Object.hasOwn(onboarding, "cloudProvisioned") && onboarding.cloudProvisioned !== true) ||
+                  onboardingKeys.some((key) => key !== "cloudProvisioned" && key !== "complete")
+                ) {
+                  console.error(JSON.stringify({ onboardingStatus: onboardingResponse.status, onboarding }));
+                  process.exit(5);
+                }
                 const deniedReads = [
                   "/api/wallet/keys",
-                  "/api/onboarding/status",
                   "/api/secrets",
                   "/api/runtime",
                   "/api/broadcast/alice-cam/scene",
@@ -1064,8 +1094,8 @@ jobs:
                   process.exit(13);
                 }
                 process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, capabilityBomSha256: capabilities.capabilityBomSha256, capabilityCount: capabilities.entries.length, emoteStatus: emoteResponse.status, companionReadStatus: initialCompanionResponse.status, companionWriteStatus: companionUpdateResponse.status, companionPersistedStatus: persistedCompanionResponse.status, statePlaneElizaLoadRequests: statePlaneState.elizaLoadRequests, statePlaneElizaCommitRequests: statePlaneState.elizaCommitRequests, statePlaneCompanionGetRequests: statePlaneState.companionGetRequests, statePlaneCompanionPutRequests: statePlaneState.companionPutRequests, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatProfile: "full-gated", modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
-              ')"; then
-                runtime_snapshot="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
+              ')"
+          runtime_snapshot="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
                   const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
                   const response = await fetch(`http://127.0.0.1:${port}/api/alice-production/proof`, { headers: { authorization: `Bearer ${process.env.MILADY_API_TOKEN}` } });
                   const body = await response.text();
@@ -1074,24 +1104,9 @@ jobs:
                     process.exit(14);
                   }
                   process.stdout.write(body);
-                ')"
-                boundary="$(printf '%s' "$runtime_snapshot" | EXPECTED_SOURCE_COMMIT="$EXPECTED_REVISION" EXPECTED_DEPLOYMENT_CONTROLLER_COMMIT="$EXPECTED_REVISION" EXPECTED_RUNTIME_IMAGE="$IMAGE" EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256="$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" EXPECTED_CAPABILITY_BOM_SHA256="$EXPECTED_CAPABILITY_BOM_SHA256" EXPECTED_DEPLOYMENT_MANIFEST_SHA256=sha256:9999999999999999999999999999999999999999999999999999999999999999 EXPECTED_ELIZA_COMMIT="$EXPECTED_ELIZA_REVISION" node deploy/modal/verify_alice_runtime_boundary.mjs)"
-                echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision build=$runtime_build_attestation health=$readiness boundary=$boundary"
-                exit 0
-              fi
-            fi
-
-            if [ "$state" != "running" ] || [ "$health" = "unhealthy" ]; then
-              docker logs "$SMOKE_CONTAINER" >&2 || true
-              exit 1
-            fi
-
-            sleep 5
-          done
-
-          docker logs "$SMOKE_CONTAINER" >&2 || true
-          echo "Candidate image did not become healthy before the smoke deadline" >&2
-          exit 1
+              ')"
+          boundary="$(printf '%s' "$runtime_snapshot" | EXPECTED_SOURCE_COMMIT="$EXPECTED_REVISION" EXPECTED_DEPLOYMENT_CONTROLLER_COMMIT="$EXPECTED_REVISION" EXPECTED_RUNTIME_IMAGE="$IMAGE" EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256="$EXPECTED_RUNTIME_BUILD_MANIFEST_SHA256" EXPECTED_CAPABILITY_BOM_SHA256="$EXPECTED_CAPABILITY_BOM_SHA256" EXPECTED_DEPLOYMENT_MANIFEST_SHA256=sha256:9999999999999999999999999999999999999999999999999999999999999999 EXPECTED_ELIZA_COMMIT="$EXPECTED_ELIZA_REVISION" node deploy/modal/verify_alice_runtime_boundary.mjs)"
+          echo "Candidate image runtime ready: image=$IMAGE revision=$actual_revision build=$runtime_build_attestation health=$readiness boundary=$boundary"
 
       - name: Cleanup candidate smoke container
         if: always() && (steps.version.outputs.build_environment == 'staging' || (github.event_name == 'workflow_dispatch' && inputs.skip_rollout == true))
