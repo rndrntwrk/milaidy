@@ -24,7 +24,13 @@ import {
 
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const NAMESPACE_ID = /^[a-f0-9]{32}$/;
-const ROLES = ["access", "control", "aiGateway"];
+const ROLES = [
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+];
 
 function mismatch() {
   throw new Error("ALICE_WORKER_PROVIDER_READBACK_MISMATCH");
@@ -59,7 +65,7 @@ function rejectProviderTargetModifiers(binding, names) {
 }
 
 function normalizeObservability(value) {
-  return {
+  return JSON.parse(JSON.stringify({
     enabled: value?.enabled,
     head_sampling_rate: value?.head_sampling_rate,
     logs: {
@@ -73,7 +79,7 @@ function normalizeObservability(value) {
       head_sampling_rate: value?.traces?.head_sampling_rate,
       persist: value?.traces?.persist,
     },
-  };
+  }));
 }
 
 function expectedBindings(config) {
@@ -118,6 +124,20 @@ function expectedBindings(config) {
       bucketName: binding.bucket_name,
       name: binding.binding,
       type: "r2_bucket",
+    });
+  }
+  for (const binding of config.d1_databases ?? []) {
+    result.push({
+      databaseId: binding.database_id,
+      name: binding.binding,
+      type: "d1",
+    });
+  }
+  for (const binding of config.vectorize ?? []) {
+    result.push({
+      indexName: binding.index_name,
+      name: binding.binding,
+      type: "vectorize",
     });
   }
   if (config.ai) result.push({ name: config.ai.binding, type: "ai" });
@@ -180,6 +200,19 @@ function providerBinding(binding) {
         name: binding.name,
         type: binding.type,
       };
+    case "d1":
+      rejectProviderTargetModifiers(binding, ["id"]);
+      return {
+        databaseId: binding.database_id,
+        name: binding.name,
+        type: binding.type,
+      };
+    case "vectorize":
+      return {
+        indexName: binding.index_name,
+        name: binding.name,
+        type: binding.type,
+      };
     case "ai":
     case "version_metadata":
       return { name: binding.name, type: binding.type };
@@ -191,6 +224,16 @@ function providerBinding(binding) {
 function providerBindings(version) {
   if (!Array.isArray(version?.resources?.bindings)) mismatch();
   return sorted(version.resources.bindings.map(providerBinding));
+}
+
+export function verifyAliceWorkerProviderBindingSnapshot({
+  version,
+  materializedWranglerConfig,
+}) {
+  const observed = providerBindings(version);
+  const expected = expectedBindings(materializedWranglerConfig ?? {});
+  if (!canonicalEqual(observed, expected)) mismatch();
+  return observed;
 }
 
 function providerDurableObjectNamespaceIds(version) {
@@ -488,6 +531,8 @@ export async function verifyAliceWorkerProviderReadback({
     access: "accessWorkerBundleSha256",
     control: "controlWorkerBundleSha256",
     aiGateway: "aiGatewayWorkerBundleSha256",
+    statePlane: "statePlaneWorkerBundleSha256",
+    connectorPlane: "connectorPlaneWorkerBundleSha256",
   }[role];
   if (
     (typeof deployedMainModule !== "string" &&
@@ -539,7 +584,10 @@ export async function verifyAliceWorkerProviderReadback({
     version.resources?.script_runtime?.compatibility_date !==
       materializedWranglerConfig.compatibility_date ||
     !canonicalEqual(
-      providerBindings(version),
+      verifyAliceWorkerProviderBindingSnapshot({
+        version,
+        materializedWranglerConfig,
+      }),
       expectedBindings(materializedWranglerConfig),
     ) ||
     !canonicalEqual(providerNamespaceIds, continuityNamespaceIds) ||

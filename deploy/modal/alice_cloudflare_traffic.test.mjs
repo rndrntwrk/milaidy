@@ -22,11 +22,26 @@ const current = {
     access: { enabled: false, previewsEnabled: false },
     control: { enabled: false, previewsEnabled: false },
     aiGateway: { enabled: true, previewsEnabled: false },
+    statePlane: { enabled: false, previewsEnabled: false },
+    connectorPlane: { enabled: false, previewsEnabled: false },
   },
 };
 
 test("adds only the two exact control routes and never uses generic triggers", () => {
   const expected = aliceExpectedProductionTrafficState();
+  assert.deepEqual(expected.subdomains.statePlane, {
+    enabled: false,
+    previewsEnabled: false,
+  });
+  assert.deepEqual(expected.subdomains.connectorPlane, {
+    enabled: false,
+    previewsEnabled: false,
+  });
+  assert.equal(
+    expected.routes.some(({ script }) =>
+      ["alice-state-plane", "alice-connector-plane"].includes(script)),
+    false,
+  );
   const plan = planAliceCandidateTrafficMutations(current, expected);
   assert.deepEqual(plan.deleteRoutes, []);
   assert.deepEqual(plan.updateRoutes, []);
@@ -79,6 +94,14 @@ test("attaches the exact owner and machine control routes without touching servi
   ]);
   assert.equal(expected.subdomains.access.enabled, false);
   assert.equal(expected.subdomains.aiGateway.enabled, true);
+  assert.deepEqual(expected.subdomains.statePlane, {
+    enabled: false,
+    previewsEnabled: false,
+  });
+  assert.deepEqual(expected.subdomains.connectorPlane, {
+    enabled: false,
+    previewsEnabled: false,
+  });
 });
 
 test("rejects a shadow route or custom domain instead of broadening traffic", () => {
@@ -182,7 +205,14 @@ function routeMutationFetch({ postCreateStates }) {
         ? "access"
         : url.pathname.includes("alice-production-control")
           ? "control"
-          : "aiGateway";
+          : url.pathname.includes("alice-ai-gateway")
+            ? "aiGateway"
+            : url.pathname.includes("alice-state-plane")
+              ? "statePlane"
+              : url.pathname.includes("alice-connector-plane")
+                ? "connectorPlane"
+                : null;
+      assert.notEqual(role, null);
       const state = activePostCreateState?.subdomains?.[role] ??
         productionCurrent.subdomains[role];
       return cloudflareResponse({

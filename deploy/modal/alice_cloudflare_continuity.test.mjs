@@ -85,7 +85,13 @@ const readback = {
     content_sha256: sentinelSha256,
   },
   durableObjectNamespaceIds: {
-    access: [],
+    access: [
+      {
+        className: "AliceRuntimeContainer",
+        name: "ALICE_RUNTIME_CONTAINER",
+        namespaceId: "55555555555555555555555555555555",
+      },
+    ],
     aiGateway: [],
     control: [
       {
@@ -99,6 +105,20 @@ const readback = {
         namespaceId: "22222222222222222222222222222222",
       },
     ],
+    statePlane: [
+      {
+        className: "AliceStateCoordination",
+        name: "ALICE_COORDINATION",
+        namespaceId: "33333333333333333333333333333333",
+      },
+    ],
+    connectorPlane: [
+      {
+        className: "AliceConnectorOutboundCoordination",
+        name: "ALICE_CONNECTOR_OUTBOUND",
+        namespaceId: "44444444444444444444444444444444",
+      },
+    ],
   },
 };
 
@@ -110,6 +130,20 @@ test("normalizes one exact provider continuity identity bundle", () => {
   assert.equal(config.evidenceQueueConsumer.id, readback.queueConsumers[0].consumer_id);
   assert.equal(config.workflow.id, readback.workflow.id);
   assert.equal(config.evidenceSentinel.contentSha256, sentinelSha256);
+  assert.deepEqual(config.durableObjectNamespaceIds.statePlane, [
+    {
+      className: "AliceStateCoordination",
+      name: "ALICE_COORDINATION",
+      namespaceId: "33333333333333333333333333333333",
+    },
+  ]);
+  assert.deepEqual(config.durableObjectNamespaceIds.connectorPlane, [
+    {
+      className: "AliceConnectorOutboundCoordination",
+      name: "ALICE_CONNECTOR_OUTBOUND",
+      namespaceId: "44444444444444444444444444444444",
+    },
+  ]);
   assert.deepEqual(verifyAliceCloudflareContinuityConfig(config), config);
   assert.match(digestAliceCloudflareContinuityConfig(config), /^sha256:[a-f0-9]{64}$/);
 });

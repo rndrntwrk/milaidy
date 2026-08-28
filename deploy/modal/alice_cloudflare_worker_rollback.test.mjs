@@ -104,6 +104,33 @@ test("normalizes immutable version resources and exact provider-owned binding va
     fixtures.aiGateway.version.resources,
   );
   assert.equal(ai.bindings.find(({ name }) => name === "AI").project, "alice-production");
+  const state = rollback.normalizeAliceCloudflareVersionResources({
+    ...fixtures.aiGateway.version.resources,
+    bindings: [
+      {
+        database_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        name: "ALICE_STATE_DB",
+        type: "d1",
+      },
+      {
+        index_name: "alice-memory-v1",
+        name: "ALICE_MEMORY_INDEX",
+        type: "vectorize",
+      },
+    ],
+  });
+  assert.deepEqual(state.bindings, [
+    {
+      database_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      name: "ALICE_STATE_DB",
+      type: "d1",
+    },
+    {
+      index_name: "alice-memory-v1",
+      name: "ALICE_MEMORY_INDEX",
+      type: "vectorize",
+    },
+  ]);
 });
 
 test("rejects malformed immutable resources and provider additions", () => {
@@ -181,7 +208,13 @@ test("captures the production-shaped current response for every Alice Worker", a
     apiToken: "test-api-token",
     baseUrl: "https://api.cloudflare.test/client/v4",
   });
-  assert.deepEqual(Object.keys(captured), ["access", "control", "aiGateway"]);
+  assert.deepEqual(Object.keys(captured), [
+    "access",
+    "control",
+    "aiGateway",
+    "statePlane",
+    "connectorPlane",
+  ]);
   assert.deepEqual(captured.access.scriptSettings, {
     logpush: false,
     observability: null,
@@ -202,6 +235,18 @@ test("captures the production-shaped current response for every Alice Worker", a
     captured.aiGateway.versionResources.bindings.find(({ name }) => name === "AI").project,
     "alice-production",
   );
+  assert.equal(
+    captured.statePlane.versionResources.bindings.find(
+      ({ name }) => name === "ALICE_STATE_DB",
+    ).database_id,
+    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  );
+  assert.equal(
+    captured.connectorPlane.versionResources.bindings.find(
+      ({ name }) => name === "ALICE_CONNECTOR_OUTBOUND",
+    ).namespace_id,
+    "44444444444444444444444444444444",
+  );
 });
 
 test("restores persistent settings and proves the prior serving version twice", async () => {
@@ -218,6 +263,14 @@ test("restores persistent settings and proves the prior serving version twice", 
     "alice-ai-gateway": [
       "33333333-3333-4333-8333-333333333331",
       "33333333-3333-4333-8333-333333333333",
+    ],
+    "alice-state-plane": [
+      "44444444-4444-4444-8444-444444444441",
+      "44444444-4444-4444-8444-444444444444",
+    ],
+    "alice-connector-plane": [
+      "55555555-5555-4555-8555-555555555551",
+      "55555555-5555-4555-8555-555555555555",
     ],
   };
   const scriptSettings = Object.fromEntries(
@@ -296,6 +349,10 @@ test("restores persistent settings and proves the prior serving version twice", 
     "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   workers["alice-ai-gateway"][0] =
     "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  workers["alice-state-plane"][0] =
+    "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  workers["alice-connector-plane"][0] =
+    "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
   const restored = await restoreAliceCloudflareWorkerRollbackState({
     expected,
     fetchImpl,
@@ -325,13 +382,34 @@ test("restores persistent settings and proves the prior serving version twice", 
         deploymentId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       },
     },
+    statePlane: {
+      ...expected.statePlane,
+      serving: {
+        ...expected.statePlane.serving,
+        deploymentId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      },
+    },
+    connectorPlane: {
+      ...expected.connectorPlane,
+      serving: {
+        ...expected.connectorPlane.serving,
+        deploymentId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      },
+    },
   });
   assert.deepEqual(restored.deployments.access, {
     previousDeploymentId: "11111111-1111-4111-8111-111111111111",
     rollbackDeploymentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     versionId: "11111111-1111-4111-8111-111111111112",
   });
-  assert.equal(patches.length, 3);
+  assert.equal(patches.length, 5);
+  assert.deepEqual(patches.map(({ worker }) => worker), [
+    "alice-access-gateway",
+    "alice-connector-plane",
+    "alice-ai-gateway",
+    "alice-production-control",
+    "alice-state-plane",
+  ]);
   for (const patch of patches) {
     assert.deepEqual(patch.body, {
       logpush: false,

@@ -63,27 +63,50 @@ test("materializes an unrouted fail-closed control bootstrap without secret bind
   assert.deepEqual(sourceConfig.routes, [{ pattern: "alice.rndrntwrk.com/control/*" }]);
 });
 
-test("extracts only the exact two provider-assigned Durable Object namespaces", () => {
-  const ids = extractAliceBootstrapNamespaceIds({
-    resources: {
-      bindings: [
-        {
-          type: "durable_object_namespace",
-          name: "ALICE_SESSIONS",
-          class_name: "AliceSession",
-          namespace_id: "2".repeat(32),
-        },
-        {
-          type: "durable_object_namespace",
-          name: "ALICE_AUTHORITY",
-          class_name: "AliceAuthority",
-          namespace_id: "1".repeat(32),
-        },
-      ],
-    },
-  });
+test("extracts the exact five-role provider-assigned Durable Object namespaces", () => {
+  const version = (bindings) => ({ resources: { bindings } });
+  const versions = {
+    access: version([{
+      type: "durable_object_namespace",
+      name: "ALICE_RUNTIME_CONTAINER",
+      class_name: "AliceRuntimeContainer",
+      namespace_id: "5".repeat(32),
+    }]),
+    control: version([
+      {
+        type: "durable_object_namespace",
+        name: "ALICE_SESSIONS",
+        class_name: "AliceSession",
+        namespace_id: "2".repeat(32),
+      },
+      {
+        type: "durable_object_namespace",
+        name: "ALICE_AUTHORITY",
+        class_name: "AliceAuthority",
+        namespace_id: "1".repeat(32),
+      },
+    ]),
+    aiGateway: null,
+    statePlane: version([{
+      type: "durable_object_namespace",
+      name: "ALICE_COORDINATION",
+      class_name: "AliceStateCoordination",
+      namespace_id: "3".repeat(32),
+    }]),
+    connectorPlane: version([{
+      type: "durable_object_namespace",
+      name: "ALICE_CONNECTOR_OUTBOUND",
+      class_name: "AliceConnectorOutboundCoordination",
+      namespace_id: "4".repeat(32),
+    }]),
+  };
+  const ids = extractAliceBootstrapNamespaceIds(versions);
   assert.deepEqual(ids, {
-    access: [],
+    access: [{
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      namespaceId: "5".repeat(32),
+    }],
     aiGateway: [],
     control: [
       {
@@ -97,12 +120,92 @@ test("extracts only the exact two provider-assigned Durable Object namespaces", 
         namespaceId: "2".repeat(32),
       },
     ],
+    statePlane: [{
+      className: "AliceStateCoordination",
+      name: "ALICE_COORDINATION",
+      namespaceId: "3".repeat(32),
+    }],
+    connectorPlane: [{
+      className: "AliceConnectorOutboundCoordination",
+      name: "ALICE_CONNECTOR_OUTBOUND",
+      namespaceId: "4".repeat(32),
+    }],
   });
   assert.throws(() =>
     extractAliceBootstrapNamespaceIds({
-      resources: { bindings: [{ ...ids.control[0], type: "durable_object_namespace" }] },
+      ...versions,
+      statePlane: version([{
+        type: "durable_object_namespace",
+        name: "ALICE_COORDINATION",
+        class_name: "WrongCoordination",
+        namespace_id: "3".repeat(32),
+      }]),
     }),
   );
+});
+
+test("materializes only inert unrouted pre-release Worker identities", () => {
+  assert.equal(
+    typeof bootstrapModule.buildAliceBootstrapPrivateWorkerConfig,
+    "function",
+  );
+  for (const [role, name, binding] of [
+    [
+      "access",
+      "alice-access-gateway",
+      { name: "ALICE_RUNTIME_CONTAINER", class_name: "AliceRuntimeContainer" },
+    ],
+    [
+      "statePlane",
+      "alice-state-plane",
+      { name: "ALICE_COORDINATION", class_name: "AliceStateCoordination" },
+    ],
+    [
+      "connectorPlane",
+      "alice-connector-plane",
+      {
+        name: "ALICE_CONNECTOR_OUTBOUND",
+        class_name: "AliceConnectorOutboundCoordination",
+      },
+    ],
+  ]) {
+    const config = bootstrapModule.buildAliceBootstrapPrivateWorkerConfig({
+      role,
+      sourceConfig: {
+        account_id: sourceConfig.account_id,
+        name,
+        main: "src/index.ts",
+        routes: [{ pattern: "should-never-be-public.example/*" }],
+        workers_dev: true,
+        preview_urls: true,
+        vars: { SAFE_STATIC_VALUE: "present" },
+        secrets: { required: ["PRIVATE_SECRET"] },
+        services: [{ binding: "UPSTREAM", service: "other-worker" }],
+        containers: [{ class_name: "AliceRuntimeContainer", image: "example.invalid/runtime" }],
+        d1_databases: [{ binding: "DB", database_id: "provider-id" }],
+        vectorize: [{ binding: "VECTOR", index_name: "provider-index" }],
+        r2_buckets: [{ binding: "OBJECTS", bucket_name: "provider-bucket" }],
+        durable_objects: { bindings: [binding] },
+        migrations: [{
+          tag: `${role}-v1`,
+          new_sqlite_classes: [binding.class_name],
+        }],
+      },
+      deploymentMainPath: `/release/${name}/index.js`,
+    });
+    assert.equal(config.name, name);
+    assert.equal(config.main, `/release/${name}/index.js`);
+    assert.deepEqual(config.routes, []);
+    assert.equal(config.workers_dev, false);
+    assert.equal(config.preview_urls, false);
+    assert.deepEqual(config.secrets, { required: [] });
+    assert.deepEqual(config.durable_objects.bindings, [binding]);
+    assert.equal("services" in config, false);
+    assert.equal("containers" in config, false);
+    assert.equal("d1_databases" in config, false);
+    assert.equal("vectorize" in config, false);
+    assert.equal("r2_buckets" in config, false);
+  }
 });
 
 test("deploys the unrouted fail-closed bootstrap before attaching one paused consumer", () => {
@@ -269,6 +372,8 @@ test("accepts the exact active recovery boundary when a newer upload is inactive
             namespaceId: "2".repeat(32),
           },
         ],
+        statePlane: [],
+        connectorPlane: [],
       },
     },
   );
@@ -405,13 +510,19 @@ test("snapshots every Alice provider surface twice before the first mutation", (
   ]) {
     assert.match(snapshot, new RegExp(expected.replaceAll("/", "\\/")));
   }
-  for (const worker of [
-    "accessWorker",
-    "controlWorker",
-    "aiGatewayWorker",
+  for (const [role, worker] of [
+    ["access", "accessWorker"],
+    ["control", "controlWorker"],
+    ["aiGateway", "aiGatewayWorker"],
+    ["statePlane", "statePlaneWorker"],
+    ["connectorPlane", "connectorPlaneWorker"],
   ]) {
-    assert.match(snapshot, new RegExp(`ALICE_CLOUDFLARE_TARGET\\.${worker}`));
+    assert.match(
+      source,
+      new RegExp(`${role}: ALICE_CLOUDFLARE_TARGET\\.${worker}`),
+    );
   }
+  assert.match(snapshot, /ROLES\.map\(\(role\) => ROLE_WORKERS\[role\]\)/);
   const main = source.slice(source.indexOf("async function main()"));
   const first = main.indexOf("const preflightFirst = await fetchAliceBootstrapResourceSnapshot");
   const second = main.indexOf("const preflightSecond = await fetchAliceBootstrapResourceSnapshot");

@@ -6,7 +6,9 @@ import test from "node:test";
 import {
   buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceConnectorPlaneEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceStatePlaneEffectiveConfig,
 } from "../../workers/alice-effective-config.js";
 import {
   materializeAliceWranglerConfig,
@@ -20,6 +22,7 @@ import {
   verifyAliceProviderControlFingerprints,
   verifyAliceWorkerProviderReadback,
 } from "./alice_cloudflare_provider_readback.mjs";
+import * as providerReadback from "./alice_cloudflare_provider_readback.mjs";
 import {
   buildAliceAccessPolicyProviderConfig,
   buildAliceAiGatewayProviderConfig,
@@ -41,6 +44,9 @@ const workerModules = {
   access: "export default { fetch() { return new Response('access'); } };\n",
   control: "export default { fetch() { return new Response('control'); } };\n",
   aiGateway: "export default { fetch() { return new Response('ai'); } };\n",
+  statePlane: "export default { fetch() { return new Response('state'); } };\n",
+  connectorPlane:
+    "export default { fetch() { return new Response('connector'); } };\n",
 };
 const workerBundleArtifact = aliceTestVerifiedWorkerBundleArtifact({
   sourceCommit: "1".repeat(40),
@@ -69,6 +75,18 @@ const source = {
       "utf8",
     ),
   ),
+  statePlane: JSON.parse(
+    fs.readFileSync(
+      new URL("../../workers/alice-state-plane/wrangler.jsonc", import.meta.url),
+      "utf8",
+    ),
+  ),
+  connectorPlane: JSON.parse(
+    fs.readFileSync(
+      new URL("../../workers/alice-connector-plane/wrangler.jsonc", import.meta.url),
+      "utf8",
+    ),
+  ),
 };
 const effective = {
   access: buildAliceContainerAccessEffectiveConfig({
@@ -87,6 +105,12 @@ const effective = {
     releaseServiceTokenIdSha256: "R".repeat(43),
   }),
   aiGateway: buildAliceAiGatewayEffectiveConfig(),
+  statePlane: buildAliceStatePlaneEffectiveConfig({
+    databaseId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  }),
+  connectorPlane: buildAliceConnectorPlaneEffectiveConfig({
+    providerActivation: "disabled",
+  }),
 };
 
 const manifest = await buildAliceDeploymentManifest({
@@ -103,6 +127,8 @@ const manifest = await buildAliceDeploymentManifest({
   accessEffectiveConfig: effective.access,
   controlEffectiveConfig: effective.control,
   aiGatewayEffectiveConfig: effective.aiGateway,
+  statePlaneEffectiveConfig: effective.statePlane,
+  connectorPlaneEffectiveConfig: effective.connectorPlane,
   accessPolicyReadback,
   aiGatewayProviderReadback,
   cloudflareContinuityReadback,
@@ -132,6 +158,15 @@ function deploymentValues(role) {
       programSignatureB64: "program-signature",
       programPublicJwkB64: "program-public-jwk",
     };
+  }
+  if (role === "statePlane") {
+    return {
+      ...common,
+      stateDatabaseId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    };
+  }
+  if (role === "connectorPlane") {
+    return { ...common, providerActivation: "disabled" };
   }
   return common;
 }
@@ -185,12 +220,93 @@ function providerBindings(config) {
       type: "r2_bucket",
     });
   }
+  for (const binding of config.d1_databases ?? []) {
+    bindings.push({
+      database_id: binding.database_id,
+      name: binding.binding,
+      type: "d1",
+    });
+  }
+  for (const binding of config.vectorize ?? []) {
+    bindings.push({
+      index_name: binding.index_name,
+      name: binding.binding,
+      type: "vectorize",
+    });
+  }
   if (config.ai) bindings.push({ name: config.ai.binding, type: "ai" });
   if (config.version_metadata) {
     bindings.push({ name: config.version_metadata.binding, type: "version_metadata" });
   }
   return bindings;
 }
+
+test("admits exact D1 and Vectorize version resources for the private state plane", () => {
+  assert.equal(
+    typeof providerReadback.verifyAliceWorkerProviderBindingSnapshot,
+    "function",
+  );
+  const config = {
+    vars: {},
+    secrets: { required: [] },
+    d1_databases: [{
+      binding: "ALICE_STATE_DB",
+      database_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    }],
+    vectorize: [{
+      binding: "ALICE_MEMORY_INDEX",
+      index_name: "alice-memory-v1",
+    }],
+  };
+  const version = {
+    resources: {
+      bindings: [
+        {
+          database_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          name: "ALICE_STATE_DB",
+          type: "d1",
+        },
+        {
+          index_name: "alice-memory-v1",
+          name: "ALICE_MEMORY_INDEX",
+          type: "vectorize",
+        },
+      ],
+    },
+  };
+  assert.deepEqual(
+    providerReadback.verifyAliceWorkerProviderBindingSnapshot({
+      version,
+      materializedWranglerConfig: config,
+    }),
+    [
+      {
+        databaseId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        name: "ALICE_STATE_DB",
+        type: "d1",
+      },
+      {
+        indexName: "alice-memory-v1",
+        name: "ALICE_MEMORY_INDEX",
+        type: "vectorize",
+      },
+    ],
+  );
+  assert.throws(
+    () => providerReadback.verifyAliceWorkerProviderBindingSnapshot({
+      version: {
+        resources: {
+          bindings: version.resources.bindings.map((binding) =>
+            binding.type === "d1"
+              ? { ...binding, database_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+              : binding),
+        },
+      },
+      materializedWranglerConfig: config,
+    }),
+    /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
+  );
+});
 
 function fixture(role) {
   const config = materializeAliceWranglerConfig(
@@ -283,7 +399,13 @@ function fixture(role) {
 }
 
 test("accepts only a 100 percent deployed Worker version matching the signed effective config", async () => {
-  for (const role of ["access", "control", "aiGateway"]) {
+  for (const role of [
+    "access",
+    "control",
+    "aiGateway",
+    "statePlane",
+    "connectorPlane",
+  ]) {
     const readback = await verifyAliceWorkerProviderReadback(fixture(role));
     assert.equal(readback.role, role);
     assert.equal(readback.versionId, `${role}-version-id`);
@@ -296,6 +418,24 @@ test("accepts only a 100 percent deployed Worker version matching the signed eff
       assert.match(binding.namespaceId, /^[a-f0-9]{32}$/);
     }
   }
+  const connector = fixture("connectorPlane");
+  const connectorBindingNames = connector.version.resources.bindings.map(
+    ({ name }) => name,
+  );
+  for (const forbiddenProviderBinding of [
+    "ALICE_DISCORD_PRIVATE_DESTINATION_ID",
+    "ALICE_TELEGRAM_PRIVATE_DESTINATION_ID",
+    "DISCORD_API_TOKEN",
+    "DISCORD_APPLICATION_ID",
+    "TELEGRAM_BOT_TOKEN",
+  ]) {
+    assert.equal(connectorBindingNames.includes(forbiddenProviderBinding), false);
+  }
+  assert.deepEqual(connector.routes, []);
+  assert.deepEqual(connector.subdomain, {
+    enabled: false,
+    previews_enabled: false,
+  });
 });
 
 test("extracts the exact provider main-module bytes from Cloudflare multipart content", async () => {
@@ -321,6 +461,22 @@ test("extracts the exact provider main-module bytes from Cloudflare multipart co
 });
 
 test("rejects traffic, binding, and observability substitutions in provider state", async () => {
+  for (const extraBinding of [
+    {
+      name: "ALICE_DISCORD_PRIVATE_DESTINATION_ID",
+      text: "unadmitted-destination",
+      type: "plain_text",
+    },
+    { name: "DISCORD_API_TOKEN", type: "secret_text" },
+  ]) {
+    const activatedConnector = fixture("connectorPlane");
+    activatedConnector.version.resources.bindings.push(extraBinding);
+    await assert.rejects(
+      () => verifyAliceWorkerProviderReadback(activatedConnector),
+      /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
+    );
+  }
+
   const traffic = fixture("access");
   traffic.deployment.versions[0].percentage = 99;
   await assert.rejects(

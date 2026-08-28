@@ -6,7 +6,13 @@ import {
 const API_BASE = "https://api.cloudflare.com/client/v4";
 const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const ROUTE_ID = /^[a-f0-9]{32}$/;
-const ROLES = ["access", "control", "aiGateway"];
+const ROLES = [
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+];
 const POST_CREATE_CONVERGENCE_READS = 12;
 const POST_CREATE_CONVERGENCE_DELAY_MS = 1_000;
 const CONVERGENCE_FAILURES = new Set([
@@ -18,6 +24,8 @@ const WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
   control: ALICE_CLOUDFLARE_TARGET.controlWorker,
   aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
+  statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
+  connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
 });
 
 function invalid() {
@@ -175,6 +183,8 @@ export function aliceExpectedProductionTrafficState() {
       access: { enabled: false, previewsEnabled: false },
       control: { enabled: false, previewsEnabled: false },
       aiGateway: { enabled: true, previewsEnabled: false },
+      statePlane: { enabled: false, previewsEnabled: false },
+      connectorPlane: { enabled: false, previewsEnabled: false },
     },
   });
 }

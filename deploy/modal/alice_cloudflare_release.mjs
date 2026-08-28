@@ -60,9 +60,27 @@ const RESOURCE_ID = /^[A-Za-z0-9_-]{16,64}$/;
 const VERSION_ID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const RELEASE_RUN_ID = /^[1-9][0-9]*-[1-9][0-9]*$/;
-const ROLES = ["access", "control", "aiGateway"];
-const UPLOAD_ORDER = ["control", "aiGateway", "access"];
-const ROLLBACK_ORDER = ["access", "aiGateway", "control"];
+const ROLES = [
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+];
+const UPLOAD_ORDER = [
+  "control",
+  "statePlane",
+  "aiGateway",
+  "connectorPlane",
+  "access",
+];
+const ROLLBACK_ORDER = [
+  "access",
+  "connectorPlane",
+  "aiGateway",
+  "control",
+  "statePlane",
+];
 const WRANGLER_ENV_ALLOWLIST = ["PATH", "LANG", "LC_ALL", "TZ"];
 const WRANGLER_ENV_DENYLIST = [
   "CLOUDFLARE_API_BASE_URL",
@@ -80,6 +98,8 @@ const WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
   control: ALICE_CLOUDFLARE_TARGET.controlWorker,
   aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
+  statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
+  connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
 });
 
 function releaseInvalid(message = "ALICE_CLOUDFLARE_RELEASE_INVALID") {
@@ -973,6 +993,10 @@ export function verifyAliceCloudflarePreparedState({
       canonicalAliceJson(anchor.previous.workers.access) ||
     canonicalAliceJson(workers.aiGateway) !==
       canonicalAliceJson(anchor.previous.workers.aiGateway) ||
+    canonicalAliceJson(workers.statePlane) !==
+      canonicalAliceJson(anchor.previous.workers.statePlane) ||
+    canonicalAliceJson(workers.connectorPlane) !==
+      canonicalAliceJson(anchor.previous.workers.connectorPlane) ||
     canonicalAliceJson(aliceTrafficSemanticState(traffic)) !==
       canonicalAliceJson(expectedTraffic)
   ) {
@@ -1157,6 +1181,8 @@ function dryRunExactBundles({
         access: "accessWorkerBundleSha256",
         control: "controlWorkerBundleSha256",
         aiGateway: "aiGatewayWorkerBundleSha256",
+        statePlane: "statePlaneWorkerBundleSha256",
+        connectorPlane: "connectorPlaneWorkerBundleSha256",
       }[command.role];
       verifyAliceWorkerDryRunDirectory({
         signedBundlePath: command.bundlePath,

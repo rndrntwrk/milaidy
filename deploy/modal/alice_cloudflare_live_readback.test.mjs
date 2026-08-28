@@ -648,6 +648,8 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     access: "alice-access-gateway",
     control: "alice-production-control",
     aiGateway: "alice-ai-gateway",
+    statePlane: "alice-state-plane",
+    connectorPlane: "alice-connector-plane",
   };
   const deploymentByWorker = Object.fromEntries(
     Object.values(roles).map((worker, index) => [
@@ -938,7 +940,13 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
             : [],
       }]),
     ),
-    expectedEffectiveConfigs: { access: {}, control: {}, aiGateway: {} },
+    expectedEffectiveConfigs: {
+      access: {},
+      control: {},
+      aiGateway: {},
+      statePlane: {},
+      connectorPlane: {},
+    },
     expectedDurableObjectNamespaceIds:
       continuityFixture.durableObjectNamespaceIds,
     verifyProvider: async () => ({
@@ -965,7 +973,13 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   const evidence = await fetchAliceCloudflarePostDeploymentReadback(
     postDeploymentInput,
   );
-  assert.deepEqual(verifiedRoles.sort(), ["access", "aiGateway", "control"]);
+  assert.deepEqual(verifiedRoles.sort(), [
+    "access",
+    "aiGateway",
+    "connectorPlane",
+    "control",
+    "statePlane",
+  ]);
   assert.deepEqual(Object.keys(evidence.workers).sort(), verifiedRoles.sort());
   for (const worker of Object.values(roles)) {
     const suffix = `/workers/scripts/${worker}/deployments`;

@@ -27,7 +27,13 @@ import {
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
-const ROLES = ["access", "control", "aiGateway"];
+const ROLES = [
+  "access",
+  "control",
+  "aiGateway",
+  "statePlane",
+  "connectorPlane",
+];
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 

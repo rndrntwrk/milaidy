@@ -41,7 +41,7 @@ export function aliceTestVerifiedWorkerBundleArtifact({
       workerModules[role] ?? `export default ${JSON.stringify(role)};\n`,
     );
   }
-  const migrationsRoot = path.join(root, "alice-state-plane", "migrations");
+  const migrationsRoot = path.join(root, roles.statePlane, "migrations");
   fs.mkdirSync(migrationsRoot);
   for (const migration of [
     "0001_alice_state.sql",
@@ -230,6 +230,104 @@ export function aliceTestLiveWorkerRollbackReadbacks() {
         { name: "ALICE_GATEWAY_TOKEN", type: "secret_text" },
       ],
     }),
+    statePlane: fixture({
+      worker: "alice-state-plane",
+      deploymentId: "44444444-4444-4444-8444-444444444441",
+      versionId: "44444444-4444-4444-8444-444444444442",
+      script: {
+        etag: "state-plane-live-etag",
+        handlers: ["fetch"],
+        last_deployed_from: "wrangler",
+        named_handlers: [
+          { name: "AliceStateCoordination", handlers: ["class"] },
+        ],
+      },
+      scriptRuntime: {
+        compatibility_date: "2026-08-27",
+        migration_tag: "alice-state-plane-v1",
+        usage_model: "standard",
+      },
+      scriptSettings: {
+        logpush: false,
+        tags: null,
+        tail_consumers: null,
+        observability: observability(true),
+      },
+      bindings: [
+        { name: "ALICE_VECTOR_INDEX_NAME", text: "alice-memory-v1", type: "plain_text" },
+        { name: "ALICE_VECTOR_MODEL", text: "bge-base-en-v1.5", type: "plain_text" },
+        { name: "ALICE_VECTOR_DIMENSIONS", text: "768", type: "plain_text" },
+        {
+          database_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          name: "ALICE_STATE_DB",
+          type: "d1",
+        },
+        {
+          index_name: "alice-memory-v1",
+          name: "ALICE_MEMORY_INDEX",
+          type: "vectorize",
+        },
+        {
+          bucket_name: "alice-production-state-objects",
+          name: "ALICE_STATE_OBJECTS",
+          type: "r2_bucket",
+        },
+        {
+          class_name: "AliceStateCoordination",
+          name: "ALICE_COORDINATION",
+          namespace_id: "33333333333333333333333333333333",
+          type: "durable_object_namespace",
+        },
+        { name: "ALICE_STATE_PLANE_SERVICE_TOKEN", type: "secret_text" },
+      ],
+    }),
+    connectorPlane: fixture({
+      worker: "alice-connector-plane",
+      deploymentId: "55555555-5555-4555-8555-555555555551",
+      versionId: "55555555-5555-4555-8555-555555555552",
+      script: {
+        etag: "connector-plane-live-etag",
+        handlers: ["fetch"],
+        last_deployed_from: "wrangler",
+        named_handlers: [
+          { name: "AliceConnectorOutboundCoordination", handlers: ["class"] },
+        ],
+      },
+      scriptRuntime: {
+        compatibility_date: "2026-08-27",
+        migration_tag: "alice-connector-plane-v1",
+        usage_model: "standard",
+      },
+      scriptSettings: {
+        logpush: false,
+        tags: null,
+        tail_consumers: null,
+        observability: observability(true),
+      },
+      bindings: [
+        { name: "ALICE_STATE_OWNER_ID", text: "alice-owner-production", type: "plain_text" },
+        { name: "ALICE_CONNECTOR_SESSION_ID", text: "alice-connectors-production", type: "plain_text" },
+        {
+          class_name: "AliceConnectorOutboundCoordination",
+          name: "ALICE_CONNECTOR_OUTBOUND",
+          namespace_id: "44444444444444444444444444444444",
+          type: "durable_object_namespace",
+        },
+        {
+          name: "ALICE_STATE_PLANE",
+          service: "alice-state-plane",
+          type: "service",
+        },
+        {
+          name: "ALICE_CONTROL",
+          service: "alice-production-control",
+          type: "service",
+        },
+        { name: "ALICE_CONNECTOR_SERVICE_TOKEN", type: "secret_text" },
+        { name: "ALICE_STATE_PLANE_SERVICE_TOKEN", type: "secret_text" },
+        { name: "ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN", type: "secret_text" },
+      ],
+    }),
   };
 }
 
@@ -309,7 +407,13 @@ export function aliceTestCloudflareContinuityReadback() {
         .digest("hex")}`,
     },
     durableObjectNamespaceIds: {
-      access: [],
+      access: [
+        {
+          className: "AliceRuntimeContainer",
+          name: "ALICE_RUNTIME_CONTAINER",
+          namespaceId: "55555555555555555555555555555555",
+        },
+      ],
       aiGateway: [],
       control: [
         {
@@ -321,6 +425,20 @@ export function aliceTestCloudflareContinuityReadback() {
           className: "AliceSession",
           name: "ALICE_SESSIONS",
           namespaceId: "22222222222222222222222222222222",
+        },
+      ],
+      statePlane: [
+        {
+          className: "AliceStateCoordination",
+          name: "ALICE_COORDINATION",
+          namespaceId: "33333333333333333333333333333333",
+        },
+      ],
+      connectorPlane: [
+        {
+          className: "AliceConnectorOutboundCoordination",
+          name: "ALICE_CONNECTOR_OUTBOUND",
+          namespaceId: "44444444444444444444444444444444",
         },
       ],
     },
