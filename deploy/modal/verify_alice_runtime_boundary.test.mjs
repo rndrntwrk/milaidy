@@ -36,7 +36,7 @@ const safeProof = {
     capabilityBomSha256: `sha256:${"a".repeat(64)}`,
     deploymentManifestSha256: `sha256:${"9".repeat(64)}`,
     elizaCommit: "6".repeat(40),
-    modalRevision: 49,
+    runtimeRevision: 49,
   },
 };
 
@@ -57,6 +57,17 @@ test("accepts only the exact post-init response-only closure", () => {
     taskWorkerCount: 0,
     releaseDigest: safeProof.release.releaseDigest,
   });
+});
+
+test("accepts the container runtimeRevision identity and rejects the legacy modalRevision field", () => {
+  assert.doesNotThrow(() => verifyAliceRuntimeBoundary(safeProof));
+  const { runtimeRevision: _runtimeRevision, ...release } = safeProof.release;
+  assert.throws(() =>
+    verifyAliceRuntimeBoundary({
+      ...safeProof,
+      release: { ...release, modalRevision: 49 },
+    }),
+  );
 });
 
 test("accepts the exact full-gated proof core markers and capability digest", () => {
@@ -130,6 +141,8 @@ test("rejects every unexpected plugin, action, worker, service, or release ident
     { ...safeProof, taskWorkerNames: ["quiet-worker"] },
     { ...safeProof, release: { ...safeProof.release, runtimeImage: "latest" } },
     { ...safeProof, release: { ...safeProof.release, deploymentManifestSha256: "unbound" } },
+    { ...safeProof, release: { ...safeProof.release, runtimeRevision: 48 } },
+    { ...safeProof, release: { ...safeProof.release, runtimeRevision: "49" } },
   ]) {
     assert.throws(() => verifyAliceRuntimeBoundary(candidate));
   }
