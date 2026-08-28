@@ -47,8 +47,12 @@ diagnostic composition.
   - Adds a sanitized, release-bound full-runtime proof while preserving the
     exact response-only proof.
 - `packages/agent/src/api/chat-routes.ts`
+- `packages/agent/src/api/__tests__/chat-routes-reply-fallback.test.ts`
+- `packages/agent/src/runtime/alice-high-risk-action-boundary.ts`
 - `packages/agent/src/api/alice-production-chat.test.ts`
   - Routes full-gated chat through the normal runtime path.
+  - Installs a fail-closed execution-path boundary for current privileged action
+    aliases, including actions registered after runtime guard installation.
 - `packages/agent/src/api/static-file-server.ts`
 - `packages/agent/src/api/static-file-server.test.ts`
   - Serves the built UI for Alice without injecting an API bearer token.
@@ -148,15 +152,93 @@ known frozen-pin `plugin-resolver.test.ts` failure for absent
 - This report is committed separately so it can record the immutable
   implementation SHA without self-reference.
 
+## Independent review corrections
+
+The four independent-review findings are corrected in source commit
+`456515ee73285d5806aa55aa005f11d0f3b079c7` (`fix(alice): close full runtime
+review gaps`).
+
+### Correction summary
+
+1. Full-gated chat and runtime plugin registration now install a general Alice
+   high-risk action execution boundary. With no independently verified
+   capability grant available at this Task 1 runtime boundary, current wallet,
+   funds, trade, bridge, signing, public-posting, stream-publication, shell,
+   role/admin/credential, app/restart, production merge/deploy, release, and
+   risk-change aliases return `ALICE_HIGH_RISK_ACTION_DENIED` without invoking
+   their original handler. Safe actions such as `CHECK_BALANCE` still execute.
+2. Agent and Access gateway full-profile GET/HEAD admission now use exact
+   reviewed allowlists for the Milady root, Companion, broadcast, immutable
+   assets, and required boot/read APIs. Unknown future reads including
+   `/api/sandbox/browser` and `/api/unreviewed/read` fail closed.
+3. The full-runtime proof now emits an exact ordered Task 1 core composition:
+   normal Eliza bridge, basic capabilities, core security hooks, SQL memory,
+   agent skills, hooks, and connector markers. The gateway rejects missing,
+   extra, duplicate, wrong-order, malformed, and case-variant proof entries.
+   Additional runtime plugins remain bound by the exact release/image/build
+   identity; the complete signed plugin BOM remains Task 2.
+4. Durable replay now repeats the post-work admission, release identity, and
+   full-profile proof checks after Session context load and before returning a
+   previously committed turn.
+
+### Correction TDD evidence
+
+RED evidence captured before each correction:
+
+- Focused chat wallet dispatch called `TRANSFER_TOKEN` once instead of denying
+  it: 1 failed, 7 skipped.
+- Normal full-gated message dispatch invoked a privileged handler: 1 failed, 8
+  skipped.
+- The agent guard admitted an unknown full-profile GET and the gateway returned
+  200 for it: one focused failure in each layer.
+- The agent proof accepted a runtime missing the skills core marker, and the
+  gateway accepted partial/extra proof inventories: one focused failure in
+  each layer.
+- A replay returned 200 after `PAUSE_ALL` became active during Session context
+  loading: 1 failed, 29 skipped.
+
+Fresh GREEN evidence after the final correction:
+
+```text
+packages/agent focused runtime/UI command:
+9 files passed; 56 tests passed; 0 failed.
+
+packages/agent chat action execution command:
+1 file passed; 9 tests passed; 0 failed.
+
+workers/alice-access-gateway:
+bun test test/index.test.ts
+30 tests passed; 363 assertions; 0 failed.
+
+bun run typecheck
+tsc --project tsconfig.json --noEmit
+exit 0.
+
+repository root:
+bun test scripts/build-cloud-agent-workflow.test.mjs
+42 tests passed; 0 failed.
+```
+
+`git diff --check` passed before the correction commit. A scoped agent
+TypeScript diagnostic reported no errors in the new action boundary, production
+guard/proof, or focused chat action test. The full agent typecheck retains
+unrelated pre-existing test/dependency errors, including the known absent
+`@elizaos/skills` declaration; none were masked. The nested Eliza checkout was
+clean before commit, including `plugins/plugin-telegram/package.json`.
+
 ## Risks and open points
 
 - WebSocket ingress remains fail-closed. No broad `/ws` opening was added
   because this Task 1 source work did not prove a transport-safe upgrade path;
   the plan assigns Container default-`fetch()` WebSocket transport and lifecycle
   proof to Task 4.
-- Full authenticated GET/HEAD product APIs are proxied after exact full-profile,
-  Access JWT, PAUSE/admission, and release-proof verification, except secret,
-  custody-key, and WebSocket paths. Non-safe writes remain an exact allowlist.
+- Full authenticated GET/HEAD product APIs are an exact reviewed allowlist
+  after full-profile, Access JWT, PAUSE/admission, and release-proof
+  verification. Unknown reads, secret/custody-key/WebSocket paths, and
+  non-safe writes fail closed.
+- Task 1 does not invent capability grants. Until the later independently
+  verified grant boundary exists, the covered high-risk runtime handlers are
+  denied even when the full profile can plan or describe them.
 - This task did not activate connector credentials, public destinations,
   streaming, deployment, provider state, or external infrastructure. Their E2E
   proof remains with later plan tasks.
