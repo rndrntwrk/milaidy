@@ -91,14 +91,15 @@ function verifyPlanResult(value, { planId, intentId, binding }) {
     value.schemaVersion !== "alice.plan-result.v1" ||
     value.planId !== planId ||
     value.releaseDigest !== binding.releaseDigest ||
-    value.status !== "authorized-awaiting-executor" ||
+    value.status !== "queued-for-execution" ||
     value.completed !== false ||
     !Array.isArray(value.decisions) ||
     value.decisions.length !== 1 ||
     !object(value.decisions[0]) ||
-    Object.keys(value.decisions[0]).sort().join(",") !== "code,intentId" ||
+    Object.keys(value.decisions[0]).sort().join(",") !== "code,intentId,risk" ||
     value.decisions[0]?.intentId !== intentId ||
-    value.decisions[0]?.code !== "INTENT_AUTHORIZED"
+    value.decisions[0]?.code !== "AUTONOMOUS_LOW_RISK" ||
+    value.decisions[0]?.risk !== "low"
   ) {
     invalid();
   }
@@ -106,8 +107,8 @@ function verifyPlanResult(value, { planId, intentId, binding }) {
     schemaVersion: "alice.plan-result.v1",
     planId,
     releaseDigest: binding.releaseDigest,
-    decisions: [{ intentId, code: "INTENT_AUTHORIZED" }],
-    status: "authorized-awaiting-executor",
+    decisions: [{ intentId, code: "AUTONOMOUS_LOW_RISK", risk: "low" }],
+    status: "queued-for-execution",
     completed: false,
   };
 }

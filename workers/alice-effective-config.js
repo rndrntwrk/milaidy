@@ -358,19 +358,42 @@ export function buildAliceControlEffectiveConfig(inputs) {
           steps: 16,
         },
       ],
-      queueProducer: {
-        binding: "ALICE_EVIDENCE_QUEUE",
-        queue: ALICE_CLOUDFLARE_TARGET.evidenceQueue,
-      },
-      queueConsumer: {
-        queue: ALICE_CLOUDFLARE_TARGET.evidenceQueue,
-        maxBatchSize: 10,
-        maxBatchTimeout: 5,
-        maxRetries: 3,
-        deadLetterQueue: ALICE_CLOUDFLARE_TARGET.evidenceDlq,
-        maxConcurrency: 1,
-        retryDelay: 10,
-      },
+      services: [{ binding: "ALICE_STATE_PLANE", service: "alice-state-plane" }],
+      queueProducers: [
+        {
+          binding: "ALICE_EVIDENCE_QUEUE",
+          queue: ALICE_CLOUDFLARE_TARGET.evidenceQueue,
+        },
+        { binding: "ALICE_WORK_QUEUE", queue: "alice-production-work-v1" },
+      ],
+      queueConsumers: [
+        {
+          queue: ALICE_CLOUDFLARE_TARGET.evidenceQueue,
+          maxBatchSize: 10,
+          maxBatchTimeout: 5,
+          maxRetries: 3,
+          deadLetterQueue: ALICE_CLOUDFLARE_TARGET.evidenceDlq,
+          maxConcurrency: 1,
+          retryDelay: 10,
+        },
+        {
+          queue: "alice-production-work-v1",
+          maxBatchSize: 10,
+          maxBatchTimeout: 5,
+          maxRetries: 3,
+          deadLetterQueue: "alice-production-work-dlq-v1",
+          maxConcurrency: 1,
+          retryDelay: 10,
+        },
+        {
+          queue: "alice-production-work-dlq-v1",
+          maxBatchSize: 10,
+          maxBatchTimeout: 5,
+          maxRetries: 3,
+          maxConcurrency: 1,
+          retryDelay: 10,
+        },
+      ],
       r2: {
         binding: "ALICE_EVIDENCE",
         bucketName: ALICE_CLOUDFLARE_TARGET.evidenceBucket,
@@ -382,6 +405,7 @@ export function buildAliceControlEffectiveConfig(inputs) {
         "ALICE_CONTROL_RECOVERY_TOKEN",
         "ALICE_DEPLOYMENT_PAUSE_TOKEN",
         "ALICE_EVIDENCE_QUEUE_HMAC_KEY",
+        "ALICE_STATE_PLANE_SERVICE_TOKEN",
       ],
     },
     values: {

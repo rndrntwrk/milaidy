@@ -108,9 +108,10 @@ test("proves a bounded runtime.health plan used the exact binding Workflow versi
                 releaseDigest: binding.releaseDigest,
                 decisions: [{
                   intentId: "runtime-health-12345678123442348123456789012345",
-                  code: "INTENT_AUTHORIZED",
+                  code: "AUTONOMOUS_LOW_RISK",
+                  risk: "low",
                 }],
-                status: "authorized-awaiting-executor",
+                status: "queued-for-execution",
                 completed: false,
               }),
         },
@@ -130,9 +131,10 @@ test("proves a bounded runtime.health plan used the exact binding Workflow versi
           releaseDigest: binding.releaseDigest,
           decisions: [{
             intentId: "runtime-health-12345678123442348123456789012345",
-            code: "INTENT_AUTHORIZED",
+            code: "AUTONOMOUS_LOW_RISK",
+            risk: "low",
           }],
-          status: "authorized-awaiting-executor",
+          status: "queued-for-execution",
           completed: false,
         },
       });
@@ -175,8 +177,8 @@ for (const failure of ["wrong-instance", "api-trigger", "extra-output-field"]) {
       schemaVersion: "alice.plan-result.v1",
       planId,
       releaseDigest: binding.releaseDigest,
-      decisions: [{ intentId, code: "INTENT_AUTHORIZED" }],
-      status: "authorized-awaiting-executor",
+      decisions: [{ intentId, code: "AUTONOMOUS_LOW_RISK", risk: "low" }],
+      status: "queued-for-execution",
       completed: false,
       ...(failure === "extra-output-field" ? { secret: "must-not-persist" } : {}),
     };

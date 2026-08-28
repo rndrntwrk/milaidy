@@ -2,16 +2,28 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 describe("Alice plan workflow execution semantics", () => {
-  test("never reports authorization-only work as executed or completed", () => {
+  test("reports durable queue handoff without falsely claiming execution", () => {
     const source = readFileSync(
       new URL("../src/workflow.ts", import.meta.url),
       "utf8",
     );
     expect(source).toContain('state: "waiting"');
-    expect(source).toContain('status: "authorized-awaiting-executor"');
+    expect(source).toContain('status: "queued-for-execution"');
+    expect(source).toContain("ALICE_WORK_QUEUE.send");
+    expect(source).toContain("buildAlicePlanExecutionRecords(plan, decisions)");
     expect(source).toContain("completed: false");
     expect(source).not.toContain('state: "completed"');
     expect(source).not.toContain("completed: true");
+    const handoff = source.slice(
+      source.indexOf('step.do("persist and enqueue authorized durable work"'),
+      source.indexOf("catch (error)"),
+    );
+    expect(handoff.indexOf("state.applyAtomic")).toBeLessThan(
+      handoff.indexOf('callJson(authority, "/session/mutate"'),
+    );
+    expect(handoff.indexOf('callJson(authority, "/session/mutate"')).toBeLessThan(
+      handoff.indexOf("this.env.ALICE_WORK_QUEUE.send"),
+    );
   });
 
   test("persists a terminal failed checkpoint when authorization or evidence fails", () => {

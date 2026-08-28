@@ -10,6 +10,11 @@ import { canonicalJson } from "./program";
 import { validatePlan, type AlicePlan } from "./plan";
 import { loadRuntimeConfig } from "./runtime-config";
 import { authorityDurableName } from "./durable-names";
+import { createAliceStatePlaneClient } from "./state-plane-client";
+import {
+  buildAlicePlanExecutionRecords,
+  createAliceWorkQueueEnvelope,
+} from "./work-execution";
 
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -108,7 +113,11 @@ export class AlicePlanWorkflow extends WorkflowEntrypoint<AliceWorkerEnv, AliceP
       return task.result;
     });
 
-    const decisions: Array<{ intentId: string; code: string }> = [];
+    const decisions: Array<{
+      intentId: string;
+      code: string;
+      risk: "low" | "high" | "unknown";
+    }> = [];
     try {
       for (let index = 0; index < plan.actions.length; index += 1) {
         const action = plan.actions[index]!;
@@ -120,9 +129,20 @@ export class AlicePlanWorkflow extends WorkflowEntrypoint<AliceWorkerEnv, AliceP
           if (!value.decision?.allowed) {
             throw new NonRetryableError(value.decision?.code ?? "INTENT_DENIED");
           }
-          return value.decision as { allowed: true; code: string; risk: string };
+          if (!["low", "high", "unknown"].includes(value.decision.risk)) {
+            throw new NonRetryableError("INTENT_DECISION_INVALID");
+          }
+          return value.decision as {
+            allowed: true;
+            code: string;
+            risk: "low" | "high" | "unknown";
+          };
         });
-        decisions.push({ intentId: action.intentId, code: decision.code });
+        decisions.push({
+          intentId: action.intentId,
+          code: decision.code,
+          risk: decision.risk,
+        });
 
         await step.do(`capture action ${index + 1} evidence`, async () => {
           const suffix = (await sha256Hex(`${plan.planId}:${action.intentId}`)).slice(0, 32);
@@ -147,7 +167,16 @@ export class AlicePlanWorkflow extends WorkflowEntrypoint<AliceWorkerEnv, AliceP
           return { queued: true, eventId: record.eventId };
         });
       }
-      await step.do("persist authorization checkpoint awaiting executor", async () => {
+      await step.do("persist and enqueue authorized durable work", async () => {
+        const execution = buildAlicePlanExecutionRecords(plan, decisions);
+        const state = createAliceStatePlaneClient(
+          this.env.ALICE_STATE_PLANE,
+          this.env.ALICE_STATE_PLANE_SERVICE_TOKEN,
+        );
+        await state.applyAtomic({
+          operationId: execution.operationId,
+          records: execution.records,
+        });
         const task = await callJson(authority, "/session/mutate", {
           actor: plan.actor,
           sessionId: plan.sessionId,
@@ -161,6 +190,15 @@ export class AlicePlanWorkflow extends WorkflowEntrypoint<AliceWorkerEnv, AliceP
           },
         });
         if (!task.ok) throw new Error("SESSION_TASK_PERSIST_FAILED");
+        for (const item of execution.workItems) {
+          await this.env.ALICE_WORK_QUEUE.send(
+            await createAliceWorkQueueEnvelope(
+              item,
+              this.env.ALICE_EVIDENCE_QUEUE_HMAC_KEY,
+            ),
+            { contentType: "json" },
+          );
+        }
         return task.result;
       });
     } catch (error) {
@@ -187,7 +225,7 @@ export class AlicePlanWorkflow extends WorkflowEntrypoint<AliceWorkerEnv, AliceP
       planId: plan.planId,
       releaseDigest: plan.binding.releaseDigest,
       decisions,
-      status: "authorized-awaiting-executor",
+      status: "queued-for-execution",
       completed: false,
     };
   }

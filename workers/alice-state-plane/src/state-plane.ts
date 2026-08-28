@@ -10,6 +10,11 @@ export const ALICE_STATE_KINDS = [
   "connectorCursor",
   "configVersion",
   "approvalReceipt",
+  "plan",
+  "approval",
+  "work",
+  "attempt",
+  "recovery",
 ] as const;
 
 export type AliceStateKind = (typeof ALICE_STATE_KINDS)[number];
@@ -160,7 +165,7 @@ CREATE TABLE IF NOT EXISTS alice_state_idempotency (
   PRIMARY KEY (owner_id, idempotency_key)
 );
 CREATE TABLE IF NOT EXISTS alice_state_records (
-  kind TEXT NOT NULL CHECK(kind IN ('message','room','world','entity','relationship','memory','task','trajectory','connectorCursor','configVersion','approvalReceipt')),
+  kind TEXT NOT NULL CHECK(kind IN ('message','room','world','entity','relationship','memory','task','trajectory','connectorCursor','configVersion','approvalReceipt','plan','approval','work','attempt','recovery')),
   record_id TEXT NOT NULL,
   owner_id TEXT NOT NULL,
   session_id TEXT,

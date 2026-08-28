@@ -33,9 +33,18 @@ import {
   executeAliceDeploymentPauseV2,
   validAliceDeploymentEdgeNonce,
 } from "./deployment-edge";
+import { createAliceStatePlaneClient } from "./state-plane-client";
+import {
+  processAliceDeadLetter,
+  processAliceWork,
+  type AliceWorkQueueEnvelope,
+} from "./work-execution";
 
 export { AliceAuthority, AliceSession } from "./durable";
 export { AlicePlanWorkflow } from "./workflow";
+
+const ALICE_WORK_QUEUE_NAME = "alice-production-work-v1";
+const ALICE_WORK_DLQ_NAME = "alice-production-work-dlq-v1";
 
 type AccessIdentity = {
   subject: string;
@@ -937,13 +946,121 @@ async function handleFetch(
   }
 }
 
+async function handleWorkQueueMessage(
+  body: unknown,
+  attempts: number,
+  deadLetter: boolean,
+  env: AliceWorkerEnv,
+) {
+  const state = createAliceStatePlaneClient(
+    env.ALICE_STATE_PLANE,
+    env.ALICE_STATE_PLANE_SERVICE_TOKEN,
+  );
+  const authority = env.ALICE_AUTHORITY.getByName(authorityDurableName());
+  const dependencies = {
+    now: () => Date.now(),
+    getRecord: state.getRecord,
+    applyAtomic: state.applyAtomic,
+    async checkRelease() {
+      const current = await callDurable(authority, "/release/check");
+      const snapshot = await callDurable(authority, "/snapshot");
+      const binding = current.value.binding as ReleaseBinding;
+      const deploymentManifestSha256 = String(
+        current.value.release?.deploymentManifestSha256 ?? "",
+      );
+      const admissionGeneration = Number(current.value.admissionGeneration);
+      const pausedScopes = snapshot.value.authority?.pausedScopes;
+      if (
+        !validReleaseBinding(binding) ||
+        !/^sha256:[a-f0-9]{64}$/.test(deploymentManifestSha256) ||
+        !Number.isSafeInteger(admissionGeneration) ||
+        admissionGeneration < 1 ||
+        !Array.isArray(pausedScopes) ||
+        pausedScopes.some((scope) => typeof scope !== "string")
+      ) {
+        throw new Error("WORK_AUTHORITY_UNAVAILABLE");
+      }
+      return {
+        allowed:
+          current.response.ok || current.value.code === "RUNTIME_PAUSED",
+        admission: {
+          binding,
+          deploymentManifestSha256,
+          admissionGeneration,
+        },
+        pausedScopes: pausedScopes as string[],
+      };
+    },
+    async checkAuthorization(intent: ActionIntent, actor: string) {
+      const current = await callDurable(authority, "/authorize", {
+        actor,
+        request: intent,
+      });
+      return {
+        allowed: current.response.ok && current.value.decision?.allowed === true,
+        code: String(current.value.decision?.code ?? "INTENT_DENIED"),
+      };
+    },
+    async execute(operation: ActionIntent, actor: string) {
+      if (operation.action === "runtime.health") {
+        return {
+          operation: operation.action,
+          releaseDigest: operation.releaseDigest,
+          status: "admitted",
+        };
+      }
+      if (operation.action === "memory.read") {
+        const record = await state.getRecord("memory", operation.target, actor);
+        return {
+          found: record !== null,
+          operation: operation.action,
+          record,
+        };
+      }
+      throw new Error("WORK_OPERATION_UNSUPPORTED");
+    },
+    async emitEvidence(record: unknown) {
+      const validation = validateEvidenceRecord(record);
+      if (!validation.ok) throw new Error(validation.code);
+      await queueEvidence(env, record as EvidenceRecord);
+    },
+  };
+  return deadLetter
+    ? processAliceDeadLetter(
+        body,
+        attempts,
+        env.ALICE_EVIDENCE_QUEUE_HMAC_KEY,
+        dependencies,
+      )
+    : processAliceWork(
+        body,
+        attempts,
+        env.ALICE_EVIDENCE_QUEUE_HMAC_KEY,
+        dependencies,
+      );
+}
+
 export default {
   fetch: handleFetch,
   async queue(
-    batch: MessageBatch<EvidenceQueueEnvelope>,
+    batch: MessageBatch<EvidenceQueueEnvelope | AliceWorkQueueEnvelope>,
     env: AliceWorkerEnv,
   ): Promise<void> {
     for (const message of batch.messages) {
+      if (
+        batch.queue === ALICE_WORK_QUEUE_NAME ||
+        batch.queue === ALICE_WORK_DLQ_NAME
+      ) {
+        const result = await handleWorkQueueMessage(
+          message.body,
+          message.attempts,
+          batch.queue === ALICE_WORK_DLQ_NAME,
+          env,
+        );
+        if (result.disposition === "ack") message.ack();
+        else message.retry({ delaySeconds: 10 });
+        continue;
+      }
       try {
         const record = await verifyEvidenceQueueEnvelope(
           message.body,
@@ -956,4 +1073,7 @@ export default {
       }
     }
   },
-} satisfies ExportedHandler<AliceWorkerEnv, EvidenceQueueEnvelope>;
+} satisfies ExportedHandler<
+  AliceWorkerEnv,
+  EvidenceQueueEnvelope | AliceWorkQueueEnvelope
+>;
