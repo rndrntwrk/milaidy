@@ -142,13 +142,23 @@ function fullRuntimeProof() {
     runtimeProfile: "full-gated",
     bridgePlugin: "eliza",
     actionPlanning: true,
-    configuredPluginPackages: [
+    coreComposition: [
+      "bridge:eliza",
+      "capabilities:basic",
+      "security:core-hooks",
+      "memory:sql",
+      "skills:agent-skills",
+      "hooks:eliza",
+      "connectors:eliza",
+    ],
+    requiredConfiguredPluginPackages: [
       "eliza",
       "@elizaos/plugin-sql",
-      "@elizaos/plugin-openai",
       "@elizaos/plugin-agent-skills",
+      "@elizaos/plugin-openai",
     ],
-    runtimePluginNames: [
+    requiredRuntimePluginNames: [
+      "@elizaos/plugin-agent-skills",
       "basic-capabilities",
       "core-security-hooks",
       "eliza",
@@ -418,37 +428,43 @@ describe("Alice Access gateway", () => {
     }
   });
 
-  test("denies an unreviewed full-gated write route before runtime ingress", async () => {
+  test("denies unreviewed full-gated read and write routes before runtime ingress", async () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
-    let runtimeRequests = 0;
-    const response = await handleRequest(
-      new Request("https://alice.rndrntwrk.com/api/unreviewed/execute", {
-        method: "POST",
-        headers: {
-          "cf-access-jwt-assertion": token,
-          "content-type": "application/json",
-          origin: "https://alice.rndrntwrk.com",
+    for (const [method, pathname] of [
+      ["GET", "/api/sandbox/browser"],
+      ["GET", "/api/unreviewed/read"],
+      ["POST", "/api/unreviewed/execute"],
+    ]) {
+      let runtimeRequests = 0;
+      const response = await handleRequest(
+        new Request(`https://alice.rndrntwrk.com${pathname}`, {
+          method,
+          headers: {
+            "cf-access-jwt-assertion": token,
+            "content-type": "application/json",
+            origin: "https://alice.rndrntwrk.com",
+          },
+          ...(method === "POST" ? { body: "{}" } : {}),
+        }),
+        env,
+        async (request) => {
+          if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+            return Response.json(jwks);
+          }
+          runtimeRequests += 1;
+          return Response.json(fullRuntimeProof());
         },
-        body: "{}",
-      }),
-      env,
-      async (request) => {
-        if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
-          return Response.json(jwks);
-        }
-        runtimeRequests += 1;
-        return Response.json(fullRuntimeProof());
-      },
-      now,
-    );
+        now,
+      );
 
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({
-      ok: false,
-      code: "ALICE_PRODUCTION_MUTATION_DENIED",
-    });
-    expect(runtimeRequests).toBe(0);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        ok: false,
+        code: "ALICE_PRODUCTION_MUTATION_DENIED",
+      });
+      expect(runtimeRequests).toBe(0);
+    }
   });
 
   test("rejects non-exact full-profile proof inventories and profile case variants", async () => {
@@ -458,7 +474,51 @@ describe("Alice Access gateway", () => {
     for (const proof of [
       {
         ...fullRuntimeProof(),
-        configuredPluginPackages: ["eliza", {}, "@elizaos/plugin-sql"],
+        requiredConfiguredPluginPackages: ["eliza", {}, "@elizaos/plugin-sql"],
+      },
+      {
+        ...fullRuntimeProof(),
+        requiredConfiguredPluginPackages: [
+          "eliza",
+          "@elizaos/plugin-sql",
+          "@elizaos/plugin-openai",
+        ],
+      },
+      {
+        ...fullRuntimeProof(),
+        requiredConfiguredPluginPackages: [
+          ...fullRuntimeProof().requiredConfiguredPluginPackages,
+          "@elizaos/plugin-unreviewed",
+        ],
+      },
+      {
+        ...fullRuntimeProof(),
+        requiredConfiguredPluginPackages: [
+          "eliza",
+          "@elizaos/plugin-sql",
+          "@elizaos/plugin-agent-skills",
+          "@elizaos/plugin-agent-skills",
+        ],
+      },
+      {
+        ...fullRuntimeProof(),
+        requiredConfiguredPluginPackages: [
+          "@elizaos/plugin-sql",
+          "eliza",
+          "@elizaos/plugin-agent-skills",
+          "@elizaos/plugin-openai",
+        ],
+      },
+      {
+        ...fullRuntimeProof(),
+        requiredRuntimePluginNames: ["core-security-hooks", "eliza", "sql"],
+      },
+      {
+        ...fullRuntimeProof(),
+        requiredRuntimePluginNames: [
+          ...fullRuntimeProof().requiredRuntimePluginNames,
+          "unreviewed-runtime-plugin",
+        ],
       },
       { ...fullRuntimeProof(), runtimeProfile: "FULL-GATED" },
     ]) {
@@ -1302,6 +1362,63 @@ describe("Alice Access gateway", () => {
     expect(await response.json()).toMatchObject({
       choices: [{ message: { content: "Previously committed response." } }],
     });
+  });
+
+  test("rechecks PAUSE_ALL after Session context load before returning a replay", async () => {
+    const requestBody = JSON.stringify({
+      model: "alice-production",
+      messages: [{ role: "user", content: "Replay only while admitted" }],
+    });
+    const requestHash = await digest(requestBody);
+    const turnHash = await digest(`owner-primary\0${requestHash}`);
+    const turnId = `turn-${turnHash.slice("sha256:".length)}`;
+    const blockingScopes: string[] = [];
+    const env = await environment({
+      blockingScopes,
+      onControlRequest(request) {
+        if (new URL(request.url).pathname.endsWith("/conversation/context")) {
+          blockingScopes.push("all");
+        }
+      },
+      context: {
+        existingTurn: {
+          turnId,
+          userText: "Replay only while admitted",
+          assistantText: "Previously committed response.",
+          requestHash,
+          responseHash: `sha256:${"f".repeat(64)}`,
+          recordedAt: 1_787_399_000_000,
+        },
+        recentTurns: [],
+      },
+    });
+    const { token, jwks } = await accessFixture();
+    let modelCalls = 0;
+    const response = await handleRequest(
+      new Request("https://alice.rndrntwrk.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "cf-access-jwt-assertion": token,
+          "content-type": "application/json",
+          "x-alice-session-id": "owner-primary",
+        },
+        body: requestBody,
+      }),
+      env,
+      authenticatedFetch(env, jwks, async () => {
+        modelCalls += 1;
+        return Response.json({ unsafe: true });
+      }),
+      now,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "RUNTIME_PAUSED",
+      blockingScopes: ["all"],
+    });
+    expect(modelCalls).toBe(0);
   });
 
   test("rejects SSE negotiation before inference because core v1 persists only complete turns", async () => {

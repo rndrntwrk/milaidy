@@ -371,20 +371,32 @@ function exactRuntimePluginClosure(names: unknown): boolean {
   );
 }
 
-function exactFullRuntimeInventory(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) &&
-    value.length >= 3 &&
-    value.length <= 64 &&
-    value.every(
-      (name) =>
-        typeof name === "string" &&
-        name.length >= 1 &&
-        name.length <= 128 &&
-        /^[a-zA-Z0-9@/._:-]+$/.test(name),
-    ) &&
-    new Set(value).size === value.length
-  );
+const FULL_REQUIRED_CONFIGURED_PLUGINS = [
+  "eliza",
+  "@elizaos/plugin-sql",
+  "@elizaos/plugin-agent-skills",
+  "@elizaos/plugin-openai",
+] as const;
+const FULL_REQUIRED_RUNTIME_PLUGINS = [
+  "@elizaos/plugin-agent-skills",
+  "basic-capabilities",
+  "core-security-hooks",
+  "eliza",
+  "openai",
+  "sql",
+] as const;
+const FULL_CORE_COMPOSITION = [
+  "bridge:eliza",
+  "capabilities:basic",
+  "security:core-hooks",
+  "memory:sql",
+  "skills:agent-skills",
+  "hooks:eliza",
+  "connectors:eliza",
+] as const;
+
+function exactOrderedStrings(value: unknown, expected: readonly string[]): boolean {
+  return Array.isArray(value) && JSON.stringify(value) === JSON.stringify(expected);
 }
 
 async function readBoundedBytes(
@@ -409,9 +421,10 @@ function runtimeReleaseMatches(
       "actionPlanning",
       "authorityMode",
       "bridgePlugin",
-      "configuredPluginPackages",
+      "coreComposition",
       "release",
-      "runtimePluginNames",
+      "requiredConfiguredPluginPackages",
+      "requiredRuntimePluginNames",
       "runtimeProfile",
       "schemaVersion",
     ]) &&
@@ -420,12 +433,15 @@ function runtimeReleaseMatches(
     proof.runtimeProfile === "full-gated" &&
     proof.bridgePlugin === "eliza" &&
     proof.actionPlanning === true &&
-    exactFullRuntimeInventory(proof.configuredPluginPackages) &&
-    proof.configuredPluginPackages[0] === "eliza" &&
-    !proof.configuredPluginPackages.includes("alice-production-response-only") &&
-    exactFullRuntimeInventory(proof.runtimePluginNames) &&
-    proof.runtimePluginNames.includes("eliza") &&
-    !proof.runtimePluginNames.includes("alice-production-response-only") &&
+    exactOrderedStrings(proof.coreComposition, FULL_CORE_COMPOSITION) &&
+    exactOrderedStrings(
+      proof.requiredConfiguredPluginPackages,
+      FULL_REQUIRED_CONFIGURED_PLUGINS,
+    ) &&
+    exactOrderedStrings(
+      proof.requiredRuntimePluginNames,
+      FULL_REQUIRED_RUNTIME_PLUGINS,
+    ) &&
     exactSafeRuntimeRelease(proof.release, admission)
   ) {
     return true;
@@ -1103,10 +1119,14 @@ const SAFE_RUNTIME_READS = [
   /^\/api\/alice-production\/proof$/,
 ];
 
-const FULL_RUNTIME_SENSITIVE_READS = [
-  /^\/api\/secrets(?:\/|$)/,
-  /^\/api\/wallet\/(?:export|keys)(?:\/|$)/,
-  /^\/ws(?:\/|$)/,
+const FULL_RUNTIME_API_READS = [
+  /^\/api\/(?:auth\/status|status|agent\/status|onboarding\/status|config|emotes)$/,
+  /^\/api\/avatar\/(?:vrm|background)$/,
+  /^\/api\/companion\/stage$/,
+  /^\/api\/broadcast\/[a-zA-Z0-9-]+\/(?:stage|scene|vrm|background)$/,
+  /^\/api\/conversations(?:\/[^/]+\/messages)?$/,
+  /^\/api\/memories\/feed$/,
+  /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
 const FULL_RUNTIME_WRITES = [
@@ -1133,10 +1153,7 @@ function isFullRuntimeUiPath(pathname: string): boolean {
 }
 
 function isFullRuntimeApiRead(pathname: string): boolean {
-  return (
-    (pathname.startsWith("/api/") || /^\/v1\/models(?:\/[^/]+)?$/.test(pathname)) &&
-    !FULL_RUNTIME_SENSITIVE_READS.some((pattern) => pattern.test(pathname))
-  );
+  return FULL_RUNTIME_API_READS.some((pattern) => pattern.test(pathname));
 }
 
 function isFullRuntimeProof(proof: unknown): boolean {
@@ -1343,6 +1360,28 @@ export async function handleRequest(
         env,
       );
       if (context.existingTurn) {
+        const replayAdmission = await checkRuntimeAdmission(env);
+        if (!replayAdmission.ok) return replayAdmission.response;
+        if (!sameRuntimeAdmission(replayAdmission.admission, admission.admission)) {
+          return jsonResponse(
+            { ok: false, code: "RUNTIME_ADMISSION_CHANGED" },
+            503,
+          );
+        }
+        const replayProof = await verifyUpstreamRelease(
+          request,
+          upstream,
+          replayAdmission.admission,
+          env,
+          fetchImpl,
+        );
+        if (!replayProof.ok) return replayProof.response;
+        if (isFullRuntimeProof(replayProof.proof) !== fullRuntime) {
+          return jsonResponse(
+            { ok: false, code: "RUNTIME_RELEASE_MISMATCH" },
+            503,
+          );
+        }
         return durableReplayResponse(durableChat, context.existingTurn, fullRuntime);
       }
       init.body = buildDurableUpstreamBody(durableChat, context.recentTurns);

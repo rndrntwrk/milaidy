@@ -53,6 +53,7 @@ import {
   type AliceProductionChatBoundary,
 } from "./alice-production-chat.js";
 import { isAliceResponseOnlyRuntime } from "./alice-production-guard.js";
+import { installAliceHighRiskActionBoundary } from "../runtime/alice-high-risk-action-boundary.js";
 import {
   isClientVisibleNoResponse,
   isNoResponsePlaceholder,
@@ -864,6 +865,7 @@ export async function generateChatResponse(
   agentName: string,
   opts?: ChatGenerateOptions,
 ): Promise<ChatGenerationResult> {
+  installAliceHighRiskActionBoundary(runtime, process.env);
   const generationTimeoutMs = resolveChatGenerationTimeoutMs(
     opts?.timeoutDuration,
   );

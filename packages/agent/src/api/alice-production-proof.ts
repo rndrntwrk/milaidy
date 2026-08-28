@@ -15,6 +15,29 @@ const EXACT_CONFIGURED_PLUGINS = [
   "@elizaos/plugin-sql",
   "@elizaos/plugin-openai",
 ] as const;
+const FULL_REQUIRED_CONFIGURED_PLUGINS = [
+  "eliza",
+  "@elizaos/plugin-sql",
+  "@elizaos/plugin-agent-skills",
+  "@elizaos/plugin-openai",
+] as const;
+const FULL_REQUIRED_RUNTIME_PLUGINS = [
+  "@elizaos/plugin-agent-skills",
+  "basic-capabilities",
+  "core-security-hooks",
+  "eliza",
+  "openai",
+  "sql",
+] as const;
+const FULL_CORE_COMPOSITION = [
+  "bridge:eliza",
+  "capabilities:basic",
+  "security:core-hooks",
+  "memory:sql",
+  "skills:agent-skills",
+  "hooks:eliza",
+  "connectors:eliza",
+] as const;
 
 type BoundaryStamp = {
   schemaVersion: "alice.runtime-boundary-stamp.v1";
@@ -26,7 +49,9 @@ type BoundaryStamp = {
 
 type FullRuntimeBoundaryStamp = {
   schemaVersion: "alice.full-runtime-boundary-stamp.v1";
-  configuredPluginPackages: string[];
+  requiredConfiguredPluginPackages: string[];
+  requiredRuntimePluginNames: string[];
+  coreComposition: string[];
   actionPlanning: true;
   bridgePlugin: "eliza";
 };
@@ -64,6 +89,7 @@ function configuredInventory(entries: string[]): string[] {
   if (
     entries.length < 1 ||
     entries.length > 64 ||
+    new Set(entries).size !== entries.length ||
     entries.some(
       (name) =>
         typeof name !== "string" ||
@@ -168,7 +194,12 @@ export function stampAliceProductionRuntimeBoundary(
     if (
       configured[0] !== "eliza" ||
       configured.includes("alice-production-response-only") ||
-      !runtimePluginNames.includes("eliza") ||
+      !FULL_REQUIRED_CONFIGURED_PLUGINS.every((name) =>
+        configured.includes(name),
+      ) ||
+      !FULL_REQUIRED_RUNTIME_PLUGINS.every((name) =>
+        runtimePluginNames.includes(name),
+      ) ||
       runtimePluginNames.includes("alice-production-response-only") ||
       inventory(runtime.actions).length === 0
     ) {
@@ -176,7 +207,15 @@ export function stampAliceProductionRuntimeBoundary(
     }
     const stamp: FullRuntimeBoundaryStamp = Object.freeze({
       schemaVersion: "alice.full-runtime-boundary-stamp.v1",
-      configuredPluginPackages: Object.freeze([...configured]) as unknown as string[],
+      requiredConfiguredPluginPackages: Object.freeze([
+        ...FULL_REQUIRED_CONFIGURED_PLUGINS,
+      ]) as unknown as string[],
+      requiredRuntimePluginNames: Object.freeze([
+        ...FULL_REQUIRED_RUNTIME_PLUGINS,
+      ]) as unknown as string[],
+      coreComposition: Object.freeze([
+        ...FULL_CORE_COMPOSITION,
+      ]) as unknown as string[],
       actionPlanning: true,
       bridgePlugin: "eliza",
     });
@@ -242,7 +281,9 @@ export function buildAliceProductionProof(
     }
     const runtimePluginNames = inventory(runtime.plugins);
     if (
-      !runtimePluginNames.includes("eliza") ||
+      !FULL_REQUIRED_RUNTIME_PLUGINS.every((name) =>
+        runtimePluginNames.includes(name),
+      ) ||
       runtimePluginNames.includes("alice-production-response-only") ||
       inventory(runtime.actions).length === 0
     ) {
@@ -254,8 +295,11 @@ export function buildAliceProductionProof(
       runtimeProfile: "full-gated" as const,
       bridgePlugin: "eliza" as const,
       actionPlanning: true as const,
-      configuredPluginPackages: [...stamp.configuredPluginPackages],
-      runtimePluginNames,
+      coreComposition: [...stamp.coreComposition],
+      requiredConfiguredPluginPackages: [
+        ...stamp.requiredConfiguredPluginPackages,
+      ],
+      requiredRuntimePluginNames: [...stamp.requiredRuntimePluginNames],
       release,
     };
   }

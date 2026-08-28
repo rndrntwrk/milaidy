@@ -32,6 +32,7 @@ describe("Alice sanitized runtime-boundary proof", () => {
       plugins: [
         { name: "basic-capabilities" },
         { name: "core-security-hooks" },
+        { name: "@elizaos/plugin-agent-skills" },
         { name: "eliza" },
         { name: "sql" },
         { name: "openai" },
@@ -57,7 +58,12 @@ describe("Alice sanitized runtime-boundary proof", () => {
 
     stampAliceProductionRuntimeBoundary(
       runtime,
-      ["eliza", "@elizaos/plugin-sql", "@elizaos/plugin-openai"],
+      [
+        "eliza",
+        "@elizaos/plugin-sql",
+        "@elizaos/plugin-agent-skills",
+        "@elizaos/plugin-openai",
+      ],
       environment,
     );
 
@@ -67,12 +73,23 @@ describe("Alice sanitized runtime-boundary proof", () => {
       runtimeProfile: "full-gated",
       bridgePlugin: "eliza",
       actionPlanning: true,
-      configuredPluginPackages: [
+      coreComposition: [
+        "bridge:eliza",
+        "capabilities:basic",
+        "security:core-hooks",
+        "memory:sql",
+        "skills:agent-skills",
+        "hooks:eliza",
+        "connectors:eliza",
+      ],
+      requiredConfiguredPluginPackages: [
         "eliza",
         "@elizaos/plugin-sql",
+        "@elizaos/plugin-agent-skills",
         "@elizaos/plugin-openai",
       ],
-      runtimePluginNames: [
+      requiredRuntimePluginNames: [
+        "@elizaos/plugin-agent-skills",
         "basic-capabilities",
         "core-security-hooks",
         "eliza",
@@ -83,6 +100,31 @@ describe("Alice sanitized runtime-boundary proof", () => {
         deploymentManifestSha256: `sha256:${"9".repeat(64)}`,
       },
     });
+  });
+
+  it("refuses to stamp full-gated runtimes missing a required core marker", () => {
+    const runtime = {
+      plugins: [
+        { name: "basic-capabilities" },
+        { name: "core-security-hooks" },
+        { name: "eliza" },
+        { name: "sql" },
+        { name: "openai" },
+      ],
+      actions: [{ name: "REPLY" }],
+    };
+    const environment = {
+      ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+      ALICE_RUNTIME_PROFILE: "full-gated",
+    };
+
+    expect(() =>
+      stampAliceProductionRuntimeBoundary(
+        runtime,
+        ["eliza", "@elizaos/plugin-sql", "@elizaos/plugin-openai"],
+        environment,
+      ),
+    ).toThrow("ALICE_PRODUCTION_EXECUTION_SURFACE_INVALID");
   });
 
   it("returns only bounded identifiers and release metadata", () => {

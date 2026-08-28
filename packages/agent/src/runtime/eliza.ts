@@ -127,6 +127,7 @@ import {
   constrainAliceProductionPluginSurface,
 } from "./alice-production-plugin-policy.js";
 import { createAliceProductionRuntimePlugin } from "./alice-production-runtime-plugin.js";
+import { installAliceHighRiskActionBoundary } from "./alice-high-risk-action-boundary.js";
 import {
   isAliceFullRuntimeProfile,
   isAliceResponseOnlyRuntime,
@@ -4012,6 +4013,7 @@ export async function startEliza(
   installRuntimeMethodBindings(runtime, {
     disablePluginLifecycle: aliceResponseOnly,
   });
+  installAliceHighRiskActionBoundary(runtime, process.env);
 
   // 7b. Pre-register plugin-sql so the adapter is ready before other plugins init.
   //     This is OPTIONAL — without it, some features (memory, todos) won't work.

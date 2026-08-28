@@ -5,7 +5,7 @@ import {
   type Content,
   type UUID,
 } from "@elizaos/core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateChatResponse } from "../chat-routes";
 
 function createRuntimeForChatRouteTests(options?: {
@@ -44,6 +44,7 @@ function createRuntimeForChatRouteTests(options?: {
       warn: vi.fn(),
       error: vi.fn(),
     } as unknown as AgentRuntime["logger"]);
+  const actions = options?.actions ?? [];
 
   return {
     agentId: stringToUuid("chat-route-agent"),
@@ -91,7 +92,10 @@ function createRuntimeForChatRouteTests(options?: {
     getActionResults:
       options?.getActionResults ??
       (() => [] as unknown[]),
-    actions: options?.actions ?? [],
+    actions,
+    registerAction: (action) => {
+      actions.push(action);
+    },
     logger: runtimeLogger,
   } as unknown as AgentRuntime;
 }
@@ -109,6 +113,108 @@ function createUserMessage(text: string) {
 }
 
 describe("generateChatResponse fallback recovery", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("denies chat-initiated wallet execution in full-gated Alice without a verified grant", async () => {
+    vi.stubEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    vi.stubEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    const transferHandler = vi.fn(async () => ({
+      success: true,
+      text: "Executed transfer",
+    }));
+    const runtime = createRuntimeForChatRouteTests({
+      actions: [
+        {
+          name: "TRANSFER_TOKEN",
+          validate: async () => true,
+          handler: transferHandler,
+        },
+      ],
+    });
+
+    const result = await generateChatResponse(
+      runtime,
+      createUserMessage(
+        "Send 1 BNB to 0x8DFBdEEC8c5d4970BB5F481C6ec7f73fa1C65be5",
+      ),
+      "ChatRouteAgent",
+    );
+
+    expect(transferHandler).not.toHaveBeenCalled();
+    expect(result.text).toContain("ALICE_HIGH_RISK_ACTION_DENIED");
+  });
+
+  it("wraps privileged handlers before normal full-gated message dispatch", async () => {
+    vi.stubEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    vi.stubEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    const privilegedHandlers = [
+      "POST_TWEET",
+      "SEND_TWEET",
+      "SEND_TOKEN",
+      "FUNDS_WITHDRAW",
+      "BRIDGE_TOKEN",
+      "SIGN_WITH_MILADY_WALLET",
+      "DEPLOY_APP",
+      "MERGE_PULL_REQUEST",
+      "INCREASE_RISK_LIMIT",
+      "STREAM555_GO_LIVE",
+      "SHELL_COMMAND",
+      "UPDATE_ROLE",
+      "ROTATE_CREDENTIAL",
+      "PROMOTE_RELEASE",
+      "RESTART_AGENT",
+      "LAUNCH_APP",
+    ].map((name) => ({ name, handler: vi.fn(async () => true) }));
+    const safeHandler = vi.fn(async () => true);
+    const lateCredentialHandler = vi.fn(async (..._args: unknown[]) => true);
+    const runtime = createRuntimeForChatRouteTests({
+      actions: [
+        ...privilegedHandlers.map(({ name, handler }) => ({
+          name,
+          validate: async () => true,
+          handler,
+        })),
+        {
+          name: "CHECK_BALANCE",
+          validate: async () => true,
+          handler: safeHandler,
+        },
+      ],
+      handleMessage: async (activeRuntime) => {
+        activeRuntime.registerAction({
+          name: "DELETE_CREDENTIAL",
+          description: "Test-only late privileged action",
+          validate: async () => true,
+          handler: async (...args) => {
+            await lateCredentialHandler(...args);
+            return { success: true };
+          },
+        });
+        for (const action of activeRuntime.actions) {
+          await action.handler(activeRuntime, createUserMessage("dispatch"));
+        }
+        return {
+          responseContent: { text: "Dispatch evaluated." },
+          mode: "actions",
+        };
+      },
+    });
+
+    await generateChatResponse(
+      runtime,
+      createUserMessage("Evaluate the planned actions"),
+      "ChatRouteAgent",
+    );
+
+    for (const { handler } of privilegedHandlers) {
+      expect(handler).not.toHaveBeenCalled();
+    }
+    expect(lateCredentialHandler).not.toHaveBeenCalled();
+    expect(safeHandler).toHaveBeenCalledTimes(1);
+  });
+
   it("does not warn about unexecuted fallback recovery for REPLY-only payloads", async () => {
     const warn = vi.fn();
     const runtimeLogger = {
