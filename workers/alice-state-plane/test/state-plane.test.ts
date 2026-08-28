@@ -184,8 +184,8 @@ describe("portable D1 Alice state contract", () => {
     d1.batch = async (statements) => {
       if (!injected) {
         injected = true;
-        d1.sqlite.query("INSERT INTO alice_state_idempotency(owner_id, idempotency_key, request_sha256, created_at) VALUES (?, ?, ?, ?)")
-          .run("owner-001", "atomic-race:0", "f".repeat(64), 1_777_000_002_000);
+        d1.sqlite.query("INSERT INTO alice_state_idempotency(owner_id, idempotency_key, request_sha256, claim_token, created_at) VALUES (?, ?, ?, ?, ?)")
+          .run("owner-001", "atomic-race:0", "f".repeat(64), "competing-claim-001", 1_777_000_002_000);
       }
       return originalBatch(statements);
     };
@@ -269,6 +269,75 @@ describe("portable D1 Alice state contract", () => {
     d1.sqlite.query("UPDATE alice_state_records SET payload_json = ? WHERE owner_id = ? AND kind = ? AND record_id = ?")
       .run(JSON.stringify({ value: "tampered" }), "owner-001", "memory", "memory-corrupt-001");
     await expect(adapter.getRecord("memory", "memory-corrupt-001", "owner-001")).rejects.toThrow("STATE_ROW_INVALID");
+  });
+
+  test("makes a delayed completed receipt replay a true no-op after a newer write", async () => {
+    const state = await import("../src/state-plane");
+    const d1 = new SqliteD1Binding();
+    await state.installAliceStateSchema(d1);
+    const first = new state.D1AliceStateAdapter(d1);
+    const original = {
+      kind: "memory" as const, recordId: "memory-delayed-001", ownerId: "owner-001",
+      sessionId: "session-001", payload: { version: "A" }, updatedAt: 1_777_000_000_000,
+      idempotencyKey: "delayed-operation-A",
+    };
+    await first.putRecord(original);
+    const newer = await first.putRecord({
+      ...original, payload: { version: "B" }, updatedAt: 1_777_000_000_001,
+      idempotencyKey: "delayed-operation-B",
+    });
+    const replayed = await new state.D1AliceStateAdapter(d1).putRecord(original);
+    expect(replayed).toEqual(newer);
+    expect(await first.getRecord("memory", "memory-delayed-001", "owner-001")).toEqual(newer);
+  });
+
+  test("makes a delayed completed multi-record atomic replay a true no-op", async () => {
+    const state = await import("../src/state-plane");
+    const d1 = new SqliteD1Binding();
+    await state.installAliceStateSchema(d1);
+    const first = new state.D1AliceStateAdapter(d1);
+    const records = (version: string, updatedAt: number) => ["room", "message"].map((kind) => ({
+      kind: kind as "room" | "message", recordId: `${kind}-delayed-001`, ownerId: "owner-001",
+      sessionId: "session-001", payload: { version }, updatedAt,
+    }));
+    await first.applyAtomic({ operationId: "atomic-delayed-A", records: records("A", 1_777_000_000_000) });
+    const newer = await first.applyAtomic({ operationId: "atomic-delayed-B", records: records("B", 1_777_000_000_001) });
+    const replayed = await new state.D1AliceStateAdapter(d1).applyAtomic({
+      operationId: "atomic-delayed-A", records: records("A", 1_777_000_000_000),
+    });
+    expect(replayed).toEqual(newer);
+    expect(await first.listRecords({ ownerId: "owner-001", sessionId: "session-001", limit: 10 }))
+      .toEqual([...newer].sort((left, right) => left.kind.localeCompare(right.kind)));
+  });
+
+  test("does not execute a second writer after an exact same-digest pre-read race", async () => {
+    const state = await import("../src/state-plane");
+    const d1 = new SqliteD1Binding();
+    await state.installAliceStateSchema(d1);
+    d1.sqlite.exec(`
+      CREATE TABLE alice_test_record_updates (record_id TEXT NOT NULL);
+      CREATE TRIGGER alice_test_record_update AFTER UPDATE ON alice_state_records
+      BEGIN INSERT INTO alice_test_record_updates(record_id) VALUES (NEW.record_id); END;
+    `);
+    const input = {
+      kind: "task" as const, recordId: "task-concurrent-same-001", ownerId: "owner-001",
+      payload: { state: "queued" }, updatedAt: 1_777_000_000_000,
+      idempotencyKey: "concurrent-same-operation-001",
+    };
+    const originalBatch = d1.batch.bind(d1);
+    let winner: unknown = null;
+    let injected = false;
+    d1.batch = async (statements) => {
+      if (!injected) {
+        injected = true;
+        d1.batch = originalBatch;
+        winner = await new state.D1AliceStateAdapter(d1).putRecord(input);
+      }
+      return originalBatch(statements);
+    };
+    const replay = await new state.D1AliceStateAdapter(d1).putRecord(input);
+    expect(replay).toEqual(winner);
+    expect(d1.sqlite.query("SELECT record_id FROM alice_test_record_updates").all()).toEqual([]);
   });
 });
 

@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS alice_state_idempotency (
   owner_id TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
   request_sha256 TEXT NOT NULL CHECK(length(request_sha256) = 64),
+  claim_token TEXT NOT NULL,
   created_at INTEGER NOT NULL CHECK(created_at > 0),
   PRIMARY KEY (owner_id, idempotency_key)
 );
