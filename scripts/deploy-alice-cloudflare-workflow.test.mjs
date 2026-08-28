@@ -17,6 +17,13 @@ const buildWorkflow = fs.readFileSync(
   path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
   "utf8",
 );
+const preimportWorkflowPath = path.join(
+  repoRoot,
+  ".github/workflows/alice-cloudflare-container-bringup.yml",
+);
+const preimportWorkflow = fs.existsSync(preimportWorkflowPath)
+  ? fs.readFileSync(preimportWorkflowPath, "utf8")
+  : "";
 const replaySource = fs.readFileSync(
   path.join(repoRoot, "deploy/modal/alice_cloudflare_release.test.mjs"),
   "utf8",
@@ -36,6 +43,20 @@ function namedWorkflowSteps(source) {
       name: heading[1],
       block,
       run: runStart === -1 ? "" : block.slice(runStart),
+    };
+  });
+}
+
+function namedWorkflowJobs(source) {
+  const jobsStart = source.indexOf("\njobs:\n");
+  assert.notEqual(jobsStart, -1, "workflow has no jobs block");
+  const jobs = source.slice(jobsStart + "\njobs:\n".length);
+  const headings = [...jobs.matchAll(/^  ([a-zA-Z0-9_-]+):$/gm)];
+  return headings.map((heading, index) => {
+    const end = headings[index + 1]?.index ?? jobs.length;
+    return {
+      name: heading[1],
+      block: jobs.slice(heading.index, end),
     };
   });
 }
@@ -502,4 +523,165 @@ test("every direct gh boundary receives only a step-local GitHub token", () => {
     );
   }
   assert.deepEqual(missing, []);
+});
+
+test("temporary pre-import materializes one exact release without production promotion", () => {
+  assert.match(preimportWorkflow, /^name: Alice Cloudflare Pre-import and Materialize$/m);
+  assert.match(preimportWorkflow, /^on:\n  workflow_dispatch:\n/m);
+  assert.doesNotMatch(preimportWorkflow, /^  (?:push|pull_request|schedule):/m);
+  for (const input of [
+    "source_sha",
+    "recovery_watchdog_run_id",
+    "build_run_id",
+    "worker_artifact_name",
+    "worker_artifact_digest",
+    "runtime_image",
+    "release_epoch",
+    "runtime_revision",
+    "policy_hash",
+  ]) {
+    assert.match(preimportWorkflow, new RegExp(`^      ${input}:$`, "m"));
+  }
+  const jobs = namedWorkflowJobs(preimportWorkflow);
+  assert.deepEqual(jobs.map(({ name }) => name), ["import_runtime", "materialize"]);
+  const imageImport = jobs.find(({ name }) => name === "import_runtime")?.block ?? "";
+  const materialize = jobs.find(({ name }) => name === "materialize")?.block ?? "";
+  assert.match(imageImport, /^    timeout-minutes: 30$/m);
+  assert.match(imageImport, /^    environment: alice-cloudflare-bringup$/m);
+  assert.match(materialize, /^    needs: import_runtime$/m);
+  assert.match(materialize, /^    timeout-minutes: 30$/m);
+  assert.match(materialize, /^    environment: alice-production$/m);
+  assert.match(preimportWorkflow, /ref: \$\{\{ inputs\.source_sha \}\}/);
+  assert.equal(
+    [...preimportWorkflow.matchAll(/test "\$GITHUB_RUN_ATTEMPT" = "1"/g)].length,
+    2,
+  );
+  assert.match(preimportWorkflow, /recovery_watchdog_run_id/);
+  assert.match(preimportWorkflow, /build-cloud-agent\.yml/);
+  assert.match(preimportWorkflow, /actions\/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53/);
+  assert.match(imageImport, /gh attestation verify "oci:\/\/\$\{RUNTIME_IMAGE\}"/);
+  assert.match(imageImport, /"\$WRANGLER" containers push "\$local_image"/);
+  assert.match(
+    imageImport,
+    /runtime_image="registry\.cloudflare\.com\/\$\{CLOUDFLARE_ACCOUNT_ID\}\/alice-runtime@\$\{remote_digest\}"/,
+  );
+  assert.match(imageImport, /containers images list/);
+  assert.doesNotMatch(imageImport, /extractAliceBootstrapNamespaceIds/);
+  assert.doesNotMatch(imageImport, /alice_deployment_manifest\.mjs/);
+  assert.match(materialize, /extractAliceBootstrapNamespaceIds/);
+  assert.match(materialize, /alice_deployment_manifest\.mjs/);
+  assert.match(materialize, /deployment-output-digests\.json/);
+  assert.equal([...preimportWorkflow.matchAll(/retention-days: 1/g)].length, 2);
+  assert.match(preimportWorkflow, /if-no-files-found: error/);
+  assert.match(preimportWorkflow, /Owner: Alice pre-import materialization operator/);
+  assert.match(preimportWorkflow, /Hard expiry: two hours after temporary branch-policy creation/);
+  assert.match(
+    preimportWorkflow,
+    /alice-cloudflare-bringup\/deployment-branch-policies\/IMPORT_POLICY_ID/,
+  );
+  assert.match(
+    preimportWorkflow,
+    /alice-production\/deployment-branch-policies\/MATERIALIZE_POLICY_ID/,
+  );
+  assert.match(preimportWorkflow, /git push origin --delete ops\/alice-preimport-6f34982-20260828/);
+  assert.equal([...preimportWorkflow.matchAll(/if: always\(\)/g)].length, 2);
+  assert.match(imageImport, /docker logout ghcr\.io/);
+  assert.match(imageImport, /rm -rf "\$\{RUNNER_TEMP\}\/alice-preimport-import"/);
+  assert.match(materialize, /rm -rf "\$\{RUNNER_TEMP\}\/alice-preimport-materialize"/);
+
+  assert.match(
+    imageImport,
+    /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_CONTAINER_BRINGUP_TOKEN \}\}/,
+  );
+  assert.doesNotMatch(imageImport, /secrets\.CLOUDFLARE_API_TOKEN/);
+  assert.doesNotMatch(imageImport, /ALICE_ACCESS_AUDIENCE|ALICE_OWNER_EMAIL_SHA256/);
+  assert.match(
+    materialize,
+    /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/,
+  );
+  assert.doesNotMatch(materialize, /CLOUDFLARE_CONTAINER_BRINGUP_TOKEN/);
+  assert.doesNotMatch(
+    materialize,
+    /containers (?:push|images (?:list|delete))/,
+  );
+  assert.doesNotMatch(
+    materialize,
+    /ALICE_MATERIALIZE_WRANGLER|wrangler@4\.122\.0/,
+  );
+
+  assert.match(imageImport, /^    outputs:$/m);
+  assert.match(imageImport, /artifact_id: \$\{\{ steps\.upload_import_evidence\.outputs\.artifact-id \}\}/);
+  assert.match(imageImport, /artifact_digest: \$\{\{ steps\.upload_import_evidence\.outputs\.artifact-digest \}\}/);
+  assert.match(imageImport, /^      - name: Upload immutable container image evidence$/m);
+  assert.match(imageImport, /^        id: upload_import_evidence$/m);
+  assert.match(
+    materialize,
+    /IMPORT_ARTIFACT_ID: \$\{\{ needs\.import_runtime\.outputs\.artifact_id \}\}/,
+  );
+  assert.match(
+    materialize,
+    /IMPORT_ARTIFACT_DIGEST: \$\{\{ needs\.import_runtime\.outputs\.artifact_digest \}\}/,
+  );
+  assert.match(materialize, /actions\/artifacts\/\$\{IMPORT_ARTIFACT_ID\}/);
+  assert.match(materialize, /\.workflow_run\.id/);
+  assert.match(materialize, /\.expired/);
+  assert.match(materialize, /import_matches/);
+  assert.match(materialize, /awk 'NF \{ count\+\+ \} END \{ print count \+ 0 \}'/);
+  assert.match(materialize, /artifact_digest_normalized/);
+  assert.match(materialize, /artifact-ids: \$\{\{ needs\.import_runtime\.outputs\.artifact_id \}\}/);
+  assert.match(materialize, /verifyAliceCloudflareContainerImageEvidence/);
+  assert.match(materialize, /evidence\.sourceCommit !== process\.env\.EXPECTED_SOURCE_SHA/);
+  assert.match(materialize, /evidence\.sourceImage !== process\.env\.EXPECTED_SOURCE_IMAGE/);
+  assert.match(materialize, /evidence\.runtimeRevision !== Number\(process\.env\.EXPECTED_RUNTIME_REVISION\)/);
+  assert.match(materialize, /ALICE_CLOUDFLARE_RUNTIME_IMAGE=/);
+  assert.match(materialize, /ALICE_RUNTIME_BUILD_MANIFEST_SHA256=/);
+  assert.match(materialize, /ALICE_CAPABILITY_BOM_SHA256=/);
+  assert.match(materialize, /test "\$\(printf '%s' "\$watchdog_json" \| jq -r \.status\)" = "in_progress"/);
+  const evidenceAdmission = materialize.indexOf(
+    "- name: Verify imported image evidence and immutable Worker identities",
+  );
+  const providerCapture = materialize.indexOf(
+    "- name: Capture exact active Durable Object identities read-only",
+  );
+  const manifestMaterialization = materialize.indexOf(
+    "- name: Materialize fresh signed-input manifest and provider readback",
+  );
+  assert.ok(evidenceAdmission >= 0);
+  assert.ok(providerCapture > evidenceAdmission);
+  assert.ok(manifestMaterialization > providerCapture);
+  assert.equal(
+    [...preimportWorkflow.matchAll(/containers images list/g)].length,
+    1,
+  );
+
+  assert.doesNotMatch(preimportWorkflow, /wrangler (?:deploy|delete|versions upload)/);
+  assert.doesNotMatch(
+    preimportWorkflow,
+    /method:\s*"(?:POST|PUT|PATCH|DELETE)"/,
+  );
+  assert.doesNotMatch(preimportWorkflow, /\/zones\/[^\s]*\/workers\/routes/);
+  assert.doesNotMatch(preimportWorkflow, /containers images delete/);
+  assert.doesNotMatch(
+    preimportWorkflow,
+    /node deploy\/modal\/alice_cloudflare_(?:bootstrap|release|recovery)\.mjs/,
+  );
+  assert.doesNotMatch(preimportWorkflow, /ALICE_MODAL_|MODAL_TOKEN_|alice_modal_/);
+  assert.doesNotMatch(preimportWorkflow, /ALICE_PROGRAM_(?:ENVELOPE|SIGNATURE|PUBLIC_JWK)_B64/);
+  const upload = preimportWorkflow.match(
+    /- name: Upload sanitized one-day materialization evidence[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.doesNotMatch(upload, /durable-object-namespace-ids|wrangler\/.*\.json/);
+  assert.doesNotMatch(
+    preimportWorkflow,
+    /^    env:\n(?:^      .*\n)*^      (?:GH_TOKEN|CLOUDFLARE_API_TOKEN):/m,
+  );
+  for (const step of namedWorkflowSteps(preimportWorkflow)) {
+    if (/\bgh (?:api|attestation)\b/.test(step.run)) {
+      assert.match(
+        step.block,
+        /^          GH_TOKEN: \$\{\{ github\.token \}\}$/m,
+        `pre-import step ${step.name} has gh without a step-local token`,
+      );
+    }
+  }
 });
