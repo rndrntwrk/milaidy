@@ -35,6 +35,7 @@ test("builds a fail-closed Container environment for gateway auth, release proof
   });
 
   expect(result).toMatchObject({
+    MILADY_CLOUD_PROVISIONED: "1",
     MILADY_TRUST_CLOUDFLARE_ACCESS: "1",
     MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET:
       "access-proxy-secret-with-at-least-32-bytes",

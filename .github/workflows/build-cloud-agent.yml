@@ -802,6 +802,7 @@ jobs:
             --env MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
             --env ELIZA_AUTH_DISABLED=0 \
             --env MILADY_API_TOKEN=alice-cloud-smoke-runtime-token \
+            --env MILADY_CLOUD_PROVISIONED=1 \
             --env MILADY_TRUST_CLOUDFLARE_ACCESS=1 \
             --env MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET=alice-cloud-smoke-access-proxy-secret \
             --env ALICE_RUNTIME_AUTHORITY_MODE=proposer-only \
@@ -962,8 +963,10 @@ jobs:
                 if (
                   onboardingResponse.status !== 200 ||
                   onboarding.complete !== true ||
-                  (Object.hasOwn(onboarding, "cloudProvisioned") && onboarding.cloudProvisioned !== true) ||
-                  onboardingKeys.some((key) => key !== "cloudProvisioned" && key !== "complete")
+                  onboarding.cloudProvisioned !== true ||
+                  onboardingKeys.length !== 2 ||
+                  onboardingKeys[0] !== "cloudProvisioned" ||
+                  onboardingKeys[1] !== "complete"
                 ) {
                   console.error(JSON.stringify({ onboardingStatus: onboardingResponse.status, onboarding }));
                   process.exit(5);
