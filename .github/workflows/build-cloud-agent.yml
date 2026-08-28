@@ -839,7 +839,7 @@ jobs:
               docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/test/contracts'
               runtime_build_attestation="$(docker exec "$SMOKE_CONTAINER" node deploy/modal/verify_alice_runtime_build_manifest.mjs)"
               printf '%s' "$runtime_build_attestation" | grep -q '"ok":true'
-              capability_bom_attestation="$(docker exec "$SMOKE_CONTAINER" node deploy/modal/verify_alice_capability_bom.mjs)"
+              capability_bom_attestation="$(docker exec "$SMOKE_CONTAINER" node --import ./node_modules/tsx/dist/loader.mjs deploy/modal/verify_alice_capability_bom.mjs)"
               printf '%s' "$capability_bom_attestation" | grep -q '"ok":true'
               if readiness="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
                 import { gunzipSync } from "node:zlib";
