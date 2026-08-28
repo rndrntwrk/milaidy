@@ -13,6 +13,7 @@ import {
   type createMessageMemory,
   ModelType,
 } from "@elizaos/core";
+import { enforceAliceActionExecutionBoundary } from "../runtime/alice-high-risk-action-boundary.js";
 import { extractCompatTextContent } from "./compat-utils.js";
 
 const EXPOSED_BINANCE_SKILL_IDS = new Set([
@@ -213,9 +214,12 @@ export async function executeFallbackParsedActions(
     ) {
       continue;
     }
-    const action =
+    const resolvedAction =
       lookup.get(parsed.name) ??
       (await resolveBuiltInFallbackAction(parsed.name));
+    const action = resolvedAction
+      ? enforceAliceActionExecutionBoundary(resolvedAction as Action)
+      : null;
     if (!action || typeof action.handler !== "function") continue;
 
     if (typeof action.validate === "function") {
@@ -958,9 +962,12 @@ export async function maybeHandleDirectBinanceSkillRequest(
         handler?: (...args: unknown[]) => unknown;
       }>)
     : [];
-  const runSkillAction = runtimeActions.find(
+  const resolvedRunSkillAction = runtimeActions.find(
     (action) => action.name === "RUN_SKILL_SCRIPT",
   );
+  const runSkillAction = resolvedRunSkillAction
+    ? enforceAliceActionExecutionBoundary(resolvedRunSkillAction as Action)
+    : undefined;
   const command = resolveDirectBinanceScriptCommand(skillSlug, userText);
   if (!command) {
     return null;

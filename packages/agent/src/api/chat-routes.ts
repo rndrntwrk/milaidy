@@ -53,7 +53,10 @@ import {
   type AliceProductionChatBoundary,
 } from "./alice-production-chat.js";
 import { isAliceResponseOnlyRuntime } from "./alice-production-guard.js";
-import { installAliceHighRiskActionBoundary } from "../runtime/alice-high-risk-action-boundary.js";
+import {
+  enforceAliceActionExecutionBoundary,
+  installAliceHighRiskActionBoundary,
+} from "../runtime/alice-high-risk-action-boundary.js";
 import {
   isClientVisibleNoResponse,
   isNoResponsePlaceholder,
@@ -1052,9 +1055,15 @@ export async function generateChatResponse(
             if (contentMetadata?.intent === "create_task") {
               const coordinator = runtime.getService("SWARM_COORDINATOR");
               if (coordinator) {
-                const createTaskAction = runtime.actions.find(
+                const resolvedCreateTaskAction = runtime.actions.find(
                   (a) => a?.name?.toUpperCase() === "CREATE_TASK",
                 );
+                const createTaskAction = resolvedCreateTaskAction
+                  ? enforceAliceActionExecutionBoundary(
+                      resolvedCreateTaskAction,
+                      process.env,
+                    )
+                  : undefined;
                 if (createTaskAction) {
                   runtime.logger?.info(
                     {
