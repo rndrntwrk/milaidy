@@ -670,7 +670,7 @@ test("cloud builds and physically materializes every policy-bound workspace pack
     "node deploy/modal/alice_capability_bom.mjs --materialize-policy-workspaces",
   );
   const finalBom = dockerfile.lastIndexOf(
-    "RUN node deploy/modal/alice_capability_bom.mjs \\",
+    "RUN node --import ./node_modules/tsx/dist/loader.mjs deploy/modal/alice_capability_bom.mjs \\",
   );
   assert.ok(materialize >= 0, "the policy workspace materializer must run in the image");
   assert.ok(finalBom > materialize, "workspace links must become physical before the final BOM");

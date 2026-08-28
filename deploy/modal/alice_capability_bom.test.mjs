@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -516,6 +517,70 @@ test("materializes exact lock-bound Bun workspace packages before the final-imag
       },
     });
     assert.equal(bom.entries.length, 3);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("final-image BOM execution loads typed package entrypoints through the pinned tsx loader", () => {
+  const root = fixtureRoot();
+  try {
+    const packageRoot = path.join(root, "node_modules/@miladyai/app-typed");
+    fs.mkdirSync(packageRoot, { recursive: true });
+    fs.writeFileSync(
+      path.join(packageRoot, "package.json"),
+      `${JSON.stringify({
+        name: "@miladyai/app-typed",
+        version: "1.0.0",
+        type: "module",
+        exports: { ".": "./index.ts" },
+      })}\n`,
+    );
+    fs.writeFileSync(
+      path.join(packageRoot, "index.ts"),
+      'const actionName: string = "REAL_ACTION";\nexport default { name: "typed-app", actions: [{ name: actionName }] };\n',
+    );
+    const policyRoot = path.join(root, "deploy/alice");
+    fs.mkdirSync(policyRoot, { recursive: true });
+    fs.writeFileSync(
+      path.join(policyRoot, "alice-capability-policy.v1.json"),
+      `${JSON.stringify(
+        policy([
+          packageEntry("@miladyai/app-typed", "core", {
+            runtimeName: "typed-app",
+          }),
+        ]),
+      )}\n`,
+    );
+    const script = path.join(
+      REPO_ROOT,
+      "deploy/modal/alice_capability_bom.mjs",
+    );
+    const plain = spawnSync(process.execPath, [script], {
+      encoding: "utf8",
+      env: { ...process.env, ALICE_BUILD_ROOT: root },
+    });
+    assert.equal(plain.status, 1);
+    assert.match(
+      plain.stderr,
+      /Stripping types is currently unsupported for files under node_modules/,
+    );
+
+    const tsxLoader = path.join(
+      REPO_ROOT,
+      "node_modules/tsx/dist/loader.mjs",
+    );
+    assert.ok(fs.existsSync(tsxLoader), "the exact installed tsx loader must exist");
+    const loaded = spawnSync(
+      process.execPath,
+      ["--import", tsxLoader, script],
+      {
+        encoding: "utf8",
+        env: { ...process.env, ALICE_BUILD_ROOT: root },
+      },
+    );
+    assert.equal(loaded.status, 0, loaded.stderr);
+    assert.match(loaded.stdout, /"bomSha256":"sha256:[a-f0-9]{64}"/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

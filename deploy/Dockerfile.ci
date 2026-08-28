@@ -532,7 +532,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=python-runtime /usr/local /usr/local
 WORKDIR /app
 COPY --from=pruner /app /app
-RUN node deploy/modal/alice_capability_bom.mjs \
+RUN node --import ./node_modules/tsx/dist/loader.mjs deploy/modal/alice_capability_bom.mjs \
   && ALICE_CAPABILITY_BOM_SHA256="$(node --input-type=module -e 'import fs from "node:fs"; import crypto from "node:crypto"; const bytes = fs.readFileSync("alice-capability-bom.json"); process.stdout.write(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`);')" \
   REVISION="${REVISION}" ELIZA_REVISION="${ELIZA_REVISION}" \
   node deploy/modal/write_alice_runtime_build_manifest.mjs
