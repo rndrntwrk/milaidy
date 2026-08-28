@@ -571,6 +571,11 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     /--env MILADY_TRUST_CLOUDFLARE_ACCESS=1[\s\S]*?--env MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET=alice-cloud-smoke-access-proxy-secret/,
     "the exact-image smoke must explicitly trust its bounded Access proxy proof before expecting durable chat ingress",
   );
+  assert.match(
+    workflow,
+    /--env MILADY_CLOUD_PROVISIONED=1/,
+    "the exact-image smoke must exercise the cloud-provisioned Companion path used by the Container runtime",
+  );
   const smokeStep = workflow.slice(
     workflow.indexOf("- name: Smoke exact candidate image"),
     workflow.indexOf("- name: Cleanup candidate smoke container"),
@@ -596,8 +601,13 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
   );
   assert.match(
     smokeStep,
-    /const onboardingResponse = await fetch\(`\$\{base\}\/api\/onboarding\/status`, \{ headers: authHeaders \}\);[\s\S]*?onboardingResponse\.status !== 200[\s\S]*?onboarding\.complete !== true[\s\S]*?onboarding\.cloudProvisioned !== true[\s\S]*?key !== "cloudProvisioned" && key !== "complete"/,
-    "the full-gated smoke must require completed onboarding and accept only the authenticated safe status shape",
+    /const onboardingResponse = await fetch\(`\$\{base\}\/api\/onboarding\/status`, \{ headers: authHeaders \}\);[\s\S]*?onboardingResponse\.status !== 200[\s\S]*?onboarding\.complete !== true[\s\S]*?onboarding\.cloudProvisioned !== true[\s\S]*?onboardingKeys\.length !== 2/,
+    "the full-gated cloud smoke must require the exact completed cloud-provisioned onboarding shape",
+  );
+  assert.doesNotMatch(
+    smokeStep,
+    /Object\.hasOwn\(onboarding, "cloudProvisioned"\)/,
+    "the Cloudflare Container smoke cannot accept a non-cloud onboarding response",
   );
   const deniedReadsBlock = smokeStep.slice(
     smokeStep.indexOf("const deniedReads = ["),
