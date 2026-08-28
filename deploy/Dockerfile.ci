@@ -444,6 +444,7 @@ RUN rm -rf \
   node_modules/@elizaos/plugin-cron \
   node_modules/@elizaos/plugin-local-embedding \
   node_modules/@elizaos/plugin-todo \
+  node_modules/onnxruntime-common \
   node_modules/onnxruntime-node \
   node_modules/onnxruntime-web
 

@@ -104,6 +104,7 @@
         "@elizaos/plugin-local-embedding",
         "@huggingface/transformers",
         "@huggingface/tokenizers",
+        "onnxruntime-common",
         "onnxruntime-node"
       ]
     },
@@ -175,6 +176,19 @@
       "policyState": "enabled"
     },
     {
+      "id": "package:@elizaos/app-contacts",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/app-contacts",
+        "entrypoint": "."
+      },
+      "surface": "module",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
       "id": "package:@elizaos/app-core",
       "classification": "core",
       "source": {
@@ -186,6 +200,45 @@
       "runtimeNames": [],
       "adapter": null,
       "policyState": "enabled"
+    },
+    {
+      "id": "package:@elizaos/app-phone",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/app-phone",
+        "entrypoint": "."
+      },
+      "surface": "module",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/app-wallet",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/app-wallet",
+        "entrypoint": "."
+      },
+      "surface": "module",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/app-wifi",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/app-wifi",
+        "entrypoint": "."
+      },
+      "surface": "module",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
     },
     {
       "id": "package:@elizaos/plugin-agent-orchestrator",
@@ -268,11 +321,37 @@
       "policyState": "disabled"
     },
     {
+      "id": "package:@elizaos/plugin-browser-bridge",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-browser-bridge",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
       "id": "package:@elizaos/plugin-capacitor-bridge",
       "classification": "policy-disabled",
       "source": {
         "type": "package",
         "package": "@elizaos/plugin-capacitor-bridge",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-cli",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-cli",
         "entrypoint": "."
       },
       "surface": "plugin",
@@ -325,6 +404,19 @@
       "source": {
         "type": "package",
         "package": "@elizaos/plugin-discord",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-discord-local",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-discord-local",
         "entrypoint": "."
       },
       "surface": "plugin",
@@ -411,11 +503,37 @@
       "policyState": "disabled"
     },
     {
+      "id": "package:@elizaos/plugin-groq",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-groq",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
       "id": "package:@elizaos/plugin-imessage",
       "classification": "policy-disabled",
       "source": {
         "type": "package",
         "package": "@elizaos/plugin-imessage",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-knowledge",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-knowledge",
         "entrypoint": "."
       },
       "surface": "plugin",
@@ -622,6 +740,19 @@
       "policyState": "disabled"
     },
     {
+      "id": "package:@elizaos/plugin-solana",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-solana",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
       "id": "package:@elizaos/plugin-sql",
       "classification": "core",
       "source": {
@@ -677,6 +808,45 @@
       "policyState": "disabled"
     },
     {
+      "id": "package:@elizaos/plugin-video",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-video",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-wallet",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-wallet",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@elizaos/plugin-wechat",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-wechat",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
       "id": "package:@elizaos/plugin-whatsapp",
       "classification": "policy-disabled",
       "source": {
@@ -716,6 +886,19 @@
       "policyState": "disabled"
     },
     {
+      "id": "package:@huggingface/jinja",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@huggingface/jinja",
+        "entrypoint": "."
+      },
+      "surface": "module",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
       "id": "package:@miladyai/app-core",
       "classification": "core",
       "source": {
@@ -734,6 +917,19 @@
       "source": {
         "type": "package",
         "package": "@miladyai/plugin-selfcontrol",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [],
+      "adapter": null,
+      "policyState": "disabled"
+    },
+    {
+      "id": "package:@miladyai/plugin-wechat",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@miladyai/plugin-wechat",
         "entrypoint": "."
       },
       "surface": "plugin",
