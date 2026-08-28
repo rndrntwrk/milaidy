@@ -64,7 +64,7 @@ const DEFAULT_COMPANION_STAGE_STATE: CompanionStageState = {
 /**
  * Persistence boundary for the companion stage state.
  *
- * Cloud production supplies `ALICE_STATE_PLANE_URL` and
+ * Cloud production supplies `ALICE_COMPANION_STATE_URL` and
  * `ALICE_STATE_OWNER_ID`; the store then uses the private Task 3 service
  * boundary and never treats the Container filesystem as canonical.
  * Local development retains the existing MILAIDY_HOME / ELIZA_DATA_DIR /

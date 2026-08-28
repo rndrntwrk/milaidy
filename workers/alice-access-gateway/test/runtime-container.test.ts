@@ -42,6 +42,8 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     OPENAI_EMBEDDING_URL: "http://alice-ai-gateway.internal/v1",
     ALICE_STATE_PLANE_URL:
       "http://alice-state-plane.internal/v1/eliza-database",
+    ALICE_COMPANION_STATE_URL:
+      "http://alice-state-plane.internal/v1/companion-state",
     ALICE_STATE_OWNER_ID: "alice-owner-production",
     ELIZA_VAULT_PASSPHRASE: "runtime-vault-passphrase-with-at-least-32-bytes",
     ALICE_PROGRAM_DIGEST: digest("1"),
@@ -117,7 +119,12 @@ test("routes the state host through the private service binding without exposing
         "content-type": "application/json",
         "x-alice-state-token": "container-controlled",
       },
-      body: JSON.stringify({ operation: "eliza.load" }),
+      body: JSON.stringify({
+        operation: "eliza.load",
+        ownerId: "alice-owner-production",
+        cursor: null,
+        limit: 500,
+      }),
     },
   );
 
@@ -129,6 +136,12 @@ test("routes the state host through the private service binding without exposing
   expect(forwarded?.headers.has("authorization")).toBe(false);
   expect(forwarded?.headers.has("cookie")).toBe(false);
   expect(forwarded?.headers.has("origin")).toBe(false);
+  expect(forwarded?.headers.get("x-alice-container-state-scope")).toBe(
+    "eliza-database",
+  );
+  expect(forwarded?.headers.get("x-alice-state-owner")).toBe(
+    "alice-owner-production",
+  );
 
   const containerSource = readFileSync(
     new URL("../src/alice-runtime-container.ts", import.meta.url),
@@ -152,26 +165,81 @@ test("routes the state host through the private service binding without exposing
   });
 });
 
-test("admits the exact Companion state route and rejects every other state-plane path", async () => {
-  const paths: string[] = [];
+test("admits only owner-bound Eliza and Companion state operations", async () => {
+  const forwarded: Request[] = [];
   const env = {
     ALICE_STATE_PLANE_SERVICE_TOKEN:
       "state-plane-service-token-with-at-least-32-bytes",
     ALICE_STATE_PLANE: {
       async fetch(request: Request) {
-        paths.push(new URL(request.url).pathname);
+        const body = await request.clone().json() as Record<string, unknown>;
+        if (body.ownerId !== request.headers.get("x-alice-state-owner")) {
+          return Response.json(
+            { ok: false, code: "STATE_CONTAINER_SCOPE_INVALID" },
+            { status: 403 },
+          );
+        }
+        forwarded.push(request);
         return Response.json({ ok: true });
       },
     },
   } as any;
   await (runtimeContainer as any).forwardToAliceStatePlane(
-    new Request("http://alice-state-plane.internal/v1/state", {
+    new Request("http://alice-state-plane.internal/v1/companion-state", {
       method: "POST",
-      body: "{}",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operation: "record.get",
+        kind: "configVersion",
+        recordId: "companion-stage-v1",
+        ownerId: "alice-owner-production",
+      }),
     }),
     env,
   );
-  expect(paths).toEqual(["/v1/state"]);
+  expect(new URL(forwarded[0]!.url).pathname).toBe("/v1/state");
+  expect(forwarded[0]!.headers.get("x-alice-container-state-scope")).toBe(
+    "companion-stage",
+  );
+  expect(forwarded[0]!.headers.get("x-alice-state-owner")).toBe(
+    "alice-owner-production",
+  );
+
+  expect((await
+    (runtimeContainer as any).forwardToAliceStatePlane(
+      new Request("http://alice-state-plane.internal/v1/eliza-database", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "eliza.load",
+          ownerId: "other-owner",
+          cursor: null,
+          limit: 500,
+        }),
+      }),
+      env,
+    )).status).toBe(403);
+
+  await
+    (runtimeContainer as any).forwardToAliceStatePlane(
+      new Request("http://alice-state-plane.internal/v1/companion-state", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "record.put",
+          kind: "approvalReceipt",
+          recordId: "forged-receipt",
+          ownerId: "alice-owner-production",
+          sessionId: "companion-production",
+          payload: {},
+          updatedAt: 1_777_000_000_000,
+          idempotencyKey: "forged-receipt",
+        }),
+      }),
+      env,
+    );
+  expect(forwarded).toHaveLength(2);
+
   expect(() =>
     (runtimeContainer as any).forwardToAliceStatePlane(
       new Request("http://alice-state-plane.internal/v1/arbitrary", {

@@ -37,6 +37,99 @@ describe("private Alice state service", () => {
     });
   });
 
+  test("binds Container-scoped state calls to the production owner and exact Companion record", async () => {
+    const { createAliceStateService } = await import("../src/service");
+    const calls: unknown[] = [];
+    const service = createAliceStateService({
+      adapter: {
+        async getRecord(kind: string, recordId: string, ownerId: string) {
+          calls.push({ kind, recordId, ownerId });
+          return null;
+        },
+        async putRecord(value: unknown) {
+          calls.push(value);
+          return value;
+        },
+        async listRecords() { throw new Error("unexpected"); },
+        async applyAtomic() { throw new Error("unexpected"); },
+      },
+      elizaDatabase: {
+        async load(input: unknown) {
+          calls.push(input);
+          return { revision: 0, records: [], nextCursor: null };
+        },
+        async commit() { throw new Error("unexpected"); },
+      },
+      token: "s".repeat(48),
+    });
+    const invoke = (path: string, scope: string, value: unknown) =>
+      service.fetch(new Request(`https://state.internal${path}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-alice-state-token": "s".repeat(48),
+          "x-alice-container-state-scope": scope,
+          "x-alice-state-owner": "alice-owner-production",
+        },
+        body: JSON.stringify(value),
+      }));
+
+    expect((await invoke("/v1/eliza-database", "eliza-database", {
+      operation: "eliza.load",
+      ownerId: "alice-owner-production",
+      cursor: null,
+      limit: 500,
+    })).status).toBe(200);
+    expect((await invoke("/v1/eliza-database", "eliza-database", {
+      operation: "eliza.load",
+      ownerId: "other-owner",
+      cursor: null,
+      limit: 500,
+    })).status).toBe(403);
+    expect((await invoke("/v1/state", "companion-stage", {
+      operation: "record.get",
+      kind: "configVersion",
+      recordId: "companion-stage-v1",
+      ownerId: "alice-owner-production",
+    })).status).toBe(200);
+    expect((await invoke("/v1/state", "companion-stage", {
+      operation: "record.put",
+      kind: "configVersion",
+      recordId: "companion-stage-v1",
+      ownerId: "alice-owner-production",
+      sessionId: "companion-production",
+      payload: {
+        schemaVersion: "alice.companion-stage-state.v1",
+        state: { camera: { zoom: 0.5, yaw: 0, pitch: 0, pan: 0 } },
+      },
+      updatedAt: 1_777_000_000_000,
+      idempotencyKey: "companion-stage-valid-001",
+    })).status).toBe(200);
+    expect((await invoke("/v1/state", "companion-stage", {
+      operation: "record.get",
+      kind: "approvalReceipt",
+      recordId: "forged-receipt",
+      ownerId: "alice-owner-production",
+    })).status).toBe(403);
+    expect((await invoke("/v1/state", "companion-stage", {
+      operation: "record.get",
+      kind: "configVersion",
+      recordId: "companion-stage-v1",
+      ownerId: "other-owner",
+    })).status).toBe(403);
+    expect((await invoke("/v1/state", "companion-stage", {
+      operation: "record.put",
+      kind: "configVersion",
+      recordId: "companion-stage-v1",
+      ownerId: "alice-owner-production",
+      sessionId: "companion-production",
+      payload: { schemaVersion: "alice.companion-stage-state.v1", state: {} },
+      updatedAt: 1_777_000_000_000,
+      idempotencyKey: "companion-stage-invalid-001",
+    })).status).toBe(403);
+    expect(calls).toHaveLength(3);
+  });
+
   test("commits a bounded Eliza value and rejects unauthorized, extra, or secret-bearing shapes", async () => {
     const { createAliceStateService } = await import("../src/service");
     const never = async () => { throw new Error("generic adapter must not be called"); };

@@ -1,5 +1,6 @@
 export const ALICE_RUNTIME_CONTAINER_NAME = "alice-production-runtime";
 export const ALICE_RUNTIME_CONTAINER_PORT = 2138;
+export const ALICE_RUNTIME_STATE_OWNER_ID = "alice-owner-production";
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const IMAGE =
@@ -73,7 +74,9 @@ export function buildAliceRuntimeContainerEnv(
     OPENAI_EMBEDDING_URL: "http://alice-ai-gateway.internal/v1",
     ALICE_STATE_PLANE_URL:
       "http://alice-state-plane.internal/v1/eliza-database",
-    ALICE_STATE_OWNER_ID: "alice-owner-production",
+    ALICE_COMPANION_STATE_URL:
+      "http://alice-state-plane.internal/v1/companion-state",
+    ALICE_STATE_OWNER_ID: ALICE_RUNTIME_STATE_OWNER_ID,
     ELIZA_VAULT_PASSPHRASE: env.ALICE_RUNTIME_VAULT_PASSPHRASE,
     ALICE_RUNTIME_PROFILE: "full-gated",
     ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
@@ -125,7 +128,8 @@ export function forwardToAliceStatePlane(
     typeof env.ALICE_STATE_PLANE_SERVICE_TOKEN !== "string" ||
     env.ALICE_STATE_PLANE_SERVICE_TOKEN.length < 32 ||
     request.method !== "POST" ||
-    (pathname !== "/v1/eliza-database" && pathname !== "/v1/state")
+    (pathname !== "/v1/eliza-database" &&
+      pathname !== "/v1/companion-state")
   ) {
     throw new Error("ALICE_STATE_PLANE_FORWARD_INVALID");
   }
@@ -133,8 +137,19 @@ export function forwardToAliceStatePlane(
   headers.delete("authorization");
   headers.delete("cookie");
   headers.delete("origin");
+  headers.delete("x-alice-container-state-scope");
+  headers.delete("x-alice-state-owner");
   headers.set("x-alice-state-token", env.ALICE_STATE_PLANE_SERVICE_TOKEN);
-  return env.ALICE_STATE_PLANE.fetch(new Request(request, { headers }));
+  headers.set(
+    "x-alice-container-state-scope",
+    pathname === "/v1/eliza-database" ? "eliza-database" : "companion-stage",
+  );
+  headers.set("x-alice-state-owner", ALICE_RUNTIME_STATE_OWNER_ID);
+  const upstreamUrl = new URL(request.url);
+  if (pathname === "/v1/companion-state") upstreamUrl.pathname = "/v1/state";
+  return env.ALICE_STATE_PLANE.fetch(
+    new Request(new Request(upstreamUrl, request), { headers }),
+  );
 }
 
 export function fetchAliceRuntimeContainer(
