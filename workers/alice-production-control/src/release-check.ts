@@ -8,9 +8,11 @@ export type AliceReleaseDetails = {
   runtimeBuildManifestSha256: string;
   capabilityBomSha256: string;
   elizaCommit: string;
-  runtimeRevision: number;
   deploymentManifestSha256: string;
-};
+} & (
+  | { modalRevision: number; runtimeRevision?: never }
+  | { runtimeRevision: number; modalRevision?: never }
+);
 
 export function buildAliceReleaseCheckResponse({
   binding,

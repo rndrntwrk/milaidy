@@ -85,6 +85,14 @@ export type AliceTrustPins = {
   policyHash: string;
 };
 
+export function releaseRevisionResponseFields(
+  config: Pick<AliceRuntimeConfig, "envelope" | "runtimeRevision">,
+): { modalRevision: number } | { runtimeRevision: number } {
+  return config.envelope.schemaVersion === "alice.program-envelope.v2"
+    ? { runtimeRevision: config.runtimeRevision }
+    : { modalRevision: config.runtimeRevision };
+}
+
 export const ALICE_PRODUCTION_TRUST_PINS: AliceTrustPins = Object.freeze({
   programPublicJwkSha256:
     "sha256:b2aa16b88a789d0110f8e02521b15fd72b1d0df8873ffdfc1c7029c213825f5e",

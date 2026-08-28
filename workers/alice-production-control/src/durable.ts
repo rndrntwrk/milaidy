@@ -14,6 +14,7 @@ import { jsonResponse, readBoundedJson } from "./http";
 import {
   loadRuntimeConfig,
   loadAuthoritySafetyConfig,
+  releaseRevisionResponseFields,
   type AliceRuntimeConfig,
   type AliceAuthoritySafetyConfig,
 } from "./runtime-config";
@@ -116,7 +117,7 @@ function releaseDetails(config: AliceRuntimeConfig) {
       config.envelope.release.runtimeBuildManifestSha256,
     capabilityBomSha256: config.capabilityBomSha256,
     elizaCommit: config.envelope.release.elizaCommit,
-    runtimeRevision: config.runtimeRevision,
+    ...releaseRevisionResponseFields(config),
     deploymentManifestSha256: config.deploymentManifestSha256,
   };
 }

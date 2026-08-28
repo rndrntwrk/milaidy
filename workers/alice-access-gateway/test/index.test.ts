@@ -1703,7 +1703,7 @@ describe("Alice Access gateway", () => {
   test("fails closed when Modal reports a different capability BOM", async () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
-    const response = await handleRequest(
+    const response = await invokeGateway(
       new Request("https://alice.rndrntwrk.com/api/health", {
         headers: { "cf-access-jwt-assertion": token },
       }),
