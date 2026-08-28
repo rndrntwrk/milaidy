@@ -35,7 +35,20 @@ export type ElizaDatabaseAdapter = {
 };
 
 const IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
-const SECRET_FIELD = /(?:token|secret|authorization|cookie|password|privateKey)/i;
+const SECRET_FIELDS = new Set([
+  "token",
+  "secret",
+  "secrets",
+  "password",
+  "authorization",
+  "cookie",
+  "privatekey",
+  "apikey",
+  "apitoken",
+  "accesstoken",
+  "refreshtoken",
+  "clientsecret",
+]);
 const encoder = new TextEncoder();
 
 type D1Result = {
@@ -95,18 +108,22 @@ function exactKeys(value: Record<string, unknown>, expected: string[]): boolean 
   return Object.keys(value).sort().join(",") === [...expected].sort().join(",");
 }
 
+function isSecretField(key: string): boolean {
+  return SECRET_FIELDS.has(key.replace(/[-_]/g, "").toLowerCase());
+}
+
 function containsSecretField(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(containsSecretField);
   if (!value || typeof value !== "object") return false;
   return Object.entries(value as Record<string, unknown>).some(
-    ([key, child]) => SECRET_FIELD.test(key) || containsSecretField(child),
+    ([key, child]) => isSecretField(key) || containsSecretField(child),
   );
 }
 
 function normalizeJson(value: unknown): unknown {
   if (value === null || typeof value === "boolean") return value;
   if (typeof value === "string") {
-    if (/[\0\r\n]/.test(value)) throw new Error("ELIZA_VALUE_INVALID");
+    if (value.includes("\0")) throw new Error("ELIZA_VALUE_INVALID");
     return value;
   }
   if (typeof value === "number") {
@@ -117,7 +134,7 @@ function normalizeJson(value: unknown): unknown {
   if (value && typeof value === "object") {
     const output: Record<string, unknown> = {};
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      if (key.length === 0 || /[\0\r\n]/.test(key) || SECRET_FIELD.test(key)) {
+      if (key.length === 0 || /[\0\r\n]/.test(key) || isSecretField(key)) {
         throw new Error("ELIZA_SECRET_FIELD");
       }
       const child = (value as Record<string, unknown>)[key];

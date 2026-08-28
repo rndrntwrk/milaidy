@@ -247,6 +247,89 @@ describe("Alice D1-backed Eliza database adapter", () => {
     );
   });
 
+  test("round-trips user objects whose $aliceType key collides with codec tags", async () => {
+    const transport = new MemoryTransport();
+    const first = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+      operationId: () => "reserved-tag-write",
+    });
+    await first.initialize();
+    const userValue = {
+      $aliceType: "date",
+      value: 42,
+      nested: { $aliceType: "set", values: ["one", "two"] },
+    };
+    await first.createMemories([
+      {
+        memory: {
+          ...memory(),
+          content: { text: "reserved marker", userValue },
+        } as Memory,
+        tableName: "messages",
+      },
+    ]);
+
+    const replacement = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+      operationId: () => "reserved-tag-replacement",
+    });
+    await replacement.initialize();
+    const restored = await replacement.getMemoriesByIds([MEMORY_ID]);
+    expect(restored[0]?.content.userValue).toEqual(userValue);
+  });
+
+  test("preserves token usage counters while removing exact credential fields", async () => {
+    const transport = new MemoryTransport();
+    const adapter = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+      operationId: () => "usage-sanitization",
+    });
+    await adapter.initialize();
+    await adapter.createMemories([
+      {
+        memory: {
+          ...memory(),
+          content: {
+            text: "usage record",
+            usage: {
+              promptTokens: 11,
+              completionTokens: 7,
+              totalTokens: 18,
+              tokenCount: 18,
+              apiToken: "must-not-persist",
+            },
+          },
+        } as Memory,
+        tableName: "messages",
+      },
+    ]);
+
+    const serialized = JSON.stringify([...transport.records.values()]);
+    expect(serialized).toContain('"promptTokens":11');
+    expect(serialized).toContain('"completionTokens":7');
+    expect(serialized).toContain('"totalTokens":18');
+    expect(serialized).toContain('"tokenCount":18');
+    expect(serialized).not.toContain("must-not-persist");
+    expect(serialized).not.toContain("apiToken");
+
+    const replacement = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+      operationId: () => "usage-sanitization-replacement",
+    });
+    await replacement.initialize();
+    const restored = await replacement.getMemoriesByIds([MEMORY_ID]);
+    expect(restored[0]?.content.usage).toEqual({
+      promptTokens: 11,
+      completionTokens: 7,
+      totalTokens: 18,
+      tokenCount: 18,
+    });
+  });
+
   test("rolls the local mutation back when the canonical D1 commit fails", async () => {
     const transport = new MemoryTransport();
     const adapter = createAliceD1DatabaseAdapter({
