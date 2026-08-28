@@ -279,6 +279,68 @@ reviewed names in the test. Scoped agent TypeScript diagnostics reported no
 errors for the changed boundary/test paths. `git diff --check` passed and the
 nested Eliza checkout remained clean before commit.
 
+## Third critical review correction
+
+Source commit `1083bc3bce55efc13e2d9b769c263e8b24c66042` (`fix(alice):
+enforce direct chat actions`) closes the dynamically resolved action bypass.
+The boundary now exports one `enforceAliceActionExecutionBoundary()` API used
+by runtime action registration and every direct action-handler call reachable
+from full chat. It returns guarded clones for denied actions, so dynamically
+imported plugin singleton objects are not permanently mutated and non-full
+behavior is preserved.
+
+### Direct full-chat action invocation audit
+
+| Full-chat branch | Action resolution | Enforcement before handler |
+| --- | --- | --- |
+| Normal `messageService.handleMessage` planning | Existing and plugin-registered `runtime.actions` | `installAliceHighRiskActionBoundary()` replaces existing entries and wraps late `registerAction()` entries through the central API. |
+| Direct Binance skill | `RUN_SKILL_SCRIPT` from `runtime.actions` | `maybeHandleDirectBinanceSkillRequest()` applies the central API immediately before its only direct handler call. |
+| Explicit UI task intent | `CREATE_TASK` from `runtime.actions` | `generateChatResponse()` applies the central API immediately before its only direct handler call. |
+| Direct wallet-intent fallback | Parsed action resolved by `executeFallbackParsedActions()` | The helper applies the central API after lookup and before validation/handler invocation. |
+| Parsed model fallback | Runtime action or dynamically imported self-control action | The same helper centrally wraps both registry and dynamic resolution results. |
+| Website-block recovery fallback | Dynamically imported `BLOCK_WEBSITES` when absent from `runtime.actions` | The same helper centrally wraps it before invocation. |
+| Website permission fallback | Dynamically imported `REQUEST_WEBSITE_BLOCKING_PERMISSION` when absent from `runtime.actions` | The same helper centrally wraps it before invocation. |
+
+A bounded source search found three direct `.handler()` call sites in the chat
+route/helper pair: parsed/recovery fallback, direct `RUN_SKILL_SCRIPT`, and
+direct `CREATE_TASK`. Each now receives the result of the central enforcement
+API. The remaining normal message-service path consumes the centrally wrapped
+runtime registry.
+
+### Third correction TDD evidence
+
+RED:
+
+```text
+bunx vitest run --config vitest.config.ts \
+  src/api/__tests__/chat-routes-reply-fallback.test.ts \
+  -t 'denies dynamically resolved'
+
+2 failed; 9 skipped.
+```
+
+Through real `generateChatResponse()` fallback inference with no matching
+runtime actions, the dynamically imported original handlers for both
+`BLOCK_WEBSITES` and `REQUEST_WEBSITE_BLOCKING_PERMISSION` were each called
+once.
+
+Fresh GREEN after central enforcement:
+
+```text
+Focused chat/action suite: 1 file; 13 tests passed; 0 failed.
+Agent runtime/UI suite: 9 files; 56 tests passed; 0 failed.
+Access gateway suite: 30 tests; 363 assertions; 0 failed.
+Access gateway typecheck: exit 0.
+Protected build contract: 42 tests passed; 0 failed.
+```
+
+The two full-gated dynamic tests prove each original handler is called zero
+times and the boundary denial is returned. Paired non-full tests prove both
+original dynamic handlers still execute exactly once, confirming the guarded
+clone does not mutate the optional plugin singleton. Scoped agent TypeScript
+diagnostics reported no errors for the changed boundary/helper/test paths.
+`git diff --check` passed and nested Eliza remained clean before commit.
+
 ## Risks and open points
 
 - WebSocket ingress remains fail-closed. No broad `/ws` opening was added
