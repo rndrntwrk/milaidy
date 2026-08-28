@@ -5,6 +5,7 @@ import {
   DurableObjectCoordinationStorage,
 } from "./coordination-storage";
 import { createAliceStateService } from "./service";
+import { D1ElizaDatabaseAdapter } from "./eliza-database";
 import {
   AliceObjectStore,
   AliceVectorStore,
@@ -45,6 +46,7 @@ type AliceStateRuntimeEnv = Cloudflare.Env & Readonly<{
 export default {
   async fetch(request: Request, env: AliceStateRuntimeEnv): Promise<Response> {
     const adapter = new D1AliceStateAdapter(env.ALICE_STATE_DB);
+    const elizaDatabase = new D1ElizaDatabaseAdapter(env.ALICE_STATE_DB);
     const vectorStore = new AliceVectorStore(env.ALICE_MEMORY_INDEX, {
       indexName: env.ALICE_VECTOR_INDEX_NAME,
       model: env.ALICE_VECTOR_MODEL,
@@ -78,6 +80,7 @@ export default {
       vectorStore,
       objectStore,
       coordination,
+      elizaDatabase,
       token: env.ALICE_STATE_PLANE_SERVICE_TOKEN,
     }).fetch(request);
   },
