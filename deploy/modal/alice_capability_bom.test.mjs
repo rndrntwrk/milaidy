@@ -246,6 +246,61 @@ test("the production Docker materialization and broad hoist leave no unclassifie
   }
 });
 
+test("the production app-core runtime alias resolves to the canonical attested package", async () => {
+  const dockerfile = fs.readFileSync(
+    path.join(REPO_ROOT, "deploy/Dockerfile.ci"),
+    "utf8",
+  );
+  assert.match(
+    dockerfile,
+    /cp packages\/app-core\/package\.json node_modules\/@miladyai\/app-core\//,
+  );
+  assert.match(
+    dockerfile,
+    /ln -s "\.\.\/@miladyai\/app-core" node_modules\/@elizaos\/app-core/,
+  );
+
+  const root = fixtureRoot();
+  try {
+    const canonicalRoot = writePackage(root, "@miladyai/app-core");
+    const aliasRoot = path.join(root, "node_modules/@elizaos/app-core");
+    fs.mkdirSync(path.dirname(aliasRoot), { recursive: true });
+    fs.symlinkSync("../@miladyai/app-core", aliasRoot);
+    const checkedPolicy = policy([
+      {
+        id: "package:@miladyai/app-core",
+        classification: "core",
+        source: {
+          type: "package",
+          package: "@miladyai/app-core",
+          entrypoint: ".",
+        },
+        surface: "module",
+        runtimeNames: [],
+        adapter: null,
+        policyState: "enabled",
+      },
+    ]);
+
+    const bom = await generateAliceCapabilityBom({ root, policy: checkedPolicy });
+    assert.deepEqual(bom.entries.map((entry) => entry.id), [
+      "package:@miladyai/app-core",
+    ]);
+    assert.equal(fs.realpathSync(aliasRoot), fs.realpathSync(canonicalRoot));
+    fs.appendFileSync(path.join(aliasRoot, "index.mjs"), "export const aliasWrite = true;\n");
+    const afterAliasWrite = await generateAliceCapabilityBom({
+      root,
+      policy: checkedPolicy,
+    });
+    assert.notEqual(
+      afterAliasWrite.entries[0].packageSha256,
+      bom.entries[0].packageSha256,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("canonical BOM is deterministic across shuffled discovery", async () => {
   const root = fixtureRoot();
   try {

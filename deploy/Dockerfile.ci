@@ -64,14 +64,17 @@ RUN set -x; \
     cp packages/plugin-555stream/package.json node_modules/@rndrntwrk/plugin-555stream/; \
     cp -a packages/plugin-555stream/src node_modules/@rndrntwrk/plugin-555stream/src; \
     ls node_modules/@miladyai/agent/src/plugins/five55-games/index.ts node_modules/@rndrntwrk/plugin-555stream/src/index.ts >/dev/null; \
-    # @elizaos/app-core: runtime compatibility alias for Milady's app-core.
-    # The server dynamically imports @elizaos/app-core for runtime hooks; the
-    # alias must be a real copied directory, not a symlink into eliza/packages.
-    rm -rf node_modules/@elizaos/app-core; \
-    mkdir -p node_modules/@elizaos/app-core; \
-    cp packages/app-core/package.json node_modules/@elizaos/app-core/; \
-    cp -a packages/app-core/src node_modules/@elizaos/app-core/src 2>/dev/null || true; \
-    cp -a packages/app-core/dist node_modules/@elizaos/app-core/dist 2>/dev/null || true; \
+    # Materialize Milady's canonical app-core as real in-image bytes so the
+    # capability BOM can hash it without following a workspace symlink.
+    rm -rf node_modules/@miladyai/app-core node_modules/@elizaos/app-core; \
+    mkdir -p node_modules/@miladyai/app-core; \
+    cp packages/app-core/package.json node_modules/@miladyai/app-core/; \
+    cp -a packages/app-core/src node_modules/@miladyai/app-core/src 2>/dev/null || true; \
+    cp -a packages/app-core/dist node_modules/@miladyai/app-core/dist 2>/dev/null || true; \
+    # The server imports @elizaos/app-core for compatibility. Point that name
+    # at the same canonical, attested bytes without escaping node_modules.
+    ln -s "../@miladyai/app-core" node_modules/@elizaos/app-core; \
+    test "$(realpath node_modules/@elizaos/app-core)" = "$(realpath node_modules/@miladyai/app-core)"; \
     ls node_modules/@elizaos/app-core/src/index.ts 2>/dev/null && echo "@elizaos/app-core Milady alias OK" || echo "WARN: app-core Milady alias missing"; \
     # @elizaos/auth: the official orchestrator imports this leaf package at
     # module evaluation time, so preserve the exact pinned compiled package.
