@@ -226,6 +226,59 @@ unrelated pre-existing test/dependency errors, including the known absent
 `@elizaos/skills` declaration; none were masked. The nested Eliza checkout was
 clean before commit, including `plugins/plugin-telegram/package.json`.
 
+## Second critical review correction
+
+Source commit `d67eb28006f7c30ff4d98fc0a4b65f0219aa893d` (`fix(alice):
+default deny full runtime actions`) replaces the action-name risk heuristic with
+a fail-closed execution policy. Because Task 1 has no independently verified
+Task 5 capability-grant verifier at the action-handler boundary, every
+full-gated action is denied unless its name is byte-for-byte equal to one of
+these reviewed safe actions:
+
+- Core response/meta terminals: `REPLY`, `IGNORE`, `STOP`, `NONE`.
+- Read-only lookups: `READ_ENTITY`, `SEARCH_ENTITY`, `READ_CHANNEL`,
+  `SEARCH_CONVERSATIONS`, `WEB_SEARCH`.
+- Verified GET-only wallet read: `CHECK_BALANCE`.
+- Presentation-only normal-chat UI action: `PLAY_EMOTE`.
+
+Unknown actions, including actions registered after guard installation, are
+denied by default. This closes the demonstrated gaps for
+`APPROVE_MILADY_WALLET_REQUEST` and `MANAGE_MILADY_BROWSER_WORKSPACE` without
+inventing grant issuance or expanding into the Task 2 BOM.
+
+### Second correction TDD evidence
+
+RED:
+
+```text
+bunx vitest run --config vitest.config.ts \
+  src/api/__tests__/chat-routes-reply-fallback.test.ts \
+  -t 'wraps privileged handlers'
+
+1 failed; 8 skipped.
+The original handler for a missed privileged action was called once.
+```
+
+The failing case included both exact missed current actions, existing
+wallet/trade aliases, and late registration of `FUTURE_UNREVIEWED_ACTION`.
+
+Fresh GREEN after the fail-closed policy:
+
+```text
+Focused action suite: 1 file; 9 tests passed; 0 failed.
+Agent runtime/UI suite: 9 files; 56 tests passed; 0 failed.
+Access gateway suite: 30 tests; 363 assertions; 0 failed.
+Access gateway typecheck: exit 0.
+Protected build contract: 42 tests passed; 0 failed.
+```
+
+The behavioral test proves every denied original handler is called zero times,
+the arbitrary late-registered handler is called zero times, each exact safe
+handler is called once, and the code-exported safe allowlist exactly matches the
+reviewed names in the test. Scoped agent TypeScript diagnostics reported no
+errors for the changed boundary/test paths. `git diff --check` passed and the
+nested Eliza checkout remained clean before commit.
+
 ## Risks and open points
 
 - WebSocket ingress remains fail-closed. No broad `/ws` opening was added
@@ -237,8 +290,8 @@ clean before commit, including `plugins/plugin-telegram/package.json`.
   verification. Unknown reads, secret/custody-key/WebSocket paths, and
   non-safe writes fail closed.
 - Task 1 does not invent capability grants. Until the later independently
-  verified grant boundary exists, the covered high-risk runtime handlers are
-  denied even when the full profile can plan or describe them.
+  verified grant boundary exists, every non-allowlisted runtime action handler
+  is denied even when the full profile can plan or describe it.
 - This task did not activate connector credentials, public destinations,
   streaming, deployment, provider state, or external infrastructure. Their E2E
   proof remains with later plan tasks.
