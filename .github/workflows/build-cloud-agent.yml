@@ -704,7 +704,9 @@ jobs:
         timeout-minutes: 10
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.cloud-image.outputs.digest }}
+          EXPECTED_IMAGE_DIGEST: ${{ steps.cloud-image.outputs.digest }}
           EXPECTED_REVISION: ${{ steps.source_revision.outputs.sha }}
+          QUALIFIED_ELIZA_REVISION: ${{ steps.eliza_revision.outputs.sha }}
           SMOKE_CONTAINER: alice-cloud-smoke-${{ github.run_id }}-${{ github.run_attempt }}
           SMOKE_STATE_CONTAINER: alice-cloud-smoke-state-${{ github.run_id }}-${{ github.run_attempt }}
           SMOKE_NETWORK: alice-cloud-smoke-net-${{ github.run_id }}-${{ github.run_attempt }}
@@ -722,10 +724,10 @@ jobs:
           }
           trap cleanup EXIT
 
-          test -n "${{ steps.cloud-image.outputs.digest }}"
+          test -n "$EXPECTED_IMAGE_DIGEST"
           EXPECTED_ELIZA_REVISION="$(git ls-tree "$EXPECTED_REVISION" eliza | awk '{print $3}')"
           test "${#EXPECTED_ELIZA_REVISION}" -eq 40
-          test "$EXPECTED_ELIZA_REVISION" = "${{ steps.eliza_revision.outputs.sha }}"
+          test "$EXPECTED_ELIZA_REVISION" = "$QUALIFIED_ELIZA_REVISION"
 
           ALICE_SMOKE_MODEL_PORT=18080 node deploy/modal/alice_smoke_model_server.mjs >/tmp/alice-smoke-model.log 2>&1 &
           SMOKE_MODEL_PID=$!

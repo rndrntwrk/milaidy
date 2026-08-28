@@ -580,6 +580,17 @@ test("the exact-image smoke proves Alice's production runtime authority boundary
     workflow.indexOf("- name: Smoke exact candidate image"),
     workflow.indexOf("- name: Cleanup candidate smoke container"),
   );
+  const smokeRun = smokeStep.slice(smokeStep.indexOf("run: |"));
+  assert.doesNotMatch(
+    smokeRun,
+    /\$\{\{/,
+    "the candidate smoke run body must not exceed GitHub's expression limit by embedding workflow expressions",
+  );
+  assert.match(
+    smokeStep,
+    /EXPECTED_IMAGE_DIGEST:\s*\$\{\{ steps\.cloud-image\.outputs\.digest \}\}[\s\S]*?QUALIFIED_ELIZA_REVISION:\s*\$\{\{ steps\.eliza_revision\.outputs\.sha \}\}[\s\S]*?test -n "\$EXPECTED_IMAGE_DIGEST"[\s\S]*?test "\$EXPECTED_ELIZA_REVISION" = "\$QUALIFIED_ELIZA_REVISION"/,
+    "the candidate smoke must receive qualified values through step-local env before its literal run body",
+  );
   const healthLoopStart = smokeStep.indexOf("for attempt in $(seq 1 72); do");
   const healthLoopEnd = smokeStep.indexOf("\n          done", healthLoopStart);
   const companionMutation = smokeStep.indexOf("const companionUpdateResponse");
