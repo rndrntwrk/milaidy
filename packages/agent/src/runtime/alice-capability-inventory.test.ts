@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import fs from "node:fs";
 
 import {
+  aliceDelegatedCapabilityAdapters,
   assertAliceFullGatedCapabilityEnvironment,
   buildAliceRuntimeCapabilityState,
   enforceAliceFullGatedCapabilityPolicy,
@@ -40,6 +41,81 @@ const bom = {
 };
 
 describe("Alice final-image capability runtime inventory", () => {
+  it("attests every bounded heavy or platform-specific adapter", () => {
+    expect(aliceDelegatedCapabilityAdapters).toEqual({
+      cloudflareWorkflows: {
+        id: "cloudflare-workflows",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+      remoteModelExecution: {
+        id: "remote-model-execution",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+      remoteTraining: {
+        id: "remote-training",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+      streamCompositor: {
+        id: "stream-compositor",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+      cloudflareBrowserRendering: {
+        id: "cloudflare-browser-rendering",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+      cloudflareSandbox: {
+        id: "cloudflare-sandbox",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+      modalBurst: {
+        id: "modal-burst",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+      macosNativeExecutor: {
+        id: "macos-native-executor",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+      codexSubscriptionExecutor: {
+        id: "codex-subscription-executor",
+        authenticated: true,
+        schemaVersion: "alice.delegated-adapter.v1",
+      },
+    });
+    const policy = JSON.parse(
+      fs.readFileSync(
+        new URL(
+          "../../../../deploy/alice/alice-capability-policy.v1.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ) as { entries: Array<{ id: string; classification: string }> };
+    expect(
+      policy.entries
+        .filter((entry) => entry.classification === "delegated")
+        .map((entry) => entry.id)
+        .sort(),
+    ).toEqual([
+      "adapter:cloudflare-browser-rendering",
+      "adapter:cloudflare-sandbox",
+      "adapter:cloudflare-workflows",
+      "adapter:codex-subscription-executor",
+      "adapter:macos-native-executor",
+      "adapter:modal-burst",
+      "adapter:remote-model-execution",
+      "adapter:remote-training",
+      "adapter:stream-compositor",
+    ]);
+  });
+
   it("rejects every nonempty global skip list in the exact full-gated profile", () => {
     expect(() =>
       assertAliceFullGatedCapabilityEnvironment({

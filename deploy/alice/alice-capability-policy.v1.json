@@ -18,6 +18,78 @@
       ]
     },
     {
+      "id": "adapter:cloudflare-browser-rendering",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "cloudflareBrowserRenderingAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "cloudflare-browser-rendering",
+      "policyState": "delegated"
+    },
+    {
+      "id": "adapter:cloudflare-sandbox",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "cloudflareSandboxAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "cloudflare-sandbox",
+      "policyState": "delegated"
+    },
+    {
+      "id": "adapter:codex-subscription-executor",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "codexSubscriptionExecutorAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "codex-subscription-executor",
+      "policyState": "delegated"
+    },
+    {
+      "id": "adapter:macos-native-executor",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "macosNativeExecutorAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "macos-native-executor",
+      "policyState": "delegated"
+    },
+    {
+      "id": "adapter:modal-burst",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "modalBurstAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "modal-burst",
+      "policyState": "delegated"
+    },
+    {
+      "id": "adapter:stream-compositor",
+      "classification": "delegated",
+      "source": {
+        "type": "adapter",
+        "path": "node_modules/@miladyai/agent/dist/runtime/alice-capability-inventory.js",
+        "export": "streamCompositorAdapter"
+      },
+      "runtimeNames": [],
+      "adapter": "stream-compositor",
+      "policyState": "delegated"
+    },
+    {
       "id": "adapter:remote-model-execution",
       "classification": "delegated",
       "source": {

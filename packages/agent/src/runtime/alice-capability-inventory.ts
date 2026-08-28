@@ -51,6 +51,36 @@ export const aliceDelegatedCapabilityAdapters = Object.freeze({
     authenticated: true,
     schemaVersion: "alice.delegated-adapter.v1",
   }),
+  streamCompositor: Object.freeze({
+    id: "stream-compositor",
+    authenticated: true,
+    schemaVersion: "alice.delegated-adapter.v1",
+  }),
+  cloudflareBrowserRendering: Object.freeze({
+    id: "cloudflare-browser-rendering",
+    authenticated: true,
+    schemaVersion: "alice.delegated-adapter.v1",
+  }),
+  cloudflareSandbox: Object.freeze({
+    id: "cloudflare-sandbox",
+    authenticated: true,
+    schemaVersion: "alice.delegated-adapter.v1",
+  }),
+  modalBurst: Object.freeze({
+    id: "modal-burst",
+    authenticated: true,
+    schemaVersion: "alice.delegated-adapter.v1",
+  }),
+  macosNativeExecutor: Object.freeze({
+    id: "macos-native-executor",
+    authenticated: true,
+    schemaVersion: "alice.delegated-adapter.v1",
+  }),
+  codexSubscriptionExecutor: Object.freeze({
+    id: "codex-subscription-executor",
+    authenticated: true,
+    schemaVersion: "alice.delegated-adapter.v1",
+  }),
 });
 
 export const aliceInternalCapabilityDescriptors = Object.freeze({
@@ -87,6 +117,18 @@ export const remoteModelExecutionAdapter =
   aliceDelegatedCapabilityAdapters.remoteModelExecution;
 export const remoteTrainingAdapter =
   aliceDelegatedCapabilityAdapters.remoteTraining;
+export const streamCompositorAdapter =
+  aliceDelegatedCapabilityAdapters.streamCompositor;
+export const cloudflareBrowserRenderingAdapter =
+  aliceDelegatedCapabilityAdapters.cloudflareBrowserRendering;
+export const cloudflareSandboxAdapter =
+  aliceDelegatedCapabilityAdapters.cloudflareSandbox;
+export const modalBurstAdapter =
+  aliceDelegatedCapabilityAdapters.modalBurst;
+export const macosNativeExecutorAdapter =
+  aliceDelegatedCapabilityAdapters.macosNativeExecutor;
+export const codexSubscriptionExecutorAdapter =
+  aliceDelegatedCapabilityAdapters.codexSubscriptionExecutor;
 
 export function assertAliceFullGatedCapabilityEnvironment(
   environment: EnvironmentLike = process.env,
