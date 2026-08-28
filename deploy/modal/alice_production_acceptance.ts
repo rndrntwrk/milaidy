@@ -37,6 +37,29 @@ const REQUIRED_EVIDENCE_KINDS = Object.freeze({
   "session.conversation": 1,
   "session.task": 2,
 });
+const FULL_CORE_COMPOSITION = Object.freeze([
+  "bridge:eliza",
+  "capabilities:basic",
+  "security:core-hooks",
+  "memory:sql",
+  "skills:agent-skills",
+  "hooks:eliza",
+  "connectors:eliza",
+]);
+const FULL_REQUIRED_CONFIGURED_PLUGINS = Object.freeze([
+  "eliza",
+  "@elizaos/plugin-sql",
+  "@elizaos/plugin-agent-skills",
+  "@elizaos/plugin-openai",
+]);
+const FULL_REQUIRED_RUNTIME_PLUGINS = Object.freeze([
+  "@elizaos/plugin-agent-skills",
+  "basic-capabilities",
+  "core-security-hooks",
+  "eliza",
+  "openai",
+  "sql",
+]);
 
 function invalid(code = "ALICE_PRODUCTION_ACCEPTANCE_INVALID"): never {
   throw new Error(code);
@@ -395,40 +418,63 @@ function validateProviderRollbackForward(
   };
 }
 
-function verifyApprovedRoot(
+function verifyFullRuntimePage(
   response: Response,
   html: string,
-  expected: any,
-  manifest: Record<string, any>,
 ) {
   const csp = response.headers.get("content-security-policy") ?? "";
-  const nonce = csp.match(/script-src 'nonce-([A-Za-z0-9_-]+)'/)?.[1] ?? "";
   if (
     response.status !== 200 ||
     response.headers.get("content-type") !== "text/html; charset=utf-8" ||
-    !/^[A-Za-z0-9_-]{16,128}$/.test(nonce) ||
-    csp.includes("'unsafe-inline'") || csp.includes("'unsafe-eval'") ||
-    !html.includes(`<script nonce="${nonce}">`) ||
-    html.match(/<script\b/g)?.length !== 1 ||
-    !html.includes('id="alice-transcript"') ||
-    !html.includes('id="alice-chat"') ||
-    !html.includes('id="alice-prompt"') ||
-    !html.includes('/v1/chat/completions') ||
-    html.includes("legacy") || html.includes("<link") ||
-    !html.includes(`data-program-digest="${expected.binding.programDigest}"`) ||
-    !html.includes(`data-release-digest="${expected.binding.releaseDigest}"`) ||
-    !html.includes(`data-policy-hash="${expected.binding.policyHash}"`) ||
-    !html.includes(
-      `data-deployment-manifest-sha256="${expected.release.deploymentManifestSha256}"`,
+    csp.includes("'unsafe-eval'") ||
+    !/<div\s+id=["']root["']\s*>/.test(html) ||
+    !/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']\/assets\/[a-zA-Z0-9._/-]+["'][^>]*><\/script>/.test(
+      html,
     ) ||
-    !html.includes(
-      `data-access-config-sha256="${manifest.cloudflare.accessConfigSha256}"`,
-    ) ||
-    !html.includes(
-      `data-access-policy-config-sha256="${manifest.cloudflare.accessPolicyConfigSha256}"`,
-    )
+    html.includes('id="alice-transcript"') ||
+    html.includes('id="alice-chat"')
   ) invalid();
   return digestBytes(html);
+}
+
+function exactStrings(value: unknown, expected: readonly string[]): boolean {
+  return Array.isArray(value) && exact(value, expected);
+}
+
+function verifyFullRuntimeProof(proof: Record<string, any>, expected: any) {
+  if (
+    proof.schemaVersion !== "alice.full-runtime-boundary-proof.v1" ||
+    proof.authorityMode !== "proposer-only" ||
+    proof.runtimeProfile !== "full-gated" ||
+    proof.bridgePlugin !== "eliza" ||
+    proof.actionPlanning !== true ||
+    !exactStrings(proof.coreComposition, FULL_CORE_COMPOSITION) ||
+    !exactStrings(
+      proof.requiredConfiguredPluginPackages,
+      FULL_REQUIRED_CONFIGURED_PLUGINS,
+    ) ||
+    !exactStrings(
+      proof.requiredRuntimePluginNames,
+      FULL_REQUIRED_RUNTIME_PLUGINS,
+    ) ||
+    proof.release?.releaseDigest !== expected.binding.releaseDigest ||
+    proof.release?.deploymentManifestSha256 !==
+      expected.release.deploymentManifestSha256
+  ) invalid();
+}
+
+function verifyCompanionStage(value: Record<string, any>) {
+  const camera = value.state?.camera;
+  if (
+    value.ok !== true || !object(camera) ||
+    ![camera.zoom, camera.yaw, camera.pitch, camera.pan].every(
+      (candidate) => typeof candidate === "number" && Number.isFinite(candidate),
+    ) ||
+    camera.zoom < 0 || camera.zoom > 1 ||
+    camera.yaw < -Math.PI || camera.yaw > Math.PI ||
+    camera.pitch < -Math.PI / 2 || camera.pitch > Math.PI / 2 ||
+    camera.pan < -5 || camera.pan > 5
+  ) invalid();
 }
 
 export async function runAliceProductionAcceptance(input: Record<string, any>) {
@@ -592,11 +638,33 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       redirect: "manual",
     });
     const rootHtml = new TextDecoder().decode(await boundedBody(rootResponse));
-    const rootHtmlSha256 = verifyApprovedRoot(
-      rootResponse,
-      rootHtml,
-      expected,
-      manifest,
+    const rootHtmlSha256 = verifyFullRuntimePage(rootResponse, rootHtml);
+    const companionResponse = await fetchImpl(`${OWNER_ORIGIN}/companion`, {
+      method: "GET",
+      headers: { ...ownerHeaders(ownerAuthorization), accept: "text/html" },
+      redirect: "manual",
+    });
+    const companionHtml = new TextDecoder().decode(
+      await boundedBody(companionResponse),
+    );
+    const companionHtmlSha256 = verifyFullRuntimePage(
+      companionResponse,
+      companionHtml,
+    );
+    const broadcastResponse = await fetchImpl(
+      `${OWNER_ORIGIN}/broadcast/alice-cam`,
+      {
+        method: "GET",
+        headers: { ...ownerHeaders(ownerAuthorization), accept: "text/html" },
+        redirect: "manual",
+      },
+    );
+    const broadcastHtml = new TextDecoder().decode(
+      await boundedBody(broadcastResponse),
+    );
+    const broadcastHtmlSha256 = verifyFullRuntimePage(
+      broadcastResponse,
+      broadcastHtml,
     );
 
     const health = await ownerJson(
@@ -629,15 +697,30 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         gateway.value.deploymentManifestSha256 !==
           expected.release.deploymentManifestSha256) invalid();
 
+    const ready = await ownerJson(
+      fetchImpl,
+      ownerAuthorization,
+      "/health/ready",
+    );
+    if (!ready.response.ok || ready.value.ok !== true ||
+        ready.value.ready !== true || ready.value.agentState !== "running") {
+      invalid();
+    }
+
     const runtime = await ownerJson(
       fetchImpl,
       ownerAuthorization,
       "/api/health",
     );
-    if (!runtime.response.ok || runtime.value.ok !== true ||
-        runtime.value.ready !== true || runtime.value.runtime !== "ok" ||
-        runtime.value.release?.releaseDigest !== expected.binding.releaseDigest ||
-        runtime.value.release?.deploymentManifestSha256 !==
+    if (!runtime.response.ok || runtime.value.ready !== true ||
+        runtime.value.runtime !== "ok" || runtime.value.database !== "ok" ||
+        runtime.value.agentState !== "running" ||
+        runtime.value.startup?.phase !== "ready" ||
+        !Number.isSafeInteger(runtime.value.plugins?.loaded) ||
+        runtime.value.plugins.loaded < FULL_REQUIRED_RUNTIME_PLUGINS.length ||
+        runtime.value.plugins?.failed !== 0 ||
+        runtime.value.aliceRelease?.releaseDigest !== expected.binding.releaseDigest ||
+        runtime.value.aliceRelease?.deploymentManifestSha256 !==
           expected.release.deploymentManifestSha256) invalid();
 
     const proof = await ownerJson(
@@ -645,15 +728,16 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       ownerAuthorization,
       "/api/alice-production/proof",
     );
-    if (!proof.response.ok ||
-        proof.value.schemaVersion !== "alice.runtime-boundary-proof.v1" ||
-        proof.value.authorityMode !== "proposer-only" ||
-        proof.value.actionExecution !== "disabled" ||
-        proof.value.actionPlanning !== false ||
-        proof.value.backgroundAuthorityWorkers !== "absent" ||
-        proof.value.release?.releaseDigest !== expected.binding.releaseDigest ||
-        proof.value.release?.deploymentManifestSha256 !==
-          expected.release.deploymentManifestSha256) invalid();
+    if (!proof.response.ok) invalid();
+    verifyFullRuntimeProof(proof.value, expected);
+
+    const companionStage = await ownerJson(
+      fetchImpl,
+      ownerAuthorization,
+      "/api/companion/stage",
+    );
+    if (!companionStage.response.ok) invalid();
+    verifyCompanionStage(companionStage.value);
 
     const grant = await ownerJson(
       fetchImpl,
@@ -742,9 +826,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/.test(turnId) ||
         typeof chatValue.choices?.[0]?.message?.content !== "string" ||
         chatValue.choices[0].message.content.length < 1 ||
-        chatValue.alice_boundary?.authorityMode !== "proposer-only" ||
-        chatValue.alice_boundary?.actionExecution !== "disabled" ||
-        chatValue.alice_boundary?.tools !== "disabled") invalid();
+        Object.hasOwn(chatValue, "alice_boundary")) invalid();
     const replayResponse = await fetchImpl(`${OWNER_ORIGIN}/v1/chat/completions`, {
       method: "POST",
       headers: chatHeaders,
@@ -939,8 +1021,19 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       },
       ownerAuthorization: "verified-cloudflare-access-jwt",
       unauthenticatedRoot: "denied-or-access-redirect",
-      authenticatedRoot: "approved-nonce-csp-chat-ui",
+      authenticatedRoot: "full-milady-companion-ui",
       rootHtmlSha256,
+      runtimeProfile: "full-gated",
+      productSurfaces: {
+        root: "full-milady",
+        companion: "full-companion",
+        broadcast: "alice-cam",
+        companionStage: "durable",
+      },
+      productSurfaceDigests: {
+        companionHtmlSha256,
+        broadcastHtmlSha256,
+      },
       health: "ready",
       durableChat: {
         sessionId,
