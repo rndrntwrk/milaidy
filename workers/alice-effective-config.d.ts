@@ -36,6 +36,15 @@ export function buildAliceControlEffectiveConfig(inputs: {
   releaseAccessAudience: string;
   releaseServiceTokenIdSha256: string;
 }): Record<string, unknown>;
+export function buildAliceContainerControlEffectiveConfig(inputs: {
+  accessIssuer: string;
+  accessAudience: string;
+  ownerEmailSha256: string;
+  modelDailyBudgetUnits: number;
+  runtimeRevision: number;
+  releaseAccessAudience: string;
+  releaseServiceTokenIdSha256: string;
+}): Record<string, unknown>;
 export function buildAliceAiGatewayEffectiveConfig(): Record<string, unknown>;
 export function verifyAliceDeploymentManifestBinding(inputs: {
   encodedManifest: string;

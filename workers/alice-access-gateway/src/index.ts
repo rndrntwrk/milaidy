@@ -5,6 +5,7 @@ import {
   verifyAliceEffectiveConfigBinding,
 } from "../../alice-effective-config.js";
 import {
+  buildAliceRuntimeContainerEnv,
   fetchAliceRuntimeContainer,
   type AliceRuntimeContainerNamespace,
 } from "./alice-runtime-host";
@@ -16,7 +17,20 @@ export type AliceAccessGatewayEnv = {
   ALICE_CLOUDFLARE_RUNTIME_IMAGE: string;
   ALICE_ACCESS_PROXY_SECRET: string;
   ALICE_ACCESS_CONTROL_SERVICE_TOKEN: string;
+  ALICE_RUNTIME_API_TOKEN: string;
+  ALICE_RUNTIME_RELEASE_TOKEN: string;
+  ALICE_RUNTIME_VAULT_PASSPHRASE: string;
+  ALICE_PROGRAM_DIGEST: string;
+  ALICE_RELEASE_DIGEST: string;
+  ALICE_POLICY_HASH: string;
+  ALICE_SOURCE_COMMIT: string;
+  ALICE_DEPLOYMENT_CONTROLLER_COMMIT: string;
+  ALICE_RUNTIME_IMAGE: string;
+  ALICE_RUNTIME_BUILD_MANIFEST_SHA256: string;
+  ALICE_ELIZA_COMMIT: string;
+  ALICE_RUNTIME_REVISION: string;
   ALICE_CONTROL: Fetcher;
+  ALICE_AI_GATEWAY: Fetcher;
   ALICE_RUNTIME_CONTAINER: AliceRuntimeContainerNamespace;
   ALICE_DEPLOYMENT_MANIFEST_SHA256: string;
   ALICE_DEPLOYMENT_MANIFEST_B64: string;
@@ -33,7 +47,7 @@ const MAX_SAFE_RUNTIME_RESPONSE_BYTES = 65_536;
 const SESSION_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
-const IMAGE = /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/;
+const IMAGE = /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
 const IDEMPOTENCY_KEY = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/;
 const ALICE_CHAT_BOUNDARY = Object.freeze({
   schemaVersion: "alice.chat-boundary.v1",
@@ -57,7 +71,7 @@ type ExpectedRuntimeRelease = {
   runtimeBuildManifestSha256: string;
   capabilityBomSha256: string;
   elizaCommit: string;
-  modalRevision: number;
+  runtimeRevision: number;
   deploymentManifestSha256: string;
 };
 
@@ -168,6 +182,7 @@ function validIssuer(value: string): boolean {
 }
 
 async function loadConfig(env: AliceAccessGatewayEnv) {
+  buildAliceRuntimeContainerEnv(env);
   if (
     !validIssuer(env.ALICE_ACCESS_ISSUER) ||
     !/^[A-Za-z0-9_-]{8,128}$/.test(env.ALICE_ACCESS_AUDIENCE) ||
@@ -292,8 +307,8 @@ async function checkRuntimeAdmission(
     !DIGEST.test(String(release.runtimeBuildManifestSha256 ?? "")) ||
     !DIGEST.test(String(release.capabilityBomSha256 ?? "")) ||
     !COMMIT.test(String(release.elizaCommit ?? "")) ||
-    !Number.isInteger(release.modalRevision) ||
-    Number(release.modalRevision) < 49 ||
+    !Number.isInteger(release.runtimeRevision) ||
+    Number(release.runtimeRevision) < 49 ||
     !DIGEST.test(String(release.deploymentManifestSha256 ?? ""))
   ) {
     const blockingScopes = Array.isArray(value.blockingScopes)
@@ -329,7 +344,7 @@ async function checkRuntimeAdmission(
         ),
         capabilityBomSha256: String(release.capabilityBomSha256),
         elizaCommit: String(release.elizaCommit),
-        modalRevision: Number(release.modalRevision),
+        runtimeRevision: Number(release.runtimeRevision),
         deploymentManifestSha256: String(release.deploymentManifestSha256),
       },
     },
@@ -354,7 +369,7 @@ function sameRuntimeAdmission(
     left.release.capabilityBomSha256 ===
       right.release.capabilityBomSha256 &&
     left.release.elizaCommit === right.release.elizaCommit &&
-    left.release.modalRevision === right.release.modalRevision &&
+    left.release.runtimeRevision === right.release.runtimeRevision &&
     left.release.deploymentManifestSha256 ===
       right.release.deploymentManifestSha256
   );
@@ -500,7 +515,7 @@ function runtimeReleaseMatches(
         "deploymentControllerCommit",
         "deploymentManifestSha256",
         "elizaCommit",
-        "modalRevision",
+        "runtimeRevision",
         "policyHash",
         "programDigest",
         "releaseDigest",
@@ -521,7 +536,7 @@ function runtimeReleaseMatches(
         admission.release.capabilityBomSha256 &&
       release.deploymentManifestSha256 === admission.release.deploymentManifestSha256 &&
       release.elizaCommit === admission.release.elizaCommit &&
-      release.modalRevision === admission.release.modalRevision,
+      release.runtimeRevision === admission.release.runtimeRevision,
   );
 }
 
@@ -578,7 +593,7 @@ function exactSafeRuntimeRelease(
       "deploymentControllerCommit",
       "deploymentManifestSha256",
       "elizaCommit",
-      "modalRevision",
+      "runtimeRevision",
       "policyHash",
       "programDigest",
       "releaseDigest",
@@ -606,8 +621,8 @@ function exactSafeRuntimeRelease(
         admission.release.deploymentManifestSha256 &&
       (value as Record<string, unknown>).elizaCommit ===
         admission.release.elizaCommit &&
-      (value as Record<string, unknown>).modalRevision ===
-        admission.release.modalRevision,
+      (value as Record<string, unknown>).runtimeRevision ===
+        admission.release.runtimeRevision,
   );
 }
 
@@ -1253,6 +1268,19 @@ function sanitizedUpstreamResponse(response: Response): Response {
   return new Response(response.body, { status: response.status, headers });
 }
 
+function sanitizedWebSocketResponse(response: Response): Response {
+  const webSocket = response.webSocket;
+  if (response.status !== 101 || webSocket === null) {
+    return jsonResponse({ ok: false, code: "RUNTIME_WEBSOCKET_UNAVAILABLE" }, 503);
+  }
+  const headers = new Headers();
+  for (const name of ["sec-websocket-extensions", "sec-websocket-protocol"]) {
+    const value = response.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  return new Response(null, { status: 101, headers, webSocket });
+}
+
 export async function handleRequest(
   request: Request,
   env: AliceAccessGatewayEnv,
@@ -1435,6 +1463,9 @@ export async function handleRequest(
       if (!finalProof.ok) return finalProof.response;
       if (isFullRuntimeProof(finalProof.proof) !== fullRuntime) {
         return jsonResponse({ ok: false, code: "RUNTIME_RELEASE_MISMATCH" }, 503);
+      }
+      if (fullRuntimeWebSocket) {
+        return sanitizedWebSocketResponse(upstreamResponse);
       }
       if (
         fullRuntime &&

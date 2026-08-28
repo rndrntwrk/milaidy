@@ -5,6 +5,7 @@ import {
   buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceContainerControlEffectiveConfig,
   encodeAliceDeploymentManifest,
 } from "../../alice-effective-config.js";
 import {
@@ -32,22 +33,22 @@ const binding = {
   releaseDigest: `sha256:${"2".repeat(64)}`,
   policyHash: `sha256:${"3".repeat(64)}`,
 };
+const runtimeContainerImage =
+  `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"9".repeat(64)}`;
 const releaseSource = {
   sourceCommit: "4".repeat(40),
   deploymentControllerCommit: "5".repeat(40),
-  runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"6".repeat(64)}`,
+  runtimeImage: runtimeContainerImage,
   runtimeBuildManifestSha256: `sha256:${"8".repeat(64)}`,
   elizaCommit: "7".repeat(40),
 };
-const runtimeContainerImage =
-  `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"9".repeat(64)}`;
 const testDeploymentManifest = await buildAliceDeploymentManifest({
   releaseEpoch: 1,
   ...releaseSource,
   capabilityBomSha256: `sha256:${"a".repeat(64)}`,
-  modalRevision: 49,
+  runtimeRevision: 49,
   policyHash: binding.policyHash,
-  rollbackBoundary: "modal:alice-runtime:v49",
+  rollbackBoundary: "container:alice-runtime:v49",
   ...providerReadbacks,
   cloudflareContinuityReadback: aliceTestCloudflareContinuityReadback(),
   workerBundleArtifact: aliceTestVerifiedWorkerBundleArtifact({
@@ -59,12 +60,12 @@ const testDeploymentManifest = await buildAliceDeploymentManifest({
     ownerEmailSha256,
     runtimeImage: runtimeContainerImage,
   }),
-  controlEffectiveConfig: buildAliceControlEffectiveConfig({
+  controlEffectiveConfig: buildAliceContainerControlEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
     accessAudience: "alice-access-audience",
     ownerEmailSha256,
     modelDailyBudgetUnits: 10_000,
-    modalRevision: 49,
+    runtimeRevision: 49,
     releaseAccessAudience: "alice-release-controller-audience",
     releaseServiceTokenIdSha256: "R".repeat(43),
   }),
@@ -76,7 +77,7 @@ const testDeploymentManifestBytes = serializeAliceDeploymentManifest(
 const release = {
   ...releaseSource,
   capabilityBomSha256: testDeploymentManifest.source.capabilityBomSha256,
-  modalRevision: 49,
+  runtimeRevision: 49,
   deploymentManifestSha256: digestAliceDeploymentManifest(
     testDeploymentManifestBytes,
   ),
@@ -277,6 +278,27 @@ async function environment(options: EnvironmentOptions = {}) {
     ALICE_CLOUDFLARE_RUNTIME_IMAGE: runtimeContainerImage,
     ALICE_ACCESS_PROXY_SECRET: "proxy-proof-secret-with-at-least-32-bytes",
     ALICE_ACCESS_CONTROL_SERVICE_TOKEN: controlToken,
+    ALICE_RUNTIME_API_TOKEN: "runtime-api-token-with-at-least-32-bytes",
+    ALICE_RUNTIME_RELEASE_TOKEN:
+      "runtime-release-token-with-at-least-32-bytes",
+    ALICE_RUNTIME_VAULT_PASSPHRASE:
+      "runtime-vault-passphrase-with-at-least-32-bytes",
+    ALICE_PROGRAM_DIGEST: binding.programDigest,
+    ALICE_RELEASE_DIGEST: binding.releaseDigest,
+    ALICE_POLICY_HASH: binding.policyHash,
+    ALICE_SOURCE_COMMIT: release.sourceCommit,
+    ALICE_DEPLOYMENT_CONTROLLER_COMMIT:
+      release.deploymentControllerCommit,
+    ALICE_RUNTIME_IMAGE: release.runtimeImage,
+    ALICE_RUNTIME_BUILD_MANIFEST_SHA256:
+      release.runtimeBuildManifestSha256,
+    ALICE_ELIZA_COMMIT: release.elizaCommit,
+    ALICE_RUNTIME_REVISION: String(release.runtimeRevision),
+    ALICE_AI_GATEWAY: {
+      async fetch() {
+        return Response.json({ ok: false }, { status: 503 });
+      },
+    },
     ALICE_CONTROL: {
       async fetch(input: RequestInfo | URL, init?: RequestInit) {
         const request = new Request(input, init);
@@ -433,15 +455,26 @@ describe("Alice Access gateway", () => {
         if (new URL(request.url).pathname === "/api/alice-production/proof") {
           return Response.json(fullRuntimeProof());
         }
-        return Response.json(
-          { ok: false, code: "CONTAINER_STARTING" },
-          { status: 503 },
-        );
+        const upgrade = new Response(null, {
+          status: 101,
+          headers: {
+            connection: "Upgrade",
+            upgrade: "websocket",
+            "sec-websocket-protocol": "milady-v1",
+            "set-cookie": "must-not-cross-gateway=1",
+          },
+        });
+        Object.defineProperty(upgrade, "webSocket", {
+          value: { accepted: true },
+        });
+        return upgrade;
       },
       now,
     );
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(101);
+    expect(response.headers.get("sec-websocket-protocol")).toBe("milady-v1");
+    expect(response.headers.get("set-cookie")).toBeNull();
     expect(env.runtimeRequests.map((request) => new URL(request.url).pathname)).toEqual([
       "/api/alice-production/proof",
       "/ws",
@@ -1250,7 +1283,7 @@ describe("Alice Access gateway", () => {
         state.admissionRelease = {
           ...release,
           deploymentManifestSha256: `sha256:${"d".repeat(64)}`,
-          modalRevision: 50,
+          runtimeRevision: 50,
         };
         return Response.json(modalChatResponse("Old release response."));
       }),

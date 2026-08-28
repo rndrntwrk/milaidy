@@ -7,7 +7,7 @@ import {
 const encoder = new TextEncoder();
 
 export type ProgramEnvelope = {
-  schemaVersion: "alice.program-envelope.v1";
+  schemaVersion: "alice.program-envelope.v1" | "alice.program-envelope.v2";
   programId: string;
   issuedAt: string;
   expiresAt: string;
@@ -19,7 +19,8 @@ export type ProgramEnvelope = {
     runtimeBuildManifestSha256: string;
     deploymentManifestSha256: string;
     elizaCommit: string;
-    modalRevision: number;
+    modalRevision?: number;
+    runtimeRevision?: number;
     policyHash: string;
     rollbackBoundary: string;
   };
@@ -96,6 +97,7 @@ function exactPlainObject(value: unknown, expectedKeys: string[]): boolean {
 }
 
 function validEnvelope(value: ProgramEnvelope): boolean {
+  const containerMode = value?.schemaVersion === "alice.program-envelope.v2";
   if (
     !exactPlainObject(value, [
       "autonomy",
@@ -109,7 +111,7 @@ function validEnvelope(value: ProgramEnvelope): boolean {
       "deploymentControllerCommit",
       "deploymentManifestSha256",
       "elizaCommit",
-      "modalRevision",
+      containerMode ? "runtimeRevision" : "modalRevision",
       "policyHash",
       "releaseEpoch",
       "rollbackBoundary",
@@ -128,7 +130,7 @@ function validEnvelope(value: ProgramEnvelope): boolean {
   const issuedAt = Date.parse(value.issuedAt);
   const expiresAt = Date.parse(value.expiresAt);
   return (
-    value.schemaVersion === "alice.program-envelope.v1" &&
+    (containerMode || value.schemaVersion === "alice.program-envelope.v1") &&
     typeof value.programId === "string" &&
     value.programId.length >= 8 &&
     Number.isFinite(issuedAt) &&
@@ -141,24 +143,45 @@ function validEnvelope(value: ProgramEnvelope): boolean {
     value.release.releaseEpoch > 0 &&
     /^[a-f0-9]{40}$/.test(value.release?.sourceCommit) &&
     /^[a-f0-9]{40}$/.test(value.release?.deploymentControllerCommit) &&
-    /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/.test(
-      value.release?.runtimeImage,
-    ) &&
+    (containerMode
+      ? /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/.test(value.release?.runtimeImage)
+      : /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/.test(value.release?.runtimeImage)) &&
     /^sha256:[a-f0-9]{64}$/.test(
       value.release?.runtimeBuildManifestSha256,
     ) &&
     /^sha256:[a-f0-9]{64}$/.test(value.release?.deploymentManifestSha256) &&
     /^[a-f0-9]{40}$/.test(value.release?.elizaCommit) &&
-    Number.isInteger(value.release?.modalRevision) &&
-    value.release.modalRevision >= 49 &&
+    Number.isInteger(
+      containerMode ? value.release?.runtimeRevision : value.release?.modalRevision,
+    ) &&
+    Number(containerMode ? value.release.runtimeRevision : value.release.modalRevision) >= 49 &&
     /^sha256:[a-f0-9]{64}$/.test(value.release?.policyHash) &&
     typeof value.release?.rollbackBoundary === "string" &&
     value.release.rollbackBoundary ===
-      `modal:alice-runtime:v${value.release.modalRevision}` &&
+      `${containerMode ? "container" : "modal"}:alice-runtime:v${
+        containerMode ? value.release.runtimeRevision : value.release.modalRevision
+      }` &&
     exactSet(value.autonomy?.autonomousActions, EXPECTED_AUTONOMOUS_ACTIONS) &&
     exactSet(value.autonomy?.capabilityActions, EXPECTED_CAPABILITY_ACTIONS) &&
     exactSet(value.autonomy?.disabledActions, EXPECTED_DISABLED_ACTIONS)
   );
+}
+
+export function normalizedRuntimeRelease(envelope: ProgramEnvelope): {
+  runtimeRevision: number;
+  rollbackBoundary: string;
+} {
+  const runtimeRevision =
+    envelope.schemaVersion === "alice.program-envelope.v2"
+      ? envelope.release.runtimeRevision
+      : envelope.release.modalRevision;
+  if (!Number.isSafeInteger(runtimeRevision)) {
+    throw new Error("ALICE_PROGRAM_ENVELOPE_INVALID");
+  }
+  return {
+    runtimeRevision: Number(runtimeRevision),
+    rollbackBoundary: envelope.release.rollbackBoundary,
+  };
 }
 
 export async function digestProgramEnvelope(envelope: ProgramEnvelope): Promise<string> {

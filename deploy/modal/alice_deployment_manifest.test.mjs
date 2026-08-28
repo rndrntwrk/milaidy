@@ -11,7 +11,9 @@ import {
 import {
   buildAliceAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceContainerAccessEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceContainerControlEffectiveConfig,
   digestAliceEffectiveConfig,
   encodeAliceDeploymentManifest,
   verifyAliceEffectiveConfigBinding,
@@ -53,6 +55,13 @@ const workerBundleArtifact = aliceTestVerifiedWorkerBundleArtifact({
   sourceCommit: "1".repeat(40),
 });
 const cloudflareContinuityReadback = aliceTestCloudflareContinuityReadback();
+const containerAccessEffectiveConfig = buildAliceContainerAccessEffectiveConfig({
+  accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+  accessAudience,
+  ownerEmailSha256: accessPolicyReadback.ownerEmailSha256,
+  runtimeImage:
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"9".repeat(64)}`,
+});
 
 const valid = {
   releaseEpoch: 1,
@@ -123,6 +132,38 @@ test("builds one non-self-referential production deployment manifest from canoni
     role: "access",
     effectiveConfig: accessEffectiveConfig,
   });
+});
+
+test("builds a Container manifest without Modal release vocabulary", async () => {
+  const { modalRevision: _modalRevision, ...common } = valid;
+  const manifest = await buildAliceDeploymentManifest({
+    ...common,
+    accessEffectiveConfig: containerAccessEffectiveConfig,
+    controlEffectiveConfig: buildAliceContainerControlEffectiveConfig({
+      accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+      accessAudience,
+      ownerEmailSha256: accessPolicyReadback.ownerEmailSha256,
+      modelDailyBudgetUnits: 10_000,
+      runtimeRevision: 49,
+      releaseAccessAudience: "alice-release-controller-audience",
+      releaseServiceTokenIdSha256: "R".repeat(43),
+    }),
+    runtimeImage: containerAccessEffectiveConfig.values.runtimeImage,
+    runtimeRevision: 49,
+    rollbackBoundary: "container:alice-runtime:v49",
+  });
+  assert.equal(manifest.schemaVersion, "alice.deployment-manifest.v2");
+  assert.deepEqual(manifest.release, {
+    releaseEpoch: 1,
+    runtimeRevision: 49,
+    policyHash: `sha256:${"6".repeat(64)}`,
+    rollbackBoundary: "container:alice-runtime:v49",
+  });
+  assert.equal("modalRevision" in manifest.release, false);
+  assert.deepEqual(
+    verifyAliceDeploymentManifest(serializeAliceDeploymentManifest(manifest)),
+    manifest,
+  );
 });
 
 test("rejects substituted targets, ambiguous bytes, and self-referential fields", async () => {

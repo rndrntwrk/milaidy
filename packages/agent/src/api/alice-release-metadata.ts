@@ -9,14 +9,14 @@ export interface AliceReleaseMetadata {
   capabilityBomSha256: string;
   deploymentManifestSha256: string;
   elizaCommit: string;
-  modalRevision: number;
+  runtimeRevision: number;
 }
 
 type EnvironmentLike = Record<string, string | undefined>;
 
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
-const IMAGE = /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/;
+const IMAGE = /^(?:ghcr\.io\/rndrntwrk\/milaidy-agent|registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime)@sha256:[a-f0-9]{64}$/;
 
 export function readAliceReleaseMetadata(
   environment: EnvironmentLike,
@@ -33,7 +33,9 @@ export function readAliceReleaseMetadata(
   const capabilityBomSha256 = environment.ALICE_CAPABILITY_BOM_SHA256;
   const deploymentManifestSha256 = environment.ALICE_DEPLOYMENT_MANIFEST_SHA256;
   const elizaCommit = environment.ALICE_ELIZA_COMMIT;
-  const modalRevision = Number(environment.ALICE_MODAL_REVISION);
+  const runtimeRevision = Number(
+    environment.ALICE_RUNTIME_REVISION ?? environment.ALICE_MODAL_REVISION,
+  );
   if (
     !programDigest ||
     !DIGEST.test(programDigest) ||
@@ -55,8 +57,8 @@ export function readAliceReleaseMetadata(
     !DIGEST.test(deploymentManifestSha256) ||
     !elizaCommit ||
     !COMMIT.test(elizaCommit) ||
-    !Number.isInteger(modalRevision) ||
-    modalRevision < 49
+    !Number.isInteger(runtimeRevision) ||
+    runtimeRevision < 49
   ) {
     return null;
   }
@@ -71,6 +73,6 @@ export function readAliceReleaseMetadata(
     capabilityBomSha256,
     deploymentManifestSha256,
     elizaCommit,
-    modalRevision,
+    runtimeRevision,
   };
 }

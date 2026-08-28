@@ -29,7 +29,7 @@ describe("Alice release health metadata", () => {
       capabilityBomSha256: valid.ALICE_CAPABILITY_BOM_SHA256,
       deploymentManifestSha256: valid.ALICE_DEPLOYMENT_MANIFEST_SHA256,
       elizaCommit: valid.ALICE_ELIZA_COMMIT,
-      modalRevision: 49,
+      runtimeRevision: 49,
     });
   });
 

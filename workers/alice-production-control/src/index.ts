@@ -647,7 +647,7 @@ async function handleOwnerApi(
             programDigest: admitted.config.binding.programDigest,
             releaseDigest: admitted.config.binding.releaseDigest,
             policyHash: admitted.config.binding.policyHash,
-            modalRevision: admitted.config.modalRevision,
+            runtimeRevision: admitted.config.runtimeRevision,
             deploymentManifestSha256: admitted.config.deploymentManifestSha256,
             workerVersion: env.ALICE_VERSION,
           }
