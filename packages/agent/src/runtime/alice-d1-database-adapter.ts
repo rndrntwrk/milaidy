@@ -81,8 +81,20 @@ export const ALICE_ELIZA_DURABLE_COLLECTIONS = [
 const COLLECTION = /^[a-z][A-Za-z0-9]{2,63}$/;
 const OWNER = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
 const OPERATION = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
-const SECRET_FIELD =
-  /(?:token|secret|password|authorization|cookie|privateKey|apiKey)/i;
+const SECRET_FIELDS = new Set([
+  "token",
+  "secret",
+  "secrets",
+  "password",
+  "authorization",
+  "cookie",
+  "privatekey",
+  "apikey",
+  "apitoken",
+  "accesstoken",
+  "refreshtoken",
+  "clientsecret",
+]);
 const MAX_MUTATIONS = 100;
 const MAX_RECORD_KEY_BYTES = 1_024;
 const MAX_RECORD_VALUE_BYTES = 1_000_000;
@@ -101,6 +113,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object") return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function isSecretField(key: string): boolean {
+  return SECRET_FIELDS.has(key.replace(/[-_]/g, "").toLowerCase());
 }
 
 function sanitizeAgentValue(value: unknown): unknown {
@@ -164,7 +180,7 @@ function encodeValue(
   for (const key of Object.keys(value).sort()) {
     const child = value[key];
     if (child === undefined) continue;
-    if (SECRET_FIELD.test(key)) {
+    if (isSecretField(key)) {
       // Character/plugin secrets are supplied again by the Worker boundary on
       // every boot. They must never enter D1, logs, or a rollback artifact.
       continue;
@@ -174,7 +190,9 @@ function encodeValue(
       path: [...path, key],
     });
   }
-  return output;
+  return Object.hasOwn(value, "$aliceType")
+    ? { $aliceType: "plain-object", value: output }
+    : output;
 }
 
 function decodeValue(value: TaggedValue): unknown {
@@ -195,6 +213,13 @@ function decodeValue(value: TaggedValue): unknown {
   }
   if (value.$aliceType === "set" && Array.isArray(value.values)) {
     return new Set(value.values.map(decodeValue));
+  }
+  if (value.$aliceType === "plain-object" && isPlainObject(value.value)) {
+    const output: Record<string, unknown> = {};
+    for (const key of Object.keys(value.value)) {
+      output[key] = decodeValue(value.value[key] as TaggedValue);
+    }
+    return output;
   }
   const output: Record<string, unknown> = {};
   for (const key of Object.keys(value)) output[key] = decodeValue(value[key]);

@@ -113,6 +113,54 @@ describe("D1 Eliza durable database adapter", () => {
     `).get() as { value_json: string }).value_json).toBe('{"a":1,"z":2}');
   });
 
+  test("round-trips CR and LF in JSON strings while still rejecting NUL", async () => {
+    const database = await import("../src/eliza-database");
+    const d1 = new SqliteD1Binding();
+    await database.installElizaDatabaseSchema(d1);
+    const adapter = new database.D1ElizaDatabaseAdapter(d1);
+    const value = {
+      text: "first line\r\nsecond line\nthird line",
+      usage: {
+        promptTokens: 11,
+        completionTokens: 7,
+        totalTokens: 18,
+        tokenCount: 18,
+      },
+    };
+
+    await expect(adapter.commit({
+      ownerId: "owner-001",
+      operationId: "operation-crlf-001",
+      expectedRevision: 0,
+      mutations: [
+        { collection: "memories", key: "memory-crlf", deleted: false, value },
+      ],
+    })).resolves.toEqual({ revision: 1 });
+    await expect(new database.D1ElizaDatabaseAdapter(d1).load({
+      ownerId: "owner-001",
+      cursor: null,
+      limit: 500,
+    })).resolves.toEqual({
+      revision: 1,
+      records: [{ collection: "memories", key: "memory-crlf", value }],
+      nextCursor: null,
+    });
+
+    await expect(adapter.commit({
+      ownerId: "owner-001",
+      operationId: "operation-nul-001",
+      expectedRevision: 1,
+      mutations: [
+        {
+          collection: "memories",
+          key: "memory-nul",
+          deleted: false,
+          value: { text: "before\0after" },
+        },
+      ],
+    })).rejects.toThrow("ELIZA_VALUE_INVALID");
+  });
+
   test("deletes records and preserves the exact first receipt across restart and later commits", async () => {
     const database = await import("../src/eliza-database");
     const d1 = new SqliteD1Binding();
