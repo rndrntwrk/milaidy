@@ -16,6 +16,7 @@ import {
 import {
   buildAliceAccessPolicyProviderConfig,
   buildAliceAiGatewayProviderConfig,
+  buildAliceVectorizeProviderConfig,
 } from "./alice_cloudflare_provider_config.mjs";
 import {
   buildAliceCloudflareContinuityConfig,
@@ -446,6 +447,7 @@ export async function verifyAliceProviderControlFingerprints({
   serializedManifest,
   accessPolicyReadback,
   aiGatewayProviderReadback,
+  vectorizeProviderReadback,
   cloudflareContinuityReadback,
 }) {
   let manifest;
@@ -456,12 +458,15 @@ export async function verifyAliceProviderControlFingerprints({
   }
   let accessPolicyConfig;
   let aiGatewayProviderConfig;
+  let vectorizeProviderConfig;
   let continuityConfig;
   try {
     accessPolicyConfig =
       await buildAliceAccessPolicyProviderConfig(accessPolicyReadback);
     aiGatewayProviderConfig =
       buildAliceAiGatewayProviderConfig(aiGatewayProviderReadback);
+    vectorizeProviderConfig =
+      buildAliceVectorizeProviderConfig(vectorizeProviderReadback);
     continuityConfig = buildAliceCloudflareContinuityConfig(
       cloudflareContinuityReadback,
     );
@@ -472,6 +477,8 @@ export async function verifyAliceProviderControlFingerprints({
     await digestAliceProviderConfig(accessPolicyConfig);
   const aiGatewayProviderConfigSha256 =
     await digestAliceProviderConfig(aiGatewayProviderConfig);
+  const vectorizeProviderConfigSha256 =
+    await digestAliceProviderConfig(vectorizeProviderConfig);
   const continuityConfigSha256 =
     digestAliceCloudflareContinuityConfig(continuityConfig);
   if (
@@ -479,6 +486,8 @@ export async function verifyAliceProviderControlFingerprints({
       manifest.cloudflare.accessPolicyConfigSha256 ||
     aiGatewayProviderConfigSha256 !==
       manifest.cloudflare.aiGatewayProviderConfigSha256 ||
+    vectorizeProviderConfigSha256 !==
+      manifest.cloudflare.vectorizeProviderConfigSha256 ||
     continuityConfigSha256 !== manifest.cloudflare.continuityConfigSha256
   ) {
     throw new Error("ALICE_PROVIDER_CONTROL_FINGERPRINT_MISMATCH");
@@ -486,6 +495,7 @@ export async function verifyAliceProviderControlFingerprints({
   return {
     accessPolicyConfigSha256,
     aiGatewayProviderConfigSha256,
+    vectorizeProviderConfigSha256,
     continuityConfigSha256,
   };
 }

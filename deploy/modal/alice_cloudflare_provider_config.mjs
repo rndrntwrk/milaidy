@@ -13,6 +13,10 @@ const ALICE_AI_MODELS = Object.freeze([
 const ALICE_AI_PROVIDERS = Object.freeze(["workers-ai"]);
 const ALICE_OTP_REDIRECT_URL =
   "https://rndrntwrk.cloudflareaccess.com/cdn-cgi/access/callback";
+const ALICE_VECTORIZE_REQUEST = Object.freeze({
+  name: "alice-memory-v1",
+  config: Object.freeze({ dimensions: 768, metric: "cosine" }),
+});
 
 function sha256Canonical(value) {
   return `sha256:${crypto
@@ -32,6 +36,16 @@ function exactKeys(value, keys) {
     !Array.isArray(value) &&
     JSON.stringify(Object.keys(value).sort()) ===
       JSON.stringify([...keys].sort())
+  );
+}
+
+function requiredAllowedKeys(value, required, allowed) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    required.every((key) => has(value, key)) &&
+    Object.keys(value).every((key) => allowed.includes(key))
   );
 }
 
@@ -592,5 +606,59 @@ export function buildAliceAiGatewayProviderConfig(raw) {
     workersAiBillingMode: raw.workers_ai_billing_mode,
     dlpSha256: sha256Canonical(raw.dlp ?? null),
     guardrailsSha256: sha256Canonical(raw.guardrails ?? null),
+  };
+}
+
+function vectorizeInvalid() {
+  throw new Error("ALICE_VECTORIZE_PROVIDER_CONFIG_INVALID");
+}
+
+export function buildAliceVectorizeProviderConfig(raw) {
+  if (
+    !requiredAllowedKeys(
+      raw,
+      ["name", "config"],
+      ["name", "description", "config", "created_on", "modified_on"],
+    ) ||
+    raw.name !== ALICE_VECTORIZE_REQUEST.name ||
+    !exactKeys(raw.config, ["dimensions", "metric"]) ||
+    raw.config.dimensions !== ALICE_VECTORIZE_REQUEST.config.dimensions ||
+    raw.config.metric !== ALICE_VECTORIZE_REQUEST.config.metric ||
+    (has(raw, "description") && typeof raw.description !== "string") ||
+    (has(raw, "created_on") && canonicalIsoTimestamp(raw.created_on) === null) ||
+    (has(raw, "modified_on") && canonicalIsoTimestamp(raw.modified_on) === null)
+  ) {
+    vectorizeInvalid();
+  }
+  return {
+    schemaVersion: "alice.vectorize-provider-config.v1",
+    name: ALICE_VECTORIZE_REQUEST.name,
+    dimensions: ALICE_VECTORIZE_REQUEST.config.dimensions,
+    metric: ALICE_VECTORIZE_REQUEST.config.metric,
+  };
+}
+
+export function buildAliceVectorizeProvisioningContract(inputs) {
+  if (!exactKeys(inputs, ["existingIndex"])) {
+    throw new Error("ALICE_VECTORIZE_PROVISIONING_CONTRACT_INVALID");
+  }
+  let action;
+  if (inputs.existingIndex === null) {
+    action = "create";
+  } else {
+    try {
+      buildAliceVectorizeProviderConfig(inputs.existingIndex);
+      action = "reuse";
+    } catch {
+      throw new Error("ALICE_VECTORIZE_PROVISIONING_CONTRACT_INVALID");
+    }
+  }
+  return {
+    schemaVersion: "alice.vectorize-provisioning-contract.v1",
+    action,
+    request: {
+      name: ALICE_VECTORIZE_REQUEST.name,
+      config: { ...ALICE_VECTORIZE_REQUEST.config },
+    },
   };
 }

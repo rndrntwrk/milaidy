@@ -26,6 +26,7 @@ import * as providerReadback from "./alice_cloudflare_provider_readback.mjs";
 import {
   buildAliceAccessPolicyProviderConfig,
   buildAliceAiGatewayProviderConfig,
+  buildAliceVectorizeProviderConfig,
 } from "./alice_cloudflare_provider_config.mjs";
 import {
   aliceTestCloudflareContinuityReadback,
@@ -33,13 +34,19 @@ import {
   aliceTestVerifiedWorkerBundleArtifact,
 } from "./test-fixtures/alice_provider_readbacks.mjs";
 
-const { accessPolicyReadback, aiGatewayProviderReadback } =
+const {
+  accessPolicyReadback,
+  aiGatewayProviderReadback,
+  vectorizeProviderReadback,
+} =
   aliceTestProviderReadbacks({ accessAudience: "alice-access-audience" });
 const owner = accessPolicyReadback.ownerEmailSha256;
 const accessPolicyConfig =
   await buildAliceAccessPolicyProviderConfig(accessPolicyReadback);
 const aiGatewayProviderConfig =
   buildAliceAiGatewayProviderConfig(aiGatewayProviderReadback);
+const vectorizeProviderConfig =
+  buildAliceVectorizeProviderConfig(vectorizeProviderReadback);
 const workerModules = {
   access: "export default { fetch() { return new Response('access'); } };\n",
   control: "export default { fetch() { return new Response('control'); } };\n",
@@ -131,6 +138,7 @@ const manifest = await buildAliceDeploymentManifest({
   connectorPlaneEffectiveConfig: effective.connectorPlane,
   accessPolicyReadback,
   aiGatewayProviderReadback,
+  vectorizeProviderReadback,
   cloudflareContinuityReadback,
   workerBundleArtifact,
 });
@@ -633,6 +641,7 @@ test("binds exact Access and AI Gateway provider settings into the deployment ma
     serializedManifest,
     accessPolicyReadback,
     aiGatewayProviderReadback,
+    vectorizeProviderReadback,
     cloudflareContinuityReadback,
   });
   assert.equal(
@@ -642,6 +651,10 @@ test("binds exact Access and AI Gateway provider settings into the deployment ma
   assert.equal(
     result.aiGatewayProviderConfigSha256,
     manifest.cloudflare.aiGatewayProviderConfigSha256,
+  );
+  assert.equal(
+    result.vectorizeProviderConfigSha256,
+    manifest.cloudflare.vectorizeProviderConfigSha256,
   );
   assert.equal(
     result.continuityConfigSha256,
@@ -661,6 +674,7 @@ test("binds exact Access and AI Gateway provider settings into the deployment ma
         }],
       },
       aiGatewayProviderReadback,
+      vectorizeProviderReadback,
       cloudflareContinuityReadback,
     }),
     /ALICE_PROVIDER_CONTROL_FINGERPRINT_MISMATCH/,
@@ -673,6 +687,7 @@ test("binds exact Access and AI Gateway provider settings into the deployment ma
         ...aiGatewayProviderReadback,
         cache_ttl: 300,
       },
+      vectorizeProviderReadback,
       cloudflareContinuityReadback,
     }),
     /ALICE_PROVIDER_CONTROL_FINGERPRINT_MISMATCH/,
@@ -682,6 +697,7 @@ test("binds exact Access and AI Gateway provider settings into the deployment ma
       serializedManifest,
       accessPolicyReadback,
       aiGatewayProviderReadback,
+      vectorizeProviderReadback,
       cloudflareContinuityReadback: {
         ...cloudflareContinuityReadback,
         workflow: {
@@ -689,6 +705,19 @@ test("binds exact Access and AI Gateway provider settings into the deployment ma
           id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
         },
       },
+    }),
+    /ALICE_PROVIDER_CONTROL_FINGERPRINT_MISMATCH/,
+  );
+  await assert.rejects(
+    () => verifyAliceProviderControlFingerprints({
+      serializedManifest,
+      accessPolicyReadback,
+      aiGatewayProviderReadback,
+      vectorizeProviderReadback: {
+        ...vectorizeProviderReadback,
+        config: { dimensions: 768, metric: "dot-product" },
+      },
+      cloudflareContinuityReadback,
     }),
     /ALICE_PROVIDER_CONTROL_FINGERPRINT_MISMATCH/,
   );

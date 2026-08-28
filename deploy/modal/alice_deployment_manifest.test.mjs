@@ -26,6 +26,7 @@ import {
 import {
   buildAliceAccessPolicyProviderConfig,
   buildAliceAiGatewayProviderConfig,
+  buildAliceVectorizeProviderConfig,
 } from "./alice_cloudflare_provider_config.mjs";
 import {
   buildAliceCloudflareContinuityConfig,
@@ -38,7 +39,11 @@ import {
 } from "./test-fixtures/alice_provider_readbacks.mjs";
 
 const accessAudience = "1f65441271f72eee92c371c42306885595ae71f950d2ed5aaa1ac354788410e4";
-const { accessPolicyReadback, aiGatewayProviderReadback } =
+const {
+  accessPolicyReadback,
+  aiGatewayProviderReadback,
+  vectorizeProviderReadback,
+} =
   aliceTestProviderReadbacks({ accessAudience });
 const accessEffectiveConfig = buildAliceAccessEffectiveConfig({
   accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
@@ -92,6 +97,7 @@ const valid = {
   connectorPlaneEffectiveConfig,
   accessPolicyReadback,
   aiGatewayProviderReadback,
+  vectorizeProviderReadback,
   cloudflareContinuityReadback,
   workerBundleArtifact,
 };
@@ -129,6 +135,9 @@ test("builds one non-self-referential production deployment manifest from canoni
       await digestAliceEffectiveConfig(
         buildAliceAiGatewayProviderConfig(aiGatewayProviderReadback),
       ),
+    vectorizeProviderConfigSha256: await digestAliceEffectiveConfig(
+      buildAliceVectorizeProviderConfig(vectorizeProviderReadback),
+    ),
     aiGatewayWorkerBundleSha256: workerBundleArtifact.bundles.aiGateway.sha256,
     controlWorkerBundleSha256: workerBundleArtifact.bundles.control.sha256,
     statePlaneConfigSha256: await digestAliceEffectiveConfig(
@@ -229,6 +238,24 @@ test("rejects substituted targets, ambiguous bytes, and self-referential fields"
     valid;
   await assert.rejects(
     () => buildAliceDeploymentManifest(missingStatePlane),
+    /ALICE_DEPLOYMENT_MANIFEST_INPUT_INVALID/,
+  );
+  const {
+    vectorizeProviderReadback: _missingVectorize,
+    ...missingVectorize
+  } = valid;
+  await assert.rejects(
+    () => buildAliceDeploymentManifest(missingVectorize),
+    /ALICE_DEPLOYMENT_MANIFEST_INPUT_INVALID/,
+  );
+  await assert.rejects(
+    () => buildAliceDeploymentManifest({
+      ...valid,
+      vectorizeProviderReadback: {
+        ...vectorizeProviderReadback,
+        config: { dimensions: 768, metric: "euclidean" },
+      },
+    }),
     /ALICE_DEPLOYMENT_MANIFEST_INPUT_INVALID/,
   );
   await assert.rejects(

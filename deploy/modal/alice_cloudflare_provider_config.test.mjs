@@ -5,6 +5,8 @@ import test from "node:test";
 import {
   buildAliceAccessPolicyProviderConfig,
   buildAliceAiGatewayProviderConfig,
+  buildAliceVectorizeProviderConfig,
+  buildAliceVectorizeProvisioningContract,
 } from "./alice_cloudflare_provider_config.mjs";
 
 const idpId = "11111111-1111-4111-8111-111111111111";
@@ -183,6 +185,66 @@ function aiReadback() {
     zdr: true,
   };
 }
+
+function vectorizeReadback() {
+  return {
+    name: "alice-memory-v1",
+    description: "Alice production memory index",
+    config: { dimensions: 768, metric: "cosine" },
+    created_on: "2026-08-27T12:00:00.000Z",
+    modified_on: "2026-08-27T12:00:00.000Z",
+  };
+}
+
+test("binds the exact production Vectorize name, dimensions, and cosine metric", () => {
+  assert.deepEqual(buildAliceVectorizeProviderConfig(vectorizeReadback()), {
+    schemaVersion: "alice.vectorize-provider-config.v1",
+    name: "alice-memory-v1",
+    dimensions: 768,
+    metric: "cosine",
+  });
+  assert.deepEqual(
+    buildAliceVectorizeProvisioningContract({ existingIndex: null }),
+    {
+      schemaVersion: "alice.vectorize-provisioning-contract.v1",
+      action: "create",
+      request: {
+        name: "alice-memory-v1",
+        config: { dimensions: 768, metric: "cosine" },
+      },
+    },
+  );
+  assert.equal(
+    buildAliceVectorizeProvisioningContract({
+      existingIndex: vectorizeReadback(),
+    }).action,
+    "reuse",
+  );
+});
+
+test("rejects absent, mismatched, or schema-expanded Vectorize state", () => {
+  for (const mutate of [
+    (raw) => { delete raw.name; },
+    (raw) => { delete raw.config.dimensions; },
+    (raw) => { delete raw.config.metric; },
+    (raw) => { raw.name = "other-index"; },
+    (raw) => { raw.config.dimensions = 384; },
+    (raw) => { raw.config.metric = "euclidean"; },
+    (raw) => { raw.config.preset = "@cf/baai/bge-base-en-v1.5"; },
+    (raw) => { raw.unreviewed = true; },
+  ]) {
+    const raw = vectorizeReadback();
+    mutate(raw);
+    assert.throws(
+      () => buildAliceVectorizeProviderConfig(raw),
+      /ALICE_VECTORIZE_PROVIDER_CONFIG_INVALID/,
+    );
+    assert.throws(
+      () => buildAliceVectorizeProvisioningContract({ existingIndex: raw }),
+      /ALICE_VECTORIZE_PROVISIONING_CONTRACT_INVALID/,
+    );
+  }
+});
 
 test("normalizes exact owner-only One-time PIN and device-posture Access policy", async () => {
   const canonical = await buildAliceAccessPolicyProviderConfig(accessReadback());

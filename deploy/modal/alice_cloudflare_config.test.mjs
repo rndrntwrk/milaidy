@@ -166,6 +166,7 @@ test("builds strict private state and connector effective configs", () => {
         vectorIndexName: "alice-memory-v1",
         vectorModel: "bge-base-en-v1.5",
         vectorDimensions: 768,
+        vectorMetric: "cosine",
       },
       observability: {
         enabled: true,
@@ -304,6 +305,7 @@ test("materializes exact private state and inert connector bindings without prov
   assert.equal(state.d1_databases[0].database_id, stateDatabaseId);
   assert.equal(state.d1_databases[0].database_name, "alice-production-state");
   assert.equal(state.vectorize[0].index_name, "alice-memory-v1");
+  assert.equal(state.vars.ALICE_VECTOR_METRIC, "cosine");
   assert.equal(state.r2_buckets[0].bucket_name, "alice-production-state-objects");
 
   const connector = rendered("connectorPlane");

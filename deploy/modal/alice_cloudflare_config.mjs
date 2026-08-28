@@ -330,6 +330,7 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
         vectorDimensions: Number(
           identityConfig.vars?.ALICE_VECTOR_DIMENSIONS,
         ),
+        vectorMetric: identityConfig.vars?.ALICE_VECTOR_METRIC,
       },
       observability: privatePlaneObservabilityFromWrangler(
         identityConfig.observability,

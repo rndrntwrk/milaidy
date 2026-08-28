@@ -85,6 +85,15 @@ function providerApi(calls) {
     if (pathname === `/accounts/${accountId}/ai-gateway/gateways/alice-production/routes`) {
       return json(fixtures.aiGatewayProviderReadback.dynamic_routes);
     }
+    if (
+      pathname ===
+      `/accounts/${accountId}/vectorize/v2/indexes/alice-memory-v1`
+    ) {
+      return json({
+        success: true,
+        result: fixtures.vectorizeProviderReadback,
+      });
+    }
     throw new Error(`unexpected ${parsed.href}`);
   };
 }
@@ -190,16 +199,67 @@ test("fetches and sanitizes the exact live Access, OTP, posture, AI, and route s
   assert.deepEqual(state.sanitized.aiGatewayProviderConfig.dynamicRoutes, {
     activeRouteCount: 0,
   });
+  assert.deepEqual(state.sanitized.vectorizeProviderConfig, {
+    schemaVersion: "alice.vectorize-provider-config.v1",
+    name: "alice-memory-v1",
+    dimensions: 768,
+    metric: "cosine",
+  });
   assert.equal(
     JSON.stringify(state.sanitized).includes("alice-owner@rndrntwrk.com"),
     false,
   );
   assert.equal(JSON.stringify(state.sanitized).includes("provider-masked-value"), false);
-  assert.equal(calls.length, 11);
+  assert.equal(calls.length, 12);
   for (const call of calls) {
     assert.equal(call.options.method, "GET");
     assert.equal(call.options.headers.authorization, "Bearer read-only-token");
     assert.equal(call.options.headers["cache-control"], "no-cache");
+  }
+});
+
+test("fails closed on absent, mismatched, or expanded live Vectorize state", async () => {
+  for (const vectorizeResult of [
+    { name: "alice-memory-v1", config: { metric: "cosine" } },
+    { name: "alice-memory-v1", config: { dimensions: 384, metric: "cosine" } },
+    { name: "alice-memory-v1", config: { dimensions: 768, metric: "euclidean" } },
+    {
+      name: "alice-memory-v1",
+      config: { dimensions: 768, metric: "cosine" },
+      unreviewed: true,
+    },
+  ]) {
+    const calls = [];
+    const baseFetch = providerApi(calls);
+    const fetchImpl = async (url, options) => {
+      const parsed = new URL(url);
+      if (
+        parsed.pathname.replace("/client/v4", "") ===
+        `/accounts/${accountId}/vectorize/v2/indexes/alice-memory-v1`
+      ) {
+        calls.push({ url: parsed.href, options });
+        return json({ success: true, result: vectorizeResult });
+      }
+      return baseFetch(url, options);
+    };
+    await assert.rejects(
+      () => fetchAliceCloudflareProviderState({
+        fetchImpl,
+        apiToken: "read-only-token",
+        ownerEmailSha256: fixtures.accessPolicyReadback.ownerEmailSha256,
+        accessAudience,
+        releaseAccessAudience:
+          fixtures.accessPolicyReadback.releaseAccessAudience,
+        releaseServiceTokenIdSha256:
+          fixtures.accessPolicyReadback.releaseServiceTokenIdSha256,
+        accountId,
+        zoneId,
+        baseUrl,
+        now: () => Date.parse(fixtures.accessPolicyReadback.observedAt),
+      }),
+      /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
+    );
+    assert.equal(calls.every((call) => call.options.method === "GET"), true);
   }
 });
 
@@ -684,7 +744,8 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     if (
       pathname.includes("/access/") ||
       pathname.includes("/devices/posture") ||
-      pathname.includes("/ai-gateway/")
+      pathname.includes("/ai-gateway/") ||
+      pathname.includes("/vectorize/")
     ) {
       if (
         pathname ===
