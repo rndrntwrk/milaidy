@@ -16,10 +16,12 @@ const config = {
     "recovery-control-token-with-at-least-32-bytes",
   ALICE_DEPLOYMENT_PAUSE_TOKEN:
     "deployment-pause-token-with-at-least-32-bytes",
+  ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN:
+    "connector-control-token-with-at-least-32-bytes",
 };
 
 describe("Alice route-scoped internal service authentication", () => {
-  test("maps transcript and release routes only to Access and model reserve only to AI", () => {
+  test("maps transcript and release routes only to Access, model reserve only to AI, and connector authorization only to the connector plane", () => {
     expect(requiredInternalService("GET", "/control/internal/v1/runtime/admit")).toBe(
       "access-gateway",
     );
@@ -35,6 +37,12 @@ describe("Alice route-scoped internal service authentication", () => {
     expect(requiredInternalService("GET", "/control/internal/v1/model/binding")).toBe(
       "ai-gateway",
     );
+    expect(
+      requiredInternalService(
+        "POST",
+        "/control/internal/v1/connectors/authorize",
+      ),
+    ).toBe("connector-plane");
     expect(requiredInternalService("POST", "/control/internal/v1/unknown")).toBeNull();
   });
 
@@ -64,6 +72,35 @@ describe("Alice route-scoped internal service authentication", () => {
       authorizeInternalService(
         "ai-gateway",
         config.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN,
+        config,
+      ),
+    ).toBe(false);
+    expect(
+      authorizeInternalService(
+        "connector-plane",
+        config.ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN,
+        config,
+      ),
+    ).toBe(true);
+    for (const forbidden of [
+      config.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN,
+      config.ALICE_AI_GATEWAY_SERVICE_TOKEN,
+    ]) {
+      expect(
+        authorizeInternalService("connector-plane", forbidden, config),
+      ).toBe(false);
+    }
+    expect(
+      authorizeInternalService(
+        "access-gateway",
+        config.ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN,
+        config,
+      ),
+    ).toBe(false);
+    expect(
+      authorizeInternalService(
+        "ai-gateway",
+        config.ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN,
         config,
       ),
     ).toBe(false);
@@ -143,6 +180,20 @@ describe("Alice route-scoped internal service authentication", () => {
       authorizeDeploymentPause(config.ALICE_DEPLOYMENT_PAUSE_TOKEN, {
         ...config,
         ALICE_DEPLOYMENT_PAUSE_TOKEN: config.ALICE_CONTROL_RECOVERY_TOKEN,
+      }),
+    ).toBe(false);
+    expect(
+      authorizeEmergencyRecovery(config.ALICE_CONTROL_RECOVERY_TOKEN, {
+        ...config,
+        ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN:
+          config.ALICE_CONTROL_RECOVERY_TOKEN,
+      }),
+    ).toBe(false);
+    expect(
+      authorizeDeploymentPause(config.ALICE_DEPLOYMENT_PAUSE_TOKEN, {
+        ...config,
+        ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN:
+          config.ALICE_DEPLOYMENT_PAUSE_TOKEN,
       }),
     ).toBe(false);
   });

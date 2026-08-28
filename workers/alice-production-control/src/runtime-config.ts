@@ -27,6 +27,7 @@ export type AliceAuthoritySafetyConfigSource = {
 export type AliceInternalServiceConfigSource = {
   ALICE_ACCESS_GATEWAY_SERVICE_TOKEN: string;
   ALICE_AI_GATEWAY_SERVICE_TOKEN: string;
+  ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN: string;
 };
 
 export type AliceDeploymentPauseConfigSource = AliceInternalServiceConfigSource & {

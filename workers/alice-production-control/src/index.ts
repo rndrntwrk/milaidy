@@ -39,6 +39,10 @@ import {
   processAliceWork,
   type AliceWorkQueueEnvelope,
 } from "./work-execution";
+import {
+  handleConnectorAuthorization,
+  isConnectorAuthorizationRoute,
+} from "./connector-authorization";
 
 export { AliceAuthority, AliceSession } from "./durable";
 export { AlicePlanWorkflow } from "./workflow";
@@ -484,6 +488,20 @@ async function handleInternal(
     return jsonResponse({ ok: false, code: "SERVICE_AUTH_REQUIRED" }, 401);
   }
   const authority = env.ALICE_AUTHORITY.getByName(authorityDurableName());
+  if (isConnectorAuthorizationRoute(request.method, path)) {
+    if (!config) {
+      return jsonResponse(
+        { ok: false, allowed: false, code: "RELEASE_ADMISSION_DENIED" },
+        503,
+      );
+    }
+    return handleConnectorAuthorization(request, (intent) =>
+      callDurable(authority, "/authorize", {
+        actor: "service:alice-connector-plane",
+        request: intent,
+      })
+    );
+  }
   if (path === "/control/internal/v1/health" && request.method === "GET") {
     const { response, value } = await callDurable(authority, "/snapshot");
     const active = value.authority?.binding as ReleaseBinding | undefined;
