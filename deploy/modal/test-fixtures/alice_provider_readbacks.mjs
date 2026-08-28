@@ -257,6 +257,7 @@ export function aliceTestLiveWorkerRollbackReadbacks() {
         { name: "ALICE_VECTOR_INDEX_NAME", text: "alice-memory-v1", type: "plain_text" },
         { name: "ALICE_VECTOR_MODEL", text: "bge-base-en-v1.5", type: "plain_text" },
         { name: "ALICE_VECTOR_DIMENSIONS", text: "768", type: "plain_text" },
+        { name: "ALICE_VECTOR_METRIC", text: "cosine", type: "plain_text" },
         {
           database_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
           name: "ALICE_STATE_DB",
@@ -628,6 +629,13 @@ export function aliceTestProviderReadbacks({
       },
       workers_ai_billing_mode: "postpaid",
       zdr: true,
+    },
+    vectorizeProviderReadback: {
+      name: "alice-memory-v1",
+      description: "Alice production memory index",
+      config: { dimensions: 768, metric: "cosine" },
+      created_on: "2026-08-27T12:00:00.000Z",
+      modified_on: "2026-08-27T12:00:00.000Z",
     },
   };
 }

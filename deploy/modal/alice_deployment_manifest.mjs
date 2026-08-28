@@ -17,6 +17,7 @@ import {
 import {
   buildAliceAccessPolicyProviderConfig,
   buildAliceAiGatewayProviderConfig,
+  buildAliceVectorizeProviderConfig,
 } from "./alice_cloudflare_provider_config.mjs";
 import {
   buildAliceCandidateCloudflareContinuityReadback,
@@ -55,6 +56,7 @@ const COMMON_INPUT_KEYS = [
   "runtimeImage",
   "sourceCommit",
   "statePlaneEffectiveConfig",
+  "vectorizeProviderReadback",
   "workerBundleArtifact",
 ];
 const LEGACY_INPUT_KEYS = [...COMMON_INPUT_KEYS, "modalRevision"];
@@ -146,6 +148,7 @@ async function validInputs(value) {
   try {
     await buildAliceAccessPolicyProviderConfig(value.accessPolicyReadback);
     buildAliceAiGatewayProviderConfig(value.aiGatewayProviderReadback);
+    buildAliceVectorizeProviderConfig(value.vectorizeProviderReadback);
     providerConfigsValid =
       value.accessPolicyReadback.ownerEmailSha256 ===
         value.accessEffectiveConfig?.values?.ownerEmailSha256 &&
@@ -238,6 +241,7 @@ function validManifest(value) {
       "stateMigrationSetSha256",
       "statePlaneConfigSha256",
       "statePlaneWorkerBundleSha256",
+      "vectorizeProviderConfigSha256",
     ])
   ) {
     return false;
@@ -284,6 +288,7 @@ function validManifest(value) {
     DIGEST.test(value.cloudflare.controlConfigSha256) &&
     DIGEST.test(value.cloudflare.aiGatewayConfigSha256) &&
     DIGEST.test(value.cloudflare.aiGatewayProviderConfigSha256) &&
+    DIGEST.test(value.cloudflare.vectorizeProviderConfigSha256) &&
     DIGEST.test(value.cloudflare.accessWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.controlWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.continuityConfigSha256) &&
@@ -307,6 +312,8 @@ export async function buildAliceDeploymentManifest(inputs) {
     await buildAliceAccessPolicyProviderConfig(inputs.accessPolicyReadback);
   const aiGatewayProviderConfig =
     buildAliceAiGatewayProviderConfig(inputs.aiGatewayProviderReadback);
+  const vectorizeProviderConfig =
+    buildAliceVectorizeProviderConfig(inputs.vectorizeProviderReadback);
   const workerBundleDigests = aliceWorkerBundleDigests(
     inputs.workerBundleArtifact,
   );
@@ -353,6 +360,8 @@ export async function buildAliceDeploymentManifest(inputs) {
       ),
       aiGatewayProviderConfigSha256:
         await digestAliceEffectiveConfig(aiGatewayProviderConfig),
+      vectorizeProviderConfigSha256:
+        await digestAliceEffectiveConfig(vectorizeProviderConfig),
       aiGatewayWorkerBundleSha256: workerBundleDigests.aiGateway,
       controlWorkerBundleSha256: workerBundleDigests.control,
       statePlaneConfigSha256: await digestAliceEffectiveConfig(
@@ -495,6 +504,7 @@ if (invokedPath === import.meta.url) {
       rollbackBoundary: process.env.ALICE_ROLLBACK_BOUNDARY,
       accessPolicyReadback: providerState.accessPolicyReadback,
       aiGatewayProviderReadback: providerState.aiGatewayProviderReadback,
+      vectorizeProviderReadback: providerState.vectorizeProviderReadback,
       cloudflareContinuityReadback: candidateContinuityReadback,
       workerBundleArtifact,
       accessEffectiveConfig,

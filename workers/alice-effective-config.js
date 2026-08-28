@@ -568,6 +568,7 @@ export function buildAliceStatePlaneEffectiveConfig(inputs) {
       vectorIndexName: ALICE_CLOUDFLARE_TARGET.memoryIndex,
       vectorModel: "bge-base-en-v1.5",
       vectorDimensions: 768,
+      vectorMetric: "cosine",
     },
     observability: alicePrivatePlaneObservability(),
   };
@@ -664,6 +665,7 @@ function validDeploymentManifest(value) {
       "stateMigrationSetSha256",
       "statePlaneConfigSha256",
       "statePlaneWorkerBundleSha256",
+      "vectorizeProviderConfigSha256",
     ]) &&
     Object.entries(ALICE_CLOUDFLARE_TARGET).every(
       ([key, expected]) => value.cloudflare[key] === expected,
@@ -679,6 +681,7 @@ function validDeploymentManifest(value) {
     DIGEST.test(value.cloudflare.statePlaneConfigSha256) &&
     DIGEST.test(value.cloudflare.connectorPlaneConfigSha256) &&
     DIGEST.test(value.cloudflare.statePlaneWorkerBundleSha256) &&
+    DIGEST.test(value.cloudflare.vectorizeProviderConfigSha256) &&
     DIGEST.test(value.cloudflare.connectorPlaneWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.stateMigrationSetSha256) &&
     DIGEST.test(value.cloudflare.continuityConfigSha256) &&

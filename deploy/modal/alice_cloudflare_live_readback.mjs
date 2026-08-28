@@ -13,6 +13,7 @@ import {
 import {
   buildAliceAccessPolicyProviderConfig,
   buildAliceAiGatewayProviderConfig,
+  buildAliceVectorizeProviderConfig,
 } from "./alice_cloudflare_provider_config.mjs";
 import {
   ALICE_CONTINUITY_SENTINEL_KEY,
@@ -346,6 +347,12 @@ export async function fetchAliceCloudflareProviderState({
       `/accounts/${accountId}/ai-gateway/gateways/${ALICE_CLOUDFLARE_TARGET.aiGateway}/routes`,
       { page: 1, per_page: 100 },
     );
+    const vectorizeProviderReadback = result(
+      await apiGetJson(
+        client,
+        `/accounts/${accountId}/vectorize/v2/indexes/${ALICE_CLOUDFLARE_TARGET.memoryIndex}`,
+      ),
+    );
     const accessPolicyReadback = {
       application,
       deploymentApplication,
@@ -370,10 +377,17 @@ export async function fetchAliceCloudflareProviderState({
       await buildAliceAccessPolicyProviderConfig(accessPolicyReadback);
     const aiGatewayProviderConfig =
       buildAliceAiGatewayProviderConfig(aiGatewayProviderReadback);
+    const vectorizeProviderConfig =
+      buildAliceVectorizeProviderConfig(vectorizeProviderReadback);
     return {
       accessPolicyReadback,
       aiGatewayProviderReadback,
-      sanitized: { accessPolicyConfig, aiGatewayProviderConfig },
+      vectorizeProviderReadback,
+      sanitized: {
+        accessPolicyConfig,
+        aiGatewayProviderConfig,
+        vectorizeProviderConfig,
+      },
     };
   } catch (error) {
     if (
@@ -731,6 +745,7 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       serializedManifest,
       accessPolicyReadback: providerState.accessPolicyReadback,
       aiGatewayProviderReadback: providerState.aiGatewayProviderReadback,
+      vectorizeProviderReadback: providerState.vectorizeProviderReadback,
       cloudflareContinuityReadback: continuityState.readback,
     });
     const client = { fetchImpl, apiToken, baseUrl };
@@ -894,6 +909,8 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       accessPolicyReadback: terminalProviderState.accessPolicyReadback,
       aiGatewayProviderReadback:
         terminalProviderState.aiGatewayProviderReadback,
+      vectorizeProviderReadback:
+        terminalProviderState.vectorizeProviderReadback,
       cloudflareContinuityReadback: terminalContinuityState.readback,
     });
     const terminalRoutes = await apiGetAllResults(
