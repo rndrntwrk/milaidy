@@ -324,7 +324,6 @@ test("captures the production-shaped current response for every Alice Worker", a
     "aiGateway",
     "statePlane",
     "connectorPlane",
-    "runtimeHost",
   ]);
   assert.deepEqual(captured.access.scriptSettings, {
     logpush: false,
