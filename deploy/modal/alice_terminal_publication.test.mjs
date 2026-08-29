@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { canonicalAliceJson } from "../../workers/alice-effective-config.js";
 import { verifyAliceTerminalPublication } from "./alice_terminal_publication.mjs";
@@ -8,6 +13,9 @@ import { verifyAliceTerminalPublication } from "./alice_terminal_publication.mjs
 const sourceCommit = "1".repeat(40);
 const runId = "123456789";
 const runAttempt = 1;
+const terminalPublicationPath = fileURLToPath(
+  new URL("./alice_terminal_publication.mjs", import.meta.url),
+);
 
 function digest(value) {
   return `sha256:${crypto.createHash("sha256").update(canonicalAliceJson(value)).digest("hex")}`;
@@ -183,6 +191,50 @@ function fixture() {
   };
 }
 
+function containerFixture() {
+  const input = fixture();
+  const runtimeImage =
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"c".repeat(64)}`;
+  const containerImageEvidence = {
+    schemaVersion: "alice.cloudflare-container-image.v1",
+    accountId: "036df6c823669b8fa2f66cf4c16eeb29",
+    observedAt: "2026-08-23T12:00:00.000Z",
+    sourceCommit,
+    sourceImage:
+      `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"d".repeat(64)}`,
+    sourceDigest: `sha256:${"d".repeat(64)}`,
+    runtimeImage,
+    runtimeDigest: `sha256:${"c".repeat(64)}`,
+    runtimeRevision: 49,
+    runtimeBuildManifestSha256: `sha256:${"e".repeat(64)}`,
+    capabilityBomSha256: `sha256:${"f".repeat(64)}`,
+    tag: `alice-${sourceCommit.slice(0, 12)}-${runId}-${runAttempt}`,
+    registryReadbackVerified: true,
+    buildReusedWithoutRebuild: true,
+  };
+  delete input.modalPromotionEvidence;
+  delete input.currentModalProviderReadback;
+  input.containerImageEvidence = containerImageEvidence;
+  input.acceptance.runtimeRevision = containerImageEvidence.runtimeRevision;
+  input.acceptance.provenance = {
+    cloudflareLiveReadbackSha256: digest(input.cloudflareLiveReadback),
+    cloudflareRollbackSha256: digest(input.cloudflareRollbackProof),
+    containerImageEvidenceSha256: digest(containerImageEvidence),
+    runtimeImage,
+    runtimeRevision: containerImageEvidence.runtimeRevision,
+  };
+  return input;
+}
+
+function writeJson(directory, name, value) {
+  const filePath = path.join(directory, name);
+  fs.writeFileSync(filePath, `${canonicalAliceJson(value)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  return filePath;
+}
+
 test("accepts only a terminal artifact from the final successful workflow conclusion", () => {
   const verified = verifyAliceTerminalPublication(fixture());
   assert.equal(verified.terminal, true);
@@ -192,6 +244,227 @@ test("accepts only a terminal artifact from the final successful workflow conclu
   );
   assert.equal(verified.workflowConclusion, "success");
   assert.match(verified.acceptanceSha256, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(verified.currentModalProviderVersion, 52);
+  assert.equal(
+    verified.modalPromotionSha256,
+    digest(fixture().modalPromotionEvidence),
+  );
+});
+
+test("accepts Container terminal publication without reading Modal evidence", () => {
+  const input = containerFixture();
+  const verified = verifyAliceTerminalPublication(input);
+  assert.equal(verified.terminal, true);
+  assert.equal(verified.runtimeRevision, 49);
+  assert.equal(
+    verified.runtimeImage,
+    input.containerImageEvidence.runtimeImage,
+  );
+  assert.equal(
+    verified.containerImageEvidenceSha256,
+    digest(input.containerImageEvidence),
+  );
+  assert.equal(Object.hasOwn(verified, "modalPromotionSha256"), false);
+  assert.equal(
+    Object.hasOwn(verified, "currentModalProviderReadbackSha256"),
+    false,
+  );
+});
+
+test("rejects ambiguous or absent terminal provider evidence", () => {
+  const both = containerFixture();
+  const modal = fixture();
+  both.modalPromotionEvidence = modal.modalPromotionEvidence;
+  both.currentModalProviderReadback = modal.currentModalProviderReadback;
+  assert.throws(
+    () => verifyAliceTerminalPublication(both),
+    /ALICE_TERMINAL_PUBLICATION_INVALID/,
+  );
+
+  const neither = containerFixture();
+  delete neither.containerImageEvidence;
+  assert.throws(
+    () => verifyAliceTerminalPublication(neither),
+    /ALICE_TERMINAL_PUBLICATION_INVALID/,
+  );
+
+  const partialModal = fixture();
+  delete partialModal.currentModalProviderReadback;
+  assert.throws(
+    () => verifyAliceTerminalPublication(partialModal),
+    /ALICE_TERMINAL_PUBLICATION_INVALID/,
+  );
+
+  const malformedContainerAlongsideModal = fixture();
+  malformedContainerAlongsideModal.containerImageEvidence = "not-an-object";
+  assert.throws(
+    () => verifyAliceTerminalPublication(malformedContainerAlongsideModal),
+    /ALICE_TERMINAL_PUBLICATION_INVALID/,
+  );
+});
+
+test("rejects Container digest, runtime image, source, and revision drift", () => {
+  for (const mutate of [
+    (input) => {
+      input.acceptance.provenance.containerImageEvidenceSha256 =
+        `sha256:${"9".repeat(64)}`;
+    },
+    (input) => {
+      input.acceptance.provenance.runtimeImage =
+        `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"9".repeat(64)}`;
+    },
+    (input) => {
+      input.containerImageEvidence.sourceCommit = "9".repeat(40);
+      input.containerImageEvidence.tag =
+        `alice-${"9".repeat(12)}-${runId}-${runAttempt}`;
+    },
+    (input) => { input.acceptance.runtimeRevision = 50; },
+    (input) => { input.acceptance.provenance.runtimeRevision = 50; },
+    (input) => {
+      input.cloudflareRollbackProof.schemaVersion =
+        "alice.cloudflare-rollback-evidence.v1";
+    },
+    (input) => { input.workflowRun.conclusion = "failure"; },
+  ]) {
+    const input = containerFixture();
+    mutate(input);
+    assert.throws(
+      () => verifyAliceTerminalPublication(input),
+      /ALICE_TERMINAL_PUBLICATION_INVALID/,
+    );
+  }
+});
+
+test("requires a fresh post-workflow Cloudflare readback in Container mode", () => {
+  const input = containerFixture();
+  input.currentCloudflareLiveReadback.observedAt =
+    "2026-08-23T11:50:00.000Z";
+  assert.throws(
+    () => verifyAliceTerminalPublication(input),
+    /ALICE_TERMINAL_PUBLICATION_INVALID/,
+  );
+});
+
+test("CLI accepts only the conditional Container evidence path", (t) => {
+  const input = containerFixture();
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "alice-terminal-container-"),
+  );
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const nowMs = Date.now();
+  input.workflowRun.updated_at = new Date(nowMs - 60_000).toISOString();
+  input.currentCloudflareLiveReadback.observedAt =
+    new Date(nowMs - 30_000).toISOString();
+  const env = {
+    PATH: process.env.PATH ?? "",
+    ALICE_PRODUCTION_ACCEPTANCE_PATH:
+      writeJson(directory, "acceptance.json", input.acceptance),
+    ALICE_CLOUDFLARE_READBACK_PATH:
+      writeJson(directory, "cloudflare.json", input.cloudflareLiveReadback),
+    ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH:
+      writeJson(directory, "rollback.json", input.cloudflareRollbackProof),
+    ALICE_CONTAINER_IMAGE_EVIDENCE_PATH:
+      writeJson(directory, "container.json", input.containerImageEvidence),
+    ALICE_CURRENT_CLOUDFLARE_READBACK_PATH:
+      writeJson(
+        directory,
+        "current-cloudflare.json",
+        input.currentCloudflareLiveReadback,
+      ),
+    ALICE_WORKFLOW_RUN_READBACK_PATH:
+      writeJson(directory, "workflow.json", input.workflowRun),
+    ALICE_SOURCE_COMMIT: sourceCommit,
+    ALICE_DEPLOYMENT_RUN_ID: runId,
+    ALICE_DEPLOYMENT_RUN_ATTEMPT: String(runAttempt),
+  };
+  const result = spawnSync(process.execPath, [terminalPublicationPath], {
+    encoding: "utf8",
+    env,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const verified = JSON.parse(result.stdout);
+  assert.equal(verified.runtimeRevision, 49);
+  assert.equal(
+    verified.containerImageEvidenceSha256,
+    digest(input.containerImageEvidence),
+  );
+
+  const missingProvider = { ...env };
+  delete missingProvider.ALICE_CONTAINER_IMAGE_EVIDENCE_PATH;
+  const missingResult = spawnSync(
+    process.execPath,
+    [terminalPublicationPath],
+    { encoding: "utf8", env: missingProvider },
+  );
+  assert.equal(missingResult.status, 1);
+  assert.match(missingResult.stderr, /ALICE_TERMINAL_PUBLICATION_INVALID/);
+
+  const ambiguousProvider = {
+    ...env,
+    ALICE_MODAL_PROMOTION_EVIDENCE_PATH:
+      path.join(directory, "must-not-be-read-modal.json"),
+    ALICE_CURRENT_MODAL_PROVIDER_READBACK_PATH:
+      path.join(directory, "must-not-be-read-current-modal.json"),
+  };
+  const ambiguousResult = spawnSync(
+    process.execPath,
+    [terminalPublicationPath],
+    { encoding: "utf8", env: ambiguousProvider },
+  );
+  assert.equal(ambiguousResult.status, 1);
+  assert.match(ambiguousResult.stderr, /ALICE_TERMINAL_PUBLICATION_INVALID/);
+});
+
+test("CLI preserves the Modal terminal evidence path", (t) => {
+  const input = fixture();
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "alice-terminal-modal-"),
+  );
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const nowMs = Date.now();
+  input.workflowRun.updated_at = new Date(nowMs - 60_000).toISOString();
+  input.currentCloudflareLiveReadback.observedAt =
+    new Date(nowMs - 30_000).toISOString();
+  input.currentModalProviderReadback.observedAt =
+    new Date(nowMs - 25_000).toISOString();
+  const result = spawnSync(process.execPath, [terminalPublicationPath], {
+    encoding: "utf8",
+    env: {
+      PATH: process.env.PATH ?? "",
+      ALICE_PRODUCTION_ACCEPTANCE_PATH:
+        writeJson(directory, "acceptance.json", input.acceptance),
+      ALICE_CLOUDFLARE_READBACK_PATH:
+        writeJson(directory, "cloudflare.json", input.cloudflareLiveReadback),
+      ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH:
+        writeJson(directory, "rollback.json", input.cloudflareRollbackProof),
+      ALICE_MODAL_PROMOTION_EVIDENCE_PATH:
+        writeJson(directory, "modal.json", input.modalPromotionEvidence),
+      ALICE_CURRENT_CLOUDFLARE_READBACK_PATH:
+        writeJson(
+          directory,
+          "current-cloudflare.json",
+          input.currentCloudflareLiveReadback,
+        ),
+      ALICE_CURRENT_MODAL_PROVIDER_READBACK_PATH:
+        writeJson(
+          directory,
+          "current-modal.json",
+          input.currentModalProviderReadback,
+        ),
+      ALICE_WORKFLOW_RUN_READBACK_PATH:
+        writeJson(directory, "workflow.json", input.workflowRun),
+      ALICE_SOURCE_COMMIT: sourceCommit,
+      ALICE_DEPLOYMENT_RUN_ID: runId,
+      ALICE_DEPLOYMENT_RUN_ATTEMPT: String(runAttempt),
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const verified = JSON.parse(result.stdout);
+  assert.equal(verified.currentModalProviderVersion, 52);
+  assert.equal(
+    verified.modalPromotionSha256,
+    digest(input.modalPromotionEvidence),
+  );
 });
 
 test("requires the private runtime host in both stable terminal snapshots", () => {

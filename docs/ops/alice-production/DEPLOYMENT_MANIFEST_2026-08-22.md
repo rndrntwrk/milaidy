@@ -231,19 +231,25 @@ itself: every consumer must fetch the GitHub workflow-run record after
 completion and run `deploy/modal/alice_terminal_publication.mjs`. The verifier
 rejects failed, cancelled, or incomplete runs and binds the exact source, run,
 attempt, empty terminal pause set, Cloudflare rollback/live-readback digests,
-Modal promotion digest, and current-run R2 object-key delta. Consumption also
-requires new authenticated provider captures made after the workflow completed
-and no more than five minutes before verification. Re-run
+the exact Container-image or Modal-promotion digest, and current-run R2
+object-key delta. Consumption also
+requires a new authenticated Cloudflare provider capture made after the
+workflow completed and no more than five minutes before verification. Re-run
 `alice_cloudflare_live_readback.mjs` against the downloaded, exact release
-manifest/config and perform the idempotent, bounded Modal scheduling enforcement
-plus provider capture with
-`python deploy/modal/alice_modal_provider_readback.py --capture-terminal`.
-Provide those files as `ALICE_CURRENT_CLOUDFLARE_READBACK_PATH` and
+manifest/config and provide it as `ALICE_CURRENT_CLOUDFLARE_READBACK_PATH`.
+For a Container release, provide the archived, exact image proof as
+`ALICE_CONTAINER_IMAGE_EVIDENCE_PATH` and omit both Modal evidence paths. The
+verifier strictly binds its source, Cloudflare-registry digest, runtime image,
+and runtime revision to the terminal acceptance artifact. For a Modal release,
+omit the Container evidence path, provide the archived promotion proof as
+`ALICE_MODAL_PROMOTION_EVIDENCE_PATH`, and perform the idempotent, bounded Modal
+scheduling enforcement plus provider capture with
+`python deploy/modal/alice_modal_provider_readback.py --capture-terminal` as
 `ALICE_CURRENT_MODAL_PROVIDER_READBACK_PATH`. The verifier compares the active
 Cloudflare deployments, versions, traffic, provider fingerprints, Workflows,
 bindings, account/zone and Worker identities byte-for-byte after removing only
-the observation timestamp/duration. It also compares the active Modal
-app/environment/provider and rollback versions, commit, function/object graph,
+the observation timestamp/duration. In Modal mode it also compares the active
+Modal app/environment/provider and rollback versions, commit, function/object graph,
 secret-object identities, volumes, images, pinned client, and provider-returned
 autoscaler state (`min=0`, `max=1`, `buffer=0`, `scaledown=300`). Modal 1.5.4
 does not expose a read-only scheduling getter, so this terminal capture precisely
