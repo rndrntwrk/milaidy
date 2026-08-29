@@ -121,6 +121,18 @@ const connectorPlaneVersion = {
     }],
   },
 };
+const runtimeHostVersionId = "55555555-5555-4555-8555-555555555555";
+const runtimeHostVersion = {
+  id: runtimeHostVersionId,
+  resources: {
+    bindings: [{
+      type: "durable_object_namespace",
+      name: "ALICE_RUNTIME_CONTAINER",
+      class_name: "AliceRuntimeContainer",
+      namespace_id: "5".repeat(32),
+    }],
+  },
+};
 const observedTraffic = {
   customDomains: [],
   routes: [{
@@ -182,10 +194,16 @@ test("materializes an unrouted fail-closed control bootstrap without secret bind
   assert.deepEqual(sourceConfig.routes, [{ pattern: "alice.rndrntwrk.com/control/*" }]);
 });
 
-test("extracts the exact five-role provider-assigned Durable Object namespaces", () => {
+test("extracts the exact six-role provider-assigned Durable Object namespaces", () => {
   const version = (bindings) => ({ resources: { bindings } });
   const versions = {
     access: version([{
+      type: "durable_object_namespace",
+      name: "ALICE_RUNTIME_CONTAINER",
+      class_name: "AliceRuntimeContainer",
+      namespace_id: "5".repeat(32),
+    }]),
+    runtimeHost: version([{
       type: "durable_object_namespace",
       name: "ALICE_RUNTIME_CONTAINER",
       class_name: "AliceRuntimeContainer",
@@ -222,6 +240,11 @@ test("extracts the exact five-role provider-assigned Durable Object namespaces",
   const ids = extractAliceBootstrapNamespaceIds(versions);
   assert.deepEqual(ids, {
     access: [{
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      namespaceId: "5".repeat(32),
+    }],
+    runtimeHost: [{
       className: "AliceRuntimeContainer",
       name: "ALICE_RUNTIME_CONTAINER",
       namespaceId: "5".repeat(32),
@@ -272,12 +295,14 @@ test("plans an inactive Access upload for the observed legacy version before fir
     bootstrapModule.planAliceBootstrapIdentityActions({
       activeVersionIds: {
         access: observedLegacyAccessVersionId,
+        runtimeHost: null,
         control: observedControlVersionId,
         statePlane: null,
         connectorPlane: null,
       },
       activeVersions: {
         access: observedLegacyAccessVersion,
+        runtimeHost: null,
         control: observedControlVersion,
         statePlane: null,
         connectorPlane: null,
@@ -285,6 +310,7 @@ test("plans an inactive Access upload for the observed legacy version before fir
     }),
     {
       access: { upload: "inactive", promote: false },
+      runtimeHost: { upload: "first-deploy", promote: true },
       control: { upload: "none", promote: false },
       statePlane: { upload: "first-deploy", promote: true },
       connectorPlane: { upload: "first-deploy", promote: true },
@@ -301,12 +327,14 @@ test("stages only Access when rerunning after the absent planes were first-deplo
     bootstrapModule.planAliceBootstrapIdentityActions({
       activeVersionIds: {
         access: observedLegacyAccessVersionId,
+        runtimeHost: runtimeHostVersionId,
         control: observedControlVersionId,
         statePlane: statePlaneVersionId,
         connectorPlane: connectorPlaneVersionId,
       },
       activeVersions: {
         access: observedLegacyAccessVersion,
+        runtimeHost: runtimeHostVersion,
         control: observedControlVersion,
         statePlane: statePlaneVersion,
         connectorPlane: connectorPlaneVersion,
@@ -314,6 +342,7 @@ test("stages only Access when rerunning after the absent planes were first-deplo
     }),
     {
       access: { upload: "inactive", promote: false },
+      runtimeHost: { upload: "none", promote: false },
       control: { upload: "none", promote: false },
       statePlane: { upload: "none", promote: false },
       connectorPlane: { upload: "none", promote: false },
@@ -326,12 +355,14 @@ test("rejects a cross-role namespace collision before planning any mutation", ()
     () => bootstrapModule.planAliceBootstrapIdentityActions({
       activeVersionIds: {
         access: observedLegacyAccessVersionId,
+        runtimeHost: null,
         control: observedControlVersionId,
         statePlane: statePlaneVersionId,
         connectorPlane: connectorPlaneVersionId,
       },
       activeVersions: {
         access: observedLegacyAccessVersion,
+        runtimeHost: null,
         control: observedControlVersion,
         statePlane: {
           ...statePlaneVersion,
@@ -400,6 +431,7 @@ test("extracts the Access namespace from the selected staged version only", () =
   );
   const selectedVersionIds = {
     access: "11111111-1111-4111-8111-111111111111",
+    runtimeHost: runtimeHostVersionId,
     control: observedControlVersionId,
     statePlane: statePlaneVersionId,
     connectorPlane: connectorPlaneVersionId,
@@ -414,6 +446,7 @@ test("extracts the Access namespace from the selected staged version only", () =
         namespace_id: "5".repeat(32),
       }] },
     },
+    runtimeHost: runtimeHostVersion,
     control: observedControlVersion,
     aiGateway: null,
     statePlane: statePlaneVersion,
@@ -442,7 +475,7 @@ test("extracts the Access namespace from the selected staged version only", () =
   );
 });
 
-test("orchestrates the rerun as one inactive Access upload with no promotion", async () => {
+test("full-deploys the unrouted runtime host before one inactive Access upload", async () => {
   assert.equal(
     typeof bootstrapModule.executeAliceBootstrapIdentityActions,
     "function",
@@ -460,6 +493,7 @@ test("orchestrates the rerun as one inactive Access upload with no promotion", a
   const provider = {
     activeVersionIds: {
       access: observedLegacyAccessVersionId,
+      runtimeHost: null,
       control: observedControlVersionId,
       statePlane: statePlaneVersionId,
       connectorPlane: connectorPlaneVersionId,
@@ -470,6 +504,7 @@ test("orchestrates the rerun as one inactive Access upload with no promotion", a
   const result = await bootstrapModule.executeAliceBootstrapIdentityActions({
     identityActions: {
       access: { upload: "inactive", promote: false },
+      runtimeHost: { upload: "first-deploy", promote: true },
       control: { upload: "none", promote: false },
       statePlane: { upload: "none", promote: false },
       connectorPlane: { upload: "none", promote: false },
@@ -479,6 +514,10 @@ test("orchestrates the rerun as one inactive Access upload with no promotion", a
       access: {
         configPath: "/release/access.bootstrap.wrangler.json",
         deploymentMainPath: "/release/alice-access-gateway/index.js",
+      },
+      runtimeHost: {
+        configPath: "/release/runtimeHost.bootstrap.wrangler.json",
+        deploymentMainPath: "/release/alice-runtime-container-host/index.js",
       },
       control: {
         configPath: "/release/control.bootstrap.wrangler.json",
@@ -500,6 +539,9 @@ test("orchestrates the rerun as one inactive Access upload with no promotion", a
     commandEnv: {},
     runCommand: (_binary, argv) => {
       commands.push(argv);
+      if (argv[0] === "deploy") {
+        return `Current Version ID: ${runtimeHostVersionId}\n`;
+      }
       if (argv[0] === "versions" && argv[1] === "upload") {
         return `Worker Version ID: ${stagedAccessVersionId}\n`;
       }
@@ -515,12 +557,14 @@ test("orchestrates the rerun as one inactive Access upload with no promotion", a
     },
     fetchVersion: async ({ role, versionId }) => ({
       access: stagedAccessVersion,
+      runtimeHost: runtimeHostVersion,
       control: observedControlVersion,
       statePlane: statePlaneVersion,
       connectorPlane: connectorPlaneVersion,
     })[role]?.id === versionId
       ? ({
           access: stagedAccessVersion,
+          runtimeHost: runtimeHostVersion,
           control: observedControlVersion,
           statePlane: statePlaneVersion,
           connectorPlane: connectorPlaneVersion,
@@ -531,16 +575,21 @@ test("orchestrates the rerun as one inactive Access upload with no promotion", a
     trafficBefore: observedTraffic,
   });
   assert.equal(result.versionIds.access, stagedAccessVersionId);
-  assert.deepEqual(result.createdRoles, []);
+  assert.deepEqual(result.createdRoles, ["runtimeHost"]);
   assert.deepEqual(
     commands.map((argv) => argv.slice(0, 3)),
-    [["versions", "upload", "/release/alice-access-gateway/index.js"]],
+    [
+      ["deploy", "/release/alice-runtime-container-host/index.js", "--config"],
+      ["versions", "upload", "/release/alice-access-gateway/index.js"],
+      ["versions", "deploy", "--config"],
+    ],
   );
   assert.deepEqual(result.namespaceIds.access, [{
     className: "AliceRuntimeContainer",
     name: "ALICE_RUNTIME_CONTAINER",
     namespaceId: "5".repeat(32),
   }]);
+  assert.deepEqual(result.namespaceIds.runtimeHost, result.namespaceIds.access);
   assert.equal(
     provider.activeVersionIds.access,
     observedLegacyAccessVersionId,
@@ -564,12 +613,14 @@ test("checks the inactive Access boundary after first-deploy promotions", async 
         namespace_id: "5".repeat(32),
       }] },
     },
+    runtimeHost: runtimeHostVersion,
     control: observedControlVersion,
     statePlane: statePlaneVersion,
     connectorPlane: connectorPlaneVersion,
   };
   const activeVersionIds = {
     access: observedLegacyAccessVersionId,
+    runtimeHost: runtimeHostVersionId,
     control: observedControlVersionId,
     statePlane: null,
     connectorPlane: connectorPlaneVersionId,
@@ -579,6 +630,7 @@ test("checks the inactive Access boundary after first-deploy promotions", async 
     bootstrapModule.executeAliceBootstrapIdentityActions({
       identityActions: {
         access: { upload: "inactive", promote: false },
+        runtimeHost: { upload: "none", promote: false },
         control: { upload: "none", promote: false },
         statePlane: { upload: "first-deploy", promote: true },
         connectorPlane: { upload: "none", promote: false },
@@ -588,6 +640,10 @@ test("checks the inactive Access boundary after first-deploy promotions", async 
         access: {
           configPath: "/release/access.bootstrap.wrangler.json",
           deploymentMainPath: "/release/alice-access-gateway/index.js",
+        },
+        runtimeHost: {
+          configPath: "/release/runtimeHost.bootstrap.wrangler.json",
+          deploymentMainPath: "/release/alice-runtime-container-host/index.js",
         },
         control: {
           configPath: "/release/control.bootstrap.wrangler.json",
@@ -712,6 +768,7 @@ test("fails closed instead of staging partial or wrong continuity bindings", () 
       () => bootstrapModule.planAliceBootstrapIdentityActions({
         activeVersionIds: {
           access: observedLegacyAccessVersionId,
+          runtimeHost: null,
           control: null,
           statePlane: null,
           connectorPlane: null,
@@ -721,6 +778,7 @@ test("fails closed instead of staging partial or wrong continuity bindings", () 
             ...observedLegacyAccessVersion,
             resources: { bindings },
           },
+          runtimeHost: null,
           control: null,
           statePlane: null,
           connectorPlane: null,
@@ -740,6 +798,15 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
     [
       "access",
       "alice-access-gateway",
+      {
+        name: "ALICE_RUNTIME_CONTAINER",
+        class_name: "AliceRuntimeContainer",
+        script_name: "alice-runtime-container-host",
+      },
+    ],
+    [
+      "runtimeHost",
+      "alice-runtime-container-host",
       { name: "ALICE_RUNTIME_CONTAINER", class_name: "AliceRuntimeContainer" },
     ],
     [
@@ -788,7 +855,7 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
     assert.deepEqual(config.secrets, { required: [] });
     assert.deepEqual(config.durable_objects.bindings, [binding]);
     assert.equal("services" in config, false);
-    assert.equal("containers" in config, false);
+    assert.equal("containers" in config, role === "runtimeHost");
     assert.equal("d1_databases" in config, false);
     assert.equal("vectorize" in config, false);
     assert.equal("r2_buckets" in config, false);
@@ -946,6 +1013,7 @@ test("accepts the exact active recovery boundary when a newer upload is inactive
       versionId: activeRecoveryVersionId,
       namespaceIds: {
         access: [],
+        runtimeHost: [],
         aiGateway: [],
         control: [
           {
