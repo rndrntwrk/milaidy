@@ -34,7 +34,10 @@ const ROLES = [
   "aiGateway",
   "statePlane",
   "connectorPlane",
+  "runtimeHost",
 ];
+const RUNTIME_HOST_WORKER =
+  ALICE_CLOUDFLARE_TARGET.runtimeHostWorker ?? "alice-runtime-container-host";
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
@@ -197,6 +200,77 @@ function normalizedRoutes(routes) {
 
 function canonicalEqual(left, right) {
   return canonicalAliceJson(left) === canonicalAliceJson(right);
+}
+
+function expectedWorkerName(role) {
+  const target = {
+    access: ALICE_CLOUDFLARE_TARGET.accessWorker,
+    control: ALICE_CLOUDFLARE_TARGET.controlWorker,
+    aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
+    statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
+    connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
+    runtimeHost: RUNTIME_HOST_WORKER,
+  }[role];
+  if (typeof target !== "string" || target.length === 0) readbackInvalid();
+  return target;
+}
+
+export async function fetchAliceRuntimeHostContainerState({
+  fetchImpl = globalThis.fetch,
+  apiToken,
+  accountId = ALICE_CLOUDFLARE_TARGET.accountId,
+  baseUrl = API_BASE,
+}) {
+  if (!validInputs({
+    apiToken,
+    accountId,
+    zoneId: ZONE_ID,
+    baseUrl,
+    fetchImpl,
+  })) {
+    readbackInvalid();
+  }
+  try {
+    const client = { fetchImpl, apiToken, baseUrl };
+    const applications = result(await apiGetJson(
+      client,
+      `/accounts/${accountId}/containers/applications`,
+      { name: "alice-production-runtime" },
+    ));
+    const application = exactOne(
+      applications,
+      (candidate) => candidate?.name === "alice-production-runtime",
+    );
+    const detailed = result(await apiGetJson(
+      client,
+      `/accounts/${accountId}/containers/applications/${application.id}`,
+    ));
+    if (!canonicalEqual(application, detailed)) readbackInvalid();
+    const instancePage = result(await apiGetJson(
+      client,
+      `/accounts/${accountId}/containers/dash/applications/${application.id}/instances`,
+      { per_page: 100 },
+    ));
+    const instances = instancePage?.instances;
+    const durableObjects = instancePage?.durable_objects ?? [];
+    if (
+      !Array.isArray(instances) ||
+      !Array.isArray(durableObjects) ||
+      instances.length !== 0 ||
+      durableObjects.length !== 0
+    ) {
+      readbackInvalid();
+    }
+    return { application: detailed, applicationInstances: instances };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "ALICE_CLOUDFLARE_LIVE_READBACK_INVALID"
+    ) {
+      throw error;
+    }
+    readbackInvalid();
+  }
 }
 
 async function readExactResponseBytes(response, expectedText) {
@@ -793,14 +867,18 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       readbackInvalid();
     }
     const workflow = continuityState.readback.workflow;
+    const runtimeHostContainerState = await fetchAliceRuntimeHostContainerState({
+      fetchImpl,
+      apiToken,
+      accountId,
+      baseUrl,
+    });
     const workers = {};
     const workerTerminalAnchors = {};
     for (const role of ROLES) {
       const config = materializedWranglerConfigs[role];
       const expectedEffectiveConfig = expectedEffectiveConfigs[role];
-      if (!config || config.name !== ALICE_CLOUDFLARE_TARGET[
-        role === "aiGateway" ? "aiGatewayWorker" : `${role}Worker`
-      ]) {
+      if (!config || config.name !== expectedWorkerName(role)) {
         readbackInvalid();
       }
       const workerRoot = `/accounts/${accountId}/workers/scripts/${config.name}`;
@@ -859,6 +937,11 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         subdomain,
         queueConsumer,
         workflow: role === "control" ? workflow : null,
+        ...(role === "runtimeHost" ? {
+          containerApplication: runtimeHostContainerState.application,
+          containerApplicationInstances:
+            runtimeHostContainerState.applicationInstances,
+        } : {}),
         materializedWranglerConfig: config,
         expectedEffectiveConfig,
         serializedManifest,
@@ -933,6 +1016,13 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
     const terminalQueue = terminalContinuityState.readback.queue;
     const terminalConsumers = terminalContinuityState.readback.queueConsumers;
     const terminalWorkflow = terminalContinuityState.readback.workflow;
+    const terminalRuntimeHostContainerState =
+      await fetchAliceRuntimeHostContainerState({
+        fetchImpl,
+        apiToken,
+        accountId,
+        baseUrl,
+      });
     if (
       !canonicalEqual(providerState.sanitized, terminalProviderState.sanitized) ||
       !canonicalEqual(providerFingerprints, terminalProviderFingerprints) ||
@@ -948,7 +1038,11 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       !canonicalEqual(queue, terminalQueue) ||
       !canonicalEqual(consumers, terminalConsumers) ||
       !canonicalEqual(workflow, terminalWorkflow)
-      || !canonicalEqual(workflowVersions, terminalWorkflowVersions)
+      || !canonicalEqual(workflowVersions, terminalWorkflowVersions) ||
+      !canonicalEqual(
+        runtimeHostContainerState,
+        terminalRuntimeHostContainerState,
+      )
     ) {
       readbackInvalid();
     }
@@ -991,7 +1085,7 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       readbackInvalid();
     }
     return {
-      schemaVersion: "alice.cloudflare-live-readback.v1",
+      schemaVersion: "alice.cloudflare-live-readback.v2",
       accountId,
       zoneId,
       observedAt: new Date(completedAt).toISOString(),

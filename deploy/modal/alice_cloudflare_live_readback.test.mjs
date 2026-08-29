@@ -710,6 +710,34 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     aiGateway: "alice-ai-gateway",
     statePlane: "alice-state-plane",
     connectorPlane: "alice-connector-plane",
+    runtimeHost: "alice-runtime-container-host",
+  };
+  const runtimeHostNamespaceId = "5".repeat(32);
+  const runtimeHostApplication = {
+    id: "55555555-5555-4555-8555-555555555555",
+    account_id: accountId,
+    created_at: "2026-08-29T12:00:00.000Z",
+    name: "alice-production-runtime",
+    version: 1,
+    scheduling_policy: "default",
+    instances: 0,
+    max_instances: 1,
+    configuration: {
+      image:
+        `registry.cloudflare.com/${accountId}/alice-runtime@sha256:${"4".repeat(64)}`,
+      instance_type: "standard-1",
+      ports: [],
+    },
+    durable_objects: { namespace_id: runtimeHostNamespaceId },
+    health: {
+      instances: {
+        active: 0,
+        healthy: 0,
+        failed: 0,
+        starting: 0,
+        scheduling: 0,
+      },
+    },
   };
   const deploymentByWorker = Object.fromEntries(
     Object.values(roles).map((worker, index) => [
@@ -734,6 +762,8 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   let routeReads = 0;
   let consumerReads = 0;
   let workflowVersionReads = 0;
+  let includeRuntimeHostInstance = false;
+  let runtimeHostDetailDrift = false;
   let ownerPolicyStableThrough = Number.POSITIVE_INFINITY;
   let routesStableThrough = Number.POSITIVE_INFINITY;
   let consumersStableThrough = Number.POSITIVE_INFINITY;
@@ -822,6 +852,35 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
           count: domains.length,
           total_count: domains.length,
         },
+      });
+    }
+    if (pathname === `/accounts/${accountId}/containers/applications`) {
+      return json({ success: true, result: [runtimeHostApplication] });
+    }
+    if (
+      pathname ===
+      `/accounts/${accountId}/containers/applications/${runtimeHostApplication.id}`
+    ) {
+      return json({
+        success: true,
+        result: runtimeHostDetailDrift
+          ? { ...runtimeHostApplication, max_instances: 2 }
+          : runtimeHostApplication,
+      });
+    }
+    if (
+      pathname ===
+      `/accounts/${accountId}/containers/dash/applications/${runtimeHostApplication.id}/instances`
+    ) {
+      return json({
+        success: true,
+        result: {
+          durable_objects: [],
+          instances: includeRuntimeHostInstance
+            ? [{ id: "unexpected-runtime-instance" }]
+            : [],
+        },
+        result_info: { per_page: 100 },
       });
     }
     if (pathname === `/accounts/${accountId}/queues`) {
@@ -999,6 +1058,24 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
           : role === "access"
             ? [{ pattern: "alice.rndrntwrk.com/*" }]
             : [],
+        ...(role === "runtimeHost" ? {
+          account_id: accountId,
+          workers_dev: false,
+          preview_urls: false,
+          containers: [{
+            class_name: "AliceRuntimeContainer",
+            image: runtimeHostApplication.configuration.image,
+            instance_type: "standard-1",
+            max_instances: 1,
+            name: runtimeHostApplication.name,
+          }],
+          durable_objects: {
+            bindings: [{
+              class_name: "AliceRuntimeContainer",
+              name: "ALICE_RUNTIME_CONTAINER",
+            }],
+          },
+        } : {}),
       }]),
     ),
     expectedEffectiveConfigs: {
@@ -1007,6 +1084,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       aiGateway: {},
       statePlane: {},
       connectorPlane: {},
+      runtimeHost: {},
     },
     expectedDurableObjectNamespaceIds:
       continuityFixture.durableObjectNamespaceIds,
@@ -1020,6 +1098,13 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       assert.equal(input.deployment.id, input.deploymentAfterContent.id);
       assert.equal(input.deploymentMainPath, input.materializedWranglerConfig.main);
       assert.equal(input.deployedMainModule.byteLength > 0, true);
+      if (input.role === "runtimeHost") {
+        assert.deepEqual(input.containerApplication, runtimeHostApplication);
+        assert.deepEqual(input.containerApplicationInstances, []);
+      } else {
+        assert.equal(input.containerApplication, undefined);
+        assert.equal(input.containerApplicationInstances, undefined);
+      }
       assert.deepEqual(
         input.expectedDurableObjectNamespaceIds,
         postDeploymentInput.expectedDurableObjectNamespaceIds[input.role],
@@ -1034,11 +1119,13 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   const evidence = await fetchAliceCloudflarePostDeploymentReadback(
     postDeploymentInput,
   );
+  assert.equal(evidence.schemaVersion, "alice.cloudflare-live-readback.v2");
   assert.deepEqual(verifiedRoles.sort(), [
     "access",
     "aiGateway",
     "connectorPlane",
     "control",
+    "runtimeHost",
     "statePlane",
   ]);
   assert.deepEqual(Object.keys(evidence.workers).sort(), verifiedRoles.sort());
@@ -1113,6 +1200,20 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   includeReleaseCustomDomain = false;
 
   includeExtraConsumer = true;
+  await assert.rejects(
+    () => fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput),
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
+  );
+  includeExtraConsumer = false;
+
+  includeRuntimeHostInstance = true;
+  await assert.rejects(
+    () => fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput),
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
+  );
+  includeRuntimeHostInstance = false;
+
+  runtimeHostDetailDrift = true;
   await assert.rejects(
     () => fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput),
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,

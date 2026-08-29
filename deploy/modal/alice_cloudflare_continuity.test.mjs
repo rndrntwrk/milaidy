@@ -90,6 +90,7 @@ const readback = {
         className: "AliceRuntimeContainer",
         name: "ALICE_RUNTIME_CONTAINER",
         namespaceId: "55555555555555555555555555555555",
+        scriptName: "alice-runtime-container-host",
       },
     ],
     aiGateway: [],
@@ -98,11 +99,13 @@ const readback = {
         className: "AliceAuthority",
         name: "ALICE_AUTHORITY",
         namespaceId: "11111111111111111111111111111111",
+        scriptName: null,
       },
       {
         className: "AliceSession",
         name: "ALICE_SESSIONS",
         namespaceId: "22222222222222222222222222222222",
+        scriptName: null,
       },
     ],
     statePlane: [
@@ -110,6 +113,7 @@ const readback = {
         className: "AliceStateCoordination",
         name: "ALICE_COORDINATION",
         namespaceId: "33333333333333333333333333333333",
+        scriptName: null,
       },
     ],
     connectorPlane: [
@@ -117,6 +121,15 @@ const readback = {
         className: "AliceConnectorOutboundCoordination",
         name: "ALICE_CONNECTOR_OUTBOUND",
         namespaceId: "44444444444444444444444444444444",
+        scriptName: null,
+      },
+    ],
+    runtimeHost: [
+      {
+        className: "AliceRuntimeContainer",
+        name: "ALICE_RUNTIME_CONTAINER",
+        namespaceId: "55555555555555555555555555555555",
+        scriptName: null,
       },
     ],
   },
@@ -124,7 +137,7 @@ const readback = {
 
 test("normalizes one exact provider continuity identity bundle", () => {
   const config = buildAliceCloudflareContinuityConfig(readback);
-  assert.equal(config.schemaVersion, "alice.cloudflare-continuity-config.v1");
+  assert.equal(config.schemaVersion, "alice.cloudflare-continuity-config.v2");
   assert.equal(config.evidenceQueue.id, readback.queue.queue_id);
   assert.equal(config.evidenceDeadLetterQueue.id, readback.deadLetterQueue.queue_id);
   assert.equal(config.evidenceQueueConsumer.id, readback.queueConsumers[0].consumer_id);
@@ -135,6 +148,7 @@ test("normalizes one exact provider continuity identity bundle", () => {
       className: "AliceStateCoordination",
       name: "ALICE_COORDINATION",
       namespaceId: "33333333333333333333333333333333",
+      scriptName: null,
     },
   ]);
   assert.deepEqual(config.durableObjectNamespaceIds.connectorPlane, [
@@ -142,10 +156,72 @@ test("normalizes one exact provider continuity identity bundle", () => {
       className: "AliceConnectorOutboundCoordination",
       name: "ALICE_CONNECTOR_OUTBOUND",
       namespaceId: "44444444444444444444444444444444",
+      scriptName: null,
+    },
+  ]);
+  assert.deepEqual(config.durableObjectNamespaceIds.runtimeHost, [
+    {
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      namespaceId: "55555555555555555555555555555555",
+      scriptName: null,
     },
   ]);
   assert.deepEqual(verifyAliceCloudflareContinuityConfig(config), config);
   assert.match(digestAliceCloudflareContinuityConfig(config), /^sha256:[a-f0-9]{64}$/);
+});
+
+test("admits only the exact external Access reference to the runtimeHost-owned namespace", () => {
+  const build = (durableObjectNamespaceIds) =>
+    buildAliceCloudflareContinuityConfig({
+      ...readback,
+      durableObjectNamespaceIds,
+    });
+  assert.doesNotThrow(() => build(readback.durableObjectNamespaceIds));
+
+  const substitutions = [
+    {
+      ...readback.durableObjectNamespaceIds,
+      access: [{
+        ...readback.durableObjectNamespaceIds.access[0],
+        scriptName: null,
+      }],
+    },
+    {
+      ...readback.durableObjectNamespaceIds,
+      access: [{
+        ...readback.durableObjectNamespaceIds.access[0],
+        scriptName: "other-runtime-host",
+      }],
+    },
+    {
+      ...readback.durableObjectNamespaceIds,
+      runtimeHost: [{
+        ...readback.durableObjectNamespaceIds.runtimeHost[0],
+        scriptName: "alice-runtime-container-host",
+      }],
+    },
+    {
+      ...readback.durableObjectNamespaceIds,
+      access: [{
+        ...readback.durableObjectNamespaceIds.access[0],
+        namespaceId: "6".repeat(32),
+      }],
+    },
+    {
+      ...readback.durableObjectNamespaceIds,
+      statePlane: [{
+        ...readback.durableObjectNamespaceIds.statePlane[0],
+        namespaceId: "5".repeat(32),
+      }],
+    },
+  ];
+  for (const ids of substitutions) {
+    assert.throws(
+      () => build(ids),
+      /ALICE_CLOUDFLARE_CONTINUITY_CONFIG_INVALID/,
+    );
+  }
 });
 
 test("case-folds Cloudflare's canonical uppercase ENAM bucket location", () => {
