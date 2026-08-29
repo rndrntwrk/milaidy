@@ -552,7 +552,7 @@ test("temporary pre-import materializes one exact release without production pro
   assert.deepEqual(jobs.map(({ name }) => name), ["import_runtime", "materialize"]);
   const imageImport = jobs.find(({ name }) => name === "import_runtime")?.block ?? "";
   const materialize = jobs.find(({ name }) => name === "materialize")?.block ?? "";
-  assert.match(imageImport, /^    timeout-minutes: 30$/m);
+  assert.match(imageImport, /^    timeout-minutes: 60$/m);
   assert.match(imageImport, /^    environment: alice-cloudflare-bringup$/m);
   assert.match(materialize, /^    needs: import_runtime$/m);
   assert.match(materialize, /^    timeout-minutes: 30$/m);
