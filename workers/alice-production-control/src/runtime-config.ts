@@ -271,10 +271,9 @@ export async function loadRuntimeConfig(
   if (!/^sha256:[a-f0-9]{64}$/.test(String(manifestSource.capabilityBomSha256 ?? ""))) {
     throw new Error("ALICE_RELEASE_MANIFEST_MISMATCH");
   }
-  const containerManifest = [
-    "alice.deployment-manifest.v2",
-    "alice.deployment-manifest.v3",
-  ].includes(manifest.schemaVersion);
+  const containerManifest =
+    manifest.schemaVersion === "alice.deployment-manifest.v2" ||
+    manifest.schemaVersion === "alice.deployment-manifest.v3";
   if (containerManifest !== containerMode) {
     throw new Error("ALICE_RELEASE_MANIFEST_MISMATCH");
   }
