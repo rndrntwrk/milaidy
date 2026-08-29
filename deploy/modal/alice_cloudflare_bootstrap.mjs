@@ -42,6 +42,7 @@ const PROTECTED_BRANCH = "release/alice-production-core-2026-08-22";
 const REPOSITORY = "rndrntwrk/milaidy";
 const BOOTSTRAP_RESOURCE_KEYS = [
   "accessWorker",
+  "runtimeHostWorker",
   "statePlaneWorker",
   "connectorPlaneWorker",
   "controlWorker",
@@ -53,6 +54,7 @@ const BOOTSTRAP_RESOURCE_KEYS = [
 ];
 const ROLES = [
   "access",
+  "runtimeHost",
   "control",
   "aiGateway",
   "statePlane",
@@ -62,10 +64,12 @@ const BOOTSTRAP_IDENTITY_ROLES = [
   "control",
   "statePlane",
   "connectorPlane",
+  "runtimeHost",
   "access",
 ];
 const ROLE_WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
+  runtimeHost: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
   control: ALICE_CLOUDFLARE_TARGET.controlWorker,
   aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
   statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
@@ -73,6 +77,13 @@ const ROLE_WORKERS = Object.freeze({
 });
 const EXPECTED_DURABLE_OBJECT_BINDINGS = Object.freeze({
   access: Object.freeze([
+    Object.freeze({
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      scriptName: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
+    }),
+  ]),
+  runtimeHost: Object.freeze([
     Object.freeze({
       className: "AliceRuntimeContainer",
       name: "ALICE_RUNTIME_CONTAINER",
@@ -124,7 +135,7 @@ export function verifyAliceBootstrapState(state) {
         "preexisting",
         "schemaVersion",
       ].sort()) ||
-    state.schemaVersion !== "alice.cloudflare-bootstrap-state.v1" ||
+    state.schemaVersion !== "alice.cloudflare-bootstrap-state.v2" ||
     !["bootstrap", "release"].includes(state.mode) ||
     !VERSION_ID.test(state.activeVersionId ?? "")
   ) {
@@ -918,7 +929,7 @@ export function buildAliceBootstrapPrivateWorkerConfig({
   deploymentMainPath,
 }) {
   if (
-    !["access", "statePlane", "connectorPlane"].includes(role) ||
+    !["access", "runtimeHost", "statePlane", "connectorPlane"].includes(role) ||
     !sourceConfig ||
     sourceConfig.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
     sourceConfig.name !== ROLE_WORKERS[role] ||
@@ -935,6 +946,9 @@ export function buildAliceBootstrapPrivateWorkerConfig({
         .map((binding) => ({
           className: binding?.class_name,
           name: binding?.name,
+          ...(binding?.script_name === undefined
+            ? {}
+            : { scriptName: binding.script_name }),
         }))
         .sort((left, right) => left.name.localeCompare(right.name)),
     ) !== canonicalAliceJson(expectedBindings)
@@ -950,7 +964,6 @@ export function buildAliceBootstrapPrivateWorkerConfig({
   for (const key of [
     "ai",
     "assets",
-    "containers",
     "d1_databases",
     "queues",
     "r2_buckets",
@@ -959,6 +972,7 @@ export function buildAliceBootstrapPrivateWorkerConfig({
   ]) {
     delete config[key];
   }
+  if (role !== "runtimeHost") delete config.containers;
   return config;
 }
 
@@ -1099,9 +1113,12 @@ function extractAliceBootstrapRoleNamespaceIds(role, version) {
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
   const identity = namespaces.map(({ className, name }) => ({ className, name }));
+  const expectedIdentity = EXPECTED_DURABLE_OBJECT_BINDINGS[role].map(
+    ({ className, name }) => ({ className, name }),
+  );
   if (
     canonicalAliceJson(identity) !==
-      canonicalAliceJson(EXPECTED_DURABLE_OBJECT_BINDINGS[role]) ||
+      canonicalAliceJson(expectedIdentity) ||
     namespaces.some(
       (binding) => !NAMESPACE_ID.test(binding.namespaceId ?? ""),
     ) ||
@@ -1111,6 +1128,40 @@ function extractAliceBootstrapRoleNamespaceIds(role, version) {
     invalid();
   }
   return namespaces;
+}
+
+function verifyAliceBootstrapNamespaceRelationships(
+  namespaceIdsByRole,
+  { requireRuntimeReference },
+) {
+  const seen = new Map();
+  for (const role of ROLES) {
+    for (const binding of namespaceIdsByRole[role] ?? []) {
+      const prior = seen.get(binding.namespaceId);
+      if (prior !== undefined) {
+        const pair = new Set([prior.role, role]);
+        if (
+          pair.size !== 2 ||
+          !pair.has("access") ||
+          !pair.has("runtimeHost") ||
+          prior.name !== "ALICE_RUNTIME_CONTAINER" ||
+          binding.name !== "ALICE_RUNTIME_CONTAINER"
+        ) {
+          invalid();
+        }
+      } else {
+        seen.set(binding.namespaceId, { role, name: binding.name });
+      }
+    }
+  }
+  const accessRuntime = namespaceIdsByRole.access?.[0];
+  const hostRuntime = namespaceIdsByRole.runtimeHost?.[0];
+  if (
+    (requireRuntimeReference || (accessRuntime && hostRuntime)) &&
+    accessRuntime?.namespaceId !== hostRuntime?.namespaceId
+  ) {
+    invalid();
+  }
 }
 
 export function planAliceBootstrapIdentityActions({
@@ -1130,7 +1181,9 @@ export function planAliceBootstrapIdentityActions({
     invalid();
   }
   const actions = {};
-  const namespaceIds = new Set();
+  const namespaceIdsByRole = Object.fromEntries(
+    ROLES.map((role) => [role, []]),
+  );
   for (const role of BOOTSTRAP_IDENTITY_ROLES) {
     const activeVersionId = activeVersionIds[role];
     const activeVersion = activeVersions[role];
@@ -1154,12 +1207,12 @@ export function planAliceBootstrapIdentityActions({
       continue;
     }
     const namespaces = extractAliceBootstrapRoleNamespaceIds(role, activeVersion);
-    for (const binding of namespaces) {
-      if (namespaceIds.has(binding.namespaceId)) invalid();
-      namespaceIds.add(binding.namespaceId);
-    }
+    namespaceIdsByRole[role] = namespaces;
     actions[role] = { upload: "none", promote: false };
   }
+  verifyAliceBootstrapNamespaceRelationships(namespaceIdsByRole, {
+    requireRuntimeReference: false,
+  });
   return actions;
 }
 
@@ -1199,14 +1252,12 @@ export function extractAliceBootstrapNamespaceIds(versions) {
     invalid();
   }
   const result = {};
-  const namespaceIds = new Set();
   for (const role of ROLES) {
     result[role] = extractAliceBootstrapRoleNamespaceIds(role, versions[role]);
-    for (const binding of result[role]) {
-      if (namespaceIds.has(binding.namespaceId)) invalid();
-      namespaceIds.add(binding.namespaceId);
-    }
   }
+  verifyAliceBootstrapNamespaceRelationships(result, {
+    requireRuntimeReference: true,
+  });
   return result;
 }
 
@@ -1314,7 +1365,7 @@ export async function executeAliceBootstrapIdentityActions({
   const previousAccessVersionId = initialVersionIds.access;
   const versionIds = { ...initialVersionIds };
   const createdRoles = [];
-  for (const role of ["statePlane", "connectorPlane", "access"]) {
+  for (const role of ["statePlane", "connectorPlane", "runtimeHost", "access"]) {
     const action = identityActions[role];
     if (action.upload === "none") continue;
     const identity = bootstrapIdentityConfigs[role];
@@ -1507,6 +1558,7 @@ export function verifyAliceBootstrapReentryBoundary({
     versionId: expectedVersionId,
     namespaceIds: {
       access: [],
+      runtimeHost: [],
       control: extractAliceBootstrapRoleNamespaceIds("control", version),
       aiGateway: [],
       statePlane: [],
@@ -1583,7 +1635,19 @@ async function main() {
       deploymentMainPath: controlMain,
     },
   };
-  for (const role of ["statePlane", "connectorPlane", "access"]) {
+  const sourceWorkerDirectories = {
+    access: "alice-access-gateway",
+    runtimeHost: "alice-access-gateway",
+    statePlane: ROLE_WORKERS.statePlane,
+    connectorPlane: ROLE_WORKERS.connectorPlane,
+  };
+  const sourceConfigNames = {
+    access: "wrangler.jsonc",
+    runtimeHost: "wrangler.runtime-host.jsonc",
+    statePlane: "wrangler.jsonc",
+    connectorPlane: "wrangler.jsonc",
+  };
+  for (const role of ["statePlane", "connectorPlane", "runtimeHost", "access"]) {
     const workerName = ROLE_WORKERS[role];
     const deploymentMainPath = path.join(artifactRoot, workerName, "index.js");
     const configPathForRole = path.join(
@@ -1592,7 +1656,12 @@ async function main() {
     );
     const roleSourceConfig = JSON.parse(
       fs.readFileSync(
-        path.join(sourceRoot, "workers", workerName, "wrangler.jsonc"),
+        path.join(
+          sourceRoot,
+          "workers",
+          sourceWorkerDirectories[role],
+          sourceConfigNames[role],
+        ),
         "utf8",
       ),
     );
@@ -1663,6 +1732,7 @@ async function main() {
   let queue;
   const createdByRun = {
     accessWorker: false,
+    runtimeHostWorker: false,
     statePlaneWorker: false,
     connectorPlaneWorker: false,
     controlWorker: false,
@@ -1804,12 +1874,14 @@ async function main() {
   writeReadonly(namespaceIdsPath, namespaceIds);
   writeReadonly(continuityReadbackPath, continuityState.readback);
   writeReadonly(bootstrapStatePath, verifyAliceBootstrapState({
-    schemaVersion: "alice.cloudflare-bootstrap-state.v1",
+    schemaVersion: "alice.cloudflare-bootstrap-state.v2",
     mode,
     activeVersionId: versionId,
     preexisting: {
       accessWorker:
         preflightSecond.workers[ROLE_WORKERS.access]?.present === true,
+      runtimeHostWorker:
+        preflightSecond.workers[ROLE_WORKERS.runtimeHost]?.present === true,
       statePlaneWorker:
         preflightSecond.workers[ROLE_WORKERS.statePlane]?.present === true,
       connectorPlaneWorker:
