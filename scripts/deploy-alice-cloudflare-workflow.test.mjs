@@ -151,6 +151,38 @@ test("deployment admits the exact preimported Cloudflare digest without another 
   assert.doesNotMatch(workflow, /containers push/);
 });
 
+test("primary deployment uses the persistent Alice account token while recovery stays isolated", () => {
+  const deployStart = workflow.indexOf("\n  deploy:");
+  const acceptStart = workflow.indexOf("\n  accept:");
+  assert.ok(deployStart >= 0 && acceptStart > deployStart);
+  const deployJob = workflow.slice(deployStart, acceptStart);
+  const primaryBindings = [
+    ...deployJob.matchAll(/^\s+CLOUDFLARE_API_TOKEN: (.+)$/gm),
+  ].map((match) => match[1]);
+  assert.ok(primaryBindings.length > 0);
+  assert.deepEqual(
+    new Set(primaryBindings),
+    new Set(["${{ secrets.CLOUDFLARE_API_READ_TOKEN }}"]),
+  );
+  assert.match(
+    deployJob,
+    /\/accounts\/\$\{accountId\}\/tokens\/verify/,
+    "primary deployment must verify the account-owned token at the account endpoint",
+  );
+  assert.doesNotMatch(
+    deployJob,
+    /\/user\/tokens\/verify/,
+    "primary deployment must not verify an account-owned token at the user endpoint",
+  );
+
+  const recoveryJob = workflow.slice(acceptStart);
+  assert.match(
+    recoveryJob,
+    /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/,
+  );
+  assert.doesNotMatch(recoveryJob, /CLOUDFLARE_API_READ_TOKEN/);
+});
+
 test("exact registry digest, runtime revision, and BOM propagate into the signed release", () => {
   const materialize = workflow.match(
     /- name: Materialize signed manifest and exact-byte Worker configs[\s\S]*?(?=\n      - name:)/,

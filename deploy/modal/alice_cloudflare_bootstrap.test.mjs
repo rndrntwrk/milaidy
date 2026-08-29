@@ -11,6 +11,7 @@ import {
   extractAliceBootstrapNamespaceIds,
   fetchAliceActiveControlVersionId,
   parseAliceWranglerDeployVersionId,
+  verifyAliceBootstrapDeployToken,
   verifyAliceBootstrapReentryBoundary,
   verifyAliceBootstrapBucket,
   verifyAliceBootstrapQueueConsumer,
@@ -43,6 +44,38 @@ const sourceConfig = {
     ],
   },
 };
+
+test("verifies the durable Alice account token through the account-owned endpoint", async () => {
+  const requests = [];
+  const id = "a".repeat(32);
+  const digest = await verifyAliceBootstrapDeployToken({
+    apiToken: "account-token-never-log",
+    fetchImpl: async (url, options) => {
+      const parsed = new URL(url);
+      requests.push({
+        authorization: options.headers.authorization,
+        method: options.method,
+        pathname: parsed.pathname,
+      });
+      return Response.json({
+        success: true,
+        errors: [],
+        messages: [],
+        result: { id, status: "active" },
+      });
+    },
+  });
+  assert.deepEqual(requests, [{
+    authorization: "Bearer account-token-never-log",
+    method: "GET",
+    pathname:
+      "/client/v4/accounts/036df6c823669b8fa2f66cf4c16eeb29/tokens/verify",
+  }]);
+  assert.equal(
+    digest,
+    `sha256:${crypto.createHash("sha256").update(id).digest("hex")}`,
+  );
+});
 
 test("materializes an unrouted fail-closed control bootstrap without secret bindings", () => {
   const config = buildAliceBootstrapControlConfig({
@@ -815,7 +848,12 @@ test("verifies and hashes the exact deploy token identity without retaining the 
     `sha256:${crypto.createHash("sha256").update(tokenId).digest("hex")}`,
   );
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url.endsWith("/user/tokens/verify"), true);
+  assert.equal(
+    calls[0].url.endsWith(
+      "/accounts/036df6c823669b8fa2f66cf4c16eeb29/tokens/verify",
+    ),
+    true,
+  );
   assert.equal(JSON.stringify(credentialIdSha256).includes(apiToken), false);
 });
 
