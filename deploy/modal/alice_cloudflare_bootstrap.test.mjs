@@ -201,6 +201,7 @@ test("extracts the exact six-role provider-assigned Durable Object namespaces", 
       type: "durable_object_namespace",
       name: "ALICE_RUNTIME_CONTAINER",
       class_name: "AliceRuntimeContainer",
+      script_name: "alice-runtime-container-host",
       namespace_id: "5".repeat(32),
     }]),
     runtimeHost: version([{
@@ -243,11 +244,13 @@ test("extracts the exact six-role provider-assigned Durable Object namespaces", 
       className: "AliceRuntimeContainer",
       name: "ALICE_RUNTIME_CONTAINER",
       namespaceId: "5".repeat(32),
+      scriptName: "alice-runtime-container-host",
     }],
     runtimeHost: [{
       className: "AliceRuntimeContainer",
       name: "ALICE_RUNTIME_CONTAINER",
       namespaceId: "5".repeat(32),
+      scriptName: null,
     }],
     aiGateway: [],
     control: [
@@ -255,22 +258,26 @@ test("extracts the exact six-role provider-assigned Durable Object namespaces", 
         className: "AliceAuthority",
         name: "ALICE_AUTHORITY",
         namespaceId: "1".repeat(32),
+        scriptName: null,
       },
       {
         className: "AliceSession",
         name: "ALICE_SESSIONS",
         namespaceId: "2".repeat(32),
+        scriptName: null,
       },
     ],
     statePlane: [{
       className: "AliceStateCoordination",
       name: "ALICE_COORDINATION",
       namespaceId: "3".repeat(32),
+      scriptName: null,
     }],
     connectorPlane: [{
       className: "AliceConnectorOutboundCoordination",
       name: "ALICE_CONNECTOR_OUTBOUND",
       namespaceId: "4".repeat(32),
+      scriptName: null,
     }],
   });
   assert.throws(() =>
@@ -283,6 +290,16 @@ test("extracts the exact six-role provider-assigned Durable Object namespaces", 
         namespace_id: "3".repeat(32),
       }]),
     }),
+  );
+  assert.throws(
+    () => extractAliceBootstrapNamespaceIds({
+      ...versions,
+      access: version([{
+        ...versions.access.resources.bindings[0],
+        script_name: "wrong-runtime-host",
+      }]),
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
   );
 });
 
@@ -347,6 +364,37 @@ test("stages only Access when rerunning after the absent planes were first-deplo
       statePlane: { upload: "none", promote: false },
       connectorPlane: { upload: "none", promote: false },
     },
+  );
+});
+
+test("rejects an external Access runtime reference when its owning host is absent", () => {
+  assert.throws(
+    () => bootstrapModule.planAliceBootstrapIdentityActions({
+      activeVersionIds: {
+        access: "11111111-1111-4111-8111-111111111111",
+        runtimeHost: null,
+        control: observedControlVersionId,
+        statePlane: statePlaneVersionId,
+        connectorPlane: connectorPlaneVersionId,
+      },
+      activeVersions: {
+        access: {
+          id: "11111111-1111-4111-8111-111111111111",
+          resources: { bindings: [{
+            type: "durable_object_namespace",
+            name: "ALICE_RUNTIME_CONTAINER",
+            class_name: "AliceRuntimeContainer",
+            script_name: "alice-runtime-container-host",
+            namespace_id: "5".repeat(32),
+          }] },
+        },
+        runtimeHost: null,
+        control: observedControlVersion,
+        statePlane: statePlaneVersion,
+        connectorPlane: connectorPlaneVersion,
+      },
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
   );
 });
 
@@ -443,6 +491,7 @@ test("extracts the Access namespace from the selected staged version only", () =
         type: "durable_object_namespace",
         name: "ALICE_RUNTIME_CONTAINER",
         class_name: "AliceRuntimeContainer",
+        script_name: "alice-runtime-container-host",
         namespace_id: "5".repeat(32),
       }] },
     },
@@ -461,6 +510,7 @@ test("extracts the Access namespace from the selected staged version only", () =
       className: "AliceRuntimeContainer",
       name: "ALICE_RUNTIME_CONTAINER",
       namespaceId: "5".repeat(32),
+      scriptName: "alice-runtime-container-host",
     }],
   );
   assert.throws(
@@ -487,6 +537,7 @@ test("full-deploys the unrouted runtime host before one inactive Access upload",
       type: "durable_object_namespace",
       name: "ALICE_RUNTIME_CONTAINER",
       class_name: "AliceRuntimeContainer",
+      script_name: "alice-runtime-container-host",
       namespace_id: "5".repeat(32),
     }] },
   };
@@ -501,6 +552,7 @@ test("full-deploys the unrouted runtime host before one inactive Access upload",
     traffic: structuredClone(observedTraffic),
   };
   const commands = [];
+  const sequence = [];
   const result = await bootstrapModule.executeAliceBootstrapIdentityActions({
     identityActions: {
       access: { upload: "inactive", promote: false },
@@ -539,7 +591,9 @@ test("full-deploys the unrouted runtime host before one inactive Access upload",
     commandEnv: {},
     runCommand: (_binary, argv) => {
       commands.push(argv);
+      sequence.push(`${argv[0]}:${argv[1]}`);
       if (argv[0] === "deploy") {
+        provider.activeVersionIds.runtimeHost = runtimeHostVersionId;
         return `Current Version ID: ${runtimeHostVersionId}\n`;
       }
       if (argv[0] === "versions" && argv[1] === "upload") {
@@ -571,11 +625,28 @@ test("full-deploys the unrouted runtime host before one inactive Access upload",
         })[role]
       : null,
     fetchActiveVersionId: async (role) => provider.activeVersionIds[role],
+    verifyRuntimeHostBoundary: async ({ versionId, version, namespaceIds }) => {
+      sequence.push("verify:runtimeHost");
+      assert.equal(versionId, runtimeHostVersionId);
+      assert.equal(version, runtimeHostVersion);
+      assert.deepEqual(namespaceIds, [{
+        className: "AliceRuntimeContainer",
+        name: "ALICE_RUNTIME_CONTAINER",
+        namespaceId: "5".repeat(32),
+        scriptName: null,
+      }]);
+      return { applicationId: "66666666-6666-4666-8666-666666666666" };
+    },
     fetchTraffic: async () => structuredClone(provider.traffic),
     trafficBefore: observedTraffic,
   });
   assert.equal(result.versionIds.access, stagedAccessVersionId);
   assert.deepEqual(result.createdRoles, ["runtimeHost"]);
+  assert.deepEqual(sequence.slice(0, 3), [
+    "deploy:/release/alice-runtime-container-host/index.js",
+    "verify:runtimeHost",
+    "versions:upload",
+  ]);
   assert.deepEqual(
     commands.map((argv) => argv.slice(0, 3)),
     [
@@ -588,8 +659,13 @@ test("full-deploys the unrouted runtime host before one inactive Access upload",
     className: "AliceRuntimeContainer",
     name: "ALICE_RUNTIME_CONTAINER",
     namespaceId: "5".repeat(32),
+    scriptName: "alice-runtime-container-host",
   }]);
-  assert.deepEqual(result.namespaceIds.runtimeHost, result.namespaceIds.access);
+  assert.equal(
+    result.namespaceIds.runtimeHost[0].namespaceId,
+    result.namespaceIds.access[0].namespaceId,
+  );
+  assert.equal(result.namespaceIds.runtimeHost[0].scriptName, null);
   assert.equal(
     provider.activeVersionIds.access,
     observedLegacyAccessVersionId,
@@ -610,6 +686,7 @@ test("checks the inactive Access boundary after first-deploy promotions", async 
         type: "durable_object_namespace",
         name: "ALICE_RUNTIME_CONTAINER",
         class_name: "AliceRuntimeContainer",
+        script_name: "alice-runtime-container-host",
         namespace_id: "5".repeat(32),
       }] },
     },
@@ -682,6 +759,9 @@ test("checks the inactive Access boundary after first-deploy promotions", async 
           ? selectedVersions[role]
           : null,
       fetchActiveVersionId: async (role) => activeVersionIds[role],
+      verifyRuntimeHostBoundary: async () => ({
+        applicationId: "66666666-6666-4666-8666-666666666666",
+      }),
       fetchTraffic: async () => structuredClone(providerTraffic),
       trafficBefore: observedTraffic,
     }),
@@ -794,6 +874,8 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
     typeof bootstrapModule.buildAliceBootstrapPrivateWorkerConfig,
     "function",
   );
+  const exactRuntimeImage =
+    `registry.cloudflare.com/${sourceConfig.account_id}/alice-runtime@sha256:${"a".repeat(64)}`;
   for (const [role, name, binding] of [
     [
       "access",
@@ -825,6 +907,7 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
   ]) {
     const config = bootstrapModule.buildAliceBootstrapPrivateWorkerConfig({
       role,
+      ...(role === "runtimeHost" ? { runtimeImage: exactRuntimeImage } : {}),
       sourceConfig: {
         account_id: sourceConfig.account_id,
         name,
@@ -835,7 +918,14 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
         vars: { SAFE_STATIC_VALUE: "present" },
         secrets: { required: ["PRIVATE_SECRET"] },
         services: [{ binding: "UPSTREAM", service: "other-worker" }],
-        containers: [{ class_name: "AliceRuntimeContainer", image: "example.invalid/runtime" }],
+        containers: [{
+          name: "alice-production-runtime",
+          class_name: "AliceRuntimeContainer",
+          image:
+            `registry.cloudflare.com/${sourceConfig.account_id}/alice-runtime:REPLACED_BY_PRODUCTION_DEPLOY`,
+          instance_type: "standard-1",
+          max_instances: 1,
+        }],
         d1_databases: [{ binding: "DB", database_id: "provider-id" }],
         vectorize: [{ binding: "VECTOR", index_name: "provider-index" }],
         r2_buckets: [{ binding: "OBJECTS", bucket_name: "provider-bucket" }],
@@ -856,9 +946,42 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
     assert.deepEqual(config.durable_objects.bindings, [binding]);
     assert.equal("services" in config, false);
     assert.equal("containers" in config, role === "runtimeHost");
+    if (role === "runtimeHost") {
+      assert.equal(config.containers[0].image, exactRuntimeImage);
+    }
     assert.equal("d1_databases" in config, false);
     assert.equal("vectorize" in config, false);
     assert.equal("r2_buckets" in config, false);
+  }
+  for (const runtimeImage of [
+    undefined,
+    `registry.cloudflare.com/${sourceConfig.account_id}/alice-runtime:latest`,
+    `registry.cloudflare.com/${sourceConfig.account_id}/other@sha256:${"a".repeat(64)}`,
+  ]) {
+    assert.throws(
+      () => bootstrapModule.buildAliceBootstrapPrivateWorkerConfig({
+        role: "runtimeHost",
+        runtimeImage,
+        sourceConfig: {
+          account_id: sourceConfig.account_id,
+          name: "alice-runtime-container-host",
+          durable_objects: { bindings: [{
+            name: "ALICE_RUNTIME_CONTAINER",
+            class_name: "AliceRuntimeContainer",
+          }] },
+          containers: [{
+            name: "alice-production-runtime",
+            class_name: "AliceRuntimeContainer",
+            image:
+              `registry.cloudflare.com/${sourceConfig.account_id}/alice-runtime:REPLACED_BY_PRODUCTION_DEPLOY`,
+            instance_type: "standard-1",
+            max_instances: 1,
+          }],
+        },
+        deploymentMainPath: "/release/alice-runtime-container-host/index.js",
+      }),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
+    );
   }
 });
 
@@ -1020,11 +1143,13 @@ test("accepts the exact active recovery boundary when a newer upload is inactive
             className: "AliceAuthority",
             name: "ALICE_AUTHORITY",
             namespaceId: "1".repeat(32),
+            scriptName: null,
           },
           {
             className: "AliceSession",
             name: "ALICE_SESSIONS",
             namespaceId: "2".repeat(32),
+            scriptName: null,
           },
         ],
         statePlane: [],
@@ -1167,6 +1292,7 @@ test("snapshots every Alice provider surface twice before the first mutation", (
   }
   for (const [role, worker] of [
     ["access", "accessWorker"],
+    ["runtimeHost", "runtimeHostWorker"],
     ["control", "controlWorker"],
     ["aiGateway", "aiGatewayWorker"],
     ["statePlane", "statePlaneWorker"],
