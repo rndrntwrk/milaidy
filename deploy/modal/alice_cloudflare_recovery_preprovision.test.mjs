@@ -9,11 +9,12 @@ import {
 import { verifyAliceBootstrapState } from "./alice_cloudflare_bootstrap.mjs";
 
 const bootstrapState = {
-  schemaVersion: "alice.cloudflare-bootstrap-state.v1",
+  schemaVersion: "alice.cloudflare-bootstrap-state.v2",
   mode: "bootstrap",
   activeVersionId: "11111111-1111-4111-8111-111111111111",
   preexisting: {
     accessWorker: false,
+    runtimeHostWorker: false,
     statePlaneWorker: false,
     connectorPlaneWorker: false,
     evidenceQueue: false,
@@ -24,6 +25,7 @@ const bootstrapState = {
   },
   createdByRun: {
     accessWorker: true,
+    runtimeHostWorker: true,
     statePlaneWorker: true,
     connectorPlaneWorker: true,
     controlWorker: true,
