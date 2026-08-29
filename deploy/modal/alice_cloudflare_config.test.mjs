@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -120,6 +121,77 @@ const expected = {
     providerActivation: connectorProviderActivation,
   }),
 };
+
+test("keeps signed deployment-manifest v1 and v2 readback compatible", async () => {
+  const priorTarget = Object.fromEntries(
+    Object.entries(ALICE_CLOUDFLARE_TARGET).filter(
+      ([key]) => key !== "runtimeHostWorker",
+    ),
+  );
+  const digest = `sha256:${"d".repeat(64)}`;
+  const accessConfigSha256 =
+    await aliceEffectiveConfigModule.digestAliceEffectiveConfig(expected.access);
+  for (const schemaVersion of [
+    "alice.deployment-manifest.v1",
+    "alice.deployment-manifest.v2",
+  ]) {
+    const containerMode = schemaVersion.endsWith(".v2");
+    const revision = 49;
+    const manifest = {
+      schemaVersion,
+      release: {
+        releaseEpoch: 1,
+        ...(containerMode
+          ? { runtimeRevision: revision }
+          : { modalRevision: revision }),
+        policyHash: digest,
+        rollbackBoundary:
+          `${containerMode ? "container" : "modal"}:alice-runtime:v${revision}`,
+      },
+      source: {
+        sourceCommit: "1".repeat(40),
+        deploymentControllerCommit: "2".repeat(40),
+        elizaCommit: "3".repeat(40),
+        runtimeImage: containerMode
+          ? runtimeContainerImage
+          : `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"4".repeat(64)}`,
+        runtimeBuildManifestSha256: digest,
+        capabilityBomSha256: digest,
+      },
+      cloudflare: {
+        ...priorTarget,
+        accessConfigSha256,
+        accessPolicyConfigSha256: digest,
+        accessWorkerBundleSha256: digest,
+        aiGatewayConfigSha256: digest,
+        aiGatewayProviderConfigSha256: digest,
+        aiGatewayWorkerBundleSha256: digest,
+        controlWorkerBundleSha256: digest,
+        controlConfigSha256: digest,
+        connectorPlaneConfigSha256: digest,
+        connectorPlaneWorkerBundleSha256: digest,
+        continuityConfigSha256: digest,
+        stateMigrationSetSha256: digest,
+        statePlaneConfigSha256: digest,
+        statePlaneWorkerBundleSha256: digest,
+        vectorizeProviderConfigSha256: digest,
+      },
+    };
+    const serialized =
+      `${aliceEffectiveConfigModule.canonicalAliceJson(manifest)}\n`;
+    const expectedManifestSha256 = `sha256:${crypto
+      .createHash("sha256")
+      .update(serialized)
+      .digest("hex")}`;
+    assert.deepEqual(
+      await aliceEffectiveConfigModule.verifyAliceDeploymentManifestBinding({
+        encodedManifest: Buffer.from(serialized).toString("base64url"),
+        expectedManifestSha256,
+      }),
+      manifest,
+    );
+  }
+});
 
 test("builds strict private state and connector effective configs", () => {
   assert.equal(ALICE_CLOUDFLARE_TARGET.statePlaneWorker, "alice-state-plane");
@@ -420,6 +492,22 @@ test("materializes one immutable Container image only into the runtime host", ()
   assert.equal(host.containers.length, 1);
   assert.equal(host.containers[0].name, "alice-production-runtime");
   assert.equal(host.containers[0].image, runtimeContainerImage);
+  assert.equal(
+    host.containers[0].image,
+    expected.runtimeHost.values.runtimeImage,
+  );
+  assert.equal(
+    host.containers[0].image,
+    expected.access.values.runtimeImage,
+  );
+  assert.equal(
+    expected.runtimeHost.bindings.secretNames.includes("ALICE_RUNTIME_IMAGE"),
+    true,
+  );
+  assert.equal(
+    expected.access.bindings.secretNames.includes("ALICE_RUNTIME_IMAGE"),
+    false,
+  );
   assert.equal(host.containers[0].instance_type, "standard-1");
   assert.equal(host.containers[0].max_instances, 1);
 });

@@ -694,16 +694,24 @@ export function encodeAliceDeploymentManifest(serializedManifest) {
 }
 
 function validDeploymentManifest(value) {
-  const containerMode = value?.schemaVersion === "alice.deployment-manifest.v3";
+  const containerMode = [
+    "alice.deployment-manifest.v2",
+    "alice.deployment-manifest.v3",
+  ].includes(value?.schemaVersion);
+  const runtimeHostMode =
+    value?.schemaVersion === "alice.deployment-manifest.v3";
+  const targetEntries = Object.entries(ALICE_CLOUDFLARE_TARGET).filter(
+    ([key]) => runtimeHostMode || key !== "runtimeHostWorker",
+  );
   return (
     exactKeys(value, ["cloudflare", "release", "schemaVersion", "source"]) &&
     (containerMode || value.schemaVersion === "alice.deployment-manifest.v1") &&
     exactKeys(value.cloudflare, [
-      ...Object.keys(ALICE_CLOUDFLARE_TARGET),
+      ...targetEntries.map(([key]) => key),
       "accessConfigSha256",
       "accessPolicyConfigSha256",
       "accessWorkerBundleSha256",
-      ...(containerMode
+      ...(runtimeHostMode
         ? ["runtimeHostConfigSha256", "runtimeHostWorkerBundleSha256"]
         : []),
       "aiGatewayConfigSha256",
@@ -719,7 +727,7 @@ function validDeploymentManifest(value) {
       "statePlaneWorkerBundleSha256",
       "vectorizeProviderConfigSha256",
     ]) &&
-    Object.entries(ALICE_CLOUDFLARE_TARGET).every(
+    targetEntries.every(
       ([key, expected]) => value.cloudflare[key] === expected,
     ) &&
     DIGEST.test(value.cloudflare.accessConfigSha256) &&
@@ -727,7 +735,7 @@ function validDeploymentManifest(value) {
     DIGEST.test(value.cloudflare.aiGatewayConfigSha256) &&
     DIGEST.test(value.cloudflare.aiGatewayProviderConfigSha256) &&
     DIGEST.test(value.cloudflare.accessWorkerBundleSha256) &&
-    (!containerMode ||
+    (!runtimeHostMode ||
       (DIGEST.test(value.cloudflare.runtimeHostConfigSha256) &&
         DIGEST.test(value.cloudflare.runtimeHostWorkerBundleSha256))) &&
     DIGEST.test(value.cloudflare.controlWorkerBundleSha256) &&
