@@ -25,6 +25,10 @@ const releaseSource = fs.readFileSync(
   path.join(repoRoot, "deploy/modal/alice_cloudflare_release.mjs"),
   "utf8",
 );
+const bootstrapSource = fs.readFileSync(
+  path.join(repoRoot, "deploy/modal/alice_cloudflare_bootstrap.mjs"),
+  "utf8",
+);
 
 function namedWorkflowSteps(source) {
   const headings = [...source.matchAll(/^      - name: (.+)$/gm)];
@@ -165,12 +169,12 @@ test("primary deployment uses the persistent Alice account token while recovery 
     new Set(["${{ secrets.CLOUDFLARE_API_READ_TOKEN }}"]),
   );
   assert.match(
-    deployJob,
-    /\/accounts\/\$\{accountId\}\/tokens\/verify/,
+    bootstrapSource,
+    /\/accounts\/\$\{ALICE_CLOUDFLARE_TARGET\.accountId\}\/tokens\/verify/,
     "primary deployment must verify the account-owned token at the account endpoint",
   );
   assert.doesNotMatch(
-    deployJob,
+    bootstrapSource,
     /\/user\/tokens\/verify/,
     "primary deployment must not verify an account-owned token at the user endpoint",
   );
@@ -220,22 +224,13 @@ test("preimport evidence is exact-bound and fresh materialization matches before
   assert.match(verify, /sourceImage[\s\S]*?EXPECTED_SOURCE_IMAGE/);
   assert.match(verify, /runtimeRevision[\s\S]*?EXPECTED_RUNTIME_REVISION/);
 
-  const capture = workflow.indexOf(
-    "Capture exact active Durable Object identities read-only",
+  const bootstrap = workflow.indexOf(
+    "Bootstrap unrouted fail-closed continuity identities",
   );
   const materialize = workflow.indexOf(
     "Materialize signed manifest and exact-byte Worker configs",
   );
-  const firstMutation = workflow.indexOf(
-    "Bootstrap unrouted fail-closed continuity identities",
-  );
-  assert.ok(capture >= 0 && capture < materialize);
-  assert.ok(materialize > capture && materialize < firstMutation);
-  const captureStep = workflow.match(
-    /- name: Capture exact active Durable Object identities read-only[\s\S]*?(?=\n      - name:)/,
-  )?.[0] ?? "";
-  assert.match(captureStep, /method: "GET"/);
-  assert.doesNotMatch(captureStep, /method: "(?:POST|PUT|PATCH|DELETE)"/);
+  assert.ok(bootstrap >= 0 && bootstrap < materialize);
   const materializeStep = workflow.match(
     /- name: Materialize signed manifest and exact-byte Worker configs[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
@@ -256,7 +251,20 @@ test("preimport evidence is exact-bound and fresh materialization matches before
   );
   assert.match(
     bootstrapStep,
-    /cmp -s[\s\S]*?"\$\{RUNNER_TEMP\}\/alice-release\/durable-object-namespace-ids\.json"[\s\S]*?bootstrap-durable-object-namespace-ids\.json/,
+    /ALICE_CLOUDFLARE_RUNTIME_IMAGE: \$\{\{ env\.ALICE_CLOUDFLARE_RUNTIME_IMAGE \}\}/,
+  );
+  assert.ok(
+    workflow.indexOf("- name: Bootstrap unrouted fail-closed continuity identities") <
+      workflow.indexOf("- name: Materialize signed manifest and exact-byte Worker configs"),
+    "the absent runtime host must be bootstrapped before canonical namespace capture and manifest materialization",
+  );
+  assert.doesNotMatch(
+    workflow,
+    /- name: Capture exact active Durable Object identities read-only/,
+  );
+  assert.match(
+    bootstrapStep,
+    /canonical_namespace_ids="\$\{RUNNER_TEMP\}\/alice-release\/durable-object-namespace-ids\.json"[\s\S]*?canonical_namespace_ids_tmp="\$\{canonical_namespace_ids\}\.tmp"[\s\S]*?cp --[\s\S]*?bootstrap-durable-object-namespace-ids\.json[\s\S]*?"\$canonical_namespace_ids_tmp"[\s\S]*?mv -- "\$canonical_namespace_ids_tmp" "\$canonical_namespace_ids"/,
   );
 });
 

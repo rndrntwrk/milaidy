@@ -8,6 +8,7 @@ const ZONE_ID = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const ROUTE_ID = /^[a-f0-9]{32}$/;
 const ROLES = [
   "access",
+  "runtimeHost",
   "control",
   "aiGateway",
   "statePlane",
@@ -22,6 +23,7 @@ const CONVERGENCE_FAILURES = new Set([
 ]);
 const WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
+  runtimeHost: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
   control: ALICE_CLOUDFLARE_TARGET.controlWorker,
   aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
   statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
@@ -185,6 +187,7 @@ export function aliceExpectedProductionTrafficState() {
       aiGateway: { enabled: true, previewsEnabled: false },
       statePlane: { enabled: false, previewsEnabled: false },
       connectorPlane: { enabled: false, previewsEnabled: false },
+      runtimeHost: { enabled: false, previewsEnabled: false },
     },
   });
 }

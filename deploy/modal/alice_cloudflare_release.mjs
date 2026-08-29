@@ -62,6 +62,7 @@ const VERSION_ID =
 const RELEASE_RUN_ID = /^[1-9][0-9]*-[1-9][0-9]*$/;
 const ROLES = [
   "access",
+  "runtimeHost",
   "control",
   "aiGateway",
   "statePlane",
@@ -72,6 +73,7 @@ const UPLOAD_ORDER = [
   "statePlane",
   "aiGateway",
   "connectorPlane",
+  "runtimeHost",
   "access",
 ];
 const STATE_MIGRATIONS = Object.freeze([
@@ -81,6 +83,7 @@ const STATE_MIGRATIONS = Object.freeze([
 ]);
 const ROLLBACK_ORDER = [
   "access",
+  "runtimeHost",
   "connectorPlane",
   "aiGateway",
   "control",
@@ -101,6 +104,7 @@ const WRANGLER_ENV_DENYLIST = [
 ];
 const WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
+  runtimeHost: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
   control: ALICE_CLOUDFLARE_TARGET.controlWorker,
   aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
   statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
@@ -801,8 +805,10 @@ function runProgramAdmissionPreflight({
   const envelope = release.configs.control.vars?.ALICE_PROGRAM_ENVELOPE_B64;
   const signature = release.configs.control.vars?.ALICE_PROGRAM_SIGNATURE_B64;
   const publicJwk = release.configs.control.vars?.ALICE_PROGRAM_PUBLIC_JWK_B64;
-  const containerMode = release.manifest.schemaVersion ===
-    "alice.deployment-manifest.v2";
+  const containerMode = [
+    "alice.deployment-manifest.v2",
+    "alice.deployment-manifest.v3",
+  ].includes(release.manifest.schemaVersion);
   if (
     !exactKeys(evidence, [
       "accessProxySecretFormatVerified",
@@ -922,7 +928,7 @@ async function createRollbackAnchor({
     releaseInvalid("ALICE_ROLLBACK_ANCHOR_INVALID");
   }
   const anchor = {
-    schemaVersion: "alice.cloudflare-rollback-anchor.v6",
+    schemaVersion: "alice.cloudflare-rollback-anchor.v7",
     accountId: ALICE_CLOUDFLARE_TARGET.accountId,
     candidate: { sourceCommit, deploymentManifestSha256 },
     previous: {
@@ -955,7 +961,7 @@ export function verifyAliceCloudflareRollbackAnchor(
       "previous",
       "schemaVersion",
     ]) ||
-    anchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v6" ||
+    anchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v7" ||
     anchor.accountId !== ALICE_CLOUDFLARE_TARGET.accountId ||
     !exactKeys(anchor.candidate, [
       "deploymentManifestSha256",
@@ -1154,8 +1160,11 @@ export function verifyAliceCloudflarePrepareEvidence(
   return value;
 }
 
-function secretFiles(configs, secretOverrides = {}) {
-  const containerMode = configs?.access?.secrets?.required?.includes(
+export function materializeAliceWorkerSecretFiles(
+  configs,
+  secretOverrides = {},
+) {
+  const containerMode = configs?.runtimeHost?.secrets?.required?.includes(
     "ALICE_RUNTIME_IMAGE",
   );
   const expectedOverrides = [
@@ -1180,7 +1189,11 @@ function secretFiles(configs, secretOverrides = {}) {
       : []),
   ];
   if (
-    !exactKeys(secretOverrides, expectedOverrides)
+    !exactKeys(secretOverrides, expectedOverrides) ||
+    (containerMode &&
+      (configs.runtimeHost.containers?.length !== 1 ||
+        secretOverrides.ALICE_RUNTIME_IMAGE !==
+          configs.runtimeHost.containers[0]?.image))
   ) {
     releaseInvalid("ALICE_RELEASE_SECRETS_INVALID");
   }
@@ -1261,6 +1274,7 @@ function dryRunExactBundles({
       );
       const digestField = {
         access: "accessWorkerBundleSha256",
+        runtimeHost: "runtimeHostWorkerBundleSha256",
         control: "controlWorkerBundleSha256",
         aiGateway: "aiGatewayWorkerBundleSha256",
         statePlane: "statePlaneWorkerBundleSha256",
@@ -1546,7 +1560,7 @@ export async function executeAliceCloudflareRollbacks({
     await failClosed();
   }
   return {
-    schemaVersion: "alice.cloudflare-rollback-evidence.v1",
+    schemaVersion: "alice.cloudflare-rollback-evidence.v2",
     accountId: ALICE_CLOUDFLARE_TARGET.accountId,
     observedAt: new Date().toISOString(),
     traffic: traffic.after,
@@ -1722,9 +1736,11 @@ async function main() {
   }
 
   if (phase === "prepare") {
-    const containerMode = release.manifest.schemaVersion ===
-      "alice.deployment-manifest.v2";
-    const secrets = secretFiles(release.configs, {
+    const containerMode = [
+      "alice.deployment-manifest.v2",
+      "alice.deployment-manifest.v3",
+    ].includes(release.manifest.schemaVersion);
+    const secrets = materializeAliceWorkerSecretFiles(release.configs, {
       ALICE_EVIDENCE_QUEUE_HMAC_KEY:
         admission.credential.evidenceQueueHmacKey,
       ALICE_RUNTIME_RELEASE_TOKEN_SHA256:

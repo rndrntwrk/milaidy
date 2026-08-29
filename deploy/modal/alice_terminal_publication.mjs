@@ -15,6 +15,7 @@ const FRESH_WINDOW_MS = 5 * 60_000;
 const FUTURE_SKEW_MS = 30_000;
 const WORKER_ROLES = Object.freeze([
   "access",
+  "runtimeHost",
   "control",
   "aiGateway",
   "statePlane",
@@ -65,7 +66,7 @@ function freshObservation(value, { afterMs, nowMs }) {
 
 function cloudflareTerminalIdentity(value) {
   if (
-    value?.schemaVersion !== "alice.cloudflare-live-readback.v1" ||
+    value?.schemaVersion !== "alice.cloudflare-live-readback.v2" ||
     value?.accountId !== ACCOUNT_ID || value?.zoneId !== ZONE_ID ||
     value?.terminalSnapshotStable !== true ||
     !object(value?.providerFingerprints) || !object(value?.provider) ||
@@ -156,7 +157,7 @@ export function verifyAliceTerminalPublication({
   const objectKeys = acceptance.evidence?.persistedObjectKeys;
   const surfaceDigests = acceptance.productSurfaceDigests;
   if (
-    acceptance.schemaVersion !== "alice.production-acceptance.v2" ||
+    acceptance.schemaVersion !== "alice.production-acceptance.v3" ||
     acceptance.terminal !== true ||
     acceptance.publicOrEconomicActionExecuted !== false ||
     acceptance.sourceCommit !== expectedSourceSha ||
@@ -203,9 +204,9 @@ export function verifyAliceTerminalPublication({
   const workflowCompletedAtMs = isoMilliseconds(workflowRun.updated_at);
   if (workflowCompletedAtMs === null) invalid();
   if (
-    cloudflareLiveReadback.schemaVersion !== "alice.cloudflare-live-readback.v1" ||
+    cloudflareLiveReadback.schemaVersion !== "alice.cloudflare-live-readback.v2" ||
     cloudflareLiveReadback.terminalSnapshotStable !== true ||
-    cloudflareRollbackProof.schemaVersion !== "alice.cloudflare-rollback-evidence.v1" ||
+    cloudflareRollbackProof.schemaVersion !== "alice.cloudflare-rollback-evidence.v2" ||
     modalPromotionEvidence.schemaVersion !== "alice.modal-promotion-evidence.v1" ||
     acceptance.provenance?.cloudflareLiveReadbackSha256 !==
       digest(cloudflareLiveReadback) ||

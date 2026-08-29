@@ -6,6 +6,7 @@ import {
 const API_BASE = "https://api.cloudflare.com/client/v4";
 const ROLES = [
   "access",
+  "runtimeHost",
   "control",
   "aiGateway",
   "statePlane",
@@ -13,6 +14,7 @@ const ROLES = [
 ];
 const RESTORE_ORDER = [
   "access",
+  "runtimeHost",
   "connectorPlane",
   "aiGateway",
   "control",
@@ -20,6 +22,7 @@ const RESTORE_ORDER = [
 ];
 const WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
+  runtimeHost: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
   control: ALICE_CLOUDFLARE_TARGET.controlWorker,
   aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
   statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,

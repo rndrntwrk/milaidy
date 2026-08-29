@@ -12,6 +12,7 @@ import {
   buildAliceEvidenceQueueUpdate,
   buildAliceProtectedCloudflareCommands,
   executeAliceCloudflareRollbacks,
+  materializeAliceWorkerSecretFiles,
   parseAliceWranglerUploadVersionId,
   verifyAliceCloudflareAnchorStillCurrent,
   verifyAliceCloudflarePreparedState,
@@ -129,6 +130,100 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     "d1 execute",
   ]) {
     assert.equal(serializedCommands.includes(destructiveD1Operation), false);
+  }
+});
+
+test("materializes Container runtime secrets only for the separate runtime host", () => {
+  const admissionEvidence = {
+    runtimeImage:
+      `registry.cloudflare.com/example/alice@sha256:${"9".repeat(64)}`,
+  };
+  const ambient = {
+    ALICE_ACCESS_PROXY_SECRET: process.env.ALICE_ACCESS_PROXY_SECRET,
+    ALICE_STATE_PLANE_SERVICE_TOKEN:
+      process.env.ALICE_STATE_PLANE_SERVICE_TOKEN,
+  };
+  process.env.ALICE_ACCESS_PROXY_SECRET = "access-proxy-secret-0123456789";
+  process.env.ALICE_STATE_PLANE_SERVICE_TOKEN =
+    "state-plane-service-token-0123456789";
+  const configs = {
+    access: { secrets: { required: ["ALICE_ACCESS_PROXY_SECRET"] } },
+    runtimeHost: {
+      containers: [{
+        image: admissionEvidence.runtimeImage,
+      }],
+      secrets: {
+        required: [
+          "ALICE_RUNTIME_API_TOKEN",
+          "ALICE_RUNTIME_IMAGE",
+          "ALICE_STATE_PLANE_SERVICE_TOKEN",
+        ],
+      },
+    },
+    control: { secrets: { required: ["ALICE_EVIDENCE_QUEUE_HMAC_KEY"] } },
+    aiGateway: {
+      secrets: { required: ["ALICE_RUNTIME_RELEASE_TOKEN_SHA256"] },
+    },
+    statePlane: {
+      secrets: { required: ["ALICE_STATE_PLANE_SERVICE_TOKEN"] },
+    },
+    connectorPlane: {
+      secrets: { required: ["ALICE_STATE_PLANE_SERVICE_TOKEN"] },
+    },
+  };
+  const secretOverrides = {
+    ALICE_EVIDENCE_QUEUE_HMAC_KEY: "evidence-hmac-key-0123456789",
+    ALICE_RUNTIME_RELEASE_TOKEN_SHA256: `sha256:${"1".repeat(64)}`,
+    ALICE_CAPABILITY_BOM_SHA256: `sha256:${"2".repeat(64)}`,
+    ALICE_DEPLOYMENT_CONTROLLER_COMMIT: "3".repeat(40),
+    ALICE_ELIZA_COMMIT: "4".repeat(40),
+    ALICE_POLICY_HASH: `sha256:${"5".repeat(64)}`,
+    ALICE_PROGRAM_DIGEST: `sha256:${"6".repeat(64)}`,
+    ALICE_RELEASE_DIGEST: `sha256:${"7".repeat(64)}`,
+    ALICE_RUNTIME_API_TOKEN: "runtime-api-token-0123456789",
+    ALICE_RUNTIME_BUILD_MANIFEST_SHA256: `sha256:${"8".repeat(64)}`,
+    ALICE_RUNTIME_IMAGE: admissionEvidence.runtimeImage,
+    ALICE_RUNTIME_RELEASE_TOKEN: "runtime-release-token-0123456789",
+    ALICE_RUNTIME_REVISION: "50",
+    ALICE_RUNTIME_VAULT_PASSPHRASE: "vault-passphrase-0123456789",
+    ALICE_SOURCE_COMMIT: "a".repeat(40),
+  };
+  let result;
+  try {
+    assert.throws(
+      () => materializeAliceWorkerSecretFiles(configs, {
+        ...secretOverrides,
+        ALICE_RUNTIME_IMAGE:
+          `registry.cloudflare.com/example/alice@sha256:${"0".repeat(64)}`,
+      }),
+      /ALICE_RELEASE_SECRETS_INVALID/,
+    );
+    result = materializeAliceWorkerSecretFiles(configs, secretOverrides);
+    const access = JSON.parse(fs.readFileSync(result.paths.access, "utf8"));
+    const runtimeHost = JSON.parse(
+      fs.readFileSync(result.paths.runtimeHost, "utf8"),
+    );
+    assert.deepEqual(access, {
+      ALICE_ACCESS_PROXY_SECRET: "access-proxy-secret-0123456789",
+    });
+    assert.equal(runtimeHost.ALICE_RUNTIME_API_TOKEN, secretOverrides.ALICE_RUNTIME_API_TOKEN);
+    assert.equal(runtimeHost.ALICE_RUNTIME_IMAGE, secretOverrides.ALICE_RUNTIME_IMAGE);
+    assert.equal(
+      runtimeHost.ALICE_RUNTIME_IMAGE,
+      configs.runtimeHost.containers[0].image,
+    );
+    assert.equal(runtimeHost.ALICE_RUNTIME_IMAGE, admissionEvidence.runtimeImage);
+    assert.equal(
+      runtimeHost.ALICE_STATE_PLANE_SERVICE_TOKEN,
+      "state-plane-service-token-0123456789",
+    );
+    assert.equal("ALICE_RUNTIME_IMAGE" in access, false);
+  } finally {
+    if (result) fs.rmSync(result.root, { recursive: true, force: true });
+    for (const [name, value] of Object.entries(ambient)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 });
 
@@ -329,6 +424,7 @@ test(
 
     const roles = [
       "access",
+      "runtimeHost",
       "control",
       "aiGateway",
       "statePlane",
@@ -336,6 +432,7 @@ test(
     ];
     const workers = {
       access: "alice-access-gateway",
+      runtimeHost: "alice-runtime-container-host",
       control: "alice-production-control",
       aiGateway: "alice-ai-gateway",
       statePlane: "alice-state-plane",
@@ -377,7 +474,7 @@ test(
         deploymentManifestSha256,
         deploymentManifestB64,
       };
-      if (role === "access") {
+      if (role === "access" || role === "runtimeHost") {
         return {
           ...common,
           runtimeImage:
@@ -415,16 +512,19 @@ test(
       fs.mkdirSync(configDir, { recursive: true });
       const effective = {};
       for (const role of roles) {
-        const sourceConfig = JSON.parse(
-          fs.readFileSync(
-            path.join(
+        const sourceConfigPath = role === "runtimeHost"
+          ? path.join(
+              repoRoot,
+              "workers/alice-access-gateway/wrangler.runtime-host.jsonc",
+            )
+          : path.join(
               repoRoot,
               "workers",
               workers[role],
               "wrangler.jsonc",
-            ),
-            "utf8",
-          ),
+            );
+        const sourceConfig = JSON.parse(
+          fs.readFileSync(sourceConfigPath, "utf8"),
         );
         const configPath = path.join(configDir, `${role}.wrangler.json`);
         const bundle = path.join(artifactRoot, workers[role], "index.js");
@@ -499,17 +599,32 @@ test(
       const artifactRootA = path.join(runnerA, "alice-worker-bundles");
       for (const worker of Object.values(workers)) {
         const workerOutdir = path.join(artifactRootA, worker);
+        const sourceConfigPath = worker === "alice-runtime-container-host"
+          ? path.join(
+              repoRoot,
+              "workers/alice-access-gateway/wrangler.runtime-host.jsonc",
+            )
+          : path.join(repoRoot, "workers", worker, "wrangler.jsonc");
         runWrangler([
           "deploy",
           "--dry-run",
           "--outdir",
           workerOutdir,
           "--config",
-          path.join(repoRoot, "workers", worker, "wrangler.jsonc"),
+          sourceConfigPath,
         ], runnerA);
         const artifactPath = path.join(workerOutdir, "index.js");
         if (worker === "alice-access-gateway") {
           const generatedPath = path.join(workerOutdir, "worker.js");
+          const generatedStat = fs.lstatSync(generatedPath);
+          assert.equal(generatedStat.isFile(), true);
+          assert.equal(generatedStat.isSymbolicLink(), false);
+          assert.equal(generatedStat.size > 0, true);
+          assert.equal(fs.existsSync(artifactPath), false);
+          fs.renameSync(generatedPath, artifactPath);
+        }
+        if (worker === "alice-runtime-container-host") {
+          const generatedPath = path.join(workerOutdir, "runtime-host.js");
           const generatedStat = fs.lstatSync(generatedPath);
           assert.equal(generatedStat.isFile(), true);
           assert.equal(generatedStat.isSymbolicLink(), false);
@@ -567,6 +682,7 @@ test(
           source: { sourceCommit },
           cloudflare: {
             accessWorkerBundleSha256: digests.access,
+            runtimeHostWorkerBundleSha256: digests.runtimeHost,
             controlWorkerBundleSha256: digests.control,
             aiGatewayWorkerBundleSha256: digests.aiGateway,
             statePlaneWorkerBundleSha256: digests.statePlane,
@@ -1270,6 +1386,7 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
   assert.deepEqual(mutations, [
     "queue-paused",
     "worker:access",
+    "worker:runtimeHost",
     "worker:connectorPlane",
     "worker:aiGateway",
     "worker:control",

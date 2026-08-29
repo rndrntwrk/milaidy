@@ -278,6 +278,9 @@ test("Alice Worker typechecks generate exact Cloudflare binding declarations fir
   const accessTypes = workflow.indexOf(
     "--config workers/alice-access-gateway/wrangler.jsonc",
   );
+  const runtimeHostTypes = workflow.indexOf(
+    "--config workers/alice-access-gateway/wrangler.runtime-host.jsonc",
+  );
   const controlTypecheck = workflow.indexOf(
     "bun x tsc --project workers/alice-production-control/tsconfig.json --noEmit",
   );
@@ -293,8 +296,13 @@ test("Alice Worker typechecks generate exact Cloudflare binding declarations fir
     workflow,
     /\.\/node_modules\/\.bin\/wrangler types[\s\S]*?--env-interface AliceAccessGatewayBindings[\s\S]*?workers\/alice-access-gateway\/worker-configuration\.d\.ts/,
   );
+  assert.match(
+    workflow,
+    /\.\/node_modules\/\.bin\/wrangler types[\s\S]*?--env-interface AliceRuntimeHostBindings[\s\S]*?workers\/alice-access-gateway\/runtime-host-configuration\.d\.ts/,
+  );
   assert.ok(controlTypes >= 0 && controlTypes < controlTypecheck);
   assert.ok(accessTypes >= 0 && accessTypes < accessTypecheck);
+  assert.ok(runtimeHostTypes >= 0 && runtimeHostTypes < accessTypecheck);
 });
 
 test("protected Alice qualification verifies provider identity and exact Worker bundles", () => {
@@ -358,7 +366,7 @@ test("protected Alice qualification verifies provider identity and exact Worker 
   );
 });
 
-test("cloud builds qualify and emit the complete five-role Alice Worker graph", () => {
+test("cloud builds qualify and emit the complete six-role Alice Worker graph", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -376,6 +384,7 @@ test("cloud builds qualify and emit the complete five-role Alice Worker graph", 
     "alice-ai-gateway",
     "alice-state-plane",
     "alice-connector-plane",
+    "alice-runtime-container-host",
   ]);
   for (const worker of workerList) {
     assert.match(
@@ -384,6 +393,11 @@ test("cloud builds qualify and emit the complete five-role Alice Worker graph", 
       `the immutable ${worker} module must use the common artifact path`,
     );
   }
+  assert.match(
+    bundleStep,
+    /alice-runtime-container-host[\s\S]*?wrangler\.runtime-host\.jsonc[\s\S]*?runtime-host\.js[\s\S]*?\$worker\/index\.js/,
+    "the runtime host must be built from its dedicated DO-only entrypoint and normalized independently",
+  );
 
   const migrationList = bundleStep.match(/for migration in ([^;\n]+); do/)?.[1]
     ?.trim()

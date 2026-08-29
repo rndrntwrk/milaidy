@@ -274,7 +274,8 @@ jobs:
             alice-production-control \
             alice-ai-gateway \
             alice-state-plane \
-            alice-connector-plane
+            alice-connector-plane \
+            alice-runtime-container-host
           do
             test -s "$recovery_root/alice-worker-bundles/$worker/index.js"
             test ! -L "$recovery_root/alice-worker-bundles/$worker/index.js"

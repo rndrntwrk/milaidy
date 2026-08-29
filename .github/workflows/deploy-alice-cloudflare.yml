@@ -338,6 +338,7 @@ jobs:
             "${RUNNER_TEMP}/alice-worker-bundles/alice-ai-gateway/index.js" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/index.js" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-connector-plane/index.js" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-runtime-container-host/index.js" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/migrations/0001_alice_state.sql" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/migrations/0002_execution_records.sql" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/migrations/0003_eliza_database.sql"
@@ -567,91 +568,42 @@ jobs:
           }
           NODE
 
-      - name: Capture exact active Durable Object identities read-only
+      - name: Bootstrap unrouted fail-closed continuity identities
         env:
+          GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
-          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/durable-object-namespace-ids.json
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
+          ALICE_CLOUDFLARE_RUNTIME_IMAGE: ${{ env.ALICE_CLOUDFLARE_RUNTIME_IMAGE }}
+          ALICE_BOOTSTRAP_OUTPUT_DIR: ${{ runner.temp }}/alice-bootstrap
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/bootstrap-durable-object-namespace-ids.json
+          ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH: ${{ runner.temp }}/alice-release/continuity-readback.json
+          ALICE_BOOTSTRAP_PREFLIGHT_PATH: ${{ runner.temp }}/alice-release/bootstrap-preflight.json
+          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
+          ALICE_STATE_PLANE_SERVICE_TOKEN: ${{ secrets.ALICE_STATE_PLANE_SERVICE_TOKEN }}
         run: |
           set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          import {
-            ALICE_CLOUDFLARE_TARGET,
-            canonicalAliceJson,
-          } from "./workers/alice-effective-config.js";
-          import {
-            extractAliceBootstrapNamespaceIds,
-          } from "./deploy/modal/alice_cloudflare_bootstrap.mjs";
-
-          const base = "https://api.cloudflare.com/client/v4";
-          const token = process.env.CLOUDFLARE_API_TOKEN;
-          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-          const outputPath = process.env.ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH;
-          const versionId = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-          const workers = {
-            access: ALICE_CLOUDFLARE_TARGET.accessWorker,
-            control: ALICE_CLOUDFLARE_TARGET.controlWorker,
-            statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
-            connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
-          };
-
-          function invalid() {
-            throw new Error("ALICE_PREIMPORT_PROVIDER_READ_INVALID");
-          }
-
-          async function get(pathname) {
-            const response = await fetch(`${base}${pathname}`, {
-              method: "GET",
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            let payload;
-            try {
-              payload = await response.json();
-            } catch {
-              invalid();
-            }
-            if (
-              !response.ok || payload?.success !== true ||
-              !Array.isArray(payload?.errors) || payload.errors.length !== 0
-            ) invalid();
-            return payload.result;
-          }
-
-          async function capture() {
-            const versions = { aiGateway: null };
-            for (const [role, worker] of Object.entries(workers)) {
-              const deployments = await get(
-                `/accounts/${accountId}/workers/scripts/${worker}/deployments`,
-              );
-              const active = deployments?.deployments?.[0];
-              if (
-                !Array.isArray(active?.versions) || active.versions.length !== 1 ||
-                active.versions[0]?.percentage !== 100 ||
-                !versionId.test(active.versions[0]?.version_id ?? "")
-              ) invalid();
-              const id = active.versions[0].version_id;
-              versions[role] = await get(
-                `/accounts/${accountId}/workers/scripts/${worker}/versions/${id}`,
-              );
-            }
-            return extractAliceBootstrapNamespaceIds(versions);
-          }
-
-          const verify = await get(`/accounts/${accountId}/tokens/verify`);
-          if (verify?.status !== "active" || !/^[a-f0-9]{32}$/.test(verify?.id ?? "")) {
-            invalid();
-          }
-          const first = await capture();
-          const second = await capture();
-          if (canonicalAliceJson(first) !== canonicalAliceJson(second)) invalid();
-          fs.writeFileSync(outputPath, `${canonicalAliceJson(second)}\n`, {
-            encoding: "utf8",
-            flag: "wx",
-            mode: 0o444,
-          });
-          NODE
-
+          mkdir -p "${RUNNER_TEMP}/alice-release"
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
+            node deploy/modal/alice_cloudflare_bootstrap.mjs
+          canonical_namespace_ids="${RUNNER_TEMP}/alice-release/durable-object-namespace-ids.json"
+          canonical_namespace_ids_tmp="${canonical_namespace_ids}.tmp"
+          test ! -e "$canonical_namespace_ids"
+          test ! -e "$canonical_namespace_ids_tmp"
+          cp -- \
+            "${RUNNER_TEMP}/alice-release/bootstrap-durable-object-namespace-ids.json" \
+            "$canonical_namespace_ids_tmp"
+          chmod 0444 "$canonical_namespace_ids_tmp"
+          mv -- "$canonical_namespace_ids_tmp" "$canonical_namespace_ids"
+          cmp -s \
+            "${RUNNER_TEMP}/alice-release/bootstrap-durable-object-namespace-ids.json" \
+            "$canonical_namespace_ids"
       - name: Materialize signed manifest and exact-byte Worker configs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
@@ -692,6 +644,8 @@ jobs:
             "${RUNNER_TEMP}/alice-release/wrangler/statePlane.wrangler.json" >/dev/null
           jq -e '.workers_dev == false and .preview_urls == false and .routes == []' \
             "${RUNNER_TEMP}/alice-release/wrangler/connectorPlane.wrangler.json" >/dev/null
+          jq -e '.workers_dev == false and .preview_urls == false and .routes == []' \
+            "${RUNNER_TEMP}/alice-release/wrangler/runtimeHost.wrangler.json" >/dev/null
           manifest="${RUNNER_TEMP}/alice-release/alice-deployment-manifest.json"
           provider="${RUNNER_TEMP}/alice-release/provider-readback.json"
           preimport_manifest="${PREIMPORT_ROOT}/alice-deployment-manifest.json"
@@ -754,33 +708,6 @@ jobs:
           NODE
           manifest_sha256="sha256:$(sha256sum "$manifest" | cut -d' ' -f1)"
           echo "ALICE_PRODUCTION_RELEASE_CONFIRM=${SOURCE_SHA}:${manifest_sha256}" >> "$GITHUB_ENV"
-
-      - name: Bootstrap unrouted fail-closed continuity identities
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
-          ALICE_SOURCE_ROOT: ${{ github.workspace }}
-          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
-          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          ALICE_WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
-          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-worker-bundles
-          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-worker-bundles/alice-worker-bundles.json
-          ALICE_BOOTSTRAP_OUTPUT_DIR: ${{ runner.temp }}/alice-bootstrap
-          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-release/bootstrap-durable-object-namespace-ids.json
-          ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH: ${{ runner.temp }}/alice-release/continuity-readback.json
-          ALICE_BOOTSTRAP_PREFLIGHT_PATH: ${{ runner.temp }}/alice-release/bootstrap-preflight.json
-          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-release/bootstrap-state.json
-          ALICE_STATE_PLANE_SERVICE_TOKEN: ${{ secrets.ALICE_STATE_PLANE_SERVICE_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p "${RUNNER_TEMP}/alice-release"
-          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
-          timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
-            node deploy/modal/alice_cloudflare_bootstrap.mjs
-          cmp -s \
-            "${RUNNER_TEMP}/alice-release/durable-object-namespace-ids.json" \
-            "${RUNNER_TEMP}/alice-release/bootstrap-durable-object-namespace-ids.json"
 
       - name: Assert independently preprovisioned recovery boundary
         env:
@@ -1321,7 +1248,8 @@ jobs:
             alice-production-control \
             alice-ai-gateway \
             alice-state-plane \
-            alice-connector-plane
+            alice-connector-plane \
+            alice-runtime-container-host
           do
             test -s "$recovery_root/alice-worker-bundles/$worker/index.js"
             test ! -L "$recovery_root/alice-worker-bundles/$worker/index.js"
