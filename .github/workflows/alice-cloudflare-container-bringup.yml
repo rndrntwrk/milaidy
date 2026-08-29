@@ -76,7 +76,7 @@ jobs:
   import_runtime:
     name: Import immutable image with isolated Containers authority
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: alice-cloudflare-bringup
     outputs:
       artifact_id: ${{ steps.upload_import_evidence.outputs.artifact-id }}
@@ -297,7 +297,7 @@ jobs:
           local_image="alice-runtime:${runtime_tag}"
           registry_tag="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime:${runtime_tag}"
           docker tag "$SOURCE_RUNTIME_IMAGE" "$local_image"
-          timeout --signal=TERM --kill-after=30s 600s \
+          timeout --signal=TERM --kill-after=30s 2400s \
             "$WRANGLER" containers push "$local_image"
           repository_digests="$(docker image inspect "$registry_tag" \
             --format '{{json .RepoDigests}}')"
