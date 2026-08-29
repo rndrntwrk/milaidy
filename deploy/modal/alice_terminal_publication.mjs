@@ -4,6 +4,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { canonicalAliceJson } from "../../workers/alice-effective-config.js";
+import { verifyAliceCloudflareContainerImageEvidence } from
+  "./alice_cloudflare_container_image.mjs";
 
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
@@ -133,6 +135,7 @@ export function verifyAliceTerminalPublication({
   acceptance,
   cloudflareLiveReadback,
   cloudflareRollbackProof,
+  containerImageEvidence,
   modalPromotionEvidence,
   currentCloudflareLiveReadback,
   currentModalProviderReadback,
@@ -144,14 +147,33 @@ export function verifyAliceTerminalPublication({
 }) {
   if (
     !object(acceptance) || !object(cloudflareLiveReadback) ||
-    !object(cloudflareRollbackProof) || !object(modalPromotionEvidence) ||
-    !object(currentCloudflareLiveReadback) ||
-    !object(currentModalProviderReadback) || !object(workflowRun) ||
+    !object(cloudflareRollbackProof) ||
+    !object(currentCloudflareLiveReadback) || !object(workflowRun) ||
     !COMMIT.test(expectedSourceSha ?? "") ||
     !RUN_ID.test(String(expectedRunId ?? "")) ||
     !Number.isSafeInteger(expectedRunAttempt) || expectedRunAttempt < 1 ||
     !Number.isSafeInteger(nowMs)
   ) invalid();
+  const containerEvidenceSupplied =
+    containerImageEvidence !== undefined && containerImageEvidence !== null;
+  const modalPromotionSupplied =
+    modalPromotionEvidence !== undefined && modalPromotionEvidence !== null;
+  const currentModalReadbackSupplied =
+    currentModalProviderReadback !== undefined &&
+      currentModalProviderReadback !== null;
+  if (
+    (containerEvidenceSupplied && !object(containerImageEvidence)) ||
+    (modalPromotionSupplied && !object(modalPromotionEvidence)) ||
+    (currentModalReadbackSupplied && !object(currentModalProviderReadback))
+  ) invalid();
+  const hasContainerEvidence = containerEvidenceSupplied;
+  const hasModalPromotion = modalPromotionSupplied;
+  const hasCurrentModalReadback = currentModalReadbackSupplied;
+  const containerMode =
+    hasContainerEvidence && !hasModalPromotion && !hasCurrentModalReadback;
+  const modalMode =
+    !hasContainerEvidence && hasModalPromotion && hasCurrentModalReadback;
+  if (!containerMode && !modalMode) invalid();
   const runId = String(expectedRunId);
   const observedAt = Date.parse(acceptance.observedAt);
   const objectKeys = acceptance.evidence?.persistedObjectKeys;
@@ -207,21 +229,48 @@ export function verifyAliceTerminalPublication({
     cloudflareLiveReadback.schemaVersion !== "alice.cloudflare-live-readback.v2" ||
     cloudflareLiveReadback.terminalSnapshotStable !== true ||
     cloudflareRollbackProof.schemaVersion !== "alice.cloudflare-rollback-evidence.v2" ||
-    modalPromotionEvidence.schemaVersion !== "alice.modal-promotion-evidence.v1" ||
     acceptance.provenance?.cloudflareLiveReadbackSha256 !==
       digest(cloudflareLiveReadback) ||
     acceptance.provenance?.cloudflareRollbackSha256 !==
-      digest(cloudflareRollbackProof) ||
-    acceptance.provenance?.modalPromotionSha256 !== digest(modalPromotionEvidence)
+      digest(cloudflareRollbackProof)
+  ) invalid();
+  let container;
+  if (containerMode) {
+    try {
+      container = verifyAliceCloudflareContainerImageEvidence(
+        containerImageEvidence,
+      );
+    } catch {
+      invalid();
+    }
+    if (
+      !Object.hasOwn(acceptance, "runtimeRevision") ||
+      Object.hasOwn(acceptance, "modalRevision") ||
+      acceptance.runtimeRevision !== container.runtimeRevision ||
+      acceptance.sourceCommit !== container.sourceCommit ||
+      container.sourceCommit !== expectedSourceSha ||
+      acceptance.provenance?.containerImageEvidenceSha256 !==
+        digest(container) ||
+      acceptance.provenance?.runtimeImage !== container.runtimeImage ||
+      acceptance.provenance?.runtimeRevision !== container.runtimeRevision ||
+      Object.hasOwn(acceptance.provenance ?? {}, "modalPromotionSha256")
+    ) invalid();
+  } else if (
+    modalPromotionEvidence.schemaVersion !==
+      "alice.modal-promotion-evidence.v1" ||
+    acceptance.provenance?.modalPromotionSha256 !==
+      digest(modalPromotionEvidence)
   ) invalid();
   freshObservation(currentCloudflareLiveReadback.observedAt, {
     afterMs: workflowCompletedAtMs,
     nowMs,
   });
-  freshObservation(currentModalProviderReadback.observedAt, {
-    afterMs: workflowCompletedAtMs,
-    nowMs,
-  });
+  if (modalMode) {
+    freshObservation(currentModalProviderReadback.observedAt, {
+      afterMs: workflowCompletedAtMs,
+      nowMs,
+    });
+  }
   const archivedCloudflareIdentity =
     cloudflareTerminalIdentity(cloudflareLiveReadback);
   const currentCloudflareIdentity =
@@ -230,6 +279,24 @@ export function verifyAliceTerminalPublication({
     canonicalAliceJson(archivedCloudflareIdentity) !==
       canonicalAliceJson(currentCloudflareIdentity)
   ) invalid();
+  if (containerMode) {
+    return {
+      schemaVersion: "alice.terminal-publication-verification.v2",
+      sourceCommit: expectedSourceSha,
+      workflowRunId: runId,
+      workflowRunAttempt: expectedRunAttempt,
+      workflowConclusion: "success",
+      acceptanceSha256: digest(acceptance),
+      cloudflareLiveReadbackSha256: digest(cloudflareLiveReadback),
+      currentCloudflareLiveReadbackSha256:
+        digest(currentCloudflareLiveReadback),
+      containerImageEvidenceSha256: digest(container),
+      runtimeImage: container.runtimeImage,
+      runtimeRevision: container.runtimeRevision,
+      verifiedAt: new Date(nowMs).toISOString(),
+      terminal: true,
+    };
+  }
   const currentModalProvider = verifyCurrentModalProvider({
     current: currentModalProviderReadback,
     expected: modalPromotionEvidence.providerReadback,
@@ -265,21 +332,38 @@ function readJson(filePath) {
 }
 
 function main() {
+  const containerEvidencePath =
+    process.env.ALICE_CONTAINER_IMAGE_EVIDENCE_PATH;
+  const modalPromotionPath =
+    process.env.ALICE_MODAL_PROMOTION_EVIDENCE_PATH;
+  const currentModalReadbackPath =
+    process.env.ALICE_CURRENT_MODAL_PROVIDER_READBACK_PATH;
+  const containerMode = typeof containerEvidencePath === "string" &&
+    containerEvidencePath.length > 0 &&
+    !(typeof modalPromotionPath === "string" && modalPromotionPath.length > 0) &&
+    !(typeof currentModalReadbackPath === "string" &&
+      currentModalReadbackPath.length > 0);
+  const modalMode = !(typeof containerEvidencePath === "string" &&
+      containerEvidencePath.length > 0) &&
+    typeof modalPromotionPath === "string" && modalPromotionPath.length > 0 &&
+    typeof currentModalReadbackPath === "string" &&
+      currentModalReadbackPath.length > 0;
+  if (!containerMode && !modalMode) invalid();
   const verification = verifyAliceTerminalPublication({
     acceptance: readJson(process.env.ALICE_PRODUCTION_ACCEPTANCE_PATH),
     cloudflareLiveReadback: readJson(process.env.ALICE_CLOUDFLARE_READBACK_PATH),
     cloudflareRollbackProof: readJson(
       process.env.ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH,
     ),
-    modalPromotionEvidence: readJson(
-      process.env.ALICE_MODAL_PROMOTION_EVIDENCE_PATH,
-    ),
+    ...(containerMode
+      ? { containerImageEvidence: readJson(containerEvidencePath) }
+      : { modalPromotionEvidence: readJson(modalPromotionPath) }),
     currentCloudflareLiveReadback: readJson(
       process.env.ALICE_CURRENT_CLOUDFLARE_READBACK_PATH,
     ),
-    currentModalProviderReadback: readJson(
-      process.env.ALICE_CURRENT_MODAL_PROVIDER_READBACK_PATH,
-    ),
+    ...(modalMode
+      ? { currentModalProviderReadback: readJson(currentModalReadbackPath) }
+      : {}),
     workflowRun: readJson(process.env.ALICE_WORKFLOW_RUN_READBACK_PATH),
     expectedSourceSha: process.env.ALICE_SOURCE_COMMIT,
     expectedRunId: process.env.ALICE_DEPLOYMENT_RUN_ID,
