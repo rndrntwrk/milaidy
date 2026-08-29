@@ -144,6 +144,18 @@ test("pre-import Durable Object reads expose sanitized failures and retry only t
   assert.doesNotMatch(captureStep, /console\.(?:log|error)\([^)]*(?:payload|token|response)/);
 });
 
+test("provider capture reads the runtime-host Worker and active version", () => {
+  const captureScript = captureProviderReadScript();
+  assert.match(
+    captureScript,
+    /runtimeHost:\s*ALICE_CLOUDFLARE_TARGET\.runtimeHostWorker,/,
+  );
+  assert.match(
+    captureScript,
+    /for \(const \[role, worker\] of Object\.entries\(workers\)\)[\s\S]*?versions\[role\] = await get\(/,
+  );
+});
+
 test("provider reads fail immediately on malformed or schema-invalid 503 envelopes", () => {
   for (const mode of ["malformed-json-503", "schema-invalid-503"]) {
     const result = runProviderReadScript(mode);

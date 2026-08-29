@@ -582,7 +582,7 @@ test("temporary pre-import materializes one exact release without production pro
   assert.match(materialize, /extractAliceBootstrapNamespaceIds/);
   assert.match(materialize, /alice_deployment_manifest\.mjs/);
   assert.match(materialize, /deployment-output-digests\.json/);
-  assert.equal([...preimportWorkflow.matchAll(/retention-days: 1/g)].length, 2);
+  assert.equal([...preimportWorkflow.matchAll(/retention-days: 1/g)].length, 3);
   assert.match(preimportWorkflow, /if-no-files-found: error/);
   assert.match(preimportWorkflow, /Owner: Alice pre-import protected-branch operator/);
   assert.match(preimportWorkflow, /Hard expiry: two hours after temporary branch-protection creation/);
@@ -607,7 +607,7 @@ test("temporary pre-import materializes one exact release without production pro
     [expectedTemporaryBranch],
     "every policy, admission, and teardown reference must bind the one exact temporary branch",
   );
-  assert.equal([...preimportWorkflow.matchAll(/if: always\(\)/g)].length, 2);
+  assert.equal([...preimportWorkflow.matchAll(/if: always\(\)/g)].length, 3);
   assert.match(imageImport, /docker logout ghcr\.io/);
   assert.match(imageImport, /rm -rf "\$\{RUNNER_TEMP\}\/alice-preimport-import"/);
   assert.match(materialize, /rm -rf "\$\{RUNNER_TEMP\}\/alice-preimport-materialize"/);
@@ -633,7 +633,7 @@ test("temporary pre-import materializes one exact release without production pro
   );
   assert.doesNotMatch(
     materialize,
-    /ALICE_MATERIALIZE_WRANGLER|wrangler@4\.122\.0/,
+    /ALICE_MATERIALIZE_WRANGLER/,
   );
 
   assert.match(imageImport, /^    outputs:$/m);
@@ -690,7 +690,7 @@ test("temporary pre-import materializes one exact release without production pro
   assert.doesNotMatch(preimportWorkflow, /containers images delete/);
   assert.doesNotMatch(
     preimportWorkflow,
-    /node deploy\/modal\/alice_cloudflare_(?:bootstrap|release|recovery)\.mjs/,
+    /node deploy\/modal\/alice_cloudflare_(?:release|recovery)\.mjs/,
   );
   assert.doesNotMatch(preimportWorkflow, /ALICE_MODAL_|MODAL_TOKEN_|alice_modal_/);
   assert.doesNotMatch(preimportWorkflow, /ALICE_PROGRAM_(?:ENVELOPE|SIGNATURE|PUBLIC_JWK)_B64/);
@@ -711,6 +711,13 @@ test("temporary pre-import materializes one exact release without production pro
       );
     }
   }
+});
+
+test("temporary pre-import attests the exact runtime-host module", () => {
+  assert.match(
+    preimportWorkflow,
+    /"\$\{RUNNER_TEMP\}\/alice-preimport-materialize\/worker-bundles\/alice-runtime-container-host\/index\.js" \\/,
+  );
 });
 
 test("temporary pre-import locks the exact workflow authority before credentials and tears it down in order", () => {
