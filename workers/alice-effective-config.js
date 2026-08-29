@@ -10,6 +10,7 @@ export const ALICE_CLOUDFLARE_TARGET = Object.freeze({
   accessDomain: "alice.rndrntwrk.com",
   releaseControlDomain: "alice-release.rndrntwrk.com",
   accessWorker: "alice-access-gateway",
+  runtimeHostWorker: "alice-runtime-container-host",
   controlWorker: "alice-production-control",
   aiGatewayWorker: "alice-ai-gateway",
   statePlaneWorker: "alice-state-plane",
@@ -224,7 +225,7 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
     throw new Error("ALICE_CONTAINER_ACCESS_EFFECTIVE_CONFIG_INVALID");
   }
   return {
-    schemaVersion: "alice.container-access-effective-config.v1",
+    schemaVersion: "alice.container-access-effective-config.v2",
     worker: {
       accountId: ALICE_CLOUDFLARE_TARGET.accountId,
       name: ALICE_CLOUDFLARE_TARGET.accessWorker,
@@ -247,13 +248,64 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
           binding: "ALICE_CONTROL",
           service: ALICE_CLOUDFLARE_TARGET.controlWorker,
         },
+      ],
+      durableObjects: [
+        {
+          binding: "ALICE_RUNTIME_CONTAINER",
+          className: "AliceRuntimeContainer",
+          scriptName: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
+        },
+      ],
+      migrations: [],
+      containers: [],
+      versionMetadata: { binding: "ALICE_VERSION" },
+      secretNames: [
+        "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
+        "ALICE_ACCESS_PROXY_SECRET",
+      ],
+    },
+    values: {
+      accessIssuer: inputs.accessIssuer,
+      accessAudience: inputs.accessAudience,
+      ownerEmailSha256: inputs.ownerEmailSha256,
+      runtimeImage: inputs.runtimeImage,
+      runtimeContainerName: "alice-production-runtime",
+      runtimePort: 2138,
+      runtimeEgress: "deny-by-default",
+    },
+    observability: aliceObservability(),
+  };
+}
+
+export function buildAliceRuntimeHostEffectiveConfig(inputs) {
+  if (
+    !exactKeys(inputs, ["runtimeImage"]) ||
+    !CLOUDFLARE_CONTAINER_IMAGE.test(inputs.runtimeImage)
+  ) {
+    throw new Error("ALICE_RUNTIME_HOST_EFFECTIVE_CONFIG_INVALID");
+  }
+  return {
+    schemaVersion: "alice.container-runtime-host-effective-config.v1",
+    worker: {
+      accountId: ALICE_CLOUDFLARE_TARGET.accountId,
+      name: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
+      main: "src/runtime-host.ts",
+      compatibilityDate: "2026-08-22",
+      workersDev: false,
+      previewUrls: false,
+      minify: true,
+      uploadSourceMaps: true,
+      routes: [],
+    },
+    bindings: {
+      services: [
         {
           binding: "ALICE_AI_GATEWAY",
           service: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
         },
         {
           binding: "ALICE_STATE_PLANE",
-          service: "alice-state-plane",
+          service: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
         },
       ],
       durableObjects: [
@@ -279,7 +331,6 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
       ],
       versionMetadata: { binding: "ALICE_VERSION" },
       secretNames: [
-        "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
         "ALICE_ACCESS_PROXY_SECRET",
         "ALICE_CAPABILITY_BOM_SHA256",
         "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
@@ -298,9 +349,6 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
       ],
     },
     values: {
-      accessIssuer: inputs.accessIssuer,
-      accessAudience: inputs.accessAudience,
-      ownerEmailSha256: inputs.ownerEmailSha256,
       runtimeImage: inputs.runtimeImage,
       runtimeContainerName: "alice-production-runtime",
       runtimePort: 2138,
@@ -646,7 +694,7 @@ export function encodeAliceDeploymentManifest(serializedManifest) {
 }
 
 function validDeploymentManifest(value) {
-  const containerMode = value?.schemaVersion === "alice.deployment-manifest.v2";
+  const containerMode = value?.schemaVersion === "alice.deployment-manifest.v3";
   return (
     exactKeys(value, ["cloudflare", "release", "schemaVersion", "source"]) &&
     (containerMode || value.schemaVersion === "alice.deployment-manifest.v1") &&
@@ -655,6 +703,9 @@ function validDeploymentManifest(value) {
       "accessConfigSha256",
       "accessPolicyConfigSha256",
       "accessWorkerBundleSha256",
+      ...(containerMode
+        ? ["runtimeHostConfigSha256", "runtimeHostWorkerBundleSha256"]
+        : []),
       "aiGatewayConfigSha256",
       "aiGatewayProviderConfigSha256",
       "aiGatewayWorkerBundleSha256",
@@ -676,6 +727,9 @@ function validDeploymentManifest(value) {
     DIGEST.test(value.cloudflare.aiGatewayConfigSha256) &&
     DIGEST.test(value.cloudflare.aiGatewayProviderConfigSha256) &&
     DIGEST.test(value.cloudflare.accessWorkerBundleSha256) &&
+    (!containerMode ||
+      (DIGEST.test(value.cloudflare.runtimeHostConfigSha256) &&
+        DIGEST.test(value.cloudflare.runtimeHostWorkerBundleSha256))) &&
     DIGEST.test(value.cloudflare.controlWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.aiGatewayWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.controlConfigSha256) &&
@@ -761,6 +815,7 @@ export async function verifyAliceEffectiveConfigBinding({
   });
   const digestField = {
     access: "accessConfigSha256",
+    runtimeHost: "runtimeHostConfigSha256",
     control: "controlConfigSha256",
     aiGateway: "aiGatewayConfigSha256",
     statePlane: "statePlaneConfigSha256",

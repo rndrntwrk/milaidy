@@ -16,6 +16,7 @@ function fixtureRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "alice-worker-artifact."));
   for (const worker of [
     "alice-access-gateway",
+    "alice-runtime-container-host",
     "alice-production-control",
     "alice-ai-gateway",
     "alice-state-plane",
@@ -39,7 +40,7 @@ function fixtureRoot() {
   return root;
 }
 
-test("creates and verifies one canonical five-Worker artifact with ordered state migrations", () => {
+test("creates and verifies one canonical six-Worker artifact with ordered state migrations", () => {
   const root = fixtureRoot();
   try {
     const artifact = buildAliceWorkerBundleArtifact({
@@ -57,12 +58,21 @@ test("creates and verifies one canonical five-Worker artifact with ordered state
     );
     assert.deepEqual(Object.keys(artifact.bundles), [
       "access",
+      "runtimeHost",
       "control",
       "aiGateway",
       "statePlane",
       "connectorPlane",
     ]);
     assert.equal(artifact.bundles.access.path, "alice-access-gateway/index.js");
+    assert.equal(
+      artifact.bundles.runtimeHost.path,
+      "alice-runtime-container-host/index.js",
+    );
+    assert.notEqual(
+      artifact.bundles.runtimeHost.sha256,
+      artifact.bundles.access.sha256,
+    );
     assert.match(artifact.bundles.access.sha256, /^sha256:[a-f0-9]{64}$/);
     assert.equal(
       artifact.bundles.statePlane.path,
@@ -200,7 +210,7 @@ test("rejects missing, extra, substituted, or reordered release members", () => 
   }
 });
 
-test("binds artifact source, five bundle bytes, and migration set to the signed manifest", () => {
+test("binds artifact source, six bundle bytes, and migration set to the signed manifest", () => {
   const root = fixtureRoot();
   try {
     const artifact = buildAliceWorkerBundleArtifact({
@@ -217,6 +227,7 @@ test("binds artifact source, five bundle bytes, and migration set to the signed 
       source: { sourceCommit: "1".repeat(40) },
       cloudflare: {
         accessWorkerBundleSha256: artifact.bundles.access.sha256,
+        runtimeHostWorkerBundleSha256: artifact.bundles.runtimeHost.sha256,
         controlWorkerBundleSha256: artifact.bundles.control.sha256,
         aiGatewayWorkerBundleSha256: artifact.bundles.aiGateway.sha256,
         statePlaneWorkerBundleSha256: artifact.bundles.statePlane.sha256,

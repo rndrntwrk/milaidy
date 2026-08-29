@@ -14,6 +14,10 @@ const BUNDLES = Object.freeze({
     path: "alice-access-gateway/index.js",
     manifestField: "accessWorkerBundleSha256",
   }),
+  runtimeHost: Object.freeze({
+    path: "alice-runtime-container-host/index.js",
+    manifestField: "runtimeHostWorkerBundleSha256",
+  }),
   control: Object.freeze({
     path: "alice-production-control/index.js",
     manifestField: "controlWorkerBundleSha256",
@@ -107,7 +111,7 @@ function validArtifactShape(value) {
       "bundles",
       "migrations",
     ]) &&
-    value.schemaVersion === "alice.worker-bundle-artifact.v2" &&
+    value.schemaVersion === "alice.worker-bundle-artifact.v3" &&
     COMMIT.test(value.sourceCommit ?? "") &&
     value.wranglerVersion === WRANGLER_VERSION &&
     exactKeys(value.bundles, Object.keys(BUNDLES)) &&
@@ -147,7 +151,7 @@ export function buildAliceWorkerBundleArtifact({
   }
   validateMigrationDirectory(root);
   return {
-    schemaVersion: "alice.worker-bundle-artifact.v2",
+    schemaVersion: "alice.worker-bundle-artifact.v3",
     sourceCommit,
     wranglerVersion,
     bundles,

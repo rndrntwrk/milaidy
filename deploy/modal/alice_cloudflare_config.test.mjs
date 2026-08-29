@@ -13,6 +13,7 @@ import {
   buildAliceAiGatewayEffectiveConfig,
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceRuntimeHostEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
 } from "../../workers/alice-effective-config.js";
 import * as aliceEffectiveConfigModule from "../../workers/alice-effective-config.js";
@@ -35,6 +36,7 @@ const stateDatabaseId = "11111111-2222-3333-4444-555555555555";
 const connectorProviderActivation = "disabled";
 const releaseRoles = [
   "access",
+  "runtimeHost",
   "control",
   "aiGateway",
   "statePlane",
@@ -53,6 +55,15 @@ const source = {
   access: JSON.parse(
     fs.readFileSync(
       new URL("../../workers/alice-access-gateway/wrangler.jsonc", import.meta.url),
+      "utf8",
+    ),
+  ),
+  runtimeHost: JSON.parse(
+    fs.readFileSync(
+      new URL(
+        "../../workers/alice-access-gateway/wrangler.runtime-host.jsonc",
+        import.meta.url,
+      ),
       "utf8",
     ),
   ),
@@ -86,6 +97,9 @@ const expected = {
     accessIssuer: commonValues.accessIssuer,
     accessAudience: commonValues.accessAudience,
     ownerEmailSha256: owner,
+    runtimeImage: runtimeContainerImage,
+  }),
+  runtimeHost: buildAliceRuntimeHostEffectiveConfig({
     runtimeImage: runtimeContainerImage,
   }),
   control: buildAliceContainerControlEffectiveConfig({
@@ -235,7 +249,7 @@ test("builds strict private state and connector effective configs", () => {
 });
 
 function rendered(role) {
-  const values = role === "access"
+  const values = role === "access" || role === "runtimeHost"
     ? { ...commonValues, runtimeImage: runtimeContainerImage }
     : role === "control"
       ? {
@@ -261,7 +275,7 @@ function rendered(role) {
 }
 
 function valuesForRole(role) {
-  return role === "access"
+  return role === "access" || role === "runtimeHost"
     ? { ...commonValues, runtimeImage: runtimeContainerImage }
     : role === "control"
       ? {
@@ -395,12 +409,56 @@ test("rejects state or connector binding and exposure substitutions", () => {
   );
 });
 
-test("materializes one immutable Container image into the runtime var and Container binding", () => {
-  const config = rendered("access");
-  assert.equal(config.vars.ALICE_CLOUDFLARE_RUNTIME_IMAGE, runtimeContainerImage);
-  assert.equal(config.containers.length, 1);
-  assert.equal(config.containers[0].image, runtimeContainerImage);
-  assert.equal("ALICE_UPSTREAM_ORIGIN" in config.vars, false);
+test("materializes one immutable Container image only into the runtime host", () => {
+  const access = rendered("access");
+  assert.equal(access.vars.ALICE_CLOUDFLARE_RUNTIME_IMAGE, runtimeContainerImage);
+  assert.equal("containers" in access, false);
+  assert.equal("migrations" in access, false);
+  assert.equal("ALICE_UPSTREAM_ORIGIN" in access.vars, false);
+
+  const host = rendered("runtimeHost");
+  assert.equal(host.containers.length, 1);
+  assert.equal(host.containers[0].name, "alice-production-runtime");
+  assert.equal(host.containers[0].image, runtimeContainerImage);
+  assert.equal(host.containers[0].instance_type, "standard-1");
+  assert.equal(host.containers[0].max_instances, 1);
+});
+
+test("keeps the routed Access upload free of first Durable Object lifecycle", () => {
+  const providerVersionsUpload = (config) => {
+    const runtimeBinding = config.durable_objects?.bindings?.find(
+      (binding) => binding.name === "ALICE_RUNTIME_CONTAINER",
+    );
+    const createsRuntimeNamespace = (config.migrations ?? []).some(
+      (migration) =>
+        (migration.new_sqlite_classes ?? []).includes("AliceRuntimeContainer"),
+    );
+    if (runtimeBinding?.script_name === undefined && createsRuntimeNamespace) {
+      throw new Error(
+        "CLOUDFLARE_VERSIONS_UPLOAD_UNSUPPORTED: first Durable Object lifecycle requires deploy",
+      );
+    }
+  };
+
+  const currentAccess = rendered("access");
+  const legacyAccess = structuredClone(currentAccess);
+  delete legacyAccess.durable_objects.bindings[0].script_name;
+  legacyAccess.migrations = [{
+    tag: "v2-alice-runtime-container",
+    new_sqlite_classes: ["AliceRuntimeContainer"],
+  }];
+  assert.throws(
+    () => providerVersionsUpload(legacyAccess),
+    /first Durable Object lifecycle requires deploy/,
+  );
+
+  providerVersionsUpload(currentAccess);
+  assert.equal(
+    currentAccess.durable_objects.bindings[0].script_name,
+    "alice-runtime-container-host",
+  );
+  assert.equal("migrations" in currentAccess, false);
+  assert.equal("containers" in currentAccess, false);
 });
 
 test("rejects a deployment-time service binding substitution", () => {
@@ -445,34 +503,34 @@ test("binds the stable evidence HMAC secret into the signed control closure", ()
   }
 });
 
-test("binds the admitted capability BOM digest into the signed Container closure", () => {
+test("binds the admitted capability BOM digest into the signed runtime host closure", () => {
   assert.ok(
-    expected.access.bindings.secretNames.includes(
+    expected.runtimeHost.bindings.secretNames.includes(
       "ALICE_CAPABILITY_BOM_SHA256",
     ),
   );
   assert.ok(
-    rendered("access").secrets.required.includes(
+    rendered("runtimeHost").secrets.required.includes(
       "ALICE_CAPABILITY_BOM_SHA256",
     ),
   );
   for (const secretNames of [
-    rendered("access").secrets.required.filter(
+    rendered("runtimeHost").secrets.required.filter(
       (name) => name !== "ALICE_CAPABILITY_BOM_SHA256",
     ),
-    rendered("access").secrets.required.map((name) =>
+    rendered("runtimeHost").secrets.required.map((name) =>
       name === "ALICE_CAPABILITY_BOM_SHA256"
         ? "ALICE_CAPABILITY_BOM_SHA256_SUBSTITUTED"
         : name,
     ),
   ]) {
-    const changed = rendered("access");
+    const changed = rendered("runtimeHost");
     changed.secrets.required = secretNames;
     assert.throws(
       () => assertAliceWranglerMatchesEffectiveConfig(
-        "access",
+        "runtimeHost",
         changed,
-        expected.access,
+        expected.runtimeHost,
       ),
       /ALICE_WRANGLER_EFFECTIVE_CONFIG_MISMATCH/,
     );
@@ -523,6 +581,7 @@ test("binds deploy configs to relocatable artifact-relative entrypoints", () => 
   const runnerB = `${runnerA}.relocated`;
   const workerNames = {
     access: "alice-access-gateway",
+    runtimeHost: "alice-runtime-container-host",
     control: "alice-production-control",
     aiGateway: "alice-ai-gateway",
     statePlane: "alice-state-plane",
@@ -677,6 +736,7 @@ test(
     try {
       const workerNames = {
         access: "alice-access-gateway",
+        runtimeHost: "alice-access-gateway",
         control: "alice-production-control",
         aiGateway: "alice-ai-gateway",
         statePlane: "alice-state-plane",

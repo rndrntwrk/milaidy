@@ -7,6 +7,7 @@ import {
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceRuntimeHostEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
   encodeAliceDeploymentManifest,
 } from "../../alice-effective-config.js";
@@ -62,6 +63,9 @@ const testDeploymentManifest = await buildAliceDeploymentManifest({
     ownerEmailSha256,
     runtimeImage: runtimeContainerImage,
   }),
+  runtimeHostEffectiveConfig: buildAliceRuntimeHostEffectiveConfig({
+    runtimeImage: runtimeContainerImage,
+  }),
   controlEffectiveConfig: buildAliceContainerControlEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
     accessAudience: "alice-access-audience",
@@ -100,15 +104,26 @@ const aliceChatBoundary = {
   services: "not-invoked",
 } as const;
 
-test("signed Container effective config binds an immutable Cloudflare registry image", () => {
-  const effectiveConfig = buildAliceContainerAccessEffectiveConfig({
+test("signed gateway references the host that exclusively binds the immutable Container", () => {
+  const accessEffectiveConfig = buildAliceContainerAccessEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
     accessAudience: "alice-access-audience",
     ownerEmailSha256,
     runtimeImage: runtimeContainerImage,
   });
 
-  expect((effectiveConfig.bindings as any).containers[0].image).toBe(
+  const runtimeHostEffectiveConfig = buildAliceRuntimeHostEffectiveConfig({
+    runtimeImage: runtimeContainerImage,
+  });
+
+  expect((accessEffectiveConfig.bindings as any).containers).toEqual([]);
+  expect((accessEffectiveConfig.bindings as any).migrations).toEqual([]);
+  expect((accessEffectiveConfig.bindings as any).durableObjects).toEqual([{
+    binding: "ALICE_RUNTIME_CONTAINER",
+    className: "AliceRuntimeContainer",
+    scriptName: "alice-runtime-container-host",
+  }]);
+  expect((runtimeHostEffectiveConfig.bindings as any).containers[0].image).toBe(
     runtimeContainerImage,
   );
 });
