@@ -29,6 +29,7 @@ export function aliceTestVerifiedWorkerBundleArtifact({
   artifactRoots.add(root);
   const roles = {
     access: "alice-access-gateway",
+    runtimeHost: "alice-runtime-container-host",
     control: "alice-production-control",
     aiGateway: "alice-ai-gateway",
     statePlane: "alice-state-plane",
