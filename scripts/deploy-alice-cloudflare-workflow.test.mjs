@@ -620,6 +620,10 @@ test("temporary pre-import materializes one exact release without production pro
   assert.doesNotMatch(imageImport, /ALICE_ACCESS_AUDIENCE|ALICE_OWNER_EMAIL_SHA256/);
   assert.match(
     materialize,
+    /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_READ_TOKEN \}\}/,
+  );
+  assert.doesNotMatch(
+    materialize,
     /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/,
   );
   assert.doesNotMatch(materialize, /CLOUDFLARE_CONTAINER_BRINGUP_TOKEN/);
@@ -733,7 +737,7 @@ test("temporary pre-import locks the exact workflow authority before credentials
     [
       "materialize",
       "Revalidate exact source build watchdog and artifact identity",
-      "CLOUDFLARE_API_TOKEN",
+      "CLOUDFLARE_API_READ_TOKEN",
     ],
   ]) {
     const job = jobs.find(({ name }) => name === jobName)?.block ?? "";

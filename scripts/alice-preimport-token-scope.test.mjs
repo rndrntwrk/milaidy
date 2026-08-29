@@ -26,3 +26,23 @@ test("pre-import checks Workers Scripts read scope before provider snapshot", ()
     /Capture exact active Durable Object identities read-only/,
   );
 });
+
+test("pre-import isolates provider reads from the deployment write token", () => {
+  assert.match(
+    workflow,
+    /`\/accounts\/\$\{accountId\}\/tokens\/verify`/,
+    "the persistent account-owned Alice token must use the account-token verification endpoint",
+  );
+  assert.doesNotMatch(
+    workflow,
+    /get\("\/user\/tokens\/verify"\)/,
+    "the account-owned Alice token must not be sent to the user-token verification endpoint",
+  );
+  const readTokenBinding =
+    "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}";
+  assert.equal(
+    workflow.split(readTokenBinding).length - 1,
+    3,
+    "the scope preflight, Durable Object capture, and materializer must use the dedicated read token",
+  );
+});
