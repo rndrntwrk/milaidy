@@ -12,6 +12,7 @@ import {
   buildAliceAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceContainerAccessEffectiveConfig,
+  buildAliceRuntimeHostEffectiveConfig,
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
@@ -77,6 +78,9 @@ const containerAccessEffectiveConfig = buildAliceContainerAccessEffectiveConfig(
   ownerEmailSha256: accessPolicyReadback.ownerEmailSha256,
   runtimeImage:
     `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"9".repeat(64)}`,
+});
+const runtimeHostEffectiveConfig = buildAliceRuntimeHostEffectiveConfig({
+  runtimeImage: containerAccessEffectiveConfig.values.runtimeImage,
 });
 
 const valid = {
@@ -183,11 +187,12 @@ test("builds one non-self-referential production deployment manifest from canoni
   }
 });
 
-test("builds a Container manifest without Modal release vocabulary", async () => {
+test("builds a v3 Container manifest with a distinct runtime-host config and bundle", async () => {
   const { modalRevision: _modalRevision, ...common } = valid;
   const manifest = await buildAliceDeploymentManifest({
     ...common,
     accessEffectiveConfig: containerAccessEffectiveConfig,
+    runtimeHostEffectiveConfig,
     controlEffectiveConfig: buildAliceContainerControlEffectiveConfig({
       accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
       accessAudience,
@@ -201,7 +206,7 @@ test("builds a Container manifest without Modal release vocabulary", async () =>
     runtimeRevision: 49,
     rollbackBoundary: "container:alice-runtime:v49",
   });
-  assert.equal(manifest.schemaVersion, "alice.deployment-manifest.v2");
+  assert.equal(manifest.schemaVersion, "alice.deployment-manifest.v3");
   assert.deepEqual(manifest.release, {
     releaseEpoch: 1,
     runtimeRevision: 49,
@@ -209,9 +214,44 @@ test("builds a Container manifest without Modal release vocabulary", async () =>
     rollbackBoundary: "container:alice-runtime:v49",
   });
   assert.equal("modalRevision" in manifest.release, false);
+  assert.equal(
+    manifest.cloudflare.runtimeHostWorker,
+    "alice-runtime-container-host",
+  );
+  assert.equal(
+    manifest.cloudflare.runtimeHostConfigSha256,
+    await digestAliceEffectiveConfig(runtimeHostEffectiveConfig),
+  );
+  assert.equal(
+    manifest.cloudflare.runtimeHostWorkerBundleSha256,
+    workerBundleArtifact.bundles.runtimeHost.sha256,
+  );
   assert.deepEqual(
     verifyAliceDeploymentManifest(serializeAliceDeploymentManifest(manifest)),
     manifest,
+  );
+  const bytes = serializeAliceDeploymentManifest(manifest);
+  for (const [role, effectiveConfig] of Object.entries({
+    access: containerAccessEffectiveConfig,
+    runtimeHost: runtimeHostEffectiveConfig,
+  })) {
+    await verifyAliceEffectiveConfigBinding({
+      encodedManifest: encodeAliceDeploymentManifest(bytes),
+      expectedManifestSha256: digestAliceDeploymentManifest(bytes),
+      role,
+      effectiveConfig,
+    });
+  }
+
+  const priorV2 = structuredClone(manifest);
+  priorV2.schemaVersion = "alice.deployment-manifest.v2";
+  delete priorV2.cloudflare.runtimeHostWorker;
+  delete priorV2.cloudflare.runtimeHostConfigSha256;
+  delete priorV2.cloudflare.runtimeHostWorkerBundleSha256;
+  assert.deepEqual(
+    verifyAliceDeploymentManifest(serializeAliceDeploymentManifest(priorV2)),
+    priorV2,
+    "prior Container manifests remain readable without retroactive host fields",
   );
 });
 

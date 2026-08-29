@@ -104,6 +104,57 @@ test("normalizes immutable version resources and exact provider-owned binding va
     fixtures.aiGateway.version.resources,
   );
   assert.equal(ai.bindings.find(({ name }) => name === "AI").project, "alice-production");
+  const runtimeHost = rollback.normalizeAliceCloudflareVersionResources(
+    fixtures.runtimeHost.version.resources,
+  );
+  assert.equal(runtimeHost.script_runtime.migration_tag, "v2-alice-runtime-container");
+  assert.equal(
+    runtimeHost.bindings.find(({ name }) => name === "ALICE_RUNTIME_CONTAINER")
+      .namespace_id,
+    "55555555555555555555555555555555",
+  );
+  const legacyAccess = rollback.normalizeAliceCloudflareVersionResources({
+    ...fixtures.access.version.resources,
+    bindings: [{
+      class_name: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      namespace_id: "55555555555555555555555555555555",
+      type: "durable_object_namespace",
+    }],
+    script_runtime: {
+      compatibility_date: "2026-08-22",
+      migration_tag: "v2-alice-runtime-container",
+      usage_model: "standard",
+    },
+  });
+  assert.equal(
+    Object.hasOwn(
+      legacyAccess.bindings.find(
+        ({ name }) => name === "ALICE_RUNTIME_CONTAINER",
+      ),
+      "script_name",
+    ),
+    false,
+    "the rollback anchor must preserve a legacy Access-owned namespace exactly",
+  );
+  assert.equal(
+    legacyAccess.script_runtime.migration_tag,
+    "v2-alice-runtime-container",
+  );
+  const externalAccess = rollback.normalizeAliceCloudflareVersionResources({
+    ...fixtures.access.version.resources,
+    bindings: [{
+      class_name: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      namespace_id: "55555555555555555555555555555555",
+      script_name: "alice-runtime-container-host",
+      type: "durable_object_namespace",
+    }],
+  });
+  assert.equal(
+    externalAccess.bindings[0].script_name,
+    "alice-runtime-container-host",
+  );
   const state = rollback.normalizeAliceCloudflareVersionResources({
     ...fixtures.aiGateway.version.resources,
     bindings: [
@@ -210,6 +261,7 @@ test("captures the production-shaped current response for every Alice Worker", a
   });
   assert.deepEqual(Object.keys(captured), [
     "access",
+    "runtimeHost",
     "control",
     "aiGateway",
     "statePlane",
@@ -247,6 +299,10 @@ test("captures the production-shaped current response for every Alice Worker", a
     ).namespace_id,
     "44444444444444444444444444444444",
   );
+  assert.equal(
+    captured.runtimeHost.versionResources.script_runtime.migration_tag,
+    "v2-alice-runtime-container",
+  );
 });
 
 test("restores persistent settings and proves the prior serving version twice", async () => {
@@ -271,6 +327,10 @@ test("restores persistent settings and proves the prior serving version twice", 
     "alice-connector-plane": [
       "55555555-5555-4555-8555-555555555551",
       "55555555-5555-4555-8555-555555555555",
+    ],
+    "alice-runtime-container-host": [
+      "66666666-6666-4666-8666-666666666661",
+      "66666666-6666-4666-8666-666666666666",
     ],
   };
   const scriptSettings = Object.fromEntries(
@@ -321,6 +381,9 @@ test("restores persistent settings and proves the prior serving version twice", 
           script: { etag: `etag-${worker}` },
           script_runtime: {
             compatibility_date: "2026-08-22",
+            ...(worker === "alice-runtime-container-host"
+              ? { migration_tag: "v2-alice-runtime-container" }
+              : {}),
             usage_model: "standard",
           },
         },
@@ -353,6 +416,8 @@ test("restores persistent settings and proves the prior serving version twice", 
     "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
   workers["alice-connector-plane"][0] =
     "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  workers["alice-runtime-container-host"][0] =
+    "ffffffff-ffff-4fff-8fff-ffffffffffff";
   const restored = await restoreAliceCloudflareWorkerRollbackState({
     expected,
     fetchImpl,
@@ -396,15 +461,32 @@ test("restores persistent settings and proves the prior serving version twice", 
         deploymentId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
       },
     },
+    runtimeHost: {
+      ...expected.runtimeHost,
+      serving: {
+        ...expected.runtimeHost.serving,
+        deploymentId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      },
+    },
   });
   assert.deepEqual(restored.deployments.access, {
     previousDeploymentId: "11111111-1111-4111-8111-111111111111",
     rollbackDeploymentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     versionId: "11111111-1111-4111-8111-111111111112",
   });
-  assert.equal(patches.length, 5);
+  assert.deepEqual(restored.deployments.runtimeHost, {
+    previousDeploymentId: "66666666-6666-4666-8666-666666666661",
+    rollbackDeploymentId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    versionId: "66666666-6666-4666-8666-666666666666",
+  });
+  assert.equal(
+    restored.restored.runtimeHost.versionResources.script_runtime.migration_tag,
+    "v2-alice-runtime-container",
+  );
+  assert.equal(patches.length, 6);
   assert.deepEqual(patches.map(({ worker }) => worker), [
     "alice-access-gateway",
+    "alice-runtime-container-host",
     "alice-connector-plane",
     "alice-ai-gateway",
     "alice-production-control",

@@ -10,6 +10,7 @@ import {
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceRuntimeHostEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
   canonicalAliceJson,
   digestAliceEffectiveConfig,
@@ -38,6 +39,13 @@ const COMMIT = /^[a-f0-9]{40}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const LEGACY_IMAGE = /^ghcr\.io\/rndrntwrk\/milaidy-agent@sha256:[a-f0-9]{64}$/;
 const CONTAINER_IMAGE = /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
+const LEGACY_CLOUDFLARE_TARGET = Object.freeze(
+  Object.fromEntries(
+    Object.entries(ALICE_CLOUDFLARE_TARGET).filter(
+      ([key]) => key !== "runtimeHostWorker",
+    ),
+  ),
+);
 const COMMON_INPUT_KEYS = [
   "accessEffectiveConfig",
   "accessPolicyReadback",
@@ -60,7 +68,11 @@ const COMMON_INPUT_KEYS = [
   "workerBundleArtifact",
 ];
 const LEGACY_INPUT_KEYS = [...COMMON_INPUT_KEYS, "modalRevision"];
-const CONTAINER_INPUT_KEYS = [...COMMON_INPUT_KEYS, "runtimeRevision"];
+const CONTAINER_INPUT_KEYS = [
+  ...COMMON_INPUT_KEYS,
+  "runtimeHostEffectiveConfig",
+  "runtimeRevision",
+];
 
 function exactKeys(value, expected) {
   return (
@@ -75,9 +87,11 @@ function effectiveConfigsAreCanonical(value) {
   try {
     const accessValues = value.accessEffectiveConfig?.values;
     const controlValues = value.controlEffectiveConfig?.values;
-    const expectedAccess =
+    const containerMode =
       value.accessEffectiveConfig?.schemaVersion ===
-      "alice.container-access-effective-config.v1"
+      "alice.container-access-effective-config.v2";
+    const expectedAccess =
+      containerMode
         ? buildAliceContainerAccessEffectiveConfig({
             accessIssuer: accessValues?.accessIssuer,
             accessAudience: accessValues?.accessAudience,
@@ -91,8 +105,7 @@ function effectiveConfigsAreCanonical(value) {
             upstreamOrigin: accessValues?.upstreamOrigin,
           });
     const expectedControl = (
-      value.accessEffectiveConfig?.schemaVersion ===
-      "alice.container-access-effective-config.v1"
+      containerMode
         ? buildAliceContainerControlEffectiveConfig
         : buildAliceControlEffectiveConfig
     )({
@@ -108,6 +121,11 @@ function effectiveConfigsAreCanonical(value) {
         controlValues?.releaseServiceTokenIdSha256,
     });
     const expectedAiGateway = buildAliceAiGatewayEffectiveConfig();
+    const expectedRuntimeHost = containerMode
+      ? buildAliceRuntimeHostEffectiveConfig({
+          runtimeImage: value.runtimeHostEffectiveConfig?.values?.runtimeImage,
+        })
+      : null;
     const expectedStatePlane = buildAliceStatePlaneEffectiveConfig({
       databaseId:
         value.statePlaneEffectiveConfig?.bindings?.d1?.[0]?.databaseId,
@@ -124,6 +142,9 @@ function effectiveConfigsAreCanonical(value) {
     return (
       canonicalAliceJson(value.accessEffectiveConfig) ===
         canonicalAliceJson(expectedAccess) &&
+      (!containerMode ||
+        canonicalAliceJson(value.runtimeHostEffectiveConfig) ===
+          canonicalAliceJson(expectedRuntimeHost)) &&
       canonicalAliceJson(value.controlEffectiveConfig) ===
         canonicalAliceJson(expectedControl) &&
       canonicalAliceJson(value.aiGatewayEffectiveConfig) ===
@@ -141,7 +162,7 @@ function effectiveConfigsAreCanonical(value) {
 async function validInputs(value) {
   const containerMode =
     value?.accessEffectiveConfig?.schemaVersion ===
-    "alice.container-access-effective-config.v1";
+    "alice.container-access-effective-config.v2";
   let providerConfigsValid = false;
   let continuityConfigValid = false;
   let workerBundleArtifactValid = false;
@@ -171,7 +192,14 @@ async function validInputs(value) {
     const bundleDigests = aliceWorkerBundleDigests(value.workerBundleArtifact);
     workerBundleArtifactValid =
       value.workerBundleArtifact.sourceCommit === value.sourceCommit &&
-      ["access", "control", "aiGateway", "statePlane", "connectorPlane"].every(
+      [
+        "access",
+        "runtimeHost",
+        "control",
+        "aiGateway",
+        "statePlane",
+        "connectorPlane",
+      ].every(
         (role) => DIGEST.test(bundleDigests[role] ?? ""),
       );
   } catch {
@@ -186,7 +214,9 @@ async function validInputs(value) {
     COMMIT.test(value.elizaCommit) &&
     (containerMode ? CONTAINER_IMAGE : LEGACY_IMAGE).test(value.runtimeImage) &&
     (!containerMode ||
-      value.runtimeImage === value.accessEffectiveConfig.values.runtimeImage) &&
+      (value.runtimeImage === value.accessEffectiveConfig.values.runtimeImage &&
+        value.runtimeImage ===
+          value.runtimeHostEffectiveConfig.values.runtimeImage)) &&
     DIGEST.test(value.runtimeBuildManifestSha256) &&
     DIGEST.test(value.capabilityBomSha256) &&
     Number.isInteger(
@@ -207,7 +237,15 @@ async function validInputs(value) {
 }
 
 function validManifest(value) {
-  const containerMode = value?.schemaVersion === "alice.deployment-manifest.v2";
+  const containerMode = [
+    "alice.deployment-manifest.v2",
+    "alice.deployment-manifest.v3",
+  ].includes(value?.schemaVersion);
+  const runtimeHostMode =
+    value?.schemaVersion === "alice.deployment-manifest.v3";
+  const target = runtimeHostMode
+    ? ALICE_CLOUDFLARE_TARGET
+    : LEGACY_CLOUDFLARE_TARGET;
   if (
     !exactKeys(value, ["schemaVersion", "release", "source", "cloudflare"]) ||
     (!containerMode && value.schemaVersion !== "alice.deployment-manifest.v1") ||
@@ -226,7 +264,7 @@ function validManifest(value) {
         : ["modalRevision", "policyHash", "releaseEpoch", "rollbackBoundary"],
     ) ||
     !exactKeys(value.cloudflare, [
-      ...Object.keys(ALICE_CLOUDFLARE_TARGET),
+      ...Object.keys(target),
       "accessConfigSha256",
       "accessPolicyConfigSha256",
       "accessWorkerBundleSha256",
@@ -242,6 +280,12 @@ function validManifest(value) {
       "statePlaneConfigSha256",
       "statePlaneWorkerBundleSha256",
       "vectorizeProviderConfigSha256",
+      ...(runtimeHostMode
+        ? [
+            "runtimeHostConfigSha256",
+            "runtimeHostWorkerBundleSha256",
+          ]
+        : []),
     ])
   ) {
     return false;
@@ -298,7 +342,10 @@ function validManifest(value) {
     DIGEST.test(value.cloudflare.statePlaneWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.connectorPlaneWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.stateMigrationSetSha256) &&
-    Object.entries(ALICE_CLOUDFLARE_TARGET).every(
+    (!runtimeHostMode ||
+      (DIGEST.test(value.cloudflare.runtimeHostConfigSha256) &&
+        DIGEST.test(value.cloudflare.runtimeHostWorkerBundleSha256))) &&
+    Object.entries(target).every(
       ([key, expected]) => value.cloudflare[key] === expected,
     )
   );
@@ -322,10 +369,10 @@ export async function buildAliceDeploymentManifest(inputs) {
   );
   const containerMode =
     inputs.accessEffectiveConfig.schemaVersion ===
-    "alice.container-access-effective-config.v1";
+    "alice.container-access-effective-config.v2";
   return {
     schemaVersion: containerMode
-      ? "alice.deployment-manifest.v2"
+      ? "alice.deployment-manifest.v3"
       : "alice.deployment-manifest.v1",
     release: {
       releaseEpoch: inputs.releaseEpoch,
@@ -344,7 +391,9 @@ export async function buildAliceDeploymentManifest(inputs) {
       runtimeBuildManifestSha256: inputs.runtimeBuildManifestSha256,
     },
     cloudflare: {
-      ...ALICE_CLOUDFLARE_TARGET,
+      ...(containerMode
+        ? ALICE_CLOUDFLARE_TARGET
+        : LEGACY_CLOUDFLARE_TARGET),
       accessConfigSha256: await digestAliceEffectiveConfig(
         inputs.accessEffectiveConfig,
       ),
@@ -352,6 +401,14 @@ export async function buildAliceDeploymentManifest(inputs) {
         accessPolicyConfig,
       ),
       accessWorkerBundleSha256: workerBundleDigests.access,
+      ...(containerMode
+        ? {
+            runtimeHostConfigSha256: await digestAliceEffectiveConfig(
+              inputs.runtimeHostEffectiveConfig,
+            ),
+            runtimeHostWorkerBundleSha256: workerBundleDigests.runtimeHost,
+          }
+        : {}),
       controlConfigSha256: await digestAliceEffectiveConfig(
         inputs.controlEffectiveConfig,
       ),
@@ -428,6 +485,9 @@ if (invokedPath === import.meta.url) {
       accessIssuer: process.env.ALICE_ACCESS_ISSUER,
       accessAudience: process.env.ALICE_ACCESS_AUDIENCE,
       ownerEmailSha256: process.env.ALICE_OWNER_EMAIL_SHA256,
+      runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+    });
+    const runtimeHostEffectiveConfig = buildAliceRuntimeHostEffectiveConfig({
       runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
     });
     const controlEffectiveConfig = buildAliceContainerControlEffectiveConfig({
@@ -508,6 +568,7 @@ if (invokedPath === import.meta.url) {
       cloudflareContinuityReadback: candidateContinuityReadback,
       workerBundleArtifact,
       accessEffectiveConfig,
+      runtimeHostEffectiveConfig,
       controlEffectiveConfig,
       aiGatewayEffectiveConfig: buildAliceAiGatewayEffectiveConfig(),
       statePlaneEffectiveConfig,
@@ -519,7 +580,7 @@ if (invokedPath === import.meta.url) {
       throw new Error("ALICE_DEPLOYMENT_MANIFEST_PATH_INVALID");
     }
     const providerEvidence = {
-      schemaVersion: "alice.cloudflare-provider-readback.v1",
+      schemaVersion: "alice.cloudflare-provider-readback.v2",
       accountId: ALICE_CLOUDFLARE_TARGET.accountId,
       zoneId: "7b24984479ee4cddb6c5d8a9b7a0f2c6",
       observedAt: new Date().toISOString(),

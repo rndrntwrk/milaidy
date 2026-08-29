@@ -359,14 +359,21 @@ function validateProviderRollbackForward(
   const modalRelease = modalPromotion?.release;
   if (
     cloudflareRollback.schemaVersion !==
-      "alice.cloudflare-rollback-evidence.v1" ||
+      "alice.cloudflare-rollback-evidence.v2" ||
     cloudflareRollback.accountId !== ACCOUNT_ID ||
     !object(cloudflareRollback.workflowVersionContinuity) ||
-    cloudflareLive.schemaVersion !== "alice.cloudflare-live-readback.v1" ||
+    cloudflareLive.schemaVersion !== "alice.cloudflare-live-readback.v2" ||
     cloudflareLive.accountId !== ACCOUNT_ID || cloudflareLive.zoneId !== ZONE_ID ||
     cloudflareLive.terminalSnapshotStable !== true ||
     !object(cloudflareLive.workers) ||
-    !["access", "control", "aiGateway"].every((role) =>
+    ![
+      "access",
+      "runtimeHost",
+      "control",
+      "aiGateway",
+      "statePlane",
+      "connectorPlane",
+    ].every((role) =>
       object(cloudflareLive.workers[role])) ||
     (!containerMode &&
       (modalPromotion?.schemaVersion !== "alice.modal-promotion-evidence.v1" ||
@@ -536,10 +543,12 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     : modalPromotionEvidence;
   if (!object(providerPromotionEvidence)) invalid();
   if (
-    manifest.schemaVersion !==
-      (containerMode
-        ? "alice.deployment-manifest.v2"
-        : "alice.deployment-manifest.v1") ||
+    (containerMode
+      ? ![
+          "alice.deployment-manifest.v2",
+          "alice.deployment-manifest.v3",
+        ].includes(manifest.schemaVersion)
+      : manifest.schemaVersion !== "alice.deployment-manifest.v1") ||
     manifest.source.sourceCommit !== expected.release.sourceCommit ||
     manifest.source.deploymentControllerCommit !==
       expected.release.deploymentControllerCommit ||
@@ -557,7 +566,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     deploymentPauseEvidence.result?.edgeReadinessConfirmed !== true ||
     !object(deploymentPauseEvidence.active) ||
     !object(deploymentPauseEvidence.result?.pause) ||
-    rollbackAnchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v6"
+    rollbackAnchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v7"
   ) invalid();
 
   const manifestBytes = `${canonicalAliceJson(manifest)}\n`;
@@ -993,7 +1002,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     if (!evidenceDelta || !observedKindCounts) invalid();
 
     return {
-      schemaVersion: "alice.production-acceptance.v2",
+      schemaVersion: "alice.production-acceptance.v3",
       observedAt: new Date(now()).toISOString(),
       accountId: ACCOUNT_ID,
       zoneId: ZONE_ID,

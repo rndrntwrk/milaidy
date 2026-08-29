@@ -259,6 +259,10 @@ jobs:
             --env-interface AliceAccessGatewayBindings \
             workers/alice-access-gateway/worker-configuration.d.ts
           ./node_modules/.bin/wrangler types \
+            --config workers/alice-access-gateway/wrangler.runtime-host.jsonc \
+            --env-interface AliceRuntimeHostBindings \
+            workers/alice-access-gateway/runtime-host-configuration.d.ts
+          ./node_modules/.bin/wrangler types \
             --config workers/alice-state-plane/wrangler.jsonc \
             workers/alice-state-plane/worker-configuration.d.ts
           ./node_modules/.bin/wrangler types \
@@ -277,17 +281,27 @@ jobs:
           bundle_root="$(mktemp -d "${RUNNER_TEMP}/alice-worker-bundles.XXXXXX")"
           wrangler_version="$(./node_modules/.bin/wrangler --version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
           test "$wrangler_version" = "4.122.0"
-          for worker in alice-access-gateway alice-production-control alice-ai-gateway alice-state-plane alice-connector-plane; do
+          for worker in alice-access-gateway alice-production-control alice-ai-gateway alice-state-plane alice-connector-plane alice-runtime-container-host; do
             mkdir "$bundle_root/$worker"
+            config="workers/$worker/wrangler.jsonc"
+            if [ "$worker" = "alice-runtime-container-host" ]; then
+              config="workers/alice-access-gateway/wrangler.runtime-host.jsonc"
+            fi
             ./node_modules/.bin/wrangler deploy \
               --dry-run \
               --outdir "$bundle_root/$worker" \
-              --config "workers/$worker/wrangler.jsonc"
+              --config "$config"
             if [ "$worker" = "alice-access-gateway" ]; then
               test -f "$bundle_root/$worker/worker.js"
               test ! -L "$bundle_root/$worker/worker.js"
               test ! -e "$bundle_root/$worker/index.js"
               mv "$bundle_root/$worker/worker.js" "$bundle_root/$worker/index.js"
+            fi
+            if [ "$worker" = "alice-runtime-container-host" ]; then
+              test -f "$bundle_root/$worker/runtime-host.js"
+              test ! -L "$bundle_root/$worker/runtime-host.js"
+              test ! -e "$bundle_root/$worker/index.js"
+              mv "$bundle_root/$worker/runtime-host.js" "$bundle_root/$worker/index.js"
             fi
             test -f "$bundle_root/$worker/index.js"
             test ! -L "$bundle_root/$worker/index.js"
