@@ -605,6 +605,8 @@ jobs:
           const token = process.env.CLOUDFLARE_API_TOKEN;
           const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
           const outputPath = process.env.ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH;
+          const TRANSIENT_READ_ATTEMPTS = 3;
+          const TRANSIENT_READ_DELAY_MS = 250;
           const versionId = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
           const workers = {
             access: ALICE_CLOUDFLARE_TARGET.accessWorker,
@@ -613,32 +615,89 @@ jobs:
             connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
           };
 
-          function invalid() {
-            throw new Error("ALICE_PREIMPORT_PROVIDER_READ_INVALID");
+          function invalid(code = "ALICE_PREIMPORT_PROVIDER_READ_INVALID") {
+            throw new Error(code);
           }
 
-          async function get(pathname) {
-            const response = await fetch(`${base}${pathname}`, {
-              method: "GET",
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            let payload;
-            try {
-              payload = await response.json();
-            } catch {
-              invalid();
+          function providerErrorCode(payload) {
+            return Array.isArray(payload?.errors)
+              ? payload.errors
+                .map((entry) => entry?.code)
+                .find((entry) => Number.isSafeInteger(entry) && entry >= 0)
+              : undefined;
+          }
+
+          function isCloudflareErrorEnvelope(payload) {
+            return (
+              payload !== null && typeof payload === "object" && !Array.isArray(payload) &&
+              payload.success === false &&
+              Array.isArray(payload.errors) &&
+              Array.isArray(payload.messages) &&
+              Object.hasOwn(payload, "result")
+            );
+          }
+
+          function providerApiInvalid(operation, status, payload) {
+            if (!/^[A-Z0-9_]{3,96}$/.test(operation ?? "")) invalid();
+            const code = providerErrorCode(payload);
+            const httpStatus = Number.isSafeInteger(status) && status >= 100 && status <= 599
+              ? status
+              : "NONE";
+            invalid(
+              `ALICE_PREIMPORT_PROVIDER_READ_INVALID:${operation}:HTTP_${httpStatus}:CF_${code ?? "NONE"}`,
+            );
+          }
+
+          const sleep = (milliseconds) => new Promise((resolve) => {
+            setTimeout(resolve, milliseconds);
+          });
+
+          async function get(operation, pathname) {
+            if (!/^[A-Z0-9_]{3,96}$/.test(operation ?? "")) invalid();
+            for (let attempt = 1; attempt <= TRANSIENT_READ_ATTEMPTS; attempt += 1) {
+              let response;
+              try {
+                response = await fetch(`${base}${pathname}`, {
+                  method: "GET",
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+              } catch {
+                providerApiInvalid(operation, null, null);
+              }
+              let payload;
+              try {
+                payload = await response.json();
+              } catch {
+                providerApiInvalid(operation, response.status, null);
+              }
+              if (!response.ok) {
+                if (
+                  response.status === 503 &&
+                  isCloudflareErrorEnvelope(payload) &&
+                  providerErrorCode(payload) === undefined &&
+                  attempt < TRANSIENT_READ_ATTEMPTS
+                ) {
+                  await sleep(TRANSIENT_READ_DELAY_MS);
+                  continue;
+                }
+                providerApiInvalid(operation, response.status, payload);
+              }
+              if (
+                payload?.success !== true ||
+                !Array.isArray(payload?.errors) || payload.errors.length !== 0
+              ) {
+                providerApiInvalid(operation, response.status, payload);
+              }
+              return payload.result;
             }
-            if (
-              !response.ok || payload?.success !== true ||
-              !Array.isArray(payload?.errors) || payload.errors.length !== 0
-            ) invalid();
-            return payload.result;
+            invalid();
           }
 
           async function capture() {
             const versions = { aiGateway: null };
             for (const [role, worker] of Object.entries(workers)) {
               const deployments = await get(
+                `GET_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_DEPLOYMENTS`,
                 `/accounts/${accountId}/workers/scripts/${worker}/deployments`,
               );
               const active = deployments?.deployments?.[0];
@@ -649,6 +708,7 @@ jobs:
               ) invalid();
               const id = active.versions[0].version_id;
               versions[role] = await get(
+                `GET_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
                 `/accounts/${accountId}/workers/scripts/${worker}/versions/${id}`,
               );
             }
@@ -656,6 +716,7 @@ jobs:
           }
 
           const verify = await get(
+            "VERIFY_READ_TOKEN",
             `/accounts/${accountId}/tokens/verify`,
           );
           if (verify?.status !== "active" || !/^[a-f0-9]{32}$/.test(verify?.id ?? "")) {
