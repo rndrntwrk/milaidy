@@ -178,6 +178,9 @@ test("routes the state host through the private service binding without exposing
     "utf8",
   );
   expect(hostEntrypoint).toContain(
+    'export { ContainerProxy } from "@cloudflare/containers";',
+  );
+  expect(hostEntrypoint).toContain(
     'export { AliceRuntimeContainer } from "./alice-runtime-container";',
   );
   expect(hostEntrypoint).not.toContain("default");
