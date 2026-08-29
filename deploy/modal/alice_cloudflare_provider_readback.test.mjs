@@ -19,7 +19,9 @@ import {
 } from "./alice_deployment_manifest.mjs";
 import {
   readAliceWorkerMainModule,
+  verifyAliceContainerApplicationReadback,
   verifyAliceProviderControlFingerprints,
+  verifyAliceWorkerProviderBindingSnapshot,
   verifyAliceWorkerProviderReadback,
 } from "./alice_cloudflare_provider_readback.mjs";
 import * as providerReadback from "./alice_cloudflare_provider_readback.mjs";
@@ -334,6 +336,7 @@ function fixture(role) {
       className: binding.class_name,
       name: binding.name,
       namespaceId: binding.namespace_id,
+      scriptName: binding.script_name ?? null,
     }));
   const queue = config.queues?.consumers?.[0];
   const workflow = config.workflows?.[0];
@@ -405,6 +408,183 @@ function fixture(role) {
     expectedDurableObjectNamespaceIds,
   };
 }
+
+test("preserves the exact external Access reference to the runtimeHost namespace", () => {
+  const namespaceId = "5".repeat(32);
+  const externalConfig = {
+    durable_objects: {
+      bindings: [{
+        class_name: "AliceRuntimeContainer",
+        name: "ALICE_RUNTIME_CONTAINER",
+        script_name: "alice-runtime-container-host",
+      }],
+    },
+  };
+  const externalVersion = {
+    resources: {
+      bindings: [{
+        class_name: "AliceRuntimeContainer",
+        name: "ALICE_RUNTIME_CONTAINER",
+        namespace_id: namespaceId,
+        script_name: "alice-runtime-container-host",
+        type: "durable_object_namespace",
+      }],
+    },
+  };
+  assert.deepEqual(
+    verifyAliceWorkerProviderBindingSnapshot({
+      version: externalVersion,
+      materializedWranglerConfig: externalConfig,
+    }),
+    [{
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      scriptName: "alice-runtime-container-host",
+      type: "durable_object_namespace",
+    }],
+  );
+
+  const localConfig = {
+    durable_objects: {
+      bindings: [{
+        class_name: "AliceRuntimeContainer",
+        name: "ALICE_RUNTIME_CONTAINER",
+      }],
+    },
+  };
+  const localVersion = structuredClone(externalVersion);
+  delete localVersion.resources.bindings[0].script_name;
+  assert.deepEqual(
+    verifyAliceWorkerProviderBindingSnapshot({
+      version: localVersion,
+      materializedWranglerConfig: localConfig,
+    }),
+    [{
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      scriptName: null,
+      type: "durable_object_namespace",
+    }],
+  );
+
+  for (const scriptName of ["other-host", "", "alice-runtime-container-host\n"]) {
+    const substituted = structuredClone(externalVersion);
+    substituted.resources.bindings[0].script_name = scriptName;
+    assert.throws(
+      () => verifyAliceWorkerProviderBindingSnapshot({
+        version: substituted,
+        materializedWranglerConfig: externalConfig,
+      }),
+      /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
+    );
+  }
+});
+
+test("normalizes only the inert max-one runtimeHost container application", () => {
+  const namespaceId = "5".repeat(32);
+  const image =
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"4".repeat(64)}`;
+  const application = {
+    id: "55555555-5555-4555-8555-555555555555",
+    account_id: "036df6c823669b8fa2f66cf4c16eeb29",
+    created_at: "2026-08-29T12:00:00.000Z",
+    name: "alice-production-runtime",
+    version: 1,
+    scheduling_policy: "default",
+    instances: 0,
+    max_instances: 1,
+    configuration: {
+      image,
+      instance_type: "standard-1",
+      ports: [],
+    },
+    durable_objects: { namespace_id: namespaceId },
+    health: {
+      instances: {
+        active: 0,
+        healthy: 0,
+        failed: 0,
+        starting: 0,
+        scheduling: 0,
+      },
+    },
+  };
+  const config = {
+    account_id: application.account_id,
+    containers: [{
+      class_name: "AliceRuntimeContainer",
+      image,
+      instance_type: "standard-1",
+      max_instances: 1,
+      name: application.name,
+    }],
+    durable_objects: {
+      bindings: [{
+        class_name: "AliceRuntimeContainer",
+        name: "ALICE_RUNTIME_CONTAINER",
+      }],
+    },
+  };
+  assert.deepEqual(
+    verifyAliceContainerApplicationReadback({
+      application,
+      applicationInstances: [],
+      materializedWranglerConfig: config,
+      expectedNamespaceId: namespaceId,
+    }),
+    {
+      applicationId: application.id,
+      applicationName: application.name,
+      applicationVersion: 1,
+      image,
+      instanceType: "standard-1",
+      maxInstances: 1,
+      namespaceId,
+      activeInstances: 0,
+    },
+  );
+
+  const substitutions = [
+    { ...application, instances: 1 },
+    { ...application, max_instances: 2 },
+    { ...application, name: "other-runtime" },
+    { ...application, durable_objects: { namespace_id: "6".repeat(32) } },
+    {
+      ...application,
+      configuration: { ...application.configuration, image: `${image}-other` },
+    },
+    {
+      ...application,
+      configuration: { ...application.configuration, ports: [{ port: 2138 }] },
+    },
+    {
+      ...application,
+      health: {
+        instances: { ...application.health.instances, starting: 1 },
+      },
+    },
+  ];
+  for (const substituted of substitutions) {
+    assert.throws(
+      () => verifyAliceContainerApplicationReadback({
+        application: substituted,
+        applicationInstances: [],
+        materializedWranglerConfig: config,
+        expectedNamespaceId: namespaceId,
+      }),
+      /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
+    );
+  }
+  assert.throws(
+    () => verifyAliceContainerApplicationReadback({
+      application,
+      applicationInstances: [{ id: "unexpected-running-instance" }],
+      materializedWranglerConfig: config,
+      expectedNamespaceId: namespaceId,
+    }),
+    /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
+  );
+});
 
 test("accepts only a 100 percent deployed Worker version matching the signed effective config", async () => {
   for (const role of [

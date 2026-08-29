@@ -414,6 +414,7 @@ export function aliceTestCloudflareContinuityReadback() {
           className: "AliceRuntimeContainer",
           name: "ALICE_RUNTIME_CONTAINER",
           namespaceId: "55555555555555555555555555555555",
+          scriptName: "alice-runtime-container-host",
         },
       ],
       aiGateway: [],
@@ -422,11 +423,13 @@ export function aliceTestCloudflareContinuityReadback() {
           className: "AliceAuthority",
           name: "ALICE_AUTHORITY",
           namespaceId: "11111111111111111111111111111111",
+          scriptName: null,
         },
         {
           className: "AliceSession",
           name: "ALICE_SESSIONS",
           namespaceId: "22222222222222222222222222222222",
+          scriptName: null,
         },
       ],
       statePlane: [
@@ -434,6 +437,7 @@ export function aliceTestCloudflareContinuityReadback() {
           className: "AliceStateCoordination",
           name: "ALICE_COORDINATION",
           namespaceId: "33333333333333333333333333333333",
+          scriptName: null,
         },
       ],
       connectorPlane: [
@@ -441,6 +445,15 @@ export function aliceTestCloudflareContinuityReadback() {
           className: "AliceConnectorOutboundCoordination",
           name: "ALICE_CONNECTOR_OUTBOUND",
           namespaceId: "44444444444444444444444444444444",
+          scriptName: null,
+        },
+      ],
+      runtimeHost: [
+        {
+          className: "AliceRuntimeContainer",
+          name: "ALICE_RUNTIME_CONTAINER",
+          namespaceId: "55555555555555555555555555555555",
+          scriptName: null,
         },
       ],
     },

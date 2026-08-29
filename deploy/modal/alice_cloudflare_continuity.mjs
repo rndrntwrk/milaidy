@@ -16,29 +16,48 @@ const ROLES = [
   "aiGateway",
   "statePlane",
   "connectorPlane",
+  "runtimeHost",
 ];
 const EXPECTED_DURABLE_OBJECT_BINDINGS = Object.freeze({
   access: Object.freeze([
     Object.freeze({
       className: "AliceRuntimeContainer",
       name: "ALICE_RUNTIME_CONTAINER",
+      scriptName: "alice-runtime-container-host",
     }),
   ]),
   control: Object.freeze([
-    Object.freeze({ className: "AliceAuthority", name: "ALICE_AUTHORITY" }),
-    Object.freeze({ className: "AliceSession", name: "ALICE_SESSIONS" }),
+    Object.freeze({
+      className: "AliceAuthority",
+      name: "ALICE_AUTHORITY",
+      scriptName: null,
+    }),
+    Object.freeze({
+      className: "AliceSession",
+      name: "ALICE_SESSIONS",
+      scriptName: null,
+    }),
   ]),
   aiGateway: Object.freeze([]),
   statePlane: Object.freeze([
     Object.freeze({
       className: "AliceStateCoordination",
       name: "ALICE_COORDINATION",
+      scriptName: null,
     }),
   ]),
   connectorPlane: Object.freeze([
     Object.freeze({
       className: "AliceConnectorOutboundCoordination",
       name: "ALICE_CONNECTOR_OUTBOUND",
+      scriptName: null,
+    }),
+  ]),
+  runtimeHost: Object.freeze([
+    Object.freeze({
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      scriptName: null,
     }),
   ]),
 });
@@ -94,12 +113,22 @@ function normalizeNamespaceIds(value) {
     result[role] = sorted(
       value[role].map((binding) => {
         if (
-          !exactKeys(binding, ["className", "name", "namespaceId"]) ||
+          !exactKeys(binding, [
+            "className",
+            "name",
+            "namespaceId",
+            "scriptName",
+          ]) ||
           typeof binding.className !== "string" ||
           binding.className.length === 0 ||
           typeof binding.name !== "string" ||
           !/^ALICE_[A-Z0-9_]+$/.test(binding.name) ||
-          !NAMESPACE_ID.test(binding.namespaceId ?? "")
+          !NAMESPACE_ID.test(binding.namespaceId ?? "") ||
+          !(
+            binding.scriptName === null ||
+            (typeof binding.scriptName === "string" &&
+              /^[a-z0-9][a-z0-9-]{0,62}$/.test(binding.scriptName))
+          )
         ) {
           invalid();
         }
@@ -107,22 +136,43 @@ function normalizeNamespaceIds(value) {
           className: binding.className,
           name: binding.name,
           namespaceId: binding.namespaceId,
+          scriptName: binding.scriptName,
         };
       }),
     );
   }
-  const namespaceIds = new Set();
+  const namespaceOwners = new Map();
   for (const role of ROLES) {
     if (
       canonicalAliceJson(
-        result[role].map(({ className, name }) => ({ className, name })),
+        result[role].map(({ className, name, scriptName }) => ({
+          className,
+          name,
+          scriptName,
+        })),
       ) !== canonicalAliceJson(sorted(EXPECTED_DURABLE_OBJECT_BINDINGS[role]))
     ) {
       invalid();
     }
     for (const binding of result[role]) {
-      if (namespaceIds.has(binding.namespaceId)) invalid();
-      namespaceIds.add(binding.namespaceId);
+      const owners = namespaceOwners.get(binding.namespaceId) ?? [];
+      owners.push({ role, ...binding });
+      namespaceOwners.set(binding.namespaceId, owners);
+    }
+  }
+  if (
+    result.access[0]?.namespaceId !== result.runtimeHost[0]?.namespaceId
+  ) {
+    invalid();
+  }
+  for (const owners of namespaceOwners.values()) {
+    if (owners.length === 1) continue;
+    if (
+      owners.length !== 2 ||
+      canonicalAliceJson(owners.map(({ role }) => role).sort()) !==
+        canonicalAliceJson(["access", "runtimeHost"])
+    ) {
+      invalid();
     }
   }
   return result;
@@ -386,7 +436,7 @@ export function buildAliceCloudflareContinuityConfig(readback) {
       new Set([evidenceQueue.id, evidenceDeadLetterQueue.id]),
     );
     return {
-      schemaVersion: "alice.cloudflare-continuity-config.v1",
+      schemaVersion: "alice.cloudflare-continuity-config.v2",
       accountId: readback.accountId,
       evidenceQueue,
       evidenceDeadLetterQueue,
@@ -424,7 +474,7 @@ export function verifyAliceCloudflareContinuityConfig(config) {
       "schemaVersion",
       "workflow",
     ]) ||
-    config.schemaVersion !== "alice.cloudflare-continuity-config.v1"
+    config.schemaVersion !== "alice.cloudflare-continuity-config.v2"
   ) {
     invalid();
   }

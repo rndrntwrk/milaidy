@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import {
+  ALICE_CLOUDFLARE_TARGET,
   canonicalAliceJson,
   digestAliceEffectiveConfig,
   encodeAliceDeploymentManifest,
@@ -25,12 +26,16 @@ import {
 
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const NAMESPACE_ID = /^[a-f0-9]{32}$/;
+const UUID =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const SCRIPT_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const ROLES = [
   "access",
   "control",
   "aiGateway",
   "statePlane",
   "connectorPlane",
+  "runtimeHost",
 ];
 
 function mismatch() {
@@ -102,6 +107,7 @@ function expectedBindings(config) {
     result.push({
       className: binding.class_name,
       name: binding.name,
+      scriptName: binding.script_name ?? null,
       type: "durable_object_namespace",
     });
   }
@@ -168,18 +174,25 @@ function providerBinding(binding) {
       };
     case "durable_object_namespace":
       rejectProviderTargetModifiers(binding, [
-        "script_name",
         "environment",
         "dispatch_namespace",
         "namespace",
         "namespace_name",
       ]);
-      if (present(binding.namespace_id) && !NAMESPACE_ID.test(binding.namespace_id)) {
+      if (
+        (present(binding.namespace_id) &&
+          !NAMESPACE_ID.test(binding.namespace_id)) ||
+        (present(binding.script_name) &&
+          (typeof binding.script_name !== "string" ||
+            !SCRIPT_NAME.test(binding.script_name) ||
+            /[\r\n]/.test(binding.script_name)))
+      ) {
         mismatch();
       }
       return {
         className: binding.class_name,
         name: binding.name,
+        scriptName: binding.script_name ?? null,
         type: binding.type,
       };
     case "workflow":
@@ -249,6 +262,7 @@ function providerDurableObjectNamespaceIds(version) {
           className: binding.class_name,
           name: binding.name,
           namespaceId: binding.namespace_id,
+          scriptName: binding.script_name ?? null,
         };
       }),
   );
@@ -260,6 +274,7 @@ function expectedDurableObjectNamespaceIds(config, expected) {
     (config.durable_objects?.bindings ?? []).map((binding) => ({
       className: binding.class_name,
       name: binding.name,
+      scriptName: binding.script_name ?? null,
     })),
   );
   const normalized = sorted(
@@ -268,7 +283,18 @@ function expectedDurableObjectNamespaceIds(config, expected) {
         !binding ||
         typeof binding !== "object" ||
         Array.isArray(binding) ||
-        !exactKeys(binding, ["className", "name", "namespaceId"]) ||
+        !exactKeys(binding, [
+          "className",
+          "name",
+          "namespaceId",
+          "scriptName",
+        ]) ||
+        !(
+          binding.scriptName === null ||
+          (typeof binding.scriptName === "string" &&
+            SCRIPT_NAME.test(binding.scriptName) &&
+            !/[\r\n]/.test(binding.scriptName))
+        ) ||
         !NAMESPACE_ID.test(binding.namespaceId ?? "")
       ) {
         mismatch();
@@ -277,19 +303,88 @@ function expectedDurableObjectNamespaceIds(config, expected) {
         className: binding.className,
         name: binding.name,
         namespaceId: binding.namespaceId,
+        scriptName: binding.scriptName,
       };
     }),
   );
   if (
     normalized.length !== expectedBindings.length ||
     !canonicalEqual(
-      normalized.map(({ className, name }) => ({ className, name })),
+      normalized.map(({ className, name, scriptName }) => ({
+        className,
+        name,
+        scriptName,
+      })),
       expectedBindings,
     )
   ) {
     mismatch();
   }
   return normalized;
+}
+
+export function verifyAliceContainerApplicationReadback({
+  application,
+  applicationInstances,
+  materializedWranglerConfig,
+  expectedNamespaceId,
+}) {
+  const container = materializedWranglerConfig?.containers?.[0];
+  const durableObjectBindings =
+    materializedWranglerConfig?.durable_objects?.bindings;
+  const health = application?.health?.instances;
+  const ports = application?.configuration?.ports;
+  if (
+    !application ||
+    !Array.isArray(applicationInstances) ||
+    applicationInstances.length !== 0 ||
+    materializedWranglerConfig?.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
+    !Array.isArray(materializedWranglerConfig?.containers) ||
+    materializedWranglerConfig.containers.length !== 1 ||
+    !Array.isArray(durableObjectBindings) ||
+    durableObjectBindings.length !== 1 ||
+    container?.name !== "alice-production-runtime" ||
+    container?.class_name !== "AliceRuntimeContainer" ||
+    container?.instance_type !== "standard-1" ||
+    container?.max_instances !== 1 ||
+    durableObjectBindings[0]?.name !== "ALICE_RUNTIME_CONTAINER" ||
+    durableObjectBindings[0]?.class_name !== container.class_name ||
+    present(durableObjectBindings[0]?.script_name) ||
+    !NAMESPACE_ID.test(expectedNamespaceId ?? "") ||
+    !UUID.test(application.id ?? "") ||
+    application.account_id !== materializedWranglerConfig.account_id ||
+    application.name !== container.name ||
+    !Number.isSafeInteger(application.version) ||
+    application.version < 1 ||
+    application.scheduling_policy !== "default" ||
+    application.instances !== 0 ||
+    application.max_instances !== container.max_instances ||
+    application.configuration?.image !== container.image ||
+    application.configuration?.instance_type !== container.instance_type ||
+    !(ports === undefined || (Array.isArray(ports) && ports.length === 0)) ||
+    application.durable_objects?.namespace_id !== expectedNamespaceId ||
+    !health ||
+    !exactKeys(health, [
+      "active",
+      "failed",
+      "healthy",
+      "scheduling",
+      "starting",
+    ]) ||
+    Object.values(health).some((count) => count !== 0)
+  ) {
+    mismatch();
+  }
+  return {
+    applicationId: application.id,
+    applicationName: application.name,
+    applicationVersion: application.version,
+    image: application.configuration.image,
+    instanceType: application.configuration.instance_type,
+    maxInstances: application.max_instances,
+    namespaceId: expectedNamespaceId,
+    activeInstances: health.active,
+  };
 }
 
 function normalizeCompatibilityFlags(value) {
@@ -511,6 +606,8 @@ export async function verifyAliceWorkerProviderReadback({
   subdomain,
   queueConsumer,
   workflow,
+  containerApplication,
+  containerApplicationInstances,
   materializedWranglerConfig,
   expectedEffectiveConfig,
   serializedManifest,
@@ -523,13 +620,24 @@ export async function verifyAliceWorkerProviderReadback({
     materializedWranglerConfig,
     expectedNamespaceIds,
   );
+  const containerApplicationReadback = role === "runtimeHost"
+    ? verifyAliceContainerApplicationReadback({
+        application: containerApplication,
+        applicationInstances: containerApplicationInstances,
+        materializedWranglerConfig,
+        expectedNamespaceId: continuityNamespaceIds[0]?.namespaceId,
+      })
+    : null;
   if (
     !ROLES.includes(role) ||
     !deployment ||
     !deploymentAfterContent ||
     !version ||
     !materializedWranglerConfig ||
-    materializedWranglerConfig.name !== expectedEffectiveConfig?.worker?.name
+    materializedWranglerConfig.name !== expectedEffectiveConfig?.worker?.name ||
+    (role !== "runtimeHost" &&
+      (containerApplication !== undefined ||
+        containerApplicationInstances !== undefined))
   ) {
     mismatch();
   }
@@ -543,6 +651,7 @@ export async function verifyAliceWorkerProviderReadback({
     aiGateway: "aiGatewayWorkerBundleSha256",
     statePlane: "statePlaneWorkerBundleSha256",
     connectorPlane: "connectorPlaneWorkerBundleSha256",
+    runtimeHost: "runtimeHostWorkerBundleSha256",
   }[role];
   if (
     (typeof deployedMainModule !== "string" &&
@@ -649,7 +758,7 @@ export async function verifyAliceWorkerProviderReadback({
       : []),
   ];
   const sanitizedReadback = {
-    schemaVersion: "alice.worker-provider-readback.v1",
+    schemaVersion: "alice.worker-provider-readback.v2",
     role,
     worker: materializedWranglerConfig.name,
     deploymentId: deployment.id,
@@ -666,6 +775,7 @@ export async function verifyAliceWorkerProviderReadback({
       entrypointOverrides: [],
     },
     durableObjectNamespaceIds: providerNamespaceIds,
+    containerApplication: containerApplicationReadback,
     signedEffectiveConfigSha256,
     providerUnverifiableFields,
     deploymentManifestSha256,
