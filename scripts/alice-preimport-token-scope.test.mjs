@@ -191,8 +191,60 @@ test("pre-import isolates provider reads from the deployment write token", () =>
     "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}";
   assert.equal(
     workflow.split(readTokenBinding).length - 1,
-    3,
-    "the scope preflight, Durable Object capture, and materializer must use the dedicated read token",
+    4,
+    "scope preflight, inert identity bootstrap, capture, and materializer must use the durable Alice account token",
+  );
+});
+
+test("first release bootstraps missing inert identities before strict provider capture", () => {
+  const install = workflow.indexOf("Install exact Cloudflare bootstrap tool");
+  const bootstrap = workflow.indexOf(
+    "Preprovision exact missing fail-closed continuity identities",
+  );
+  const capture = workflow.indexOf(
+    "Capture exact active Durable Object identities read-only",
+  );
+  const materialize = workflow.indexOf(
+    "Materialize fresh signed-input manifest and provider readback",
+  );
+  assert.ok(install >= 0 && bootstrap > install);
+  assert.ok(capture > bootstrap && materialize > capture);
+
+  const bootstrapStep = workflow.match(
+    /- name: Preprovision exact missing fail-closed continuity identities[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(
+    bootstrapStep,
+    /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_READ_TOKEN \}\}/,
+  );
+  assert.match(bootstrapStep, /node deploy\/modal\/alice_cloudflare_bootstrap\.mjs/);
+  assert.match(bootstrapStep, /ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH/);
+  assert.match(bootstrapStep, /ALICE_BOOTSTRAP_STATE_PATH/);
+  assert.match(bootstrapStep, /ALICE_BOOTSTRAP_PREFLIGHT_PATH/);
+  assert.match(bootstrapStep, /ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH/);
+
+  const captureStep = workflow.match(
+    /- name: Capture exact active Durable Object identities read-only[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(
+    captureStep,
+    /cmp -s[\s\S]*?bootstrap-durable-object-namespace-ids\.json[\s\S]*?durable-object-namespace-ids\.json/,
+  );
+});
+
+test("pre-import preserves sanitized bootstrap identity evidence on every outcome", () => {
+  const evidenceStep = workflow.match(
+    /- name: Preserve sanitized bootstrap identity evidence[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  assert.match(evidenceStep, /if: always\(\)/);
+  assert.match(evidenceStep, /bootstrap-preflight\.json/);
+  assert.match(evidenceStep, /bootstrap-state\.json/);
+  assert.match(evidenceStep, /bootstrap-durable-object-namespace-ids\.json/);
+  assert.match(evidenceStep, /bootstrap-continuity-readback\.json/);
+  assert.match(evidenceStep, /retention-days: 1/);
+  assert.doesNotMatch(
+    evidenceStep,
+    /CLOUDFLARE_API_TOKEN|Authorization|Bearer|ALICE_STATE_PLANE_SERVICE_TOKEN/,
   );
 });
 

@@ -11,9 +11,10 @@
 #   gh api --method DELETE repos/rndrntwrk/milaidy/environments/alice-production/deployment-branch-policies/MATERIALIZE_POLICY_ID
 #   gh api --method DELETE repos/rndrntwrk/milaidy/branches/ops%2Falice-preimport-18372c5-20260828/protection
 #   git push origin --delete ops/alice-preimport-18372c5-20260828
-# Completion evidence: terminal run, sanitized one-day artifact, exact Cloudflare
-# registry digest/inventory readback, both branch-policy absences, branch-
-# protection absence, and branch absence.
+# Completion evidence: terminal run, sanitized one-day artifacts, exact
+# Cloudflare registry digest/inventory readback, exact inert identity bootstrap
+# readback, both branch-policy absences, branch-protection absence, and branch
+# absence.
 
 name: Alice Cloudflare Pre-import and Materialize
 run-name: Alice pre-import ${{ inputs.source_sha }} build-${{ inputs.build_run_id }}
@@ -117,8 +118,8 @@ jobs:
             echo "- Authority: exact branch read-only with enforce_admins=true, lock_branch=true, allow_force_pushes=false, allow_deletions=false before environment policies"
             echo "- Branch-protection readback: \`${WORKFLOW_PROTECTION_SHA256}\` observed \`${WORKFLOW_PROTECTION_OBSERVED_AT}\`"
             echo "- Absolute UTC hard expiry: ${expires_at} (no later than two hours after branch-protection creation)"
-            echo "- Provider mutation: retain one exact \`alice-runtime\` registry tag for the protected deploy"
-            echo "- Forbidden: Worker/route/Modal/runtime promotion, signing, or credential mutation"
+            echo "- Provider mutation: retain one exact \`alice-runtime\` registry tag and preprovision only missing private fail-closed continuity identities"
+            echo "- Forbidden: public Worker route, Modal/runtime promotion, signing, or credential mutation"
             echo "- Ordered teardown: remove both exact environment policies; delete exact branch protection; then \`git push origin --delete ops/alice-preimport-18372c5-20260828\`"
             echo "- Completion evidence: exact digest/inventory plus sanitized one-day materialization artifact"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -583,6 +584,51 @@ jobs:
             exit 1
           fi
 
+      - name: Install exact Cloudflare bootstrap tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_root="${RUNNER_TEMP}/alice-preimport-materialize/tools"
+          mkdir -p "$tool_root"
+          npm install --prefix "$tool_root" --ignore-scripts --no-audit --no-fund \
+            wrangler@4.122.0
+          test -x "$tool_root/node_modules/.bin/wrangler"
+          echo "ALICE_PREIMPORT_BOOTSTRAP_WRANGLER=$tool_root/node_modules/.bin/wrangler" >> \
+            "$GITHUB_ENV"
+
+      - name: Preprovision exact missing fail-closed continuity identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
+          ALICE_SOURCE_ROOT: ${{ github.workspace }}
+          ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
+          ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          ALICE_WRANGLER_BIN: ${{ env.ALICE_PREIMPORT_BOOTSTRAP_WRANGLER }}
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-preimport-materialize/worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-preimport-materialize/worker-bundles/alice-worker-bundles.json
+          ALICE_BOOTSTRAP_OUTPUT_DIR: ${{ runner.temp }}/alice-preimport-materialize/bootstrap
+          ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-durable-object-namespace-ids.json
+          ALICE_CLOUDFLARE_CONTINUITY_READBACK_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-continuity-readback.json
+          ALICE_BOOTSTRAP_PREFLIGHT_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-preflight.json
+          ALICE_BOOTSTRAP_STATE_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-state.json
+          ALICE_STATE_PLANE_SERVICE_TOKEN: ${{ secrets.ALICE_STATE_PLANE_SERVICE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/alice-preimport-materialize/release"
+          timeout --signal=TERM --kill-after=30s 900s \
+            node deploy/modal/alice_cloudflare_bootstrap.mjs
+          for file in \
+            "${RUNNER_TEMP}/alice-preimport-materialize/release/bootstrap-durable-object-namespace-ids.json" \
+            "${RUNNER_TEMP}/alice-preimport-materialize/release/bootstrap-continuity-readback.json" \
+            "${RUNNER_TEMP}/alice-preimport-materialize/release/bootstrap-preflight.json" \
+            "${RUNNER_TEMP}/alice-preimport-materialize/release/bootstrap-state.json"
+          do
+            test -s "$file"
+            test ! -L "$file"
+          done
+
       - name: Capture exact active Durable Object identities read-only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
@@ -731,6 +777,9 @@ jobs:
             mode: 0o444,
           });
           NODE
+          cmp -s \
+            "${RUNNER_TEMP}/alice-preimport-materialize/release/bootstrap-durable-object-namespace-ids.json" \
+            "${RUNNER_TEMP}/alice-preimport-materialize/release/durable-object-namespace-ids.json"
 
       - name: Materialize fresh signed-input manifest and provider readback
         env:
@@ -796,6 +845,20 @@ jobs:
             echo "- Provider readback: \`${provider_sha256}\`"
             echo "- Imported tag retained for the protected deploy: \`${ALICE_CLOUDFLARE_RUNTIME_TAG}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve sanitized bootstrap identity evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-preimport-bootstrap-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-preflight.json
+            ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-state.json
+            ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-durable-object-namespace-ids.json
+            ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-continuity-readback.json
+          if-no-files-found: warn
+          include-hidden-files: false
+          retention-days: 1
 
       - name: Upload sanitized one-day materialization evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
