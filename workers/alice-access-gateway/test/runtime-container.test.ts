@@ -158,7 +158,10 @@ test("routes the state host through the private service binding without exposing
     '"alice-state-plane.internal": forwardToAliceStatePlane',
   );
   const wrangler = JSON.parse(
-    readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
+    readFileSync(
+      new URL("../wrangler.runtime-host.jsonc", import.meta.url),
+      "utf8",
+    ),
   ) as {
     secrets: { required: string[] };
     services: Array<{ binding: string; service: string }>;
@@ -170,6 +173,14 @@ test("routes the state host through the private service binding without exposing
     binding: "ALICE_STATE_PLANE",
     service: "alice-state-plane",
   });
+  const hostEntrypoint = readFileSync(
+    new URL("../src/runtime-host.ts", import.meta.url),
+    "utf8",
+  );
+  expect(hostEntrypoint).toContain(
+    'export { AliceRuntimeContainer } from "./alice-runtime-container";',
+  );
+  expect(hostEntrypoint).not.toContain("default");
 });
 
 test("admits only owner-bound Eliza and Companion state operations", async () => {

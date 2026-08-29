@@ -1,5 +1,6 @@
 export type AliceEffectiveConfigRole =
   | "access"
+  | "runtimeHost"
   | "control"
   | "aiGateway"
   | "statePlane"
@@ -30,6 +31,9 @@ export function buildAliceContainerAccessEffectiveConfig(inputs: {
   accessIssuer: string;
   accessAudience: string;
   ownerEmailSha256: string;
+  runtimeImage: string;
+}): Record<string, unknown>;
+export function buildAliceRuntimeHostEffectiveConfig(inputs: {
   runtimeImage: string;
 }): Record<string, unknown>;
 export function buildAliceControlEffectiveConfig(inputs: {

@@ -9,6 +9,7 @@ import {
   buildAliceAiGatewayEffectiveConfig,
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
+  buildAliceRuntimeHostEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
   canonicalAliceJson,
   encodeAliceDeploymentManifest,
@@ -21,6 +22,7 @@ import {
 
 const ROLES = [
   "access",
+  "runtimeHost",
   "control",
   "aiGateway",
   "statePlane",
@@ -28,6 +30,7 @@ const ROLES = [
 ];
 const CANONICAL_MAIN = Object.freeze({
   access: "src/worker.ts",
+  runtimeHost: "src/runtime-host.ts",
   control: "src/index.ts",
   aiGateway: "src/index.mjs",
   statePlane: "src/index.ts",
@@ -35,13 +38,19 @@ const CANONICAL_MAIN = Object.freeze({
 });
 const WORKER_DIRECTORIES = Object.freeze({
   access: "alice-access-gateway",
+  runtimeHost: "alice-runtime-container-host",
   control: "alice-production-control",
   aiGateway: "alice-ai-gateway",
   statePlane: "alice-state-plane",
   connectorPlane: "alice-connector-plane",
 });
+const SOURCE_WORKER_DIRECTORIES = Object.freeze({
+  ...WORKER_DIRECTORIES,
+  runtimeHost: "alice-access-gateway",
+});
 const SOURCE_MAIN = Object.freeze({
   access: "src/worker.ts",
+  runtimeHost: "src/runtime-host.ts",
   control: "src/index.ts",
   aiGateway: "src/index.mjs",
   statePlane: "src/index.ts",
@@ -152,6 +161,9 @@ function durableObjectBindings(config) {
   return (config.durable_objects?.bindings ?? []).map((binding) => ({
     name: binding.name,
     className: binding.class_name,
+    ...(binding.script_name === undefined
+      ? {}
+      : { scriptName: binding.script_name }),
   }));
 }
 
@@ -204,7 +216,7 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
   if (role === "access") {
     const common = commonBindings(identityConfig);
     return {
-      schemaVersion: "alice.container-access-effective-config.v1",
+      schemaVersion: "alice.container-access-effective-config.v2",
       worker: baseWorker(identityConfig),
       bindings: {
         services: common.services,
@@ -212,6 +224,9 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
           (binding) => ({
             binding: binding.name,
             className: binding.class_name,
+            ...(binding.script_name === undefined
+              ? {}
+              : { scriptName: binding.script_name }),
           }),
         ),
         migrations: (identityConfig.migrations ?? []).map((migration) => ({
@@ -233,6 +248,39 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
         accessAudience: identityConfig.vars?.ALICE_ACCESS_AUDIENCE,
         ownerEmailSha256: identityConfig.vars?.ALICE_OWNER_EMAIL_SHA256,
         runtimeImage: identityConfig.vars?.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+        runtimeContainerName: "alice-production-runtime",
+        runtimePort: 2138,
+        runtimeEgress: "deny-by-default",
+      },
+      observability: observabilityFromWrangler(identityConfig.observability),
+    };
+  }
+  if (role === "runtimeHost") {
+    const common = commonBindings(identityConfig);
+    return {
+      schemaVersion: "alice.container-runtime-host-effective-config.v1",
+      worker: baseWorker(identityConfig),
+      bindings: {
+        services: common.services,
+        durableObjects: (identityConfig.durable_objects?.bindings ?? []).map(
+          (binding) => ({
+            binding: binding.name,
+            className: binding.class_name,
+          }),
+        ),
+        migrations: durableObjectMigrations(identityConfig),
+        containers: (identityConfig.containers ?? []).map((container) => ({
+          name: container.name,
+          className: container.class_name,
+          image: container.image,
+          instanceType: container.instance_type,
+          maxInstances: container.max_instances,
+        })),
+        versionMetadata: common.versionMetadata,
+        secretNames: common.secretNames,
+      },
+      values: {
+        runtimeImage: identityConfig.containers?.[0]?.image,
         runtimeContainerName: identityConfig.containers?.[0]?.name,
         runtimePort: 2138,
         runtimeEgress: "deny-by-default",
@@ -443,7 +491,7 @@ export function resolveAliceWranglerDeploymentEntrypoint(
   const relative = path.relative(artifactRoot, resolved);
   const allowed = new Set([
     path.join(WORKER_DIRECTORIES[role], "index.js"),
-    path.join(WORKER_DIRECTORIES[role], SOURCE_MAIN[role]),
+    path.join(SOURCE_WORKER_DIRECTORIES[role], SOURCE_MAIN[role]),
   ]);
   if (
     config.main !== path.relative(path.dirname(configPath), resolved) ||
@@ -543,9 +591,6 @@ export function materializeAliceWranglerConfig(role, sourceConfig, values) {
   }
   config.vars ??= {};
   if (role === "access") {
-    if (!Array.isArray(config.containers) || config.containers.length !== 1) {
-      throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
-    }
     Object.assign(config.vars, {
       ALICE_ACCESS_ISSUER: values.accessIssuer,
       ALICE_ACCESS_AUDIENCE: values.accessAudience,
@@ -554,7 +599,15 @@ export function materializeAliceWranglerConfig(role, sourceConfig, values) {
       ALICE_DEPLOYMENT_MANIFEST_SHA256: values.deploymentManifestSha256,
       ALICE_DEPLOYMENT_MANIFEST_B64: values.deploymentManifestB64,
     });
+  } else if (role === "runtimeHost") {
+    if (!Array.isArray(config.containers) || config.containers.length !== 1) {
+      throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
+    }
     config.containers[0].image = values.runtimeImage;
+    Object.assign(config.vars, {
+      ALICE_DEPLOYMENT_MANIFEST_SHA256: values.deploymentManifestSha256,
+      ALICE_DEPLOYMENT_MANIFEST_B64: values.deploymentManifestB64,
+    });
   } else if (role === "control") {
     Object.assign(config.vars, {
       ALICE_ACCESS_ISSUER: values.accessIssuer,
@@ -675,6 +728,9 @@ if (invokedPath === import.meta.url) {
         ownerEmailSha256: commonValues.ownerEmailSha256,
         runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
       }),
+      runtimeHost: buildAliceRuntimeHostEffectiveConfig({
+        runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+      }),
       control: buildAliceContainerControlEffectiveConfig({
         accessIssuer: commonValues.accessIssuer,
         accessAudience: commonValues.accessAudience,
@@ -699,6 +755,12 @@ if (invokedPath === import.meta.url) {
       access: loadJson(
         path.join(sourceRoot, "workers/alice-access-gateway/wrangler.jsonc"),
       ),
+      runtimeHost: loadJson(
+        path.join(
+          sourceRoot,
+          "workers/alice-access-gateway/wrangler.runtime-host.jsonc",
+        ),
+      ),
       control: loadJson(
         path.join(sourceRoot, "workers/alice-production-control/wrangler.jsonc"),
       ),
@@ -714,7 +776,7 @@ if (invokedPath === import.meta.url) {
     };
     fs.mkdirSync(outputDir, { recursive: false });
     for (const role of ROLES) {
-      const roleValues = role === "access"
+      const roleValues = role === "access" || role === "runtimeHost"
         ? {
             ...commonValues,
             runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
@@ -753,7 +815,7 @@ if (invokedPath === import.meta.url) {
       const sourceWorkerRoot = path.join(
         sourceRoot,
         "workers",
-        WORKER_DIRECTORIES[role],
+        SOURCE_WORKER_DIRECTORIES[role],
       );
       const deploymentRoot = workerBundleRoot
         ? path.join(workerBundleRoot, WORKER_DIRECTORIES[role])

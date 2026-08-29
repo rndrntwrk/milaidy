@@ -25,60 +25,24 @@
   "secrets": {
     "required": [
       "ALICE_ACCESS_PROXY_SECRET",
-      "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
-      "ALICE_RUNTIME_API_TOKEN",
-      "ALICE_RUNTIME_RELEASE_TOKEN",
-      "ALICE_RUNTIME_VAULT_PASSPHRASE",
-      "ALICE_STATE_PLANE_SERVICE_TOKEN",
-      "ALICE_PROGRAM_DIGEST",
-      "ALICE_RELEASE_DIGEST",
-      "ALICE_POLICY_HASH",
-      "ALICE_CAPABILITY_BOM_SHA256",
-      "ALICE_SOURCE_COMMIT",
-      "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
-      "ALICE_RUNTIME_IMAGE",
-      "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
-      "ALICE_ELIZA_COMMIT",
-      "ALICE_RUNTIME_REVISION"
+      "ALICE_ACCESS_CONTROL_SERVICE_TOKEN"
     ]
   },
   "services": [
     {
       "binding": "ALICE_CONTROL",
       "service": "alice-production-control"
-    },
-    {
-      "binding": "ALICE_AI_GATEWAY",
-      "service": "alice-ai-gateway"
-    },
-    {
-      "binding": "ALICE_STATE_PLANE",
-      "service": "alice-state-plane"
     }
   ],
   "durable_objects": {
     "bindings": [
       {
         "name": "ALICE_RUNTIME_CONTAINER",
-        "class_name": "AliceRuntimeContainer"
+        "class_name": "AliceRuntimeContainer",
+        "script_name": "alice-runtime-container-host"
       }
     ]
   },
-  "migrations": [
-    {
-      "tag": "v2-alice-runtime-container",
-      "new_sqlite_classes": ["AliceRuntimeContainer"]
-    }
-  ],
-  "containers": [
-    {
-      "name": "alice-production-runtime",
-      "class_name": "AliceRuntimeContainer",
-      "image": "registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime:REPLACED_BY_PRODUCTION_DEPLOY",
-      "instance_type": "standard-1",
-      "max_instances": 1
-    }
-  ],
   "version_metadata": {
     "binding": "ALICE_VERSION"
   },

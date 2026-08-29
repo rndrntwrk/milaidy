@@ -5,7 +5,6 @@ import {
   verifyAliceEffectiveConfigBinding,
 } from "../../alice-effective-config.js";
 import {
-  buildAliceRuntimeContainerEnv,
   fetchAliceRuntimeContainer,
   type AliceRuntimeContainerNamespace,
 } from "./alice-runtime-host";
@@ -17,23 +16,7 @@ export type AliceAccessGatewayEnv = {
   ALICE_CLOUDFLARE_RUNTIME_IMAGE: string;
   ALICE_ACCESS_PROXY_SECRET: string;
   ALICE_ACCESS_CONTROL_SERVICE_TOKEN: string;
-  ALICE_RUNTIME_API_TOKEN: string;
-  ALICE_RUNTIME_RELEASE_TOKEN: string;
-  ALICE_RUNTIME_VAULT_PASSPHRASE: string;
-  ALICE_STATE_PLANE_SERVICE_TOKEN: string;
-  ALICE_PROGRAM_DIGEST: string;
-  ALICE_RELEASE_DIGEST: string;
-  ALICE_POLICY_HASH: string;
-  ALICE_SOURCE_COMMIT: string;
-  ALICE_DEPLOYMENT_CONTROLLER_COMMIT: string;
-  ALICE_RUNTIME_IMAGE: string;
-  ALICE_RUNTIME_BUILD_MANIFEST_SHA256: string;
-  ALICE_CAPABILITY_BOM_SHA256: string;
-  ALICE_ELIZA_COMMIT: string;
-  ALICE_RUNTIME_REVISION: string;
   ALICE_CONTROL: Fetcher;
-  ALICE_AI_GATEWAY: Fetcher;
-  ALICE_STATE_PLANE: Fetcher;
   ALICE_RUNTIME_CONTAINER: AliceRuntimeContainerNamespace;
   ALICE_DEPLOYMENT_MANIFEST_SHA256: string;
   ALICE_DEPLOYMENT_MANIFEST_B64: string;
@@ -185,7 +168,6 @@ function validIssuer(value: string): boolean {
 }
 
 async function loadConfig(env: AliceAccessGatewayEnv) {
-  buildAliceRuntimeContainerEnv(env);
   if (
     !validIssuer(env.ALICE_ACCESS_ISSUER) ||
     !/^[A-Za-z0-9_-]{8,128}$/.test(env.ALICE_ACCESS_AUDIENCE) ||
@@ -216,12 +198,6 @@ async function loadConfig(env: AliceAccessGatewayEnv) {
       runtimeImage: env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
     }),
   });
-  if (
-    env.ALICE_CAPABILITY_BOM_SHA256 !==
-    (manifest.source as Record<string, unknown>).capabilityBomSha256
-  ) {
-    throw new Error("ACCESS_GATEWAY_CONFIG_INVALID");
-  }
   return { manifest };
 }
 
