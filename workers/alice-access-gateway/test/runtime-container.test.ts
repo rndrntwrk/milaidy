@@ -100,6 +100,57 @@ test("routes the only allowed model host through ContainerProxy to the authentic
   );
 });
 
+const invalidAiGatewayEnvironments: Array<
+  [string, (fetchBinding: (request: Request) => Promise<Response>) => unknown]
+> = [
+  ["the environment is null", () => null],
+  ["the environment is malformed", () => "not-an-environment"],
+  [
+    "the release token is missing",
+    (fetchBinding) => ({ ALICE_AI_GATEWAY: { fetch: fetchBinding } }),
+  ],
+  [
+    "the release token is too short",
+    (fetchBinding) => ({
+      ALICE_RUNTIME_RELEASE_TOKEN: "too-short",
+      ALICE_AI_GATEWAY: { fetch: fetchBinding },
+    }),
+  ],
+  [
+    "the service binding is missing",
+    () => ({
+      ALICE_RUNTIME_RELEASE_TOKEN:
+        "runtime-release-token-with-at-least-32-bytes",
+    }),
+  ],
+  [
+    "the service binding cannot fetch",
+    () => ({
+      ALICE_RUNTIME_RELEASE_TOKEN:
+        "runtime-release-token-with-at-least-32-bytes",
+      ALICE_AI_GATEWAY: {},
+    }),
+  ],
+];
+
+test.each(invalidAiGatewayEnvironments)(
+  "fails closed before AI egress when %s",
+  (_label, buildEnvironment) => {
+    let forwarded = 0;
+    const env = buildEnvironment(async () => {
+      forwarded += 1;
+      return new Response("must-not-forward");
+    });
+    expect(() =>
+      runtimeContainer.forwardToAliceAiGateway(
+        new Request("http://alice-ai-gateway.internal/v1/chat/completions"),
+        env,
+      ),
+    ).toThrow("ALICE_AI_GATEWAY_FORWARD_INVALID");
+    expect(forwarded).toBe(0);
+  },
+);
+
 test("routes the state host through the private service binding without exposing its token to the Container", async () => {
   expect(typeof (runtimeContainer as any).forwardToAliceStatePlane).toBe(
     "function",
@@ -186,6 +237,60 @@ test("routes the state host through the private service binding without exposing
   expect(hostEntrypoint).toContain("export default {};");
   expect(hostEntrypoint).not.toContain("fetch");
 });
+
+const invalidStatePlaneEnvironments: Array<
+  [string, (fetchBinding: (request: Request) => Promise<Response>) => unknown]
+> = [
+  ["the environment is null", () => null],
+  ["the environment is malformed", () => "not-an-environment"],
+  [
+    "the service token is missing",
+    (fetchBinding) => ({ ALICE_STATE_PLANE: { fetch: fetchBinding } }),
+  ],
+  [
+    "the service token is too short",
+    (fetchBinding) => ({
+      ALICE_STATE_PLANE_SERVICE_TOKEN: "too-short",
+      ALICE_STATE_PLANE: { fetch: fetchBinding },
+    }),
+  ],
+  [
+    "the service binding is missing",
+    () => ({
+      ALICE_STATE_PLANE_SERVICE_TOKEN:
+        "state-plane-service-token-with-at-least-32-bytes",
+    }),
+  ],
+  [
+    "the service binding cannot fetch",
+    () => ({
+      ALICE_STATE_PLANE_SERVICE_TOKEN:
+        "state-plane-service-token-with-at-least-32-bytes",
+      ALICE_STATE_PLANE: {},
+    }),
+  ],
+];
+
+test.each(invalidStatePlaneEnvironments)(
+  "fails closed before state egress when %s",
+  (_label, buildEnvironment) => {
+    let forwarded = 0;
+    const env = buildEnvironment(async () => {
+      forwarded += 1;
+      return new Response("must-not-forward");
+    });
+    expect(() =>
+      runtimeContainer.forwardToAliceStatePlane(
+        new Request("http://alice-state-plane.internal/v1/eliza-database", {
+          method: "POST",
+          body: "{}",
+        }),
+        env,
+      ),
+    ).toThrow("ALICE_STATE_PLANE_FORWARD_INVALID");
+    expect(forwarded).toBe(0);
+  },
+);
 
 test("admits only owner-bound Eliza and Companion state operations", async () => {
   const forwarded: Request[] = [];

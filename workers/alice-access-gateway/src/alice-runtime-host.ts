@@ -109,13 +109,48 @@ export type AliceRuntimeAiGatewayEnvironment = {
   ALICE_AI_GATEWAY: { fetch(request: Request): Promise<Response> };
 };
 
+function isFetchBinding(
+  value: unknown,
+): value is { fetch(request: Request): Promise<Response> } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "fetch" in value &&
+    typeof value.fetch === "function"
+  );
+}
+
+function readAliceRuntimeAiGatewayEnvironment(
+  value: unknown,
+): AliceRuntimeAiGatewayEnvironment {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("ALICE_RUNTIME_RELEASE_TOKEN" in value) ||
+    typeof value.ALICE_RUNTIME_RELEASE_TOKEN !== "string" ||
+    value.ALICE_RUNTIME_RELEASE_TOKEN.length < 32 ||
+    !("ALICE_AI_GATEWAY" in value) ||
+    !isFetchBinding(value.ALICE_AI_GATEWAY)
+  ) {
+    throw new Error("ALICE_AI_GATEWAY_FORWARD_INVALID");
+  }
+  return {
+    ALICE_RUNTIME_RELEASE_TOKEN: value.ALICE_RUNTIME_RELEASE_TOKEN,
+    ALICE_AI_GATEWAY: value.ALICE_AI_GATEWAY,
+  };
+}
+
 export function forwardToAliceAiGateway(
   request: Request,
-  env: AliceRuntimeAiGatewayEnvironment,
+  env: unknown,
 ): Promise<Response> {
+  const runtimeEnv = readAliceRuntimeAiGatewayEnvironment(env);
   const headers = new Headers(request.headers);
-  headers.set("authorization", `Bearer ${env.ALICE_RUNTIME_RELEASE_TOKEN}`);
-  return env.ALICE_AI_GATEWAY.fetch(new Request(request, { headers }));
+  headers.set(
+    "authorization",
+    `Bearer ${runtimeEnv.ALICE_RUNTIME_RELEASE_TOKEN}`,
+  );
+  return runtimeEnv.ALICE_AI_GATEWAY.fetch(new Request(request, { headers }));
 }
 
 export type AliceRuntimeStatePlaneEnvironment = {
@@ -125,15 +160,19 @@ export type AliceRuntimeStatePlaneEnvironment = {
 
 export function forwardToAliceStatePlane(
   request: Request,
-  env: AliceRuntimeStatePlaneEnvironment,
+  env: unknown,
 ): Promise<Response> {
   const pathname = new URL(request.url).pathname;
   if (
+    env === null ||
+    typeof env !== "object" ||
+    !("ALICE_STATE_PLANE_SERVICE_TOKEN" in env) ||
     typeof env.ALICE_STATE_PLANE_SERVICE_TOKEN !== "string" ||
     env.ALICE_STATE_PLANE_SERVICE_TOKEN.length < 32 ||
+    !("ALICE_STATE_PLANE" in env) ||
+    !isFetchBinding(env.ALICE_STATE_PLANE) ||
     request.method !== "POST" ||
-    (pathname !== "/v1/eliza-database" &&
-      pathname !== "/v1/companion-state")
+    (pathname !== "/v1/eliza-database" && pathname !== "/v1/companion-state")
   ) {
     throw new Error("ALICE_STATE_PLANE_FORWARD_INVALID");
   }
