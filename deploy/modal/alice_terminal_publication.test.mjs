@@ -15,7 +15,7 @@ function digest(value) {
 
 function fixture() {
   const cloudflareLiveReadback = {
-    schemaVersion: "alice.cloudflare-live-readback.v1",
+    schemaVersion: "alice.cloudflare-live-readback.v2",
     accountId: "036df6c823669b8fa2f66cf4c16eeb29",
     zoneId: "7b24984479ee4cddb6c5d8a9b7a0f2c6",
     observedAt: "2026-08-23T12:00:00.000Z",
@@ -33,11 +33,12 @@ function fixture() {
       aiGateway: { serving: { versionId: "ai-version" } },
       statePlane: { serving: { versionId: "state-version" } },
       connectorPlane: { serving: { versionId: "connector-version" } },
+      runtimeHost: { serving: { versionId: "runtime-host-version" } },
     },
     terminalSnapshotStable: true,
   };
   const cloudflareRollbackProof = {
-    schemaVersion: "alice.cloudflare-rollback-evidence.v1",
+    schemaVersion: "alice.cloudflare-rollback-evidence.v2",
   };
   const modalPromotionEvidence = {
     schemaVersion: "alice.modal-promotion-evidence.v1",
@@ -112,7 +113,7 @@ function fixture() {
     },
   };
   const acceptance = {
-    schemaVersion: "alice.production-acceptance.v2",
+    schemaVersion: "alice.production-acceptance.v3",
     observedAt: "2026-08-23T12:00:00.000Z",
     sourceCommit,
     deploymentManifestSha256: `sha256:${"2".repeat(64)}`,
@@ -191,6 +192,15 @@ test("accepts only a terminal artifact from the final successful workflow conclu
   );
   assert.equal(verified.workflowConclusion, "success");
   assert.match(verified.acceptanceSha256, /^sha256:[a-f0-9]{64}$/);
+});
+
+test("requires the private runtime host in both stable terminal snapshots", () => {
+  const input = fixture();
+  delete input.currentCloudflareLiveReadback.workers.runtimeHost;
+  assert.throws(
+    () => verifyAliceTerminalPublication(input),
+    /ALICE_TERMINAL_PUBLICATION_INVALID/,
+  );
 });
 
 test("rejects terminal artifacts left behind by failure, cancellation, or later rollback", () => {

@@ -24,6 +24,7 @@ const current = {
     aiGateway: { enabled: true, previewsEnabled: false },
     statePlane: { enabled: false, previewsEnabled: false },
     connectorPlane: { enabled: false, previewsEnabled: false },
+    runtimeHost: { enabled: false, previewsEnabled: false },
   },
 };
 
@@ -37,9 +38,17 @@ test("adds only the two exact control routes and never uses generic triggers", (
     enabled: false,
     previewsEnabled: false,
   });
+  assert.deepEqual(expected.subdomains.runtimeHost, {
+    enabled: false,
+    previewsEnabled: false,
+  });
   assert.equal(
     expected.routes.some(({ script }) =>
-      ["alice-state-plane", "alice-connector-plane"].includes(script)),
+      [
+        "alice-state-plane",
+        "alice-connector-plane",
+        "alice-runtime-container-host",
+      ].includes(script)),
     false,
   );
   const plan = planAliceCandidateTrafficMutations(current, expected);
@@ -99,6 +108,10 @@ test("attaches the exact owner and machine control routes without touching servi
     previewsEnabled: false,
   });
   assert.deepEqual(expected.subdomains.connectorPlane, {
+    enabled: false,
+    previewsEnabled: false,
+  });
+  assert.deepEqual(expected.subdomains.runtimeHost, {
     enabled: false,
     previewsEnabled: false,
   });
@@ -211,6 +224,8 @@ function routeMutationFetch({ postCreateStates }) {
               ? "statePlane"
               : url.pathname.includes("alice-connector-plane")
                 ? "connectorPlane"
+                : url.pathname.includes("alice-runtime-container-host")
+                  ? "runtimeHost"
                 : null;
       assert.notEqual(role, null);
       const state = activePostCreateState?.subdomains?.[role] ??

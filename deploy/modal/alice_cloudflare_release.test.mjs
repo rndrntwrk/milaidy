@@ -54,6 +54,7 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     releaseRunId: "123456789-2",
     uploadedVersions: {
       access: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      runtimeHost: "ffffffff-ffff-4fff-8fff-ffffffffffff",
       control: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       aiGateway: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       statePlane: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
@@ -61,6 +62,7 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     },
     rollbackVersions: {
       access: "11111111-1111-4111-8111-111111111111",
+      runtimeHost: "66666666-6666-4666-8666-666666666666",
       control: "22222222-2222-4222-8222-222222222222",
       aiGateway: "33333333-3333-4333-8333-333333333333",
       statePlane: "44444444-4444-4444-8444-444444444444",
@@ -72,6 +74,7 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     "statePlane",
     "aiGateway",
     "connectorPlane",
+    "runtimeHost",
     "access",
   ]);
   for (const command of commands.uploads) {
@@ -86,6 +89,7 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     "statePlane",
     "aiGateway",
     "connectorPlane",
+    "runtimeHost",
     "access",
   ]);
   assert.deepEqual(
@@ -98,6 +102,7 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
       ["dddddddd-dddd-4ddd-8ddd-dddddddddddd", "100"],
       ["cccccccc-cccc-4ccc-8ccc-cccccccccccc", "100"],
       ["eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "100"],
+      ["ffffffff-ffff-4fff-8fff-ffffffffffff", "100"],
       ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "100"],
     ],
   );
@@ -108,11 +113,16 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   );
   assert.deepEqual(commands.rollbacks.map((command) => command.role), [
     "access",
+    "runtimeHost",
     "connectorPlane",
     "aiGateway",
     "control",
     "statePlane",
   ]);
+  assert.equal(
+    commands.uploads.find(({ role }) => role === "runtimeHost").bundlePath,
+    "/release/bundles/alice-runtime-container-host/index.js",
+  );
   for (const command of commands.rollbacks) {
     assert.deepEqual(command.argv.slice(0, 2), ["versions", "deploy"]);
     assert.equal(
@@ -912,7 +922,7 @@ test("the protected command requires attested bundles and terminal live readback
   assert.match(source, /applyAliceCandidateTrafficState/);
   assert.match(source, /restoreAliceTrafficState/);
   assert.match(source, /restoreAliceCloudflareWorkerRollbackState/);
-  assert.match(source, /alice\.cloudflare-rollback-evidence\.v1/);
+  assert.match(source, /alice\.cloudflare-rollback-evidence\.v2/);
   assert.match(source, /workerDeployments: workers\.deployments/);
   assert.match(source, /fetchAliceCloudflareContinuityState/);
   assert.match(source, /ALICE_CONTINUITY_CHANGED_DURING_PROMOTION/);
@@ -1035,7 +1045,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     limits: { steps: version.limits.steps },
   }));
   const anchor = {
-    schemaVersion: "alice.cloudflare-rollback-anchor.v6",
+    schemaVersion: "alice.cloudflare-rollback-anchor.v7",
     accountId: "036df6c823669b8fa2f66cf4c16eeb29",
     candidate: { sourceCommit, deploymentManifestSha256 },
     previous: {
@@ -1055,6 +1065,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
           aiGateway: { enabled: true, previewsEnabled: false },
           statePlane: { enabled: false, previewsEnabled: false },
           connectorPlane: { enabled: false, previewsEnabled: false },
+          runtimeHost: { enabled: false, previewsEnabled: false },
         },
       },
       workflowVersions,
@@ -1083,6 +1094,11 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
           "alice-connector-plane",
           "55555555-5555-4555-8555-555555555551",
           "55555555-5555-4555-8555-555555555555",
+        ),
+        runtimeHost: worker(
+          "alice-runtime-container-host",
+          "66666666-6666-4666-8666-666666666661",
+          "66666666-6666-4666-8666-666666666666",
         ),
       },
     },
@@ -1113,6 +1129,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
   }), /ALICE_CLOUDFLARE_ANCHOR_DRIFTED/);
   const uploadedVersions = {
     access: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    runtimeHost: "ffffffff-ffff-4fff-8fff-ffffffffffff",
     control: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     aiGateway: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     statePlane: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
@@ -1325,6 +1342,7 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
   const trafficState = { routes: [], customDomains: [], subdomains: {} };
   const workerState = {
     access: {},
+    runtimeHost: {},
     control: {},
     aiGateway: {},
     statePlane: {},
@@ -1338,6 +1356,7 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
     commands: {
       rollbacks: [
         { role: "access", argv: ["access"] },
+        { role: "runtimeHost", argv: ["runtime-host"] },
         { role: "connectorPlane", argv: ["connector"] },
         { role: "aiGateway", argv: ["ai"] },
         { role: "control", argv: ["control"] },

@@ -12,6 +12,64 @@ const {
   restoreAliceCloudflareWorkerRollbackState,
 } = rollback;
 
+function sixRoleRollbackReadbacks() {
+  return {
+    ...aliceTestLiveWorkerRollbackReadbacks(),
+    runtimeHost: {
+      worker: "alice-runtime-container-host",
+      deployment: {
+        deployments: [{
+          id: "66666666-6666-4666-8666-666666666661",
+          versions: [{
+            percentage: 100,
+            version_id: "66666666-6666-4666-8666-666666666666",
+          }],
+        }],
+      },
+      version: {
+        id: "66666666-6666-4666-8666-666666666666",
+        resources: {
+          bindings: [
+            { name: "AI", project: "alice-production", type: "ai" },
+            {
+              database_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              name: "ALICE_STATE_DB",
+              type: "d1",
+            },
+            {
+              class_name: "AliceRuntimeContainer",
+              name: "ALICE_RUNTIME_CONTAINER",
+              namespace_id: "55555555555555555555555555555555",
+              type: "durable_object_namespace",
+            },
+            { name: "ALICE_RUNTIME_API_TOKEN", type: "secret_text" },
+          ],
+          script: {
+            etag: "runtime-host-live-etag",
+            handlers: [],
+            last_deployed_from: "wrangler",
+            named_handlers: [{
+              handlers: ["class"],
+              name: "AliceRuntimeContainer",
+            }],
+          },
+          script_runtime: {
+            compatibility_date: "2026-08-22",
+            migration_tag: "v2-alice-runtime-container",
+            usage_model: "standard",
+          },
+        },
+      },
+      scriptSettings: {
+        logpush: false,
+        observability: null,
+        tags: null,
+        tail_consumers: null,
+      },
+    },
+  };
+}
+
 test("normalizes every persistent script setting with explicit defaults", () => {
   assert.deepEqual(normalizeAliceCloudflareScriptSettings({}), {
     logpush: false,
@@ -83,7 +141,7 @@ test("normalizes every persistent script setting with explicit defaults", () => 
 
 test("normalizes immutable version resources and exact provider-owned binding values", () => {
   assert.equal(typeof rollback.normalizeAliceCloudflareVersionResources, "function");
-  const fixtures = aliceTestLiveWorkerRollbackReadbacks();
+  const fixtures = sixRoleRollbackReadbacks();
   const access = rollback.normalizeAliceCloudflareVersionResources(
     fixtures.access.version.resources,
   );
@@ -195,7 +253,7 @@ test("rejects malformed immutable resources and provider additions", () => {
     );
   }
   assert.equal(typeof rollback.normalizeAliceCloudflareVersionResources, "function");
-  const fixtures = aliceTestLiveWorkerRollbackReadbacks();
+  const fixtures = sixRoleRollbackReadbacks();
   const invalidBindings = [
     { name: "", text: "", type: "plain_text" },
     { name: "EMPTY", text: "", type: "" },
@@ -235,7 +293,7 @@ test("rejects malformed immutable resources and provider additions", () => {
 });
 
 test("captures the production-shaped current response for every Alice Worker", async () => {
-  const fixtures = aliceTestLiveWorkerRollbackReadbacks();
+  const fixtures = sixRoleRollbackReadbacks();
   const json = (result) => new Response(
     JSON.stringify({ success: true, result }),
     { status: 200, headers: { "content-type": "application/json" } },
@@ -266,6 +324,7 @@ test("captures the production-shaped current response for every Alice Worker", a
     "aiGateway",
     "statePlane",
     "connectorPlane",
+    "runtimeHost",
   ]);
   assert.deepEqual(captured.access.scriptSettings, {
     logpush: false,

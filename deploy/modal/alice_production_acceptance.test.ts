@@ -118,22 +118,29 @@ function fixture() {
     },
   };
   const rollbackAnchor = {
-    schemaVersion: "alice.cloudflare-rollback-anchor.v6",
+    schemaVersion: "alice.cloudflare-rollback-anchor.v7",
     previous: { workflowVersions: [previousWorkflow] },
   };
   const cloudflareRollbackProof = {
-    schemaVersion: "alice.cloudflare-rollback-evidence.v1",
+    schemaVersion: "alice.cloudflare-rollback-evidence.v2",
     accountId: "036df6c823669b8fa2f66cf4c16eeb29",
     workflowVersionContinuity: { preserved: true },
   };
   const cloudflareLiveReadback = {
-    schemaVersion: "alice.cloudflare-live-readback.v1",
+    schemaVersion: "alice.cloudflare-live-readback.v2",
     accountId: "036df6c823669b8fa2f66cf4c16eeb29",
     zoneId: "7b24984479ee4cddb6c5d8a9b7a0f2c6",
     terminalSnapshotStable: true,
     provider: { continuityConfig: { workflow: { id: workflowId } } },
     workflowVersions: [previousWorkflow, candidateWorkflow],
-    workers: { access: {}, control: {}, aiGateway: {} },
+    workers: {
+      access: {},
+      runtimeHost: {},
+      control: {},
+      aiGateway: {},
+      statePlane: {},
+      connectorPlane: {},
+    },
   };
   const modalPromotionEvidence = {
     schemaVersion: "alice.modal-promotion-evidence.v1",
@@ -187,7 +194,7 @@ function containerFixture() {
   const data: any = fixture();
   const runtimeImage =
     `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"6".repeat(64)}`;
-  data.manifest.schemaVersion = "alice.deployment-manifest.v2";
+  data.manifest.schemaVersion = "alice.deployment-manifest.v3";
   data.manifest.source.runtimeImage = runtimeImage;
   delete data.manifest.release.modalRevision;
   data.manifest.release.runtimeRevision = 50;
@@ -584,12 +591,22 @@ describe("Alice terminal production acceptance", () => {
       acceptanceInput(data, runtime),
     );
     expect(evidence.runtimeRevision).toBe(50);
+    expect(evidence.schemaVersion).toBe("alice.production-acceptance.v3");
     expect(evidence.provenance.runtimeImage).toBe(
       data.containerImageEvidence.runtimeImage,
     );
     expect(evidence.provenance.containerImageEvidenceSha256).toMatch(
       /^sha256:[a-f0-9]{64}$/,
     );
+  });
+
+  test("rejects terminal Cloudflare proof without the private runtime host", async () => {
+    const data = containerFixture();
+    delete data.cloudflareLiveReadback.workers.runtimeHost;
+    const runtime = mockRuntime(data);
+    await expect(
+      runAliceProductionAcceptance(acceptanceInput(data, runtime)),
+    ).rejects.toThrow("ALICE_PRODUCTION_ACCEPTANCE_INVALID");
   });
 
   test("proves authenticated UI, durable chat/task recovery, gates, pause, rollback, and provenance", async () => {
