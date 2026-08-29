@@ -778,25 +778,33 @@ describe("Alice Access gateway", () => {
     expect(calls).toBe(0);
   });
 
-  test("rejects a valid but unadmitted Container capability BOM before ingress", async () => {
-    const env = await environment();
-    env.ALICE_CAPABILITY_BOM_SHA256 = `sha256:${"0".repeat(64)}`;
-    let calls = 0;
-    const response = await invokeGateway(
-      new Request("https://alice.rndrntwrk.com/api/health"),
-      env,
-      async () => {
-        calls += 1;
-        return Response.json({ unreachable: true });
+  test("fails closed when control admission capability BOM differs from the Container proof", async () => {
+    const substitutedDigest = `sha256:${"0".repeat(64)}`;
+    const env = await environment({
+      admissionRelease: {
+        ...release,
+        capabilityBomSha256: substitutedDigest,
       },
+    });
+    const { token, jwks } = await accessFixture();
+    let ownerPathCalls = 0;
+    const response = await invokeGateway(
+      new Request("https://alice.rndrntwrk.com/api/health", {
+        headers: { "cf-access-jwt-assertion": token },
+      }),
+      env,
+      authenticatedFetch(env, jwks, async () => {
+        ownerPathCalls += 1;
+        return Response.json({ unreachable: true });
+      }),
       now,
     );
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({
       ok: false,
-      code: "ACCESS_GATEWAY_CONFIG_INVALID",
+      code: "RUNTIME_RELEASE_MISMATCH",
     });
-    expect(calls).toBe(0);
+    expect(ownerPathCalls).toBe(0);
   });
 
   test("uses an explicit outbound header allowlist for proof and owner proxy requests", async () => {

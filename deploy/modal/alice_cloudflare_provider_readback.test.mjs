@@ -8,6 +8,7 @@ import {
   buildAliceAiGatewayEffectiveConfig,
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceRuntimeHostEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
 } from "../../workers/alice-effective-config.js";
 import {
@@ -104,6 +105,9 @@ const effective = {
     ownerEmailSha256: owner,
     runtimeImage: runtimeContainerImage,
   }),
+  runtimeHost: buildAliceRuntimeHostEffectiveConfig({
+    runtimeImage: runtimeContainerImage,
+  }),
   control: buildAliceContainerControlEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
     accessAudience: "alice-access-audience",
@@ -134,6 +138,7 @@ const manifest = await buildAliceDeploymentManifest({
   policyHash: `sha256:${"6".repeat(64)}`,
   rollbackBoundary: "container:alice-runtime:v49",
   accessEffectiveConfig: effective.access,
+  runtimeHostEffectiveConfig: effective.runtimeHost,
   controlEffectiveConfig: effective.control,
   aiGatewayEffectiveConfig: effective.aiGateway,
   statePlaneEffectiveConfig: effective.statePlane,
@@ -205,6 +210,7 @@ function providerBindings(config) {
         .update(`${binding.name}:${binding.class_name}`)
         .digest("hex")
         .slice(0, 32),
+      script_name: binding.script_name ?? null,
       type: "durable_object_namespace",
     });
   }
