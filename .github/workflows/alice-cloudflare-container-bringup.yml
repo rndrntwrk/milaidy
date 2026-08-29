@@ -542,6 +542,7 @@ jobs:
           for subject in \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-worker-bundles.json" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-access-gateway/index.js" \
+            "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-runtime-container-host/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-production-control/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-ai-gateway/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/index.js" \
@@ -656,6 +657,7 @@ jobs:
           const versionId = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
           const workers = {
             access: ALICE_CLOUDFLARE_TARGET.accessWorker,
+            runtimeHost: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
             control: ALICE_CLOUDFLARE_TARGET.controlWorker,
             statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
             connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
