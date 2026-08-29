@@ -183,7 +183,8 @@ test("routes the state host through the private service binding without exposing
   expect(hostEntrypoint).toContain(
     'export { AliceRuntimeContainer } from "./alice-runtime-container";',
   );
-  expect(hostEntrypoint).not.toContain("default");
+  expect(hostEntrypoint).toContain("export default {};");
+  expect(hostEntrypoint).not.toContain("fetch");
 });
 
 test("admits only owner-bound Eliza and Companion state operations", async () => {
