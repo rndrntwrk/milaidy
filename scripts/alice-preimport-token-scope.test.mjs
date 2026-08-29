@@ -46,3 +46,20 @@ test("pre-import isolates provider reads from the deployment write token", () =>
     "the scope preflight, Durable Object capture, and materializer must use the dedicated read token",
   );
 });
+
+test("pre-import validation cannot fail valid values through pipefail SIGPIPE", () => {
+  const workflowLines = workflow.split("\n");
+  const unsafePipefailValidations = workflowLines.filter((line, index) =>
+    line.includes("printf '%s'") &&
+    (
+      line.includes("| grep -Eq") ||
+      (line.trimEnd().endsWith("| \\") &&
+        workflowLines[index + 1]?.includes("grep -Eq"))
+    )
+  );
+  assert.equal(
+    unsafePipefailValidations.length,
+    0,
+    "validation must pass values to grep without a pipe under set -o pipefail",
+  );
+});

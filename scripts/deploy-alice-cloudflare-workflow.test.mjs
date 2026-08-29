@@ -777,7 +777,7 @@ test("temporary pre-import locks the exact workflow authority before credentials
     );
     assert.match(
       guard,
-      /printf '%s' "\$WORKFLOW_PROTECTION_SHA256" \|[\s\S]*?grep -Eq '\^sha256:\[a-f0-9\]\{64\}\$'/,
+      /grep -Eq '\^sha256:\[a-f0-9\]\{64\}\$' <<<"\$WORKFLOW_PROTECTION_SHA256"/,
     );
     assert.match(
       guard,

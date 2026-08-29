@@ -99,8 +99,7 @@ jobs:
             awk -F'|' '{print NF}')" = "2"
           WORKFLOW_PROTECTION_SHA256="${WORKFLOW_PROTECTION_EVIDENCE%%|*}"
           WORKFLOW_PROTECTION_OBSERVED_AT="${WORKFLOW_PROTECTION_EVIDENCE#*|}"
-          printf '%s' "$WORKFLOW_PROTECTION_SHA256" | \
-            grep -Eq '^sha256:[a-f0-9]{64}$'
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$WORKFLOW_PROTECTION_SHA256"
           test "$(date -u -d "$WORKFLOW_PROTECTION_OBSERVED_AT" \
             '+%Y-%m-%dT%H:%M:%SZ')" = "$WORKFLOW_PROTECTION_OBSERVED_AT"
           protection_observed_epoch="$(date -u -d \
@@ -163,8 +162,7 @@ jobs:
             awk -F'|' '{print NF}')" = "2"
           WORKFLOW_PROTECTION_SHA256="${WORKFLOW_PROTECTION_EVIDENCE%%|*}"
           WORKFLOW_PROTECTION_OBSERVED_AT="${WORKFLOW_PROTECTION_EVIDENCE#*|}"
-          printf '%s' "$WORKFLOW_PROTECTION_SHA256" | \
-            grep -Eq '^sha256:[a-f0-9]{64}$'
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$WORKFLOW_PROTECTION_SHA256"
           test "$(date -u -d "$WORKFLOW_PROTECTION_OBSERVED_AT" \
             '+%Y-%m-%dT%H:%M:%SZ')" = "$WORKFLOW_PROTECTION_OBSERVED_AT"
           protection_observed_epoch="$(date -u -d \
@@ -174,18 +172,17 @@ jobs:
           protection_age_seconds=$(( now_epoch - protection_observed_epoch ))
           test "$protection_age_seconds" -ge -60
           test "$protection_age_seconds" -le 7200
-          printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
-          printf '%s' "$RECOVERY_WATCHDOG_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
-          printf '%s' "$BUILD_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
-          printf '%s' "$ARTIFACT_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
-          printf '%s' "$RUNTIME_IMAGE" | grep -Eq \
-            '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$'
-          printf '%s' "$RELEASE_EPOCH" | grep -Eq '^[1-9][0-9]*$'
-          printf '%s' "$RUNTIME_REVISION" | grep -Eq \
-            '^(49|[5-9][0-9]|[1-9][0-9]{2,})$'
-          printf '%s' "$POLICY_HASH" | grep -Eq '^sha256:[a-f0-9]{64}$'
-          printf '%s' "$ARTIFACT_NAME" | grep -Eq \
-            "^alice-worker-bundles-${SOURCE_SHA}-${BUILD_RUN_ID}-[1-9][0-9]*$"
+          grep -Eq '^[a-f0-9]{40}$' <<<"$SOURCE_SHA"
+          grep -Eq '^[1-9][0-9]*$' <<<"$RECOVERY_WATCHDOG_RUN_ID"
+          grep -Eq '^[1-9][0-9]*$' <<<"$BUILD_RUN_ID"
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$ARTIFACT_DIGEST"
+          grep -Eq '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$' <<<"$RUNTIME_IMAGE"
+          grep -Eq '^[1-9][0-9]*$' <<<"$RELEASE_EPOCH"
+          grep -Eq '^(49|[5-9][0-9]|[1-9][0-9]{2,})$' <<<"$RUNTIME_REVISION"
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$POLICY_HASH"
+          grep -Eq \
+            "^alice-worker-bundles-${SOURCE_SHA}-${BUILD_RUN_ID}-[1-9][0-9]*$" \
+            <<<"$ARTIFACT_NAME"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           test "$(gh api \
@@ -265,8 +262,8 @@ jobs:
           capability_bom_sha256="$(docker run --rm --platform linux/amd64 \
             --entrypoint node "$RUNTIME_IMAGE" --input-type=module \
             -e 'import fs from "node:fs"; import crypto from "node:crypto"; const bytes = fs.readFileSync("/app/alice-capability-bom.json"); process.stdout.write(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`);')"
-          printf '%s' "$runtime_build_manifest_sha256" | grep -Eq '^sha256:[a-f0-9]{64}$'
-          printf '%s' "$capability_bom_sha256" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$runtime_build_manifest_sha256"
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$capability_bom_sha256"
           docker run --rm --platform linux/amd64 --entrypoint node \
             --env ALICE_SOURCE_COMMIT="$SOURCE_SHA" \
             --env ALICE_ELIZA_COMMIT="$ELIZA_SHA" \
@@ -309,8 +306,9 @@ jobs:
           remote_digest="$(printf '%s' "$remote_manifest" | jq -er \
             '.Descriptor.digest | select(test("^sha256:[a-f0-9]{64}$"))')"
           runtime_image="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime@${remote_digest}"
-          printf '%s' "$runtime_image" | grep -Eq \
-            "^registry\\.cloudflare\\.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime@sha256:[a-f0-9]{64}$"
+          grep -Eq \
+            "^registry\\.cloudflare\\.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime@sha256:[a-f0-9]{64}$" \
+            <<<"$runtime_image"
           test "$runtime_image" = "$local_runtime_image"
           inventory="$(timeout --signal=TERM --kill-after=30s 90s \
             "$WRANGLER" containers images list \
@@ -404,8 +402,7 @@ jobs:
             awk -F'|' '{print NF}')" = "2"
           WORKFLOW_PROTECTION_SHA256="${WORKFLOW_PROTECTION_EVIDENCE%%|*}"
           WORKFLOW_PROTECTION_OBSERVED_AT="${WORKFLOW_PROTECTION_EVIDENCE#*|}"
-          printf '%s' "$WORKFLOW_PROTECTION_SHA256" | \
-            grep -Eq '^sha256:[a-f0-9]{64}$'
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$WORKFLOW_PROTECTION_SHA256"
           test "$(date -u -d "$WORKFLOW_PROTECTION_OBSERVED_AT" \
             '+%Y-%m-%dT%H:%M:%SZ')" = "$WORKFLOW_PROTECTION_OBSERVED_AT"
           protection_observed_epoch="$(date -u -d \
@@ -415,20 +412,19 @@ jobs:
           protection_age_seconds=$(( now_epoch - protection_observed_epoch ))
           test "$protection_age_seconds" -ge -60
           test "$protection_age_seconds" -le 7200
-          printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
-          printf '%s' "$RECOVERY_WATCHDOG_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
-          printf '%s' "$BUILD_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
-          printf '%s' "$ARTIFACT_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
-          printf '%s' "$RUNTIME_IMAGE" | grep -Eq \
-            '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$'
-          printf '%s' "$RELEASE_EPOCH" | grep -Eq '^[1-9][0-9]*$'
-          printf '%s' "$RUNTIME_REVISION" | grep -Eq \
-            '^(49|[5-9][0-9]|[1-9][0-9]{2,})$'
-          printf '%s' "$POLICY_HASH" | grep -Eq '^sha256:[a-f0-9]{64}$'
-          printf '%s' "$ARTIFACT_NAME" | grep -Eq \
-            "^alice-worker-bundles-${SOURCE_SHA}-${BUILD_RUN_ID}-[1-9][0-9]*$"
-          printf '%s' "$IMPORT_ARTIFACT_ID" | grep -Eq '^[1-9][0-9]*$'
-          printf '%s' "$IMPORT_ARTIFACT_DIGEST" | grep -Eq '^(sha256:)?[a-f0-9]{64}$'
+          grep -Eq '^[a-f0-9]{40}$' <<<"$SOURCE_SHA"
+          grep -Eq '^[1-9][0-9]*$' <<<"$RECOVERY_WATCHDOG_RUN_ID"
+          grep -Eq '^[1-9][0-9]*$' <<<"$BUILD_RUN_ID"
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$ARTIFACT_DIGEST"
+          grep -Eq '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$' <<<"$RUNTIME_IMAGE"
+          grep -Eq '^[1-9][0-9]*$' <<<"$RELEASE_EPOCH"
+          grep -Eq '^(49|[5-9][0-9]|[1-9][0-9]{2,})$' <<<"$RUNTIME_REVISION"
+          grep -Eq '^sha256:[a-f0-9]{64}$' <<<"$POLICY_HASH"
+          grep -Eq \
+            "^alice-worker-bundles-${SOURCE_SHA}-${BUILD_RUN_ID}-[1-9][0-9]*$" \
+            <<<"$ARTIFACT_NAME"
+          grep -Eq '^[1-9][0-9]*$' <<<"$IMPORT_ARTIFACT_ID"
+          grep -Eq '^(sha256:)?[a-f0-9]{64}$' <<<"$IMPORT_ARTIFACT_DIGEST"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           test "$(gh api \
