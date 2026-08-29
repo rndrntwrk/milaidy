@@ -279,7 +279,8 @@ export async function verifyAliceBootstrapDeployToken({ fetchImpl, apiToken }) {
     apiToken,
     method: "GET",
     operation: "VERIFY_DEPLOY_TOKEN",
-    pathname: "/user/tokens/verify",
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/tokens/verify`,
     allowNotFound: false,
   });
   if (
