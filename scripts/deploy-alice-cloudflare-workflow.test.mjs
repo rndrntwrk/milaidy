@@ -268,7 +268,7 @@ test("preimport evidence is exact-bound and fresh materialization matches before
   );
 });
 
-test("state-plane auth is uploaded only as an access-Worker secret", () => {
+test("state-plane auth is exposed only to the bounded Worker release step", () => {
   assert.match(
     workflow,
     /ALICE_STATE_PLANE_SERVICE_TOKEN: \$\{\{ secrets\.ALICE_STATE_PLANE_SERVICE_TOKEN \}\}/,
@@ -325,7 +325,7 @@ test("rollback journals contain relocatable Worker bytes and artifact-relative c
   }
 });
 
-test("deployment attests every module in the five-role Worker artifact", () => {
+test("deployment attests every module in the six-role Worker artifact", () => {
   const attest = workflow.match(
     /- name: Verify immutable Worker attestations before unrouted fail-closed bootstrap[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
@@ -335,6 +335,7 @@ test("deployment attests every module in the five-role Worker artifact", () => {
     "alice-ai-gateway",
     "alice-state-plane",
     "alice-connector-plane",
+    "alice-runtime-container-host",
   ]) {
     assert.match(
       attest,
@@ -387,7 +388,7 @@ test("state and connector configs stay private and receive only their scoped inp
     /ALICE_(?:DISCORD|TELEGRAM)_PRIVATE_DESTINATION_ID/,
     "disabled providers must not receive destination placeholders",
   );
-  for (const config of ["statePlane", "connectorPlane"]) {
+  for (const config of ["statePlane", "connectorPlane", "runtimeHost"]) {
     assert.match(
       materialize,
       new RegExp(
@@ -402,7 +403,7 @@ test("state and connector configs stay private and receive only their scoped inp
   );
 });
 
-test("five-role mutation steps receive connector credentials only step-locally", () => {
+test("six-role mutation steps receive connector credentials only step-locally", () => {
   const prepareStep = "Prepare service-authenticated fail-closed control route";
   const secretNames = [
     "ALICE_CONNECTOR_SERVICE_TOKEN",
@@ -443,14 +444,14 @@ test("five-role mutation steps receive connector credentials only step-locally",
   }
 });
 
-test("both independent recovery lanes require all five relocated Worker modules", () => {
+test("both independent recovery lanes require all six relocated Worker modules", () => {
   for (const source of [workflow, watchdog]) {
     const recovery = source.match(
       /- name: Consume external journal and recover Cloudflare independently[\s\S]*?(?=\n      - name:)/,
     )?.[0] ?? "";
     assert.match(
       recovery,
-      /for worker in \\\n+\s+alice-access-gateway \\\n+\s+alice-production-control \\\n+\s+alice-ai-gateway \\\n+\s+alice-state-plane \\\n+\s+alice-connector-plane/,
+      /for worker in \\\n+\s+alice-access-gateway \\\n+\s+alice-production-control \\\n+\s+alice-ai-gateway \\\n+\s+alice-state-plane \\\n+\s+alice-connector-plane \\\n+\s+alice-runtime-container-host/,
     );
     assert.match(
       recovery,
