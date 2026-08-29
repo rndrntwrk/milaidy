@@ -17,6 +17,7 @@ import {
 } from "./alice_cloudflare_live_readback.mjs";
 import {
   aliceCloudflareCommandEnv,
+  parseAliceWranglerUploadVersionId as parseAliceProtectedWranglerUploadVersionId,
 } from "./alice_cloudflare_release.mjs";
 import {
   verifyAliceWorkerBundleArtifact,
@@ -989,6 +990,43 @@ export function buildAliceBootstrapCreationCommand({
   ];
 }
 
+export function buildAliceBootstrapInactiveUploadCommand({
+  workerMain,
+  configPath,
+  sourceCommit,
+  releaseRunId,
+}) {
+  if (
+    !absolute(workerMain) ||
+    !absolute(configPath) ||
+    !COMMIT.test(sourceCommit ?? "") ||
+    !RELEASE_RUN_ID.test(releaseRunId ?? "")
+  ) {
+    invalid();
+  }
+  return [
+    "versions",
+    "upload",
+    workerMain,
+    "--config",
+    configPath,
+    "--no-bundle",
+    "--strict",
+    "--tag",
+    `alice-continuity-bootstrap-${sourceCommit}-${releaseRunId}`,
+    "--message",
+    `Alice inactive fail-closed continuity bootstrap ${sourceCommit}`,
+  ];
+}
+
+export function parseAliceBootstrapUploadVersionId(output) {
+  try {
+    return parseAliceProtectedWranglerUploadVersionId(output);
+  } catch {
+    invalid("ALICE_CLOUDFLARE_BOOTSTRAP_UPLOAD_VERSION_INVALID");
+  }
+}
+
 export function parseAliceWranglerDeployVersionId(output) {
   if (typeof output !== "string") {
     invalid("ALICE_CLOUDFLARE_BOOTSTRAP_DEPLOY_VERSION_INVALID");
@@ -1020,11 +1058,38 @@ export function buildAliceBootstrapPromotionCommand({ versionId, configPath }) {
   ];
 }
 
-function extractAliceBootstrapRoleNamespaceIds(role, version) {
+function aliceBootstrapVersionBindings(role, version) {
   if (!ROLES.includes(role)) invalid();
   if (role === "aiGateway" && version === null) return [];
   const bindings = version?.resources?.bindings;
-  if (!Array.isArray(bindings)) invalid();
+  if (
+    !Array.isArray(bindings) ||
+    bindings.some((binding) =>
+      !binding ||
+      typeof binding !== "object" ||
+      Array.isArray(binding) ||
+      typeof binding.type !== "string" ||
+      typeof binding.name !== "string"
+    )
+  ) {
+    invalid();
+  }
+  const expectedNames = new Set(
+    EXPECTED_DURABLE_OBJECT_BINDINGS[role].map((binding) => binding.name),
+  );
+  if (
+    bindings.some((binding) =>
+      binding?.type !== "durable_object_namespace" &&
+      expectedNames.has(binding?.name)
+    )
+  ) {
+    invalid();
+  }
+  return bindings;
+}
+
+function extractAliceBootstrapRoleNamespaceIds(role, version) {
+  const bindings = aliceBootstrapVersionBindings(role, version);
   const namespaces = bindings
     .filter((binding) => binding?.type === "durable_object_namespace")
     .map((binding) => ({
@@ -1048,6 +1113,81 @@ function extractAliceBootstrapRoleNamespaceIds(role, version) {
   return namespaces;
 }
 
+export function planAliceBootstrapIdentityActions({
+  activeVersionIds,
+  activeVersions,
+}) {
+  const exactIdentityRoles = (value) =>
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    canonicalAliceJson(Object.keys(value).sort()) ===
+      canonicalAliceJson([...BOOTSTRAP_IDENTITY_ROLES].sort());
+  if (
+    !exactIdentityRoles(activeVersionIds) ||
+    !exactIdentityRoles(activeVersions)
+  ) {
+    invalid();
+  }
+  const actions = {};
+  const namespaceIds = new Set();
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    const activeVersionId = activeVersionIds[role];
+    const activeVersion = activeVersions[role];
+    if (activeVersionId === null) {
+      if (activeVersion !== null) invalid();
+      actions[role] = { upload: "first-deploy", promote: true };
+      continue;
+    }
+    if (
+      !VERSION_ID.test(activeVersionId ?? "") ||
+      activeVersion?.id !== activeVersionId
+    ) {
+      invalid();
+    }
+    const bindings = aliceBootstrapVersionBindings(role, activeVersion);
+    const durableObjectBindings = bindings.filter(
+      (binding) => binding?.type === "durable_object_namespace",
+    );
+    if (role === "access" && durableObjectBindings.length === 0) {
+      actions[role] = { upload: "inactive", promote: false };
+      continue;
+    }
+    const namespaces = extractAliceBootstrapRoleNamespaceIds(role, activeVersion);
+    for (const binding of namespaces) {
+      if (namespaceIds.has(binding.namespaceId)) invalid();
+      namespaceIds.add(binding.namespaceId);
+    }
+    actions[role] = { upload: "none", promote: false };
+  }
+  return actions;
+}
+
+export function verifyAliceBootstrapInactiveAccessBoundary({
+  previousActiveVersionId,
+  currentActiveVersionId,
+  trafficBefore,
+  trafficAfter,
+}) {
+  const exactTraffic = (value) =>
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    canonicalAliceJson(Object.keys(value).sort()) ===
+      canonicalAliceJson(["customDomains", "routes"]) &&
+    Array.isArray(value.customDomains) &&
+    Array.isArray(value.routes);
+  if (
+    !VERSION_ID.test(previousActiveVersionId ?? "") ||
+    currentActiveVersionId !== previousActiveVersionId ||
+    !exactTraffic(trafficBefore) ||
+    !exactTraffic(trafficAfter) ||
+    canonicalAliceJson(trafficAfter) !== canonicalAliceJson(trafficBefore)
+  ) {
+    invalid("ALICE_CLOUDFLARE_BOOTSTRAP_INACTIVE_ACCESS_BOUNDARY_INVALID");
+  }
+}
+
 export function extractAliceBootstrapNamespaceIds(versions) {
   if (
     !versions ||
@@ -1068,6 +1208,183 @@ export function extractAliceBootstrapNamespaceIds(versions) {
     }
   }
   return result;
+}
+
+export function extractAliceBootstrapSelectedNamespaceIds({
+  versionIds,
+  versions,
+}) {
+  if (
+    !versionIds ||
+    typeof versionIds !== "object" ||
+    Array.isArray(versionIds) ||
+    canonicalAliceJson(Object.keys(versionIds).sort()) !==
+      canonicalAliceJson([...BOOTSTRAP_IDENTITY_ROLES].sort())
+  ) {
+    invalid();
+  }
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    if (
+      !VERSION_ID.test(versionIds[role] ?? "") ||
+      versions?.[role]?.id !== versionIds[role]
+    ) {
+      invalid();
+    }
+  }
+  return extractAliceBootstrapNamespaceIds(versions);
+}
+
+export async function executeAliceBootstrapIdentityActions({
+  identityActions,
+  versionIds: initialVersionIds,
+  bootstrapIdentityConfigs,
+  wranglerBin,
+  sourceRoot,
+  sourceCommit,
+  releaseRunId,
+  commandEnv,
+  runCommand = run,
+  fetchVersion,
+  fetchActiveVersionId,
+  fetchTraffic,
+  trafficBefore,
+}) {
+  const exactIdentityRoles = (value) =>
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    canonicalAliceJson(Object.keys(value).sort()) ===
+      canonicalAliceJson([...BOOTSTRAP_IDENTITY_ROLES].sort());
+  if (
+    !exactIdentityRoles(identityActions) ||
+    !exactIdentityRoles(initialVersionIds) ||
+    !exactIdentityRoles(bootstrapIdentityConfigs) ||
+    !absolute(wranglerBin) ||
+    !absolute(sourceRoot) ||
+    !COMMIT.test(sourceCommit ?? "") ||
+    !RELEASE_RUN_ID.test(releaseRunId ?? "") ||
+    !commandEnv ||
+    typeof commandEnv !== "object" ||
+    Array.isArray(commandEnv) ||
+    typeof runCommand !== "function" ||
+    typeof fetchVersion !== "function" ||
+    typeof fetchActiveVersionId !== "function" ||
+    typeof fetchTraffic !== "function"
+  ) {
+    invalid();
+  }
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    const action = identityActions[role];
+    const validAction =
+      action &&
+      typeof action === "object" &&
+      !Array.isArray(action) &&
+      canonicalAliceJson(Object.keys(action).sort()) ===
+        canonicalAliceJson(["promote", "upload"]) &&
+      (
+        (action.upload === "none" && action.promote === false) ||
+        (action.upload === "first-deploy" && action.promote === true) ||
+        (
+          role === "access" &&
+          action.upload === "inactive" &&
+          action.promote === false
+        )
+      );
+    const initialVersionId = initialVersionIds[role];
+    const validInitialVersion = action?.upload === "first-deploy" &&
+        role !== "control"
+      ? initialVersionId === null
+      : VERSION_ID.test(initialVersionId ?? "");
+    const identity = bootstrapIdentityConfigs[role];
+    if (
+      !validAction ||
+      !validInitialVersion ||
+      !identity ||
+      typeof identity !== "object" ||
+      Array.isArray(identity) ||
+      canonicalAliceJson(Object.keys(identity).sort()) !==
+        canonicalAliceJson(["configPath", "deploymentMainPath"]) ||
+      !absolute(identity.configPath) ||
+      !absolute(identity.deploymentMainPath)
+    ) {
+      invalid();
+    }
+  }
+
+  const previousAccessVersionId = initialVersionIds.access;
+  const versionIds = { ...initialVersionIds };
+  const createdRoles = [];
+  for (const role of ["statePlane", "connectorPlane", "access"]) {
+    const action = identityActions[role];
+    if (action.upload === "none") continue;
+    const identity = bootstrapIdentityConfigs[role];
+    const inactive = action.upload === "inactive";
+    const output = runCommand(
+      wranglerBin,
+      inactive
+        ? buildAliceBootstrapInactiveUploadCommand({
+            workerMain: identity.deploymentMainPath,
+            configPath: identity.configPath,
+            sourceCommit,
+            releaseRunId,
+          })
+        : buildAliceBootstrapCreationCommand({
+            controlMain: identity.deploymentMainPath,
+            configPath: identity.configPath,
+            sourceCommit,
+            releaseRunId,
+          }),
+      {
+        cwd: sourceRoot,
+        env: commandEnv,
+        errorCode: `ALICE_CLOUDFLARE_${role.toUpperCase()}_BOOTSTRAP_UPLOAD_FAILED`,
+      },
+    );
+    versionIds[role] = inactive
+      ? parseAliceBootstrapUploadVersionId(output)
+      : parseAliceWranglerDeployVersionId(output);
+    if (action.upload === "first-deploy") createdRoles.push(role);
+  }
+
+  const versions = { aiGateway: null };
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    versions[role] = await fetchVersion({
+      role,
+      versionId: versionIds[role],
+    });
+  }
+  const namespaceIds = extractAliceBootstrapSelectedNamespaceIds({
+    versionIds,
+    versions,
+  });
+
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    if (!identityActions[role].promote) continue;
+    runCommand(
+      wranglerBin,
+      buildAliceBootstrapPromotionCommand({
+        versionId: versionIds[role],
+        configPath: bootstrapIdentityConfigs[role].configPath,
+      }),
+      {
+        cwd: sourceRoot,
+        env: commandEnv,
+        errorCode: `ALICE_CLOUDFLARE_${role.toUpperCase()}_BOOTSTRAP_PROMOTION_FAILED`,
+      },
+    );
+    const deployedVersionId = await fetchActiveVersionId(role);
+    if (deployedVersionId !== versionIds[role]) invalid();
+  }
+
+  if (identityActions.access.upload === "inactive") {
+    verifyAliceBootstrapInactiveAccessBoundary({
+      previousActiveVersionId: previousAccessVersionId,
+      currentActiveVersionId: await fetchActiveVersionId("access"),
+      trafficBefore,
+      trafficAfter: await fetchTraffic(),
+    });
+  }
+  return { createdRoles, namespaceIds, versionIds, versions };
 }
 
 async function ensureConsumer({ fetchImpl, apiToken, queue }) {
@@ -1320,9 +1637,27 @@ async function main() {
       role,
     });
   }
+  const activeVersions = {};
+  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
+    activeVersions[role] = priorVersionIds[role] === null
+      ? null
+      : await api({
+          fetchImpl: globalThis.fetch,
+          apiToken,
+          method: "GET",
+          operation:
+            `GET_ACTIVE_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
+          pathname:
+            `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ROLE_WORKERS[role]}/versions/${priorVersionIds[role]}`,
+        });
+  }
+  const identityActions = planAliceBootstrapIdentityActions({
+    activeVersionIds: priorVersionIds,
+    activeVersions,
+  });
   const priorVersionId = priorVersionIds.control;
   verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
-  const versionIds = { ...priorVersionIds };
+  let versionIds = { ...priorVersionIds };
   let versionId = versionIds.control;
   let mode = "release";
   let queue;
@@ -1337,7 +1672,7 @@ async function main() {
     evidenceSentinel: false,
     evidenceQueueConsumer: false,
   };
-  if (versionId === null) {
+  if (identityActions.control.upload === "first-deploy") {
     mode = "bootstrap";
     const evidenceQueue = await ensureAliceBootstrapQueue({
       fetchImpl: globalThis.fetch,
@@ -1376,38 +1711,45 @@ async function main() {
     versionIds.control = versionId;
     createdByRun.controlWorker = true;
   }
-  for (const role of ["statePlane", "connectorPlane", "access"]) {
-    if (versionIds[role] !== null) continue;
-    const identity = bootstrapIdentityConfigs[role];
-    const output = run(
-      wranglerBin,
-      buildAliceBootstrapCreationCommand({
-        controlMain: identity.deploymentMainPath,
-        configPath: identity.configPath,
-        sourceCommit,
-        releaseRunId,
+  const identityExecution = await executeAliceBootstrapIdentityActions({
+    identityActions,
+    versionIds,
+    bootstrapIdentityConfigs,
+    wranglerBin,
+    sourceRoot,
+    sourceCommit,
+    releaseRunId,
+    commandEnv: aliceCloudflareCommandEnv(),
+    fetchVersion: async ({ role, versionId: selectedVersionId }) =>
+      api({
+        fetchImpl: globalThis.fetch,
+        apiToken,
+        method: "GET",
+        operation:
+          `GET_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
+        pathname:
+          `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ROLE_WORKERS[role]}/versions/${selectedVersionId}`,
       }),
-      {
-        cwd: sourceRoot,
-        env: aliceCloudflareCommandEnv(),
-        errorCode: `ALICE_CLOUDFLARE_${role.toUpperCase()}_BOOTSTRAP_UPLOAD_FAILED`,
-      },
-    );
-    versionIds[role] = parseAliceWranglerDeployVersionId(output);
+    fetchActiveVersionId: async (role) =>
+      fetchAliceActiveWorkerVersionId({
+        fetchImpl: globalThis.fetch,
+        apiToken,
+        role,
+      }),
+    fetchTraffic: async () =>
+      (await fetchAliceBootstrapResourceSnapshot({
+        fetchImpl: globalThis.fetch,
+        apiToken,
+        deployCredentialIdSha256,
+      })).traffic,
+    trafficBefore: preflightSecond.traffic,
+  });
+  versionIds = identityExecution.versionIds;
+  versionId = versionIds.control;
+  for (const role of identityExecution.createdRoles) {
     createdByRun[`${role}Worker`] = true;
   }
-  const versions = { aiGateway: null };
-  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
-    versions[role] = await api({
-      fetchImpl: globalThis.fetch,
-      apiToken,
-      method: "GET",
-      operation: `GET_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
-      pathname:
-        `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ROLE_WORKERS[role]}/versions/${versionIds[role]}`,
-    });
-  }
-  const namespaceIds = extractAliceBootstrapNamespaceIds(versions);
+  const { namespaceIds, versions } = identityExecution;
   const version = versions.control;
   const versionTag = version?.annotations?.["workers/tag"];
   if (priorVersionId !== null) {
@@ -1417,27 +1759,6 @@ async function main() {
         versionTag.startsWith("alice-recovery-boundary-"))
         ? "bootstrap"
         : "release";
-  }
-  for (const role of BOOTSTRAP_IDENTITY_ROLES) {
-    if (priorVersionIds[role] !== null) continue;
-    run(
-      wranglerBin,
-      buildAliceBootstrapPromotionCommand({
-        versionId: versionIds[role],
-        configPath: bootstrapIdentityConfigs[role].configPath,
-      }),
-      {
-        cwd: sourceRoot,
-        env: aliceCloudflareCommandEnv(),
-        errorCode: `ALICE_CLOUDFLARE_${role.toUpperCase()}_BOOTSTRAP_PROMOTION_FAILED`,
-      },
-    );
-    const deployedVersionId = await fetchAliceActiveWorkerVersionId({
-      fetchImpl: globalThis.fetch,
-      apiToken,
-      role,
-    });
-    if (deployedVersionId !== versionIds[role]) invalid();
   }
   if (mode === "bootstrap") {
     if (queue === undefined) {

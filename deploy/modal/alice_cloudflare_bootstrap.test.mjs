@@ -45,6 +45,92 @@ const sourceConfig = {
   },
 };
 
+const observedLegacyAccessVersionId =
+  "f380b84a-c470-405f-b8bf-a7a85ea2b8c0";
+const observedLegacyAccessVersion = {
+  id: observedLegacyAccessVersionId,
+  resources: {
+    bindings: [
+      { name: "ASSET_BUST_TAG", text: "prod-0d7cee2-20260501", type: "plain_text" },
+      { name: "BYPASS_PATHS", text: "/health,/cdn-cgi/access/*", type: "plain_text" },
+      { name: "DEFAULT_AUTH_REDIRECT_PATH", text: "/", type: "plain_text" },
+      { name: "HOMEPAGE_URL", text: "https://rndrntwrk.com", type: "plain_text" },
+      { name: "REDIRECT_STATUS", text: "302", type: "plain_text" },
+      { name: "SHARED_CONVERSATION_MODE", text: "true", type: "plain_text" },
+      { name: "SHARED_CONVERSATION_TITLE", text: "Alice Shared Session", type: "plain_text" },
+      { name: "TRUST_ACCESS_SESSION_COOKIES", text: "false", type: "plain_text" },
+      { name: "UPSTREAM_API_TOKEN", type: "secret_text" },
+      { name: "UPSTREAM_HOST_HEADER", text: "", type: "plain_text" },
+      { name: "UPSTREAM_ORIGIN", text: "", type: "plain_text" },
+    ],
+    script: {
+      etag: "77d7eb6b24cf375ff26ecfef60077f109a60b03dcd972175fab00ecfd7937cbe",
+    },
+    script_runtime: {
+      cache_options: null,
+      compatibility_date: "2026-02-18",
+      compatibility_flags: [],
+      exports: {},
+      limits: null,
+      migration_tag: null,
+      usage_model: "standard",
+    },
+  },
+};
+const observedControlVersionId = "12567b75-bc0e-4451-9e8c-52295ec7af2b";
+const observedControlVersion = {
+  id: observedControlVersionId,
+  resources: {
+    bindings: [
+      {
+        type: "durable_object_namespace",
+        name: "ALICE_AUTHORITY",
+        class_name: "AliceAuthority",
+        namespace_id: "b8e8471d24e043e4a0114fecabab913c",
+      },
+      {
+        type: "durable_object_namespace",
+        name: "ALICE_SESSIONS",
+        class_name: "AliceSession",
+        namespace_id: "0ecdd7fb1aa94d6c912a4b12790586bb",
+      },
+    ],
+  },
+};
+const statePlaneVersionId = "33333333-3333-4333-8333-333333333333";
+const statePlaneVersion = {
+  id: statePlaneVersionId,
+  resources: {
+    bindings: [{
+      type: "durable_object_namespace",
+      name: "ALICE_COORDINATION",
+      class_name: "AliceStateCoordination",
+      namespace_id: "3".repeat(32),
+    }],
+  },
+};
+const connectorPlaneVersionId = "44444444-4444-4444-8444-444444444444";
+const connectorPlaneVersion = {
+  id: connectorPlaneVersionId,
+  resources: {
+    bindings: [{
+      type: "durable_object_namespace",
+      name: "ALICE_CONNECTOR_OUTBOUND",
+      class_name: "AliceConnectorOutboundCoordination",
+      namespace_id: "4".repeat(32),
+    }],
+  },
+};
+const observedTraffic = {
+  customDomains: [],
+  routes: [{
+    id: "55959f9c8da945f9a2b85b02b3657016",
+    pattern: "alice.rndrntwrk.com/*",
+    request_limit_fail_open: false,
+    script: "alice-access-gateway",
+  }],
+};
+
 test("verifies the durable Alice account token through the account-owned endpoint", async () => {
   const requests = [];
   const id = "a".repeat(32);
@@ -177,6 +263,474 @@ test("extracts the exact five-role provider-assigned Durable Object namespaces",
   );
 });
 
+test("plans an inactive Access upload for the observed legacy version before first-deploying absent planes", () => {
+  assert.equal(
+    typeof bootstrapModule.planAliceBootstrapIdentityActions,
+    "function",
+  );
+  assert.deepEqual(
+    bootstrapModule.planAliceBootstrapIdentityActions({
+      activeVersionIds: {
+        access: observedLegacyAccessVersionId,
+        control: observedControlVersionId,
+        statePlane: null,
+        connectorPlane: null,
+      },
+      activeVersions: {
+        access: observedLegacyAccessVersion,
+        control: observedControlVersion,
+        statePlane: null,
+        connectorPlane: null,
+      },
+    }),
+    {
+      access: { upload: "inactive", promote: false },
+      control: { upload: "none", promote: false },
+      statePlane: { upload: "first-deploy", promote: true },
+      connectorPlane: { upload: "first-deploy", promote: true },
+    },
+  );
+});
+
+test("stages only Access when rerunning after the absent planes were first-deployed", () => {
+  assert.equal(
+    typeof bootstrapModule.planAliceBootstrapIdentityActions,
+    "function",
+  );
+  assert.deepEqual(
+    bootstrapModule.planAliceBootstrapIdentityActions({
+      activeVersionIds: {
+        access: observedLegacyAccessVersionId,
+        control: observedControlVersionId,
+        statePlane: statePlaneVersionId,
+        connectorPlane: connectorPlaneVersionId,
+      },
+      activeVersions: {
+        access: observedLegacyAccessVersion,
+        control: observedControlVersion,
+        statePlane: statePlaneVersion,
+        connectorPlane: connectorPlaneVersion,
+      },
+    }),
+    {
+      access: { upload: "inactive", promote: false },
+      control: { upload: "none", promote: false },
+      statePlane: { upload: "none", promote: false },
+      connectorPlane: { upload: "none", promote: false },
+    },
+  );
+});
+
+test("rejects a cross-role namespace collision before planning any mutation", () => {
+  assert.throws(
+    () => bootstrapModule.planAliceBootstrapIdentityActions({
+      activeVersionIds: {
+        access: observedLegacyAccessVersionId,
+        control: observedControlVersionId,
+        statePlane: statePlaneVersionId,
+        connectorPlane: connectorPlaneVersionId,
+      },
+      activeVersions: {
+        access: observedLegacyAccessVersion,
+        control: observedControlVersion,
+        statePlane: {
+          ...statePlaneVersion,
+          resources: { bindings: [{
+            ...statePlaneVersion.resources.bindings[0],
+            namespace_id:
+              observedControlVersion.resources.bindings[0].namespace_id,
+          }] },
+        },
+        connectorPlane: connectorPlaneVersion,
+      },
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
+  );
+});
+
+test("uses exact pinned-Wrangler upload-only semantics for a staged Access identity", () => {
+  assert.equal(
+    typeof bootstrapModule.buildAliceBootstrapInactiveUploadCommand,
+    "function",
+  );
+  assert.deepEqual(
+    bootstrapModule.buildAliceBootstrapInactiveUploadCommand({
+      workerMain: "/release/alice-access-gateway/index.js",
+      configPath: "/release/access.bootstrap.wrangler.json",
+      sourceCommit: "1".repeat(40),
+      releaseRunId: "33244173579-1",
+    }),
+    [
+      "versions",
+      "upload",
+      "/release/alice-access-gateway/index.js",
+      "--config",
+      "/release/access.bootstrap.wrangler.json",
+      "--no-bundle",
+      "--strict",
+      "--tag",
+      `alice-continuity-bootstrap-${"1".repeat(40)}-33244173579-1`,
+      "--message",
+      `Alice inactive fail-closed continuity bootstrap ${"1".repeat(40)}`,
+    ],
+  );
+  assert.equal(
+    typeof bootstrapModule.parseAliceBootstrapUploadVersionId,
+    "function",
+  );
+  assert.equal(
+    bootstrapModule.parseAliceBootstrapUploadVersionId(
+      "Uploaded alice-access-gateway\n" +
+        "Worker Version ID: 11111111-1111-4111-8111-111111111111\n",
+    ),
+    "11111111-1111-4111-8111-111111111111",
+  );
+  assert.throws(
+    () => bootstrapModule.parseAliceBootstrapUploadVersionId(
+      "Current Version ID: 11111111-1111-4111-8111-111111111111\n",
+    ),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_UPLOAD_VERSION_INVALID/,
+  );
+});
+
+test("extracts the Access namespace from the selected staged version only", () => {
+  assert.equal(
+    typeof bootstrapModule.extractAliceBootstrapSelectedNamespaceIds,
+    "function",
+  );
+  const selectedVersionIds = {
+    access: "11111111-1111-4111-8111-111111111111",
+    control: observedControlVersionId,
+    statePlane: statePlaneVersionId,
+    connectorPlane: connectorPlaneVersionId,
+  };
+  const selectedVersions = {
+    access: {
+      id: selectedVersionIds.access,
+      resources: { bindings: [{
+        type: "durable_object_namespace",
+        name: "ALICE_RUNTIME_CONTAINER",
+        class_name: "AliceRuntimeContainer",
+        namespace_id: "5".repeat(32),
+      }] },
+    },
+    control: observedControlVersion,
+    aiGateway: null,
+    statePlane: statePlaneVersion,
+    connectorPlane: connectorPlaneVersion,
+  };
+  assert.deepEqual(
+    bootstrapModule.extractAliceBootstrapSelectedNamespaceIds({
+      versionIds: selectedVersionIds,
+      versions: selectedVersions,
+    }).access,
+    [{
+      className: "AliceRuntimeContainer",
+      name: "ALICE_RUNTIME_CONTAINER",
+      namespaceId: "5".repeat(32),
+    }],
+  );
+  assert.throws(
+    () => bootstrapModule.extractAliceBootstrapSelectedNamespaceIds({
+      versionIds: selectedVersionIds,
+      versions: {
+        ...selectedVersions,
+        access: { ...selectedVersions.access, id: observedLegacyAccessVersionId },
+      },
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
+  );
+});
+
+test("orchestrates the rerun as one inactive Access upload with no promotion", async () => {
+  assert.equal(
+    typeof bootstrapModule.executeAliceBootstrapIdentityActions,
+    "function",
+  );
+  const stagedAccessVersionId = "11111111-1111-4111-8111-111111111111";
+  const stagedAccessVersion = {
+    id: stagedAccessVersionId,
+    resources: { bindings: [{
+      type: "durable_object_namespace",
+      name: "ALICE_RUNTIME_CONTAINER",
+      class_name: "AliceRuntimeContainer",
+      namespace_id: "5".repeat(32),
+    }] },
+  };
+  const provider = {
+    activeVersionIds: {
+      access: observedLegacyAccessVersionId,
+      control: observedControlVersionId,
+      statePlane: statePlaneVersionId,
+      connectorPlane: connectorPlaneVersionId,
+    },
+    traffic: structuredClone(observedTraffic),
+  };
+  const commands = [];
+  const result = await bootstrapModule.executeAliceBootstrapIdentityActions({
+    identityActions: {
+      access: { upload: "inactive", promote: false },
+      control: { upload: "none", promote: false },
+      statePlane: { upload: "none", promote: false },
+      connectorPlane: { upload: "none", promote: false },
+    },
+    versionIds: provider.activeVersionIds,
+    bootstrapIdentityConfigs: {
+      access: {
+        configPath: "/release/access.bootstrap.wrangler.json",
+        deploymentMainPath: "/release/alice-access-gateway/index.js",
+      },
+      control: {
+        configPath: "/release/control.bootstrap.wrangler.json",
+        deploymentMainPath: "/release/alice-production-control/index.js",
+      },
+      statePlane: {
+        configPath: "/release/statePlane.bootstrap.wrangler.json",
+        deploymentMainPath: "/release/alice-state-plane/index.js",
+      },
+      connectorPlane: {
+        configPath: "/release/connectorPlane.bootstrap.wrangler.json",
+        deploymentMainPath: "/release/alice-connector-plane/index.js",
+      },
+    },
+    wranglerBin: "/release/wrangler",
+    sourceRoot: "/release/source",
+    sourceCommit: "1".repeat(40),
+    releaseRunId: "33244173579-1",
+    commandEnv: {},
+    runCommand: (_binary, argv) => {
+      commands.push(argv);
+      if (argv[0] === "versions" && argv[1] === "upload") {
+        return `Worker Version ID: ${stagedAccessVersionId}\n`;
+      }
+      if (argv[0] === "versions" && argv[1] === "deploy") {
+        const configPath = argv[argv.indexOf("--config") + 1];
+        const role = Object.keys(provider.activeVersionIds).find((candidate) =>
+          configPath.includes(candidate)
+        );
+        provider.activeVersionIds[role] = argv[argv.indexOf("--version-id") + 1];
+        return "";
+      }
+      throw new Error("unexpected identity command");
+    },
+    fetchVersion: async ({ role, versionId }) => ({
+      access: stagedAccessVersion,
+      control: observedControlVersion,
+      statePlane: statePlaneVersion,
+      connectorPlane: connectorPlaneVersion,
+    })[role]?.id === versionId
+      ? ({
+          access: stagedAccessVersion,
+          control: observedControlVersion,
+          statePlane: statePlaneVersion,
+          connectorPlane: connectorPlaneVersion,
+        })[role]
+      : null,
+    fetchActiveVersionId: async (role) => provider.activeVersionIds[role],
+    fetchTraffic: async () => structuredClone(provider.traffic),
+    trafficBefore: observedTraffic,
+  });
+  assert.equal(result.versionIds.access, stagedAccessVersionId);
+  assert.deepEqual(result.createdRoles, []);
+  assert.deepEqual(
+    commands.map((argv) => argv.slice(0, 3)),
+    [["versions", "upload", "/release/alice-access-gateway/index.js"]],
+  );
+  assert.deepEqual(result.namespaceIds.access, [{
+    className: "AliceRuntimeContainer",
+    name: "ALICE_RUNTIME_CONTAINER",
+    namespaceId: "5".repeat(32),
+  }]);
+  assert.equal(
+    provider.activeVersionIds.access,
+    observedLegacyAccessVersionId,
+  );
+  assert.deepEqual(provider.traffic, observedTraffic);
+});
+
+test("checks the inactive Access boundary after first-deploy promotions", async () => {
+  assert.equal(
+    typeof bootstrapModule.executeAliceBootstrapIdentityActions,
+    "function",
+  );
+  const stagedAccessVersionId = "11111111-1111-4111-8111-111111111111";
+  const selectedVersions = {
+    access: {
+      id: stagedAccessVersionId,
+      resources: { bindings: [{
+        type: "durable_object_namespace",
+        name: "ALICE_RUNTIME_CONTAINER",
+        class_name: "AliceRuntimeContainer",
+        namespace_id: "5".repeat(32),
+      }] },
+    },
+    control: observedControlVersion,
+    statePlane: statePlaneVersion,
+    connectorPlane: connectorPlaneVersion,
+  };
+  const activeVersionIds = {
+    access: observedLegacyAccessVersionId,
+    control: observedControlVersionId,
+    statePlane: null,
+    connectorPlane: connectorPlaneVersionId,
+  };
+  const providerTraffic = structuredClone(observedTraffic);
+  await assert.rejects(
+    bootstrapModule.executeAliceBootstrapIdentityActions({
+      identityActions: {
+        access: { upload: "inactive", promote: false },
+        control: { upload: "none", promote: false },
+        statePlane: { upload: "first-deploy", promote: true },
+        connectorPlane: { upload: "none", promote: false },
+      },
+      versionIds: activeVersionIds,
+      bootstrapIdentityConfigs: {
+        access: {
+          configPath: "/release/access.bootstrap.wrangler.json",
+          deploymentMainPath: "/release/alice-access-gateway/index.js",
+        },
+        control: {
+          configPath: "/release/control.bootstrap.wrangler.json",
+          deploymentMainPath: "/release/alice-production-control/index.js",
+        },
+        statePlane: {
+          configPath: "/release/statePlane.bootstrap.wrangler.json",
+          deploymentMainPath: "/release/alice-state-plane/index.js",
+        },
+        connectorPlane: {
+          configPath: "/release/connectorPlane.bootstrap.wrangler.json",
+          deploymentMainPath: "/release/alice-connector-plane/index.js",
+        },
+      },
+      wranglerBin: "/release/wrangler",
+      sourceRoot: "/release/source",
+      sourceCommit: "1".repeat(40),
+      releaseRunId: "33244173579-1",
+      commandEnv: {},
+      runCommand: (_binary, argv) => {
+        if (argv[0] === "deploy") {
+          activeVersionIds.statePlane = statePlaneVersionId;
+          return `Current Version ID: ${statePlaneVersionId}\n`;
+        }
+        if (argv[0] === "versions" && argv[1] === "upload") {
+          return `Worker Version ID: ${stagedAccessVersionId}\n`;
+        }
+        if (argv[0] === "versions" && argv[1] === "deploy") {
+          providerTraffic.routes[0].script = "unexpected-traffic-change";
+          return "";
+        }
+        throw new Error("unexpected identity command");
+      },
+      fetchVersion: async ({ role, versionId }) =>
+        selectedVersions[role]?.id === versionId
+          ? selectedVersions[role]
+          : null,
+      fetchActiveVersionId: async (role) => activeVersionIds[role],
+      fetchTraffic: async () => structuredClone(providerTraffic),
+      trafficBefore: observedTraffic,
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_INACTIVE_ACCESS_BOUNDARY_INVALID/,
+  );
+});
+
+test("requires the staged Access upload to preserve the active version and traffic exactly", () => {
+  assert.equal(
+    typeof bootstrapModule.verifyAliceBootstrapInactiveAccessBoundary,
+    "function",
+  );
+  assert.doesNotThrow(() =>
+    bootstrapModule.verifyAliceBootstrapInactiveAccessBoundary({
+      previousActiveVersionId: observedLegacyAccessVersionId,
+      currentActiveVersionId: observedLegacyAccessVersionId,
+      trafficBefore: observedTraffic,
+      trafficAfter: structuredClone(observedTraffic),
+    })
+  );
+  for (const changed of [
+    {
+      currentActiveVersionId: "11111111-1111-4111-8111-111111111111",
+      trafficAfter: observedTraffic,
+    },
+    {
+      currentActiveVersionId: observedLegacyAccessVersionId,
+      trafficAfter: {
+        ...observedTraffic,
+        routes: [{ ...observedTraffic.routes[0], script: "other-worker" }],
+      },
+    },
+  ]) {
+    assert.throws(
+      () => bootstrapModule.verifyAliceBootstrapInactiveAccessBoundary({
+        previousActiveVersionId: observedLegacyAccessVersionId,
+        currentActiveVersionId: changed.currentActiveVersionId,
+        trafficBefore: observedTraffic,
+        trafficAfter: changed.trafficAfter,
+      }),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_INACTIVE_ACCESS_BOUNDARY_INVALID/,
+    );
+  }
+});
+
+test("fails closed instead of staging partial or wrong continuity bindings", () => {
+  assert.equal(
+    typeof bootstrapModule.planAliceBootstrapIdentityActions,
+    "function",
+  );
+  for (const bindings of [
+    [null],
+    [{
+      type: "durable_object_namespace",
+      name: "ALICE_RUNTIME_CONTAINER",
+      class_name: "AliceRuntimeContainer",
+    }],
+    [{
+      type: "durable_object_namespace",
+      name: "ALICE_RUNTIME_CONTAINER",
+      class_name: "WrongRuntimeContainer",
+      namespace_id: "5".repeat(32),
+    }],
+    [{
+      type: "plain_text",
+      name: "ALICE_RUNTIME_CONTAINER",
+      text: "wrong-binding-type",
+    }],
+    [
+      {
+        type: "durable_object_namespace",
+        name: "ALICE_RUNTIME_CONTAINER",
+        class_name: "AliceRuntimeContainer",
+        namespace_id: "5".repeat(32),
+      },
+      {
+        type: "plain_text",
+        name: "ALICE_RUNTIME_CONTAINER",
+        text: "colliding-binding",
+      },
+    ],
+  ]) {
+    assert.throws(
+      () => bootstrapModule.planAliceBootstrapIdentityActions({
+        activeVersionIds: {
+          access: observedLegacyAccessVersionId,
+          control: null,
+          statePlane: null,
+          connectorPlane: null,
+        },
+        activeVersions: {
+          access: {
+            ...observedLegacyAccessVersion,
+            resources: { bindings },
+          },
+          control: null,
+          statePlane: null,
+          connectorPlane: null,
+        },
+      }),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/,
+    );
+  }
+});
+
 test("materializes only inert unrouted pre-release Worker identities", () => {
   assert.equal(
     typeof bootstrapModule.buildAliceBootstrapPrivateWorkerConfig,
@@ -289,10 +843,10 @@ test("deploys the unrouted fail-closed bootstrap before attaching one paused con
   assert.ok(main.indexOf("fetchAliceBootstrapResourceSnapshot") >= 0);
   assert.ok(main.indexOf("verifyProtectedRefStillExact") >= 0);
   assert.ok(main.indexOf("verifyProtectedRefStillExact") < main.indexOf("ensureAliceBootstrapQueue"));
-  assert.ok(main.indexOf("buildAliceBootstrapPromotionCommand") >= 0);
-  assert.ok(main.indexOf("buildAliceBootstrapCreationCommand") >= 0);
-  assert.ok(main.indexOf("buildAliceBootstrapCreationCommand") < main.indexOf("ensureConsumer"));
-  assert.ok(main.indexOf("buildAliceBootstrapPromotionCommand") < main.indexOf("ensureConsumer"));
+  assert.ok(main.indexOf("planAliceBootstrapIdentityActions") >= 0);
+  assert.ok(main.indexOf("planAliceBootstrapIdentityActions") < main.indexOf("ensureAliceBootstrapQueue"));
+  assert.ok(main.indexOf("executeAliceBootstrapIdentityActions") >= 0);
+  assert.ok(main.indexOf("executeAliceBootstrapIdentityActions") < main.indexOf("ensureConsumer"));
   assert.ok(main.indexOf("ensureConsumer") < main.indexOf("fetchAliceCloudflareContinuityState"));
 });
 
