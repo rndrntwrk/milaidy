@@ -486,10 +486,12 @@ test("preserves the exact external Access reference to the runtimeHost namespace
   }
 });
 
-test("normalizes the exact max-one runtimeHost application with zero runtime instances", () => {
+test("normalizes the pre-mutation runtimeHost application against its current image", () => {
   const namespaceId = "5".repeat(32);
   const image =
     `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"4".repeat(64)}`;
+  const candidateImage =
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"5".repeat(64)}`;
   const application = {
     id: "55555555-5555-4555-8555-555555555555",
     account_id: "036df6c823669b8fa2f66cf4c16eeb29",
@@ -529,7 +531,7 @@ test("normalizes the exact max-one runtimeHost application with zero runtime ins
     account_id: application.account_id,
     containers: [{
       class_name: "AliceRuntimeContainer",
-      image,
+      image: candidateImage,
       instance_type: "standard-1",
       max_instances: 1,
       name: application.name,
@@ -545,6 +547,7 @@ test("normalizes the exact max-one runtimeHost application with zero runtime ins
     verifyAliceContainerApplicationReadback({
       application,
       applicationInstances: [],
+      expectedApplicationImage: image,
       materializedWranglerConfig: config,
       expectedNamespaceId: namespaceId,
     }),
@@ -586,6 +589,7 @@ test("normalizes the exact max-one runtimeHost application with zero runtime ins
       () => verifyAliceContainerApplicationReadback({
         application: substituted,
         applicationInstances: [],
+        expectedApplicationImage: image,
         materializedWranglerConfig: config,
         expectedNamespaceId: namespaceId,
       }),
@@ -596,6 +600,7 @@ test("normalizes the exact max-one runtimeHost application with zero runtime ins
     () => verifyAliceContainerApplicationReadback({
       application,
       applicationInstances: [{ id: "unexpected-running-instance" }],
+      expectedApplicationImage: image,
       materializedWranglerConfig: config,
       expectedNamespaceId: namespaceId,
     }),

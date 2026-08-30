@@ -29,6 +29,8 @@ const NAMESPACE_ID = /^[a-f0-9]{32}$/;
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const SCRIPT_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const CLOUDFLARE_CONTAINER_IMAGE =
+  /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
 const ROLES = [
   "access",
   "control",
@@ -326,10 +328,12 @@ function expectedDurableObjectNamespaceIds(config, expected) {
 export function verifyAliceContainerApplicationReadback({
   application,
   applicationInstances,
+  expectedApplicationImage,
   materializedWranglerConfig,
   expectedNamespaceId,
 }) {
   const container = materializedWranglerConfig?.containers?.[0];
+  const expectedImage = expectedApplicationImage ?? container?.image;
   const durableObjectBindings =
     materializedWranglerConfig?.durable_objects?.bindings;
   const health = application?.health?.instances;
@@ -361,7 +365,8 @@ export function verifyAliceContainerApplicationReadback({
     application.scheduling_policy !== "default" ||
     application.instances !== 1 ||
     application.max_instances !== container.max_instances ||
-    application.configuration?.image !== container.image ||
+    !CLOUDFLARE_CONTAINER_IMAGE.test(expectedImage ?? "") ||
+    application.configuration?.image !== expectedImage ||
     application.configuration?.vcpu !== 0.5 ||
     application.configuration?.memory_mib !== 4096 ||
     application.configuration?.disk?.size_mb !== 8000 ||
