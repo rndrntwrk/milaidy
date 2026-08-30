@@ -56,6 +56,17 @@ jobs:
         working-directory: eliza
         run: bun install --ignore-scripts --frozen-lockfile
 
+      - name: Build declared auth typecheck prerequisites
+        working-directory: eliza
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run --cwd packages/shared build
+          bun run --cwd packages/cloud/routing build
+          test -f packages/shared/dist/contracts/first-run-options.d.ts
+          test -f packages/cloud/routing/dist/index.d.ts
+          test -f packages/core/src/i18n/generated/validation-keyword-data.ts
+
       - name: Run focused auth durability tests
         working-directory: eliza
         shell: bash
