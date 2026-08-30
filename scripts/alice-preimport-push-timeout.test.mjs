@@ -9,6 +9,10 @@ const workflow = fs.readFileSync(
   new URL("../.github/workflows/alice-cloudflare-container-bringup.yml", import.meta.url),
   "utf8",
 );
+const watchdogWorkflow = fs.readFileSync(
+  new URL("../.github/workflows/recover-alice-production-watchdog.yml", import.meta.url),
+  "utf8",
+);
 
 function identityRetryLoop(stepName) {
   const escapedName = stepName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -83,8 +87,15 @@ test("pre-import reserves enough exact watchdog parent-selection runway before m
     /- name: Enforce exact source build watchdog and artifact identity[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
   assert.match(admission, /Select one exact parent deployment/);
-  assert.match(admission, /5400/);
+  assert.equal(
+    [...workflow.matchAll(/watchdog_remaining_seconds=\$\(\( 7200 -/g)].length,
+    2,
+  );
   assert.match(admission, /MINIMUM_WATCHDOG_RUNWAY_SECONDS:\s*1800/);
+  assert.match(
+    watchdogWorkflow,
+    /for attempt in \$\(seq 1 480\)[\s\S]*?sleep 15/,
+  );
   assert.match(
     admission,
     /runs\/\$\{RECOVERY_WATCHDOG_RUN_ID\}\/jobs\?filter=latest/,
