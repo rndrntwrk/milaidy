@@ -1,0 +1,86 @@
+name: Alice Codex Auth CI
+
+on:
+  push:
+    branches:
+      - codex/alice-openai-codex-durable-auth-2026-08-29
+    paths:
+      - eliza
+      - .github/workflows/alice-codex-auth-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alice-codex-auth-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  eliza-auth:
+    name: Exact Eliza auth contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out parent identity
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Resolve exact Eliza gitlink
+        id: eliza
+        shell: bash
+        run: |
+          set -euo pipefail
+          ELIZA_SHA="$(git ls-tree HEAD eliza | awk '{print $3}')"
+          test "${#ELIZA_SHA}" -eq 40
+          printf 'sha=%s\n' "$ELIZA_SHA" >> "$GITHUB_OUTPUT"
+          printf 'Exact Eliza gitlink: %s\n' "$ELIZA_SHA"
+
+      - name: Check out exact Eliza source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: rndrntwrk/eliza
+          ref: ${{ steps.eliza.outputs.sha }}
+          path: eliza
+          fetch-depth: 1
+          submodules: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install exact Eliza lockfile
+        working-directory: eliza
+        run: bun install --ignore-scripts --frozen-lockfile
+
+      - name: Run focused auth durability tests
+        working-directory: eliza
+        run: |
+          bunx vitest run \
+            packages/auth/src/credential-durability.test.ts \
+            packages/auth/src/credential-snapshot.test.ts \
+            --coverage.enabled=false
+
+      - name: Typecheck auth package
+        working-directory: eliza/packages/auth
+        run: bun run typecheck
+
+      - name: Check changed auth source formatting
+        working-directory: eliza
+        run: |
+          FILES=(
+            packages/auth/src/credential-durability.ts
+            packages/auth/src/credential-durability.test.ts
+            packages/auth/src/credential-snapshot.ts
+            packages/auth/src/credential-snapshot.test.ts
+            packages/auth/src/index.ts
+          )
+          PRESENT=()
+          for file in "${FILES[@]}"; do
+            if [ -f "$file" ]; then PRESENT+=("$file"); fi
+          done
+          test "${#PRESENT[@]}" -gt 0
+          bunx @biomejs/biome check "${PRESENT[@]}"
