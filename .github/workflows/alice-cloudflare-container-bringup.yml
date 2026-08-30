@@ -322,8 +322,24 @@ jobs:
           local_image="alice-runtime:${runtime_tag}"
           registry_tag="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/alice-runtime:${runtime_tag}"
           docker tag "$SOURCE_RUNTIME_IMAGE" "$local_image"
+          docker tag "$local_image" "$registry_tag"
+          registry_credentials="$("$WRANGLER" containers registries credentials registry.cloudflare.com \
+            --push \
+            --pull \
+            --expiration-minutes 45 \
+            --json)"
+          registry_username="$(printf '%s' "$registry_credentials" | jq -er \
+            '.username | select(type == "string" and length > 0 and (test("[\\r\\n]") | not))')"
+          registry_password="$(printf '%s' "$registry_credentials" | jq -er \
+            '.password | select(type == "string" and length > 0 and (test("[\\r\\n]") | not))')"
+          printf '%s' "$registry_password" | docker login registry.cloudflare.com \
+            --username "$registry_username" \
+            --password-stdin
+          registry_credentials=""
+          registry_password=""
+          unset registry_credentials registry_password
           timeout --signal=TERM --kill-after=30s 2400s \
-            "$WRANGLER" containers push "$local_image"
+            docker push "$registry_tag"
           repository_digests="$(docker image inspect "$registry_tag" \
             --format '{{json .RepoDigests}}')"
           local_runtime_image="$(printf '%s' "$repository_digests" | jq -er \

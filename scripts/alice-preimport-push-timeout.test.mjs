@@ -76,12 +76,21 @@ test("pre-import reserves enough exact watchdog parent-selection runway before m
   );
   const pushTimeout = Number(
     importJob.match(
-      /timeout\s+--signal=TERM\s+--kill-after=30s\s+(\d+)s[\s\\]+"\$WRANGLER"\s+containers push/,
+      /timeout\s+--signal=TERM\s+--kill-after=30s\s+(\d+)s[\s\\]+docker push "\$registry_tag"/,
     )?.[1],
   );
   assert.ok(Number.isInteger(jobTimeout) && jobTimeout >= 60);
   assert.ok(Number.isInteger(pushTimeout) && pushTimeout >= 2400);
   assert.ok(pushTimeout < jobTimeout * 60);
+  assert.match(
+    importJob,
+    /containers registries credentials registry\.cloudflare\.com[\s\\]+--push[\s\\]+--pull[\s\\]+--expiration-minutes 45[\s\\]+--json/,
+  );
+  assert.match(
+    importJob,
+    /docker login registry\.cloudflare\.com[\s\\]+--username "\$registry_username"[\s\\]+--password-stdin/,
+  );
+  assert.doesNotMatch(importJob, /"\$WRANGLER" containers push/);
 
   const admission = workflow.match(
     /- name: Enforce exact source build watchdog and artifact identity[\s\S]*?(?=\n      - name:)/,
