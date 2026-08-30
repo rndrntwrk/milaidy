@@ -167,9 +167,11 @@ export function verifyAliceRouteSecretClosure(
     !exactRequiredSecrets(configs.control, [
       "ALICE_ACCESS_GATEWAY_SERVICE_TOKEN",
       "ALICE_AI_GATEWAY_SERVICE_TOKEN",
+      "ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN",
       "ALICE_CONTROL_RECOVERY_TOKEN",
       "ALICE_DEPLOYMENT_PAUSE_TOKEN",
       "ALICE_EVIDENCE_QUEUE_HMAC_KEY",
+      "ALICE_STATE_PLANE_SERVICE_TOKEN",
     ]) ||
     !exactRequiredSecrets(configs.aiGateway, [
       "ALICE_AI_CONTROL_SERVICE_TOKEN",
