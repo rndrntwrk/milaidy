@@ -25,10 +25,12 @@ const configs = {
     secrets: {
       required: [
         "ALICE_CONTROL_RECOVERY_TOKEN",
+        "ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN",
         "ALICE_DEPLOYMENT_PAUSE_TOKEN",
         "ALICE_EVIDENCE_QUEUE_HMAC_KEY",
         "ALICE_ACCESS_GATEWAY_SERVICE_TOKEN",
         "ALICE_AI_GATEWAY_SERVICE_TOKEN",
+        "ALICE_STATE_PLANE_SERVICE_TOKEN",
       ],
     },
   },
