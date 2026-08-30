@@ -136,7 +136,7 @@ jobs:
           set -euo pipefail
           expected_title="Alice production deploy watchdog-${GITHUB_RUN_ID}"
           parent_json=''
-          for attempt in $(seq 1 360)
+          for attempt in $(seq 1 480)
           do
             runs_json="$(gh api --paginate --slurp \
               "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-alice-cloudflare.yml/runs?branch=release%2Falice-production-core-2026-08-22&event=workflow_dispatch&per_page=100")"

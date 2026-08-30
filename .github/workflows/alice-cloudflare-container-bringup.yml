@@ -205,7 +205,7 @@ jobs:
           parent_started_at="$(printf '%s' "$parent_steps" | jq -r '.[0].started_at')"
           parent_started_epoch="$(date -u -d "$parent_started_at" +%s)"
           now_epoch="$(date -u +%s)"
-          watchdog_remaining_seconds=$(( 5400 - (now_epoch - parent_started_epoch) ))
+          watchdog_remaining_seconds=$(( 7200 - (now_epoch - parent_started_epoch) ))
           test "$watchdog_remaining_seconds" -ge "$MINIMUM_WATCHDOG_RUNWAY_SECONDS"
 
           run_json="$(gh api \
@@ -463,7 +463,7 @@ jobs:
           parent_started_at="$(printf '%s' "$parent_steps" | jq -r '.[0].started_at')"
           parent_started_epoch="$(date -u -d "$parent_started_at" +%s)"
           now_epoch="$(date -u +%s)"
-          watchdog_remaining_seconds=$(( 5400 - (now_epoch - parent_started_epoch) ))
+          watchdog_remaining_seconds=$(( 7200 - (now_epoch - parent_started_epoch) ))
           test "$watchdog_remaining_seconds" -ge "$MINIMUM_WATCHDOG_RUNWAY_SECONDS"
 
           run_json="$(gh api \
