@@ -1,3 +1,4 @@
+export * from "./alice-credential-state.js";
 export * from "./apps.js";
 export * from "./avatar-speech.js";
 export * from "./awareness.js";
