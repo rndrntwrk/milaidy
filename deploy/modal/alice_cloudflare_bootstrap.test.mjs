@@ -525,6 +525,230 @@ test("extracts the Access namespace from the selected staged version only", () =
   );
 });
 
+test("binds the inactive Access selection and revalidates the exact provider phase twice", async () => {
+  const sourceCommit = "4b82f4f28ec704077da7fb416d163286bfe00a8d";
+  const stagedAccessVersionId = "97d7d9c2-471f-47ee-ac5d-5cda28b66fac";
+  const activeDeploymentIds = {
+    access: "a30d90f6-f666-47b5-b250-8825d40c9b9b",
+    runtimeHost: "66666666-6666-4666-8666-666666666666",
+    control: "77777777-7777-4777-8777-777777777777",
+    statePlane: "88888888-8888-4888-8888-888888888888",
+    connectorPlane: "99999999-9999-4999-8999-999999999999",
+  };
+  const activeVersionIds = {
+    access: observedLegacyAccessVersionId,
+    runtimeHost: runtimeHostVersionId,
+    control: observedControlVersionId,
+    statePlane: statePlaneVersionId,
+    connectorPlane: connectorPlaneVersionId,
+  };
+  const selectedVersionIds = {
+    ...activeVersionIds,
+    access: stagedAccessVersionId,
+  };
+  const activeIdentities = Object.fromEntries(
+    Object.keys(activeVersionIds).map((role) => [role, {
+      deploymentId: activeDeploymentIds[role],
+      versionId: activeVersionIds[role],
+    }]),
+  );
+  const routesSha256 = `sha256:${crypto.createHash("sha256").update(
+    JSON.stringify(observedTraffic.routes),
+  ).digest("hex")}`;
+  const customDomainsSha256 = `sha256:${crypto.createHash("sha256").update(
+    JSON.stringify(observedTraffic.customDomains),
+  ).digest("hex")}`;
+  const boundary = bootstrapModule.buildAliceBootstrapVersionBoundary({
+    sourceCommit,
+    producerRun: { id: "33290617560", attempt: 1 },
+    identityActions: {
+      access: { upload: "inactive", promote: false },
+      runtimeHost: { upload: "none", promote: false },
+      control: { upload: "none", promote: false },
+      statePlane: { upload: "none", promote: false },
+      connectorPlane: { upload: "none", promote: false },
+    },
+    versionIds: selectedVersionIds,
+    activeBefore: activeIdentities,
+    activeAfter: structuredClone(activeIdentities),
+    trafficBefore: observedTraffic,
+    trafficAfter: structuredClone(observedTraffic),
+  });
+  assert.equal(
+    boundary.schemaVersion,
+    "alice.cloudflare-bootstrap-version-boundary.v1",
+  );
+  assert.equal(boundary.sourceCommit, sourceCommit);
+  assert.deepEqual(boundary.producerRun, { id: "33290617560", attempt: 1 });
+  assert.deepEqual(boundary.traffic, {
+    routesSha256Before: routesSha256,
+    routesSha256After: routesSha256,
+    customDomainsSha256Before: customDomainsSha256,
+    customDomainsSha256After: customDomainsSha256,
+  });
+  assert.equal(
+    boundary.roles.access.bootstrapSelectedVersionId,
+    stagedAccessVersionId,
+  );
+  assert.equal(
+    boundary.roles.access.activeVersionIdAfter,
+    observedLegacyAccessVersionId,
+  );
+  for (const role of ["runtimeHost", "control", "statePlane", "connectorPlane"]) {
+    assert.equal(
+      boundary.roles[role].bootstrapSelectedVersionId,
+      boundary.roles[role].activeVersionIdAfter,
+    );
+  }
+
+  const selectedVersions = {
+    access: {
+      id: stagedAccessVersionId,
+      resources: { bindings: [{
+        type: "durable_object_namespace",
+        name: "ALICE_RUNTIME_CONTAINER",
+        class_name: "AliceRuntimeContainer",
+        script_name: "alice-runtime-container-host",
+        namespace_id: "5".repeat(32),
+      }] },
+    },
+    runtimeHost: runtimeHostVersion,
+    control: observedControlVersion,
+    statePlane: statePlaneVersion,
+    connectorPlane: connectorPlaneVersion,
+  };
+  const capture = {
+    versions: selectedVersions,
+    activeDeployments: Object.fromEntries(
+      Object.keys(activeVersionIds).map((role) => [role, {
+        deployments: [{
+          id: activeDeploymentIds[role],
+          versions: [{ version_id: activeVersionIds[role], percentage: 100 }],
+        }],
+      }]),
+    ),
+    traffic: structuredClone(observedTraffic),
+  };
+  let captures = 0;
+  const namespaceIds = await bootstrapModule
+    .revalidateAliceBootstrapVersionBoundaryCurrent({
+      boundary,
+      captureCurrent: async () => {
+        captures += 1;
+        return structuredClone(capture);
+      },
+    });
+  assert.equal(captures, 2);
+  assert.equal(namespaceIds.access[0].namespaceId, "5".repeat(32));
+  assert.equal(
+    namespaceIds.access[0].namespaceId,
+    namespaceIds.runtimeHost[0].namespaceId,
+  );
+});
+
+test("rejects bootstrap phase drift, unsafe plans, extra fields, and changing captures", async () => {
+  const base = {
+    sourceCommit: "4b82f4f28ec704077da7fb416d163286bfe00a8d",
+    producerRun: { id: "33290617560", attempt: 1 },
+    identityActions: {
+      access: { upload: "inactive", promote: false },
+      runtimeHost: { upload: "none", promote: false },
+      control: { upload: "none", promote: false },
+      statePlane: { upload: "none", promote: false },
+      connectorPlane: { upload: "none", promote: false },
+    },
+    versionIds: {
+      access: "97d7d9c2-471f-47ee-ac5d-5cda28b66fac",
+      runtimeHost: runtimeHostVersionId,
+      control: observedControlVersionId,
+      statePlane: statePlaneVersionId,
+      connectorPlane: connectorPlaneVersionId,
+    },
+    activeBefore: {
+      access: {
+        deploymentId: "a30d90f6-f666-47b5-b250-8825d40c9b9b",
+        versionId: observedLegacyAccessVersionId,
+      },
+      runtimeHost: {
+        deploymentId: "66666666-6666-4666-8666-666666666666",
+        versionId: runtimeHostVersionId,
+      },
+      control: {
+        deploymentId: "77777777-7777-4777-8777-777777777777",
+        versionId: observedControlVersionId,
+      },
+      statePlane: {
+        deploymentId: "88888888-8888-4888-8888-888888888888",
+        versionId: statePlaneVersionId,
+      },
+      connectorPlane: {
+        deploymentId: "99999999-9999-4999-8999-999999999999",
+        versionId: connectorPlaneVersionId,
+      },
+    },
+    trafficBefore: observedTraffic,
+    trafficAfter: structuredClone(observedTraffic),
+  };
+  base.activeAfter = structuredClone(base.activeBefore);
+  for (const [input, expectedError] of [
+    [{
+      ...base,
+      versionIds: {
+        ...base.versionIds,
+        access: observedLegacyAccessVersionId,
+      },
+    }, /ALICE_CLOUDFLARE_BOOTSTRAP_VERSION_BOUNDARY_INVALID/],
+    [{
+      ...base,
+      identityActions: {
+        ...base.identityActions,
+        statePlane: { upload: "first-deploy", promote: true },
+      },
+    }, /ALICE_BOOTSTRAP_PLAN_DRIFT/],
+    [{
+      ...base,
+      activeAfter: {
+        ...base.activeAfter,
+        control: {
+          ...base.activeAfter.control,
+          versionId: "11111111-1111-4111-8111-111111111111",
+        },
+      },
+    }, /ALICE_CLOUDFLARE_BOOTSTRAP_VERSION_BOUNDARY_INVALID/],
+  ]) {
+    assert.throws(
+      () => bootstrapModule.buildAliceBootstrapVersionBoundary(input),
+      expectedError,
+    );
+  }
+  const boundary = bootstrapModule.buildAliceBootstrapVersionBoundary(base);
+  assert.throws(
+    () => bootstrapModule.verifyAliceBootstrapVersionBoundary({
+      ...boundary,
+      secret: "must-never-be-admitted",
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_VERSION_BOUNDARY_INVALID/,
+  );
+  const emptyCapture = {
+    versions: {},
+    activeDeployments: {},
+    traffic: structuredClone(observedTraffic),
+  };
+  let attempt = 0;
+  await assert.rejects(
+    bootstrapModule.revalidateAliceBootstrapVersionBoundaryCurrent({
+      boundary,
+      captureCurrent: async () => {
+        attempt += 1;
+        return attempt === 1
+          ? emptyCapture
+          : { ...emptyCapture, traffic: { routes: [], customDomains: [] } };
+      },
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_CAPTURE_DRIFT/,
+  );
+});
+
 test("full-deploys the unrouted runtime host before one inactive Access upload", async () => {
   assert.equal(
     typeof bootstrapModule.executeAliceBootstrapIdentityActions,
@@ -673,6 +897,7 @@ test("full-deploys the unrouted runtime host before one inactive Access upload",
     observedLegacyAccessVersionId,
   );
   assert.deepEqual(provider.traffic, observedTraffic);
+  assert.deepEqual(result.trafficAfter, observedTraffic);
 });
 
 test("checks the inactive Access boundary after first-deploy promotions", async () => {
@@ -993,7 +1218,7 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
   }
 });
 
-test("deploys the unrouted fail-closed bootstrap before attaching one paused consumer", () => {
+test("retains bootstrap commands while pre-import never creates continuity resources", () => {
   assert.deepEqual(
     buildAliceBootstrapCreationCommand({
       controlMain: "/release/alice-production-control/index.js",
@@ -1040,12 +1265,20 @@ test("deploys the unrouted fail-closed bootstrap before attaching one paused con
   const main = source.slice(source.indexOf("async function main()"));
   assert.ok(main.indexOf("fetchAliceBootstrapResourceSnapshot") >= 0);
   assert.ok(main.indexOf("verifyProtectedRefStillExact") >= 0);
-  assert.ok(main.indexOf("verifyProtectedRefStillExact") < main.indexOf("ensureAliceBootstrapQueue"));
   assert.ok(main.indexOf("planAliceBootstrapIdentityActions") >= 0);
-  assert.ok(main.indexOf("planAliceBootstrapIdentityActions") < main.indexOf("ensureAliceBootstrapQueue"));
+  assert.ok(
+    main.indexOf("verifyAliceBootstrapPreimportContinuity") <
+      main.indexOf("executeAliceBootstrapIdentityActions"),
+  );
   assert.ok(main.indexOf("executeAliceBootstrapIdentityActions") >= 0);
-  assert.ok(main.indexOf("executeAliceBootstrapIdentityActions") < main.indexOf("ensureConsumer"));
-  assert.ok(main.indexOf("ensureConsumer") < main.indexOf("fetchAliceCloudflareContinuityState"));
+  assert.doesNotMatch(
+    main,
+    /ensureAliceBootstrapQueue|ensureBucketAndSentinel|ensureConsumer/,
+  );
+  assert.ok(
+    main.indexOf("executeAliceBootstrapIdentityActions") <
+      main.indexOf("fetchAliceCloudflareContinuityState"),
+  );
 });
 
 test("parses only one exact pinned-Wrangler first-deploy version", () => {
@@ -1274,6 +1507,64 @@ test("accepts only Cloudflare's unambiguous Queue consumer script field", () => 
   }
 });
 
+test("requires the exact existing continuity resources before pre-import mutation", () => {
+  const queue = (queue_name, id) => ({
+    queue_id: id.repeat(32),
+    queue_name,
+    settings: {
+      delivery_delay: 0,
+      delivery_paused: true,
+      message_retention_period: 86_400,
+    },
+  });
+  const consumer = {
+    consumer_id: "c".repeat(32),
+    queue_name: "alice-production-evidence-v1",
+    script: "alice-production-control",
+    type: "worker",
+    dead_letter_queue: "alice-production-evidence-dlq-v1",
+    settings: {
+      batch_size: 10,
+      max_concurrency: 1,
+      max_retries: 3,
+      max_wait_time_ms: 5_000,
+      retry_delay: 10,
+    },
+  };
+  const preflight = {
+    queues: {
+      evidence: queue("alice-production-evidence-v1", "a"),
+      deadLetter: queue("alice-production-evidence-dlq-v1", "b"),
+    },
+    consumers: { evidence: [consumer], deadLetter: [] },
+    bucket: {
+      name: "alice-production-evidence",
+      jurisdiction: "default",
+      location: "ENAM",
+      storage_class: "Standard",
+    },
+    sentinelObjects: [{ key: "alice-continuity.json" }],
+    sentinelBodyVerified: true,
+  };
+
+  assert.deepEqual(
+    bootstrapModule.verifyAliceBootstrapPreimportContinuity(preflight),
+    { evidenceQueue: preflight.queues.evidence },
+  );
+  for (const invalidPreflight of [
+    { ...preflight, queues: { ...preflight.queues, evidence: null } },
+    { ...preflight, consumers: { ...preflight.consumers, evidence: [] } },
+    { ...preflight, bucket: null },
+    { ...preflight, sentinelObjects: [] },
+    { ...preflight, sentinelBodyVerified: false },
+  ]) {
+    assert.throws(
+      () => bootstrapModule.verifyAliceBootstrapPreimportContinuity(invalidPreflight),
+      /ALICE_CLOUDFLARE_BOOTSTRAP_PREIMPORT_CONTINUITY_INVALID/,
+    );
+  }
+});
+
 test("snapshots every Alice provider surface twice before the first mutation", () => {
   const source = fs.readFileSync(
     new URL("./alice_cloudflare_bootstrap.mjs", import.meta.url),
@@ -1315,8 +1606,12 @@ test("snapshots every Alice provider surface twice before the first mutation", (
   const main = source.slice(source.indexOf("async function main()"));
   const first = main.indexOf("const preflightFirst = await fetchAliceBootstrapResourceSnapshot");
   const second = main.indexOf("const preflightSecond = await fetchAliceBootstrapResourceSnapshot");
-  const firstMutation = main.indexOf("ensureAliceBootstrapQueue");
-  assert.ok(first >= 0 && second > first && firstMutation > second);
+  const continuity = main.indexOf("verifyAliceBootstrapPreimportContinuity");
+  const firstMutation = main.indexOf("executeAliceBootstrapIdentityActions");
+  assert.ok(
+    first >= 0 && second > first && continuity > second &&
+      firstMutation > continuity,
+  );
   assert.match(main, /ALICE_CLOUDFLARE_BOOTSTRAP_PREFLIGHT_DRIFT/);
 });
 

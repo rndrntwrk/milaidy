@@ -78,6 +78,13 @@ const BOOTSTRAP_IDENTITY_ROLES = [
   "runtimeHost",
   "access",
 ];
+const BOOTSTRAP_VERSION_BOUNDARY_ROLES = [
+  "access",
+  "runtimeHost",
+  "control",
+  "statePlane",
+  "connectorPlane",
+];
 const ROLE_WORKERS = Object.freeze({
   access: ALICE_CLOUDFLARE_TARGET.accessWorker,
   runtimeHost: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
@@ -486,6 +493,47 @@ export function verifyAliceBootstrapBucket(bucket) {
     invalid();
   }
   return bucket;
+}
+
+export function verifyAliceBootstrapPreimportContinuity(snapshot) {
+  const verifyQueue = (queue, expectedName) => {
+    if (
+      !RESOURCE_ID.test(queue?.queue_id ?? "") ||
+      queue?.queue_name !== expectedName ||
+      queue?.settings?.delivery_paused !== true ||
+      queue?.settings?.delivery_delay !== 0 ||
+      queue?.settings?.message_retention_period !== 86_400
+    ) {
+      invalid("ALICE_CLOUDFLARE_BOOTSTRAP_PREIMPORT_CONTINUITY_INVALID");
+    }
+    return queue;
+  };
+  try {
+    const evidenceQueue = verifyQueue(
+      snapshot?.queues?.evidence,
+      ALICE_CLOUDFLARE_TARGET.evidenceQueue,
+    );
+    verifyQueue(
+      snapshot?.queues?.deadLetter,
+      ALICE_CLOUDFLARE_TARGET.evidenceDlq,
+    );
+    verifyAliceBootstrapBucket(snapshot?.bucket);
+    if (
+      snapshot?.sentinelBodyVerified !== true ||
+      !Array.isArray(snapshot?.sentinelObjects) ||
+      snapshot.sentinelObjects.length !== 1 ||
+      !Array.isArray(snapshot?.consumers?.evidence) ||
+      snapshot.consumers.evidence.length !== 1 ||
+      !Array.isArray(snapshot?.consumers?.deadLetter) ||
+      snapshot.consumers.deadLetter.length !== 0
+    ) {
+      invalid("ALICE_CLOUDFLARE_BOOTSTRAP_PREIMPORT_CONTINUITY_INVALID");
+    }
+    verifyAliceBootstrapQueueConsumer(snapshot.consumers.evidence[0]);
+    return { evidenceQueue };
+  } catch {
+    invalid("ALICE_CLOUDFLARE_BOOTSTRAP_PREIMPORT_CONTINUITY_INVALID");
+  }
 }
 
 export async function ensureAliceBootstrapQueue({ fetchImpl, apiToken, name }) {
@@ -1282,6 +1330,357 @@ export function verifyAliceBootstrapInactiveAccessBoundary({
   }
 }
 
+function boundaryInvalid(
+  message = "ALICE_CLOUDFLARE_BOOTSTRAP_VERSION_BOUNDARY_INVALID",
+) {
+  invalid(message);
+}
+
+function exactObjectKeys(value, keys) {
+  return value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    canonicalAliceJson(Object.keys(value).sort()) ===
+      canonicalAliceJson([...keys].sort());
+}
+
+function digestAliceBootstrapProjection(value) {
+  return `sha256:${crypto.createHash("sha256")
+    .update(canonicalAliceJson(value))
+    .digest("hex")}`;
+}
+
+function freezeAliceBootstrapValue(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) freezeAliceBootstrapValue(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function verifyAliceBootstrapBoundaryActionPlan(identityActions) {
+  if (!exactObjectKeys(identityActions, BOOTSTRAP_VERSION_BOUNDARY_ROLES)) {
+    boundaryInvalid("ALICE_BOOTSTRAP_PLAN_DRIFT");
+  }
+  for (const role of BOOTSTRAP_VERSION_BOUNDARY_ROLES) {
+    const expected = role === "access"
+      ? { upload: "inactive", promote: false }
+      : { upload: "none", promote: false };
+    if (
+      !exactObjectKeys(identityActions[role], ["promote", "upload"]) ||
+      canonicalAliceJson(identityActions[role]) !== canonicalAliceJson(expected)
+    ) {
+      boundaryInvalid("ALICE_BOOTSTRAP_PLAN_DRIFT");
+    }
+  }
+}
+
+function verifyAliceBootstrapActiveIdentity(value) {
+  if (
+    !exactObjectKeys(value, ["deploymentId", "versionId"]) ||
+    !VERSION_ID.test(value.deploymentId ?? "") ||
+    !VERSION_ID.test(value.versionId ?? "")
+  ) {
+    boundaryInvalid();
+  }
+  return value;
+}
+
+export function verifyAliceBootstrapVersionBoundary(value) {
+  if (
+    !exactObjectKeys(value, [
+      "accountId",
+      "producerRun",
+      "roles",
+      "schemaVersion",
+      "sourceCommit",
+      "traffic",
+    ]) ||
+    value.schemaVersion !==
+      "alice.cloudflare-bootstrap-version-boundary.v1" ||
+    value.accountId !== ALICE_CLOUDFLARE_TARGET.accountId ||
+    !COMMIT.test(value.sourceCommit ?? "") ||
+    !exactObjectKeys(value.producerRun, ["attempt", "id"]) ||
+    !/^[1-9][0-9]*$/.test(value.producerRun.id ?? "") ||
+    value.producerRun.attempt !== 1 ||
+    !exactObjectKeys(value.roles, BOOTSTRAP_VERSION_BOUNDARY_ROLES) ||
+    !exactObjectKeys(value.traffic, [
+      "customDomainsSha256After",
+      "customDomainsSha256Before",
+      "routesSha256After",
+      "routesSha256Before",
+    ])
+  ) {
+    boundaryInvalid();
+  }
+  for (const digest of Object.values(value.traffic)) {
+    if (!DIGEST.test(digest ?? "")) boundaryInvalid();
+  }
+  if (
+    value.traffic.routesSha256Before !== value.traffic.routesSha256After ||
+    value.traffic.customDomainsSha256Before !==
+      value.traffic.customDomainsSha256After
+  ) {
+    boundaryInvalid("ALICE_BOOTSTRAP_TRAFFIC_DRIFT");
+  }
+  for (const role of BOOTSTRAP_VERSION_BOUNDARY_ROLES) {
+    const selected = value.roles[role];
+    if (
+      !exactObjectKeys(selected, [
+        "activeDeploymentIdAfter",
+        "activeDeploymentIdBefore",
+        "activeVersionIdAfter",
+        "activeVersionIdBefore",
+        "bootstrapSelectedVersionId",
+        "scriptName",
+        "selectionMode",
+      ]) ||
+      selected.scriptName !== ROLE_WORKERS[role] ||
+      selected.selectionMode !==
+        (role === "access" ? "inactive-upload" : "active-existing") ||
+      !VERSION_ID.test(selected.bootstrapSelectedVersionId ?? "") ||
+      !VERSION_ID.test(selected.activeDeploymentIdBefore ?? "") ||
+      selected.activeDeploymentIdAfter !== selected.activeDeploymentIdBefore ||
+      !VERSION_ID.test(selected.activeVersionIdBefore ?? "") ||
+      selected.activeVersionIdAfter !== selected.activeVersionIdBefore ||
+      (role === "access"
+        ? selected.bootstrapSelectedVersionId === selected.activeVersionIdAfter
+        : selected.bootstrapSelectedVersionId !== selected.activeVersionIdAfter)
+    ) {
+      boundaryInvalid();
+    }
+  }
+  return freezeAliceBootstrapValue(
+    JSON.parse(canonicalAliceJson(value)),
+  );
+}
+
+export function buildAliceBootstrapVersionBoundary({
+  sourceCommit,
+  producerRun,
+  identityActions,
+  versionIds,
+  activeBefore,
+  activeAfter,
+  trafficBefore,
+  trafficAfter,
+}) {
+  verifyAliceBootstrapBoundaryActionPlan(identityActions);
+  if (
+    !COMMIT.test(sourceCommit ?? "") ||
+    !exactObjectKeys(versionIds, BOOTSTRAP_VERSION_BOUNDARY_ROLES) ||
+    !exactObjectKeys(activeBefore, BOOTSTRAP_VERSION_BOUNDARY_ROLES) ||
+    !exactObjectKeys(activeAfter, BOOTSTRAP_VERSION_BOUNDARY_ROLES) ||
+    !exactObjectKeys(trafficBefore, ["customDomains", "routes"]) ||
+    !exactObjectKeys(trafficAfter, ["customDomains", "routes"]) ||
+    !Array.isArray(trafficBefore.routes) ||
+    !Array.isArray(trafficBefore.customDomains) ||
+    canonicalAliceJson(trafficBefore) !== canonicalAliceJson(trafficAfter)
+  ) {
+    boundaryInvalid();
+  }
+  const roles = {};
+  for (const role of BOOTSTRAP_VERSION_BOUNDARY_ROLES) {
+    const before = verifyAliceBootstrapActiveIdentity(activeBefore[role]);
+    const after = verifyAliceBootstrapActiveIdentity(activeAfter[role]);
+    if (
+      canonicalAliceJson(before) !== canonicalAliceJson(after) ||
+      !VERSION_ID.test(versionIds[role] ?? "")
+    ) {
+      boundaryInvalid();
+    }
+    roles[role] = {
+      scriptName: ROLE_WORKERS[role],
+      selectionMode: role === "access" ? "inactive-upload" : "active-existing",
+      bootstrapSelectedVersionId: versionIds[role],
+      activeDeploymentIdBefore: before.deploymentId,
+      activeDeploymentIdAfter: after.deploymentId,
+      activeVersionIdBefore: before.versionId,
+      activeVersionIdAfter: after.versionId,
+    };
+  }
+  return verifyAliceBootstrapVersionBoundary({
+    schemaVersion: "alice.cloudflare-bootstrap-version-boundary.v1",
+    sourceCommit,
+    producerRun,
+    accountId: ALICE_CLOUDFLARE_TARGET.accountId,
+    roles,
+    traffic: {
+      routesSha256Before: digestAliceBootstrapProjection(trafficBefore.routes),
+      routesSha256After: digestAliceBootstrapProjection(trafficAfter.routes),
+      customDomainsSha256Before:
+        digestAliceBootstrapProjection(trafficBefore.customDomains),
+      customDomainsSha256After:
+        digestAliceBootstrapProjection(trafficAfter.customDomains),
+    },
+  });
+}
+
+function activeAliceBootstrapDeploymentIdentity(value) {
+  const active = value?.deployments?.[0];
+  if (
+    !active ||
+    !VERSION_ID.test(active.id ?? "") ||
+    !Array.isArray(active.versions) ||
+    active.versions.length !== 1 ||
+    active.versions[0]?.percentage !== 100 ||
+    !VERSION_ID.test(active.versions[0]?.version_id ?? "")
+  ) {
+    boundaryInvalid("ALICE_BOOTSTRAP_ACTIVE_DEPLOYMENT_DRIFT");
+  }
+  return {
+    deploymentId: active.id,
+    versionId: active.versions[0].version_id,
+  };
+}
+
+function verifyAliceBootstrapBoundaryCapture(boundary, capture) {
+  if (
+    !exactObjectKeys(capture, ["activeDeployments", "traffic", "versions"]) ||
+    !exactObjectKeys(
+      capture.activeDeployments,
+      BOOTSTRAP_VERSION_BOUNDARY_ROLES,
+    ) ||
+    !exactObjectKeys(capture.versions, BOOTSTRAP_VERSION_BOUNDARY_ROLES) ||
+    !exactObjectKeys(capture.traffic, ["customDomains", "routes"]) ||
+    !Array.isArray(capture.traffic.routes) ||
+    !Array.isArray(capture.traffic.customDomains)
+  ) {
+    boundaryInvalid();
+  }
+  const versionIds = {};
+  for (const role of BOOTSTRAP_VERSION_BOUNDARY_ROLES) {
+    const expected = boundary.roles[role];
+    const selectedVersion = capture.versions[role];
+    if (selectedVersion?.id !== expected.bootstrapSelectedVersionId) {
+      boundaryInvalid("ALICE_BOOTSTRAP_SELECTED_VERSION_ID_MISMATCH");
+    }
+    const active = activeAliceBootstrapDeploymentIdentity(
+      capture.activeDeployments[role],
+    );
+    if (
+      active.deploymentId !== expected.activeDeploymentIdAfter ||
+      active.versionId !== expected.activeVersionIdAfter
+    ) {
+      boundaryInvalid("ALICE_BOOTSTRAP_ACTIVE_DEPLOYMENT_DRIFT");
+    }
+    versionIds[role] = expected.bootstrapSelectedVersionId;
+  }
+  if (
+    digestAliceBootstrapProjection(capture.traffic.routes) !==
+      boundary.traffic.routesSha256After ||
+    digestAliceBootstrapProjection(capture.traffic.customDomains) !==
+      boundary.traffic.customDomainsSha256After
+  ) {
+    boundaryInvalid("ALICE_BOOTSTRAP_TRAFFIC_DRIFT");
+  }
+  try {
+    return extractAliceBootstrapSelectedNamespaceIds({
+      versionIds,
+      versions: { ...capture.versions, aiGateway: null },
+    });
+  } catch {
+    boundaryInvalid("ALICE_BOOTSTRAP_SELECTED_BINDING_MISMATCH");
+  }
+}
+
+export async function revalidateAliceBootstrapVersionBoundaryCurrent({
+  boundary,
+  captureCurrent,
+}) {
+  const verified = verifyAliceBootstrapVersionBoundary(boundary);
+  if (typeof captureCurrent !== "function") boundaryInvalid();
+  const first = await captureCurrent(verified);
+  const second = await captureCurrent(verified);
+  if (canonicalAliceJson(first) !== canonicalAliceJson(second)) {
+    boundaryInvalid("ALICE_CLOUDFLARE_BOOTSTRAP_CAPTURE_DRIFT");
+  }
+  const namespaceIds = verifyAliceBootstrapBoundaryCapture(verified, second);
+  return freezeAliceBootstrapValue(
+    JSON.parse(canonicalAliceJson(namespaceIds)),
+  );
+}
+
+export async function captureAliceBootstrapVersionBoundaryCurrent({
+  boundary,
+  fetchImpl,
+  apiToken,
+  transientRouteReadSleep = async () => {},
+}) {
+  const verified = verifyAliceBootstrapVersionBoundary(boundary);
+  if (typeof fetchImpl !== "function" || typeof transientRouteReadSleep !== "function") {
+    boundaryInvalid();
+  }
+  const versions = {};
+  const activeDeployments = {};
+  for (const role of BOOTSTRAP_VERSION_BOUNDARY_ROLES) {
+    const workerPath =
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/` +
+      verified.roles[role].scriptName;
+    versions[role] = await api({
+      fetchImpl,
+      apiToken,
+      method: "GET",
+      operation: `GET_BOUNDARY_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
+      pathname: `${workerPath}/versions/${verified.roles[role].bootstrapSelectedVersionId}`,
+    });
+    activeDeployments[role] = await api({
+      fetchImpl,
+      apiToken,
+      method: "GET",
+      operation: `GET_BOUNDARY_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_DEPLOYMENTS`,
+      pathname: `${workerPath}/deployments`,
+    });
+  }
+  const routes = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    operation: "LIST_WORKER_ROUTES",
+    pathname: `/zones/${ZONE_ID}/workers/routes`,
+    retryTransientRoute503: true,
+    transientRouteReadSleep,
+  });
+  const customDomains = await apiGetAllResults({
+    fetchImpl,
+    apiToken,
+    operation: "LIST_WORKER_DOMAINS",
+    pathname:
+      `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/domains?zone_id=${ZONE_ID}`,
+  });
+  const aliceDomains = new Set([
+    ALICE_CLOUDFLARE_TARGET.accessDomain,
+    ALICE_CLOUDFLARE_TARGET.releaseControlDomain,
+  ]);
+  const routeCanMatchHostname = (pattern, hostname) => {
+    if (typeof pattern !== "string") boundaryInvalid();
+    const hostPattern = pattern
+      .replace(/^https?:\/\//i, "")
+      .split("/", 1)[0]
+      .toLowerCase();
+    if (hostPattern.length === 0 || /[^a-z0-9.*_-]/.test(hostPattern)) {
+      boundaryInvalid();
+    }
+    const expression = hostPattern
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replaceAll("*", ".*");
+    return new RegExp(`^${expression}$`, "i").test(hostname);
+  };
+  return {
+    versions,
+    activeDeployments,
+    traffic: {
+      routes: routes.filter((route) =>
+        [...aliceDomains].some((hostname) =>
+          routeCanMatchHostname(route?.pattern, hostname)
+        )
+      ),
+      customDomains: customDomains.filter((domain) =>
+        aliceDomains.has(domain?.hostname?.toLowerCase())
+      ),
+    },
+  };
+}
+
 export function extractAliceBootstrapNamespaceIds(versions) {
   if (
     !versions ||
@@ -1502,18 +1901,21 @@ export async function executeAliceBootstrapIdentityActions({
     if (deployedVersionId !== versionIds[role]) invalid();
   }
 
+  let trafficAfter = trafficBefore;
   if (identityActions.access.upload === "inactive") {
+    trafficAfter = await fetchTraffic();
     verifyAliceBootstrapInactiveAccessBoundary({
       previousActiveVersionId: previousAccessVersionId,
       currentActiveVersionId: await fetchActiveVersionId("access"),
       trafficBefore,
-      trafficAfter: await fetchTraffic(),
+      trafficAfter,
     });
   }
   return {
     createdRoles,
     namespaceIds,
     runtimeHostBoundary,
+    trafficAfter,
     versionIds,
     versions,
   };
@@ -1590,7 +1992,11 @@ export function verifyAliceBootstrapQueueConsumer(consumer) {
   return consumer;
 }
 
-async function fetchAliceActiveWorkerVersionId({ fetchImpl, apiToken, role }) {
+async function fetchAliceActiveWorkerDeploymentIdentity({
+  fetchImpl,
+  apiToken,
+  role,
+}) {
   if (!BOOTSTRAP_IDENTITY_ROLES.includes(role)) invalid();
   const deployments = await api({
     fetchImpl,
@@ -1605,6 +2011,7 @@ async function fetchAliceActiveWorkerVersionId({ fetchImpl, apiToken, role }) {
   if (deployments.deployments.length === 0) return null;
   const active = deployments.deployments[0];
   if (
+    !VERSION_ID.test(active?.id ?? "") ||
     !Array.isArray(active?.versions) ||
     active.versions.length !== 1 ||
     active.versions[0]?.percentage !== 100 ||
@@ -1612,7 +2019,19 @@ async function fetchAliceActiveWorkerVersionId({ fetchImpl, apiToken, role }) {
   ) {
     invalid();
   }
-  return active.versions[0].version_id;
+  return {
+    deploymentId: active.id,
+    versionId: active.versions[0].version_id,
+  };
+}
+
+async function fetchAliceActiveWorkerVersionId({ fetchImpl, apiToken, role }) {
+  const identity = await fetchAliceActiveWorkerDeploymentIdentity({
+    fetchImpl,
+    apiToken,
+    role,
+  });
+  return identity?.versionId ?? null;
 }
 
 export async function fetchAliceActiveControlVersionId(options) {
@@ -1669,13 +2088,16 @@ async function main() {
   const bootstrapPreflightPath =
     process.env.ALICE_BOOTSTRAP_PREFLIGHT_PATH;
   const bootstrapStatePath = process.env.ALICE_BOOTSTRAP_STATE_PATH;
+  const bootstrapVersionBoundaryPath =
+    process.env.ALICE_BOOTSTRAP_VERSION_BOUNDARY_PATH;
   const sourceCommit = process.env.ALICE_SOURCE_COMMIT;
   const releaseRunId = process.env.ALICE_RELEASE_RUN_ID;
   const runtimeImage = process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE;
   const apiToken = process.env.CLOUDFLARE_API_TOKEN;
   if (
     ![sourceRoot, artifactRoot, artifactPath, wranglerBin, outputDir,
-      namespaceIdsPath, continuityReadbackPath, bootstrapStatePath].every(absolute) ||
+      namespaceIdsPath, continuityReadbackPath, bootstrapStatePath,
+      bootstrapVersionBoundaryPath].every(absolute) ||
     !absolute(bootstrapPreflightPath) ||
     !COMMIT.test(sourceCommit ?? "") ||
     !RELEASE_RUN_ID.test(releaseRunId ?? "") ||
@@ -1785,14 +2207,18 @@ async function main() {
   if (canonicalAliceJson(preflightFirst) !== canonicalAliceJson(preflightSecond)) {
     invalid("ALICE_CLOUDFLARE_BOOTSTRAP_PREFLIGHT_DRIFT");
   }
+  verifyAliceBootstrapPreimportContinuity(preflightSecond);
   writeReadonly(bootstrapPreflightPath, preflightSecond);
+  const priorDeploymentIdentities = {};
   const priorVersionIds = {};
   for (const role of BOOTSTRAP_IDENTITY_ROLES) {
-    priorVersionIds[role] = await fetchAliceActiveWorkerVersionId({
+    priorDeploymentIdentities[role] =
+      await fetchAliceActiveWorkerDeploymentIdentity({
       fetchImpl: globalThis.fetch,
       apiToken,
       role,
     });
+    priorVersionIds[role] = priorDeploymentIdentities[role]?.versionId ?? null;
   }
   const activeVersions = {};
   for (const role of BOOTSTRAP_IDENTITY_ROLES) {
@@ -1812,12 +2238,12 @@ async function main() {
     activeVersionIds: priorVersionIds,
     activeVersions,
   });
+  verifyAliceBootstrapBoundaryActionPlan(identityActions);
   const priorVersionId = priorVersionIds.control;
   verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
   let versionIds = { ...priorVersionIds };
   let versionId = versionIds.control;
   let mode = "release";
-  let queue;
   const createdByRun = {
     accessWorker: false,
     runtimeHostWorker: false,
@@ -1830,45 +2256,6 @@ async function main() {
     evidenceSentinel: false,
     evidenceQueueConsumer: false,
   };
-  if (identityActions.control.upload === "first-deploy") {
-    mode = "bootstrap";
-    const evidenceQueue = await ensureAliceBootstrapQueue({
-      fetchImpl: globalThis.fetch,
-      apiToken,
-      name: ALICE_CLOUDFLARE_TARGET.evidenceQueue,
-    });
-    queue = evidenceQueue.queue;
-    createdByRun.evidenceQueue = evidenceQueue.created;
-    const deadLetterQueue = await ensureAliceBootstrapQueue({
-      fetchImpl: globalThis.fetch,
-      apiToken,
-      name: ALICE_CLOUDFLARE_TARGET.evidenceDlq,
-    });
-    createdByRun.evidenceDeadLetterQueue = deadLetterQueue.created;
-    const evidenceStore = await ensureBucketAndSentinel({
-      fetchImpl: globalThis.fetch,
-      apiToken,
-    });
-    createdByRun.evidenceBucket = evidenceStore.bucketCreated;
-    createdByRun.evidenceSentinel = evidenceStore.sentinelCreated;
-    const output = run(
-      wranglerBin,
-      buildAliceBootstrapCreationCommand({
-        controlMain,
-        configPath: controlConfigPath,
-        sourceCommit,
-        releaseRunId,
-      }),
-      {
-        cwd: sourceRoot,
-        env: aliceCloudflareCommandEnv(),
-        errorCode: "ALICE_CLOUDFLARE_BOOTSTRAP_UPLOAD_FAILED",
-      },
-    );
-    versionId = parseAliceWranglerDeployVersionId(output);
-    versionIds.control = versionId;
-    createdByRun.controlWorker = true;
-  }
   const expectedRuntimeHostApplicationImage =
     identityActions.runtimeHost.upload === "none"
       ? (await fetchAliceRuntimeHostContainerState({
@@ -1928,10 +2315,15 @@ async function main() {
   });
   versionIds = identityExecution.versionIds;
   versionId = versionIds.control;
-  for (const role of identityExecution.createdRoles) {
-    createdByRun[`${role}Worker`] = true;
+  const {
+    namespaceIds,
+    runtimeHostBoundary,
+    trafficAfter,
+    versions,
+  } = identityExecution;
+  if (identityExecution.createdRoles.length !== 0) {
+    invalid("ALICE_BOOTSTRAP_PLAN_DRIFT");
   }
-  const { namespaceIds, runtimeHostBoundary, versions } = identityExecution;
   const version = versions.control;
   const versionTag = version?.annotations?.["workers/tag"];
   if (priorVersionId !== null) {
@@ -1943,27 +2335,6 @@ async function main() {
         : "release";
   }
   if (mode === "bootstrap") {
-    if (queue === undefined) {
-      const evidenceQueue = await ensureAliceBootstrapQueue({
-        fetchImpl: globalThis.fetch,
-        apiToken,
-        name: ALICE_CLOUDFLARE_TARGET.evidenceQueue,
-      });
-      queue = evidenceQueue.queue;
-      createdByRun.evidenceQueue = evidenceQueue.created;
-      const deadLetterQueue = await ensureAliceBootstrapQueue({
-        fetchImpl: globalThis.fetch,
-        apiToken,
-        name: ALICE_CLOUDFLARE_TARGET.evidenceDlq,
-      });
-      createdByRun.evidenceDeadLetterQueue = deadLetterQueue.created;
-      const evidenceStore = await ensureBucketAndSentinel({
-        fetchImpl: globalThis.fetch,
-        apiToken,
-      });
-      createdByRun.evidenceBucket = evidenceStore.bucketCreated;
-      createdByRun.evidenceSentinel = evidenceStore.sentinelCreated;
-    }
     verifyAliceBootstrapReentryBoundary({
       activeVersionId: await fetchAliceActiveControlVersionId({
         fetchImpl: globalThis.fetch,
@@ -1972,19 +2343,41 @@ async function main() {
       expectedVersionId: versionId,
       version,
     });
-    const consumer = await ensureConsumer({
-      fetchImpl: globalThis.fetch,
-      apiToken,
-      queue,
-    });
-    createdByRun.evidenceQueueConsumer = consumer.created;
   }
   const continuityState = await fetchAliceCloudflareContinuityState({
     apiToken,
     expectedDurableObjectNamespaceIds: namespaceIds,
   });
+  const currentDeploymentIdentities = {};
+  for (const role of BOOTSTRAP_VERSION_BOUNDARY_ROLES) {
+    currentDeploymentIdentities[role] =
+      await fetchAliceActiveWorkerDeploymentIdentity({
+        fetchImpl: globalThis.fetch,
+        apiToken,
+        role,
+      });
+  }
+  const [producerRunId, producerRunAttempt] = releaseRunId.split("-");
+  const bootstrapVersionBoundary = buildAliceBootstrapVersionBoundary({
+    sourceCommit,
+    producerRun: {
+      id: producerRunId,
+      attempt: Number(producerRunAttempt),
+    },
+    identityActions,
+    versionIds,
+    activeBefore: priorDeploymentIdentities,
+    activeAfter: currentDeploymentIdentities,
+    trafficBefore: preflightSecond.traffic,
+    trafficAfter,
+  });
   writeReadonly(namespaceIdsPath, namespaceIds);
   writeReadonly(continuityReadbackPath, continuityState.readback);
+  writeReadonly(bootstrapVersionBoundaryPath, bootstrapVersionBoundary);
+  const bootstrapVersionBoundarySha256 = `sha256:${crypto
+    .createHash("sha256")
+    .update(`${canonicalAliceJson(bootstrapVersionBoundary)}\n`)
+    .digest("hex")}`;
   writeReadonly(bootstrapStatePath, verifyAliceBootstrapState({
     schemaVersion: "alice.cloudflare-bootstrap-state.v2",
     mode,
@@ -2012,6 +2405,8 @@ async function main() {
       controlConfigPath,
       namespaceIdsPath,
       continuityReadbackPath,
+      bootstrapVersionBoundaryPath,
+      bootstrapVersionBoundarySha256,
       bootstrapVersionId: versionId,
       runtimeHostVersionId: versionIds.runtimeHost,
       runtimeHostNamespaceId: namespaceIds.runtimeHost[0]?.namespaceId,

@@ -110,6 +110,8 @@ test("protected deployment consumes one exact successful preimport artifact", ()
   assert.match(identity, /\.expired/);
   assert.match(identity, /preimport_artifact_record_count/);
   assert.match(identity, /test "\$preimport_artifact_record_count" = "1"/);
+  assert.match(identity, /test "\$PREIMPORT_WORKFLOW_SHA" = "\$SOURCE_SHA"/);
+  assert.match(identity, /test "\$PREIMPORT_WORKFLOW_REF" = "\$EXPECTED_REF"/);
   const download = workflow.match(
     /- name: Download exact preimport evidence artifact[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
@@ -214,10 +216,12 @@ test("preimport evidence is exact-bound and fresh materialization matches before
   )?.[0] ?? "";
   assert.match(verify, /verifyAliceCloudflareContainerImageEvidence/);
   assert.match(verify, /verifyAliceDeploymentManifest/);
-  assert.match(verify, /alice\.preimport-output-digests\.v1/);
+  assert.match(verify, /alice\.preimport-output-digests\.v2/);
   assert.match(verify, /deploymentManifestSha256/);
   assert.match(verify, /providerReadbackSha256/);
   assert.match(verify, /containerImageEvidenceSha256/);
+  assert.match(verify, /bootstrapVersionBoundarySha256/);
+  assert.match(verify, /durableObjectNamespaceIdsSha256/);
   assert.match(verify, /sourceSha[\s\S]*?SOURCE_SHA/);
   assert.match(verify, /buildRunId[\s\S]*?BUILD_RUN_ID/);
   assert.match(verify, /watchdogRunId[\s\S]*?RECOVERY_WATCHDOG_RUN_ID/);
@@ -225,7 +229,7 @@ test("preimport evidence is exact-bound and fresh materialization matches before
   assert.match(verify, /runtimeRevision[\s\S]*?EXPECTED_RUNTIME_REVISION/);
 
   const bootstrap = workflow.indexOf(
-    "Bootstrap unrouted fail-closed continuity identities",
+    "Revalidate exact pre-import bootstrap version boundary read-only",
   );
   const materialize = workflow.indexOf(
     "Materialize signed manifest and exact-byte Worker configs",
@@ -243,29 +247,31 @@ test("preimport evidence is exact-bound and fresh materialization matches before
   assert.match(materializeStep, /freshObservedAtMs - preimportObservedAtMs > 7_200_000/);
   assert.match(materializeStep, /Math\.abs\(Date\.now\(\) - freshObservedAtMs\) > 300_000/);
   const bootstrapStep = workflow.match(
-    /- name: Bootstrap unrouted fail-closed continuity identities[\s\S]*?(?=\n      - name:)/,
+    /- name: Revalidate exact pre-import bootstrap version boundary read-only[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
   assert.match(
     bootstrapStep,
-    /ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: \$\{\{ runner\.temp \}\}\/alice-release\/bootstrap-durable-object-namespace-ids\.json/,
+    /ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: \$\{\{ runner\.temp \}\}\/alice-release\/durable-object-namespace-ids\.json/,
   );
   assert.match(
     bootstrapStep,
-    /ALICE_CLOUDFLARE_RUNTIME_IMAGE: \$\{\{ env\.ALICE_CLOUDFLARE_RUNTIME_IMAGE \}\}/,
+    /revalidateAliceBootstrapVersionBoundaryCurrent/,
   );
   assert.ok(
-    workflow.indexOf("- name: Bootstrap unrouted fail-closed continuity identities") <
+    workflow.indexOf("- name: Revalidate exact pre-import bootstrap version boundary read-only") <
       workflow.indexOf("- name: Materialize signed manifest and exact-byte Worker configs"),
-    "the absent runtime host must be bootstrapped before canonical namespace capture and manifest materialization",
+    "the exact pre-import boundary must be revalidated before manifest materialization",
   );
   assert.doesNotMatch(
     workflow,
     /- name: Capture exact active Durable Object identities read-only/,
   );
-  assert.match(
-    bootstrapStep,
-    /canonical_namespace_ids="\$\{RUNNER_TEMP\}\/alice-release\/durable-object-namespace-ids\.json"[\s\S]*?canonical_namespace_ids_tmp="\$\{canonical_namespace_ids\}\.tmp"[\s\S]*?cp --[\s\S]*?bootstrap-durable-object-namespace-ids\.json[\s\S]*?"\$canonical_namespace_ids_tmp"[\s\S]*?mv -- "\$canonical_namespace_ids_tmp" "\$canonical_namespace_ids"/,
-  );
+  assert.match(bootstrapStep, /bootstrap-version-boundary\.json/);
+  assert.match(bootstrapStep, /durable-object-namespace-ids\.json/);
+  assert.match(bootstrapStep, /ALICE_CONTROL_RECOVERY_TOKEN/);
+  assert.doesNotMatch(bootstrapStep, /alice_cloudflare_bootstrap\.mjs\s*$/m);
+  assert.doesNotMatch(bootstrapStep, /versions upload|versions deploy/);
+  assert.doesNotMatch(workflow, /alice_cloudflare_recovery_preprovision\.mjs/);
 });
 
 test("state-plane auth is exposed only to the bounded Worker release step", () => {
@@ -507,15 +513,13 @@ test("fresh-runner replay is mandatory, mutation-disabled, and exercises contain
 
 test("every provider mutation remains bounded by the shared recovery reserve", () => {
   const firstMutation = workflow.indexOf(
-    "Bootstrap unrouted fail-closed continuity identities",
+    "Prepare service-authenticated fail-closed control route",
   );
   const readiness = workflow.indexOf(
     "Verify Cloudflare recovery readiness before first mutation",
   );
   assert.ok(readiness >= 0 && readiness < firstMutation);
   for (const name of [
-    "Bootstrap unrouted fail-closed continuity identities",
-    "Assert independently preprovisioned recovery boundary",
     "Prepare service-authenticated fail-closed control route",
     "Commit first-release PAUSE_ALL before runtime mutation",
     "Promote only attested immutable Worker bytes",
