@@ -162,10 +162,6 @@ jobs:
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = "1"
           test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
-          workflow_branch_sha="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/git/ref/heads/${EXPECTED_WORKFLOW_BRANCH}" \
-            --jq .object.sha)"
-          test "$GITHUB_SHA" = "$workflow_branch_sha"
           test "$GITHUB_SHA" = "$SOURCE_SHA"
           test "$GITHUB_REF_PROTECTED_CONTEXT" = "true"
           grep -Eq '^[a-f0-9]{40}$' <<<"$SOURCE_SHA"
@@ -181,12 +177,16 @@ jobs:
             <<<"$ARTIFACT_NAME"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+          capture_github_identity_snapshot() (
+            set -euo pipefail
           test "$(gh api \
-            "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" \
-            --jq .object.sha)" = "$SOURCE_SHA"
+            "repos/${GITHUB_REPOSITORY}/git/ref/heads/${EXPECTED_WORKFLOW_BRANCH}" \
+            --jq .object.sha 2>/dev/null)" = "$SOURCE_SHA"
 
           watchdog_json="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}")"
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}" \
+            2>/dev/null)"
           test "$(printf '%s' "$watchdog_json" | jq -r .head_sha)" = "$SOURCE_SHA"
           test "$(printf '%s' "$watchdog_json" | jq -r .head_branch)" = \
             "release/alice-production-core-2026-08-22"
@@ -197,7 +197,8 @@ jobs:
           test "$(printf '%s' "$watchdog_json" | jq -r .status)" = "in_progress"
           test "$(printf '%s' "$watchdog_json" | jq -r .conclusion)" = "null"
           watchdog_jobs="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}/jobs?filter=latest&per_page=100")"
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}/jobs?filter=latest&per_page=100" \
+            2>/dev/null)"
           parent_steps="$(printf '%s' "$watchdog_jobs" | jq -c \
             '[.jobs[].steps[] | select(.name == "Select one exact parent deployment" and .status == "in_progress")]')"
           test "$(printf '%s' "$parent_steps" | jq 'length')" = "1"
@@ -207,7 +208,8 @@ jobs:
           watchdog_remaining_seconds=$(( 5400 - (now_epoch - parent_started_epoch) ))
           test "$watchdog_remaining_seconds" -ge "$MINIMUM_WATCHDOG_RUNWAY_SECONDS"
 
-          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}")"
+          run_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}" 2>/dev/null)"
           test "$(printf '%s' "$run_json" | jq -r .head_sha)" = "$SOURCE_SHA"
           test "$(printf '%s' "$run_json" | jq -r .head_branch)" = \
             "release/alice-production-core-2026-08-22"
@@ -219,12 +221,32 @@ jobs:
 
           artifact_record="$(gh api --paginate \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}/artifacts?per_page=100" \
-            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | [.digest, .expired] | @tsv")"
+            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | [.digest, .expired] | @tsv" \
+            2>/dev/null)"
           artifact_record_count="$(printf '%s' "$artifact_record" | \
             awk 'NF { count++ } END { print count + 0 }')"
           test "$artifact_record_count" = "1"
           test "$(printf '%s' "$artifact_record" | cut -f1)" = "$ARTIFACT_DIGEST"
           test "$(printf '%s' "$artifact_record" | cut -f2)" = "false"
+          )
+
+          snapshot_attempt=1
+          while [ "$snapshot_attempt" -le 3 ]; do
+            set +e
+            capture_github_identity_snapshot
+            snapshot_status=$?
+            set -e
+            if [ "$snapshot_status" -eq 0 ]; then
+              break
+            fi
+            if [ "$snapshot_attempt" -eq 3 ]; then
+              echo "::error title=Alice pre-import GitHub identity invalid::ALICE_PREIMPORT_GITHUB_IDENTITY_INVALID attempts=3" >&2
+              exit 1
+            fi
+            echo "::warning title=Alice pre-import GitHub identity retry::ALICE_PREIMPORT_GITHUB_IDENTITY_RETRY attempt=${snapshot_attempt}/3" >&2
+            sleep 2
+            snapshot_attempt=$((snapshot_attempt + 1))
+          done
 
       - name: Setup Node.js 24.19.0
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -396,10 +418,6 @@ jobs:
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = "1"
           test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
-          workflow_branch_sha="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/git/ref/heads/${EXPECTED_WORKFLOW_BRANCH}" \
-            --jq .object.sha)"
-          test "$GITHUB_SHA" = "$workflow_branch_sha"
           test "$GITHUB_SHA" = "$SOURCE_SHA"
           test "$GITHUB_REF_PROTECTED_CONTEXT" = "true"
           grep -Eq '^[a-f0-9]{40}$' <<<"$SOURCE_SHA"
@@ -417,12 +435,16 @@ jobs:
           grep -Eq '^(sha256:)?[a-f0-9]{64}$' <<<"$IMPORT_ARTIFACT_DIGEST"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+          capture_github_identity_snapshot() (
+            set -euo pipefail
           test "$(gh api \
-            "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" \
-            --jq .object.sha)" = "$SOURCE_SHA"
+            "repos/${GITHUB_REPOSITORY}/git/ref/heads/${EXPECTED_WORKFLOW_BRANCH}" \
+            --jq .object.sha 2>/dev/null)" = "$SOURCE_SHA"
 
           watchdog_json="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}")"
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}" \
+            2>/dev/null)"
           test "$(printf '%s' "$watchdog_json" | jq -r .head_sha)" = "$SOURCE_SHA"
           test "$(printf '%s' "$watchdog_json" | jq -r .head_branch)" = \
             "release/alice-production-core-2026-08-22"
@@ -433,7 +455,8 @@ jobs:
           test "$(printf '%s' "$watchdog_json" | jq -r .status)" = "in_progress"
           test "$(printf '%s' "$watchdog_json" | jq -r .conclusion)" = "null"
           watchdog_jobs="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}/jobs?filter=latest&per_page=100")"
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}/jobs?filter=latest&per_page=100" \
+            2>/dev/null)"
           parent_steps="$(printf '%s' "$watchdog_jobs" | jq -c \
             '[.jobs[].steps[] | select(.name == "Select one exact parent deployment" and .status == "in_progress")]')"
           test "$(printf '%s' "$parent_steps" | jq 'length')" = "1"
@@ -443,7 +466,8 @@ jobs:
           watchdog_remaining_seconds=$(( 5400 - (now_epoch - parent_started_epoch) ))
           test "$watchdog_remaining_seconds" -ge "$MINIMUM_WATCHDOG_RUNWAY_SECONDS"
 
-          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}")"
+          run_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}" 2>/dev/null)"
           test "$(printf '%s' "$run_json" | jq -r .head_sha)" = "$SOURCE_SHA"
           test "$(printf '%s' "$run_json" | jq -r .head_branch)" = \
             "release/alice-production-core-2026-08-22"
@@ -455,7 +479,8 @@ jobs:
 
           artifact_record="$(gh api --paginate \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}/artifacts?per_page=100" \
-            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | [.digest, .expired] | @tsv")"
+            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | [.digest, .expired] | @tsv" \
+            2>/dev/null)"
           artifact_record_count="$(printf '%s' "$artifact_record" | \
             awk 'NF { count++ } END { print count + 0 }')"
           test "$artifact_record_count" = "1"
@@ -463,19 +488,40 @@ jobs:
           test "$(printf '%s' "$artifact_record" | cut -f2)" = "false"
 
           import_record="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${IMPORT_ARTIFACT_ID}")"
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${IMPORT_ARTIFACT_ID}" \
+            2>/dev/null)"
           test "$(printf '%s' "$import_record" | jq -r .name)" = "$IMPORT_ARTIFACT_NAME"
           test "$(printf '%s' "$import_record" | jq -r .expired)" = "false"
           test "$(printf '%s' "$import_record" | jq -r .workflow_run.id)" = \
             "$GITHUB_RUN_ID"
           import_matches="$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
-            --jq ".artifacts[] | select(.name == \"${IMPORT_ARTIFACT_NAME}\") | .id")"
+            --jq ".artifacts[] | select(.name == \"${IMPORT_ARTIFACT_NAME}\") | .id" \
+            2>/dev/null)"
           test "$(printf '%s' "$import_matches" | awk 'NF { count++ } END { print count + 0 }')" = "1"
           test "$import_matches" = "$IMPORT_ARTIFACT_ID"
           artifact_digest_normalized="sha256:${IMPORT_ARTIFACT_DIGEST#sha256:}"
           test "$(printf '%s' "$import_record" | jq -r .digest)" = \
             "$artifact_digest_normalized"
+          )
+
+          snapshot_attempt=1
+          while [ "$snapshot_attempt" -le 3 ]; do
+            set +e
+            capture_github_identity_snapshot
+            snapshot_status=$?
+            set -e
+            if [ "$snapshot_status" -eq 0 ]; then
+              break
+            fi
+            if [ "$snapshot_attempt" -eq 3 ]; then
+              echo "::error title=Alice pre-import GitHub identity invalid::ALICE_PREIMPORT_GITHUB_IDENTITY_INVALID attempts=3" >&2
+              exit 1
+            fi
+            echo "::warning title=Alice pre-import GitHub identity retry::ALICE_PREIMPORT_GITHUB_IDENTITY_RETRY attempt=${snapshot_attempt}/3" >&2
+            sleep 2
+            snapshot_attempt=$((snapshot_attempt + 1))
+          done
 
       - name: Setup Node.js 24.19.0
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
