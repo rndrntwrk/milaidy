@@ -23,6 +23,7 @@
     "./env-utils": "./src/env-utils.ts",
     "./runtime-env": "./src/runtime-env.ts",
     "./contracts": "./src/contracts/index.ts",
+    "./contracts/alice-credential-state": "./src/contracts/alice-credential-state.ts",
     "./contracts/avatar-speech": "./src/contracts/avatar-speech.ts",
     "./contracts/apps": "./src/contracts/apps.ts",
     "./contracts/awareness": "./src/contracts/awareness.ts",
