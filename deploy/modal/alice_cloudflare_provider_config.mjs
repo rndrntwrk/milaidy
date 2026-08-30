@@ -95,13 +95,18 @@ function applicationCanAffectHost(application, hostname) {
 
 function canonicalIsoTimestamp(value) {
   if (typeof value !== "string") return null;
-  const milliseconds = Date.parse(value);
+  const normalized = value.replace(
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3})\d{3}Z$/,
+    "$1Z",
+  );
+  const milliseconds = Date.parse(normalized);
   const canonical = Number.isFinite(milliseconds)
     ? new Date(milliseconds).toISOString()
     : "";
   if (
     !Number.isFinite(milliseconds) ||
-    (canonical !== value && canonical.replace(/\.000Z$/, "Z") !== value)
+    (canonical !== normalized &&
+      canonical.replace(/\.000Z$/, "Z") !== normalized)
   ) {
     return null;
   }

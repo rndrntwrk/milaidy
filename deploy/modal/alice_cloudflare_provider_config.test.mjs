@@ -191,8 +191,8 @@ function vectorizeReadback() {
     name: "alice-memory-v1",
     description: "Alice production memory index",
     config: { dimensions: 768, metric: "cosine" },
-    created_on: "2026-08-27T12:00:00.000Z",
-    modified_on: "2026-08-27T12:00:00.000Z",
+    created_on: "2026-08-28T04:46:12.081161Z",
+    modified_on: "2026-08-28T04:46:12.081161Z",
   };
 }
 
@@ -231,6 +231,7 @@ test("rejects absent, mismatched, or schema-expanded Vectorize state", () => {
     (raw) => { raw.config.dimensions = 384; },
     (raw) => { raw.config.metric = "euclidean"; },
     (raw) => { raw.config.preset = "@cf/baai/bge-base-en-v1.5"; },
+    (raw) => { raw.created_on = "2026-08-28T04:46:12.081161+00:00"; },
     (raw) => { raw.unreviewed = true; },
   ]) {
     const raw = vectorizeReadback();
