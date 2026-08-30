@@ -58,11 +58,14 @@ jobs:
 
       - name: Run focused auth durability tests
         working-directory: eliza
+        shell: bash
         run: |
-          bunx vitest run \
-            packages/auth/src/credential-durability.test.ts \
-            packages/auth/src/credential-snapshot.test.ts \
-            --coverage.enabled=false
+          set -euo pipefail
+          TESTS=(packages/auth/src/credential-durability.test.ts)
+          if [ -f packages/auth/src/credential-snapshot.test.ts ]; then
+            TESTS+=(packages/auth/src/credential-snapshot.test.ts)
+          fi
+          bunx vitest run "${TESTS[@]}" --coverage.enabled=false
 
       - name: Typecheck auth package
         working-directory: eliza/packages/auth
@@ -70,7 +73,9 @@ jobs:
 
       - name: Check changed auth source formatting
         working-directory: eliza
+        shell: bash
         run: |
+          set -euo pipefail
           FILES=(
             packages/auth/src/credential-durability.ts
             packages/auth/src/credential-durability.test.ts
