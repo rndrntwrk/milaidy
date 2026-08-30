@@ -334,6 +334,8 @@ export function verifyAliceContainerApplicationReadback({
     materializedWranglerConfig?.durable_objects?.bindings;
   const health = application?.health?.instances;
   const ports = application?.configuration?.ports;
+  // Cloudflare returns the application deployment count and resolved resources
+  // here; actual running Containers are verified via applicationInstances.
   if (
     !application ||
     !Array.isArray(applicationInstances) ||
@@ -357,21 +359,28 @@ export function verifyAliceContainerApplicationReadback({
     !Number.isSafeInteger(application.version) ||
     application.version < 1 ||
     application.scheduling_policy !== "default" ||
-    application.instances !== 0 ||
+    application.instances !== 1 ||
     application.max_instances !== container.max_instances ||
     application.configuration?.image !== container.image ||
-    application.configuration?.instance_type !== container.instance_type ||
+    application.configuration?.vcpu !== 0.5 ||
+    application.configuration?.memory_mib !== 4096 ||
+    application.configuration?.disk?.size_mb !== 8000 ||
     !(ports === undefined || (Array.isArray(ports) && ports.length === 0)) ||
     application.durable_objects?.namespace_id !== expectedNamespaceId ||
     !health ||
     !exactKeys(health, [
       "active",
+      "assigned",
       "failed",
       "healthy",
       "scheduling",
       "starting",
+      "stopped",
     ]) ||
-    Object.values(health).some((count) => count !== 0)
+    Object.values(health).some(
+      (count) => !Number.isSafeInteger(count) || count < 0 || count > 1,
+    ) ||
+    health.failed !== 0
   ) {
     mismatch();
   }
@@ -380,7 +389,7 @@ export function verifyAliceContainerApplicationReadback({
     applicationName: application.name,
     applicationVersion: application.version,
     image: application.configuration.image,
-    instanceType: application.configuration.instance_type,
+    instanceType: container.instance_type,
     maxInstances: application.max_instances,
     namespaceId: expectedNamespaceId,
     activeInstances: health.active,

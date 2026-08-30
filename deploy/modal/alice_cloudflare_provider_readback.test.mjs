@@ -486,7 +486,7 @@ test("preserves the exact external Access reference to the runtimeHost namespace
   }
 });
 
-test("normalizes only the inert max-one runtimeHost container application", () => {
+test("normalizes the exact max-one runtimeHost application with zero runtime instances", () => {
   const namespaceId = "5".repeat(32);
   const image =
     `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"4".repeat(64)}`;
@@ -497,20 +497,30 @@ test("normalizes only the inert max-one runtimeHost container application", () =
     name: "alice-production-runtime",
     version: 1,
     scheduling_policy: "default",
-    instances: 0,
+    instances: 1,
     max_instances: 1,
     configuration: {
       image,
-      instance_type: "standard-1",
-      ports: [],
+      vcpu: 0.5,
+      memory: "4GiB",
+      memory_mib: 4096,
+      disk: { size_mb: 8000, size: "8GB" },
+      network: { assign_ipv6: "none", assign_ipv4: "none", mode: "private" },
+      command: [],
+      entrypoint: [],
+      runtime: "firecracker",
+      observability: { logs: { enabled: true } },
     },
     durable_objects: { namespace_id: namespaceId },
     health: {
+      errors: [],
       instances: {
         active: 0,
+        assigned: 0,
         healthy: 0,
+        stopped: 0,
         failed: 0,
-        starting: 0,
+        starting: 1,
         scheduling: 0,
       },
     },
@@ -551,7 +561,7 @@ test("normalizes only the inert max-one runtimeHost container application", () =
   );
 
   const substitutions = [
-    { ...application, instances: 1 },
+    { ...application, instances: 0 },
     { ...application, max_instances: 2 },
     { ...application, name: "other-runtime" },
     { ...application, durable_objects: { namespace_id: "6".repeat(32) } },
@@ -561,12 +571,13 @@ test("normalizes only the inert max-one runtimeHost container application", () =
     },
     {
       ...application,
-      configuration: { ...application.configuration, ports: [{ port: 2138 }] },
+      configuration: { ...application.configuration, vcpu: 1 },
     },
     {
       ...application,
       health: {
-        instances: { ...application.health.instances, starting: 1 },
+        ...application.health,
+        instances: { ...application.health.instances, failed: 1 },
       },
     },
   ];
