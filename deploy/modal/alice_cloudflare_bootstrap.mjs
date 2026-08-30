@@ -1334,6 +1334,7 @@ export async function executeAliceBootstrapIdentityActions({
   sourceRoot,
   sourceCommit,
   releaseRunId,
+  expectedRuntimeHostApplicationImage,
   commandEnv,
   runCommand = run,
   fetchVersion,
@@ -1356,6 +1357,7 @@ export async function executeAliceBootstrapIdentityActions({
     !absolute(sourceRoot) ||
     !COMMIT.test(sourceCommit ?? "") ||
     !RELEASE_RUN_ID.test(releaseRunId ?? "") ||
+    !RUNTIME_IMAGE.test(expectedRuntimeHostApplicationImage ?? "") ||
     !commandEnv ||
     typeof commandEnv !== "object" ||
     Array.isArray(commandEnv) ||
@@ -1459,6 +1461,7 @@ export async function executeAliceBootstrapIdentityActions({
     versionId: versionIds.runtimeHost,
     version: selectedRuntimeHostVersion,
     namespaceIds: selectedRuntimeHostNamespaceIds,
+    expectedApplicationImage: expectedRuntimeHostApplicationImage,
   });
   if (
     !runtimeHostBoundary ||
@@ -1866,6 +1869,13 @@ async function main() {
     versionIds.control = versionId;
     createdByRun.controlWorker = true;
   }
+  const expectedRuntimeHostApplicationImage =
+    identityActions.runtimeHost.upload === "none"
+      ? (await fetchAliceRuntimeHostContainerState({
+          fetchImpl: globalThis.fetch,
+          apiToken,
+        })).application?.configuration?.image
+      : runtimeImage;
   const identityExecution = await executeAliceBootstrapIdentityActions({
     identityActions,
     versionIds,
@@ -1874,6 +1884,7 @@ async function main() {
     sourceRoot,
     sourceCommit,
     releaseRunId,
+    expectedRuntimeHostApplicationImage,
     commandEnv: aliceCloudflareCommandEnv(),
     fetchVersion: async ({ role, versionId: selectedVersionId }) =>
       api({
@@ -1891,7 +1902,10 @@ async function main() {
         apiToken,
         role,
       }),
-    verifyRuntimeHostBoundary: async ({ namespaceIds: runtimeHostNamespaces }) => {
+    verifyRuntimeHostBoundary: async ({
+      namespaceIds: runtimeHostNamespaces,
+      expectedApplicationImage,
+    }) => {
       const containerState = await fetchAliceRuntimeHostContainerState({
         fetchImpl: globalThis.fetch,
         apiToken,
@@ -1899,6 +1913,7 @@ async function main() {
       return verifyAliceContainerApplicationReadback({
         application: containerState.application,
         applicationInstances: containerState.applicationInstances,
+        expectedApplicationImage,
         materializedWranglerConfig: runtimeHostBootstrapConfig,
         expectedNamespaceId: runtimeHostNamespaces[0]?.namespaceId,
       });

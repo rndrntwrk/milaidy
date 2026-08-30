@@ -588,6 +588,8 @@ test("full-deploys the unrouted runtime host before one inactive Access upload",
     sourceRoot: "/release/source",
     sourceCommit: "1".repeat(40),
     releaseRunId: "33244173579-1",
+    expectedRuntimeHostApplicationImage:
+      `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"5".repeat(64)}`,
     commandEnv: {},
     runCommand: (_binary, argv) => {
       commands.push(argv);
@@ -703,6 +705,8 @@ test("checks the inactive Access boundary after first-deploy promotions", async 
     connectorPlane: connectorPlaneVersionId,
   };
   const providerTraffic = structuredClone(observedTraffic);
+  const capturedRuntimeHostImage =
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"4".repeat(64)}`;
   await assert.rejects(
     bootstrapModule.executeAliceBootstrapIdentityActions({
       identityActions: {
@@ -739,6 +743,7 @@ test("checks the inactive Access boundary after first-deploy promotions", async 
       sourceRoot: "/release/source",
       sourceCommit: "1".repeat(40),
       releaseRunId: "33244173579-1",
+      expectedRuntimeHostApplicationImage: capturedRuntimeHostImage,
       commandEnv: {},
       runCommand: (_binary, argv) => {
         if (argv[0] === "deploy") {
@@ -759,9 +764,12 @@ test("checks the inactive Access boundary after first-deploy promotions", async 
           ? selectedVersions[role]
           : null,
       fetchActiveVersionId: async (role) => activeVersionIds[role],
-      verifyRuntimeHostBoundary: async () => ({
-        applicationId: "66666666-6666-4666-8666-666666666666",
-      }),
+      verifyRuntimeHostBoundary: async ({ expectedApplicationImage }) => {
+        assert.equal(expectedApplicationImage, capturedRuntimeHostImage);
+        return {
+          applicationId: "66666666-6666-4666-8666-666666666666",
+        };
+      },
       fetchTraffic: async () => structuredClone(providerTraffic),
       trafficBefore: observedTraffic,
     }),
