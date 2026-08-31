@@ -22,6 +22,7 @@ export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {
   requiredPorts = [ALICE_RUNTIME_CONTAINER_PORT];
   sleepAfter = "10m";
   enableInternet = false;
+  allowedHosts = Object.keys(ALICE_RUNTIME_OUTBOUND_BY_HOST);
   pingEndpoint = "/health/live";
   constructor(
     ctx: DurableObjectState<Record<string, never>>,
