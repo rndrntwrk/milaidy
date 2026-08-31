@@ -11,9 +11,12 @@ import {
   aliceCloudflareCommandEnv,
   buildAliceEvidenceQueueUpdate,
   buildAliceProtectedCloudflareCommands,
+  buildAliceCandidateContainerApplicationTarget,
   executeAliceCloudflareRollbacks,
   materializeAliceWorkerSecretFiles,
+  normalizeAliceContainerApplicationRollbackState,
   parseAliceWranglerUploadVersionId,
+  transitionAliceContainerApplication,
   verifyAliceCloudflareAnchorStillCurrent,
   verifyAliceCloudflarePreparedState,
   verifyAliceCloudflarePrepareEvidence,
@@ -43,6 +46,31 @@ import {
 } from "./test-fixtures/alice_provider_readbacks.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+function aliceTestContainerApplicationState({
+  imageDigit = "1",
+  applicationVersion = 1,
+} = {}) {
+  return {
+    schemaVersion: "alice.container-application-state.v1",
+    accountId: "036df6c823669b8fa2f66cf4c16eeb29",
+    applicationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    applicationName: "alice-production-runtime",
+    applicationVersion,
+    namespaceId: "5".repeat(32),
+    schedulingPolicy: "default",
+    maxInstances: 1,
+    rolloutActiveGracePeriod: 0,
+    target: {
+      configuration: {
+        image:
+          `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${imageDigit.repeat(64)}`,
+        instance_type: "standard-1",
+        observability: { logs: { enabled: true } },
+      },
+    },
+  };
+}
 
 test("builds one exact-byte staged upload, promotion, and rollback sequence", () => {
   const sourceCommit = "1".repeat(40);
@@ -141,6 +169,131 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   ]) {
     assert.equal(serializedCommands.includes(destructiveD1Operation), false);
   }
+});
+
+test("promotes and restores one exact captured Container application target", async () => {
+  const previousImage =
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"1".repeat(64)}`;
+  const candidateImage =
+    `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"2".repeat(64)}`;
+  const rawApplication = {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    account_id: "036df6c823669b8fa2f66cf4c16eeb29",
+    name: "alice-production-runtime",
+    version: 1,
+    scheduling_policy: "default",
+    max_instances: 1,
+    configuration: {
+      image: previousImage,
+      vcpu: 0.5,
+      memory_mib: 4096,
+      disk: { size_mb: 8000 },
+      observability: { logs: { enabled: true } },
+    },
+    durable_objects: { namespace_id: "5".repeat(32) },
+    rollout_active_grace_period: 0,
+    health: { instances: { failed: 0 }, errors: [] },
+  };
+  const rawVersion = {
+    id: "1",
+    version: 1,
+    percentage: 100,
+    configuration: structuredClone(rawApplication.configuration),
+  };
+  const previous = normalizeAliceContainerApplicationRollbackState({
+    application: rawApplication,
+    applicationVersions: [rawVersion],
+    applicationInstances: [{ id: "active-instance" }],
+  });
+  const candidateTarget = buildAliceCandidateContainerApplicationTarget({
+    previous,
+    materializedWranglerConfig: {
+      account_id: rawApplication.account_id,
+      containers: [{
+        name: rawApplication.name,
+        class_name: "AliceRuntimeContainer",
+        image: candidateImage,
+        instance_type: "standard-1",
+        max_instances: 1,
+      }],
+      durable_objects: {
+        bindings: [{
+          name: "ALICE_RUNTIME_CONTAINER",
+          class_name: "AliceRuntimeContainer",
+        }],
+      },
+      observability: { logs: { enabled: true } },
+    },
+  });
+  let current = previous;
+  const mutations = [];
+  const rolloutBodies = [];
+  const operations = {
+    fetchApplication: async () => current,
+    createRollout: async ({ target, body }) => {
+      mutations.push(`rollout:${target.configuration.image}`);
+      rolloutBodies.push(body);
+      const currentVersion = current.applicationVersion;
+      const currentConfiguration = current.target.configuration;
+      current = {
+        ...current,
+        applicationVersion: currentVersion + 1,
+        target,
+      };
+      return {
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        current_version: currentVersion,
+        target_version: current.applicationVersion,
+        current_configuration: currentConfiguration,
+        target_configuration: target.configuration,
+        status: "completed",
+      };
+    },
+    fetchRollout: async ({ rollout }) => rollout,
+    sleep: async () => undefined,
+  };
+  const promoted = await transitionAliceContainerApplication({
+    expectedCurrent: previous,
+    target: candidateTarget,
+    operations,
+  });
+  assert.equal(promoted.changed, true);
+  assert.equal(promoted.current.target.configuration.image, candidateImage);
+  const restored = await transitionAliceContainerApplication({
+    expectedCurrent: promoted.current,
+    target: previous.target,
+    operations,
+  });
+  assert.equal(restored.changed, true);
+  assert.equal(restored.current.target.configuration.image, previousImage);
+  assert.deepEqual(mutations, [
+    `rollout:${candidateImage}`,
+    `rollout:${previousImage}`,
+  ]);
+  assert.deepEqual(rolloutBodies[0], {
+    description: "Alice protected immutable image transition",
+    strategy: "rolling",
+    target_configuration: candidateTarget.configuration,
+    step_percentage: 100,
+    kind: "full_auto",
+  });
+
+  current = { ...previous, applicationVersion: 99 };
+  let mutated = false;
+  await assert.rejects(
+    () => transitionAliceContainerApplication({
+      expectedCurrent: previous,
+      target: candidateTarget,
+      operations: {
+        ...operations,
+        createRollout: async () => {
+          mutated = true;
+        },
+      },
+    }),
+    /ALICE_CONTAINER_APPLICATION_DRIFTED/,
+  );
+  assert.equal(mutated, false);
 });
 
 test("materializes Container runtime secrets only for the separate runtime host", () => {
@@ -923,6 +1076,7 @@ test("the protected command requires attested bundles and terminal live readback
   assert.match(source, /restoreAliceTrafficState/);
   assert.match(source, /restoreAliceCloudflareWorkerRollbackState/);
   assert.match(source, /alice\.cloudflare-rollback-evidence\.v2/);
+  assert.match(source, /transitionAliceContainerApplication/);
   assert.match(source, /workerDeployments: workers\.deployments/);
   assert.match(source, /fetchAliceCloudflareContinuityState/);
   assert.match(source, /ALICE_CONTINUITY_CHANGED_DURING_PROMOTION/);
@@ -1051,6 +1205,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     previous: {
       capturedAt: "2026-08-22T12:00:00.000Z",
       coherent: true,
+      containerApplication: aliceTestContainerApplicationState(),
       continuityConfig,
       trafficState: {
         routes: [{
@@ -1113,6 +1268,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
   assert.deepEqual(verifyAliceCloudflareAnchorStillCurrent({
     anchor,
     workers: anchor.previous.workers,
+    containerApplication: anchor.previous.containerApplication,
     traffic: anchor.previous.trafficState,
     continuityConfig: anchor.previous.continuityConfig,
     workflowVersions: anchor.previous.workflowVersions,
@@ -1120,6 +1276,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
   assert.throws(() => verifyAliceCloudflareAnchorStillCurrent({
     anchor,
     workers: anchor.previous.workers,
+    containerApplication: anchor.previous.containerApplication,
     traffic: {
       ...anchor.previous.trafficState,
       routes: [],
@@ -1149,6 +1306,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
         },
       },
     },
+    containerApplication: anchor.previous.containerApplication,
     traffic: {
       ...anchor.previous.trafficState,
       routes: [
@@ -1367,6 +1525,7 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
     apiToken: "provider-token-value",
     anchor: {
       previous: {
+        containerApplication: aliceTestContainerApplicationState(),
         continuityConfig,
         trafficState,
         workflowVersions: [previousWorkflowVersion],
@@ -1388,6 +1547,10 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
         } } };
       },
       runRollbackCommand: (command) => mutations.push(`worker:${command.role}`),
+      restoreContainerApplication: async () => {
+        mutations.push("container-restored");
+        return { current: aliceTestContainerApplicationState() };
+      },
       restoreTraffic: async () => {
         mutations.push("traffic-restored");
         return { after: trafficState };
@@ -1406,6 +1569,7 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
     "queue-paused",
     "worker:access",
     "worker:runtimeHost",
+    "container-restored",
     "worker:connectorPlane",
     "worker:aiGateway",
     "worker:control",
@@ -1416,6 +1580,10 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
   ]);
   assert.equal(workflowRead, 2);
   assert.deepEqual(evidence.continuityConfig, continuityConfig);
+  assert.deepEqual(
+    evidence.containerApplication,
+    aliceTestContainerApplicationState(),
+  );
   assert.equal(evidence.continuityRestoration.mode, "prior-serving-state-restored");
   assert.deepEqual(evidence.workflowVersionContinuity.current, workflowVersions);
 });
@@ -1456,6 +1624,7 @@ for (const failurePoint of ["control-command", "worker-settings"]) {
         apiToken: "provider-token-value",
         anchor: {
           previous: {
+            containerApplication: aliceTestContainerApplicationState(),
             continuityConfig,
             trafficState: {},
             workflowVersions: [workflowVersion],
@@ -1477,6 +1646,9 @@ for (const failurePoint of ["control-command", "worker-settings"]) {
               throw new Error("INJECTED_CONTROL_ROLLBACK_FAILURE");
             }
           },
+          restoreContainerApplication: async () => ({
+            current: aliceTestContainerApplicationState(),
+          }),
           restoreTraffic: async () => {
             mutations.push("traffic-restored");
             return { after: {} };

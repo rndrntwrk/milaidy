@@ -582,13 +582,22 @@ export function bindAliceWranglerDeploymentEntrypoint(
 }
 
 export function materializeAliceWranglerConfig(role, sourceConfig, values) {
-  if (!ROLES.includes(role) || !values || typeof values !== "object") {
+  if (
+    !ROLES.includes(role) ||
+    !sourceConfig ||
+    typeof sourceConfig !== "object" ||
+    Array.isArray(sourceConfig) ||
+    Object.hasOwn(sourceConfig, "unsafe") ||
+    !values ||
+    typeof values !== "object"
+  ) {
     throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
   }
   const config = clone(sourceConfig);
   if (config.account_id !== ALICE_CLOUDFLARE_TARGET.accountId) {
     throw new Error("ALICE_WRANGLER_ACCOUNT_INVALID");
   }
+  config.unsafe = { metadata: { keep_bindings: [] } };
   config.vars ??= {};
   if (role === "access") {
     Object.assign(config.vars, {

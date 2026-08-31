@@ -43,7 +43,9 @@ function cloudflareProviderFixture({
   expiresOn,
   broaden = false,
 } = {}) {
-  const groupIds = ["1", "2", "3", "4"].map((value) => value.repeat(32));
+  const groupIds = ALICE_CLOUDFLARE_RECOVERY_PERMISSION_GROUPS.map(
+    (_, index) => String(index + 1).repeat(32),
+  );
   const groups = ALICE_CLOUDFLARE_RECOVERY_PERMISSION_GROUPS.map(
     (group, index) => ({
       id: groupIds[index],
@@ -53,13 +55,15 @@ function cloudflareProviderFixture({
   );
   if (broaden) {
     groups.push({
-      id: "5".repeat(32),
+      id: "f".repeat(32),
       name: "Access: Apps and Policies Write",
       scopes: ["com.cloudflare.api.account"],
     });
   }
   const accountGroups = groups.filter((group) =>
     group.scopes[0] === "com.cloudflare.api.account");
+  const zoneGroup = groups.find((group) =>
+    group.scopes[0] === "com.cloudflare.api.account.zone");
   const token = {
     id: tokenId,
     status: "active",
@@ -79,8 +83,8 @@ function cloudflareProviderFixture({
         effect: "allow",
         resources: { [`com.cloudflare.api.account.zone.${zoneId}`]: "*" },
         permission_groups: [{
-          id: groups[3].id,
-          name: groups[3].name,
+          id: zoneGroup.id,
+          name: zoneGroup.name,
         }],
       },
     ],
@@ -261,6 +265,18 @@ test("binds the full sanitized Modal capture emitted by the watchdog", () => {
 });
 
 test("binds an active Cloudflare token to the exact reviewed recovery policy", () => {
+  assert.equal(
+    ALICE_CLOUDFLARE_RECOVERY_CAPABILITIES.includes(
+      "account.containers.read-write",
+    ),
+    true,
+  );
+  assert.deepEqual(
+    ALICE_CLOUDFLARE_RECOVERY_PERMISSION_GROUPS.find(
+      (group) => group.name === "Containers Write",
+    ),
+    { name: "Containers Write", scope: "com.cloudflare.api.account" },
+  );
   const tokenId = "0123456789abcdef0123456789abcdef";
   const provider = cloudflareProviderFixture({
     tokenId,

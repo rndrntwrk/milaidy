@@ -32,6 +32,7 @@ export const ALICE_RECOVERY_CREDENTIAL_MIN_VALIDITY_MS = 5 * 60 * 60 * 1000;
 export const ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES = 128 * 1024;
 
 export const ALICE_CLOUDFLARE_RECOVERY_CAPABILITIES = Object.freeze([
+  "account.containers.read-write",
   "account.queues.read-write",
   "account.r2.read",
   "account.workers-scripts.read-write",
@@ -50,6 +51,10 @@ export const ALICE_CLOUDFLARE_RECOVERY_PERMISSION_GROUPS = Object.freeze([
   }),
   Object.freeze({
     name: "Workers Scripts Write",
+    scope: "com.cloudflare.api.account",
+  }),
+  Object.freeze({
+    name: "Containers Write",
     scope: "com.cloudflare.api.account",
   }),
   Object.freeze({

@@ -60,6 +60,9 @@ const RESOURCE_ID = /^[A-Za-z0-9_-]{16,64}$/;
 const VERSION_ID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const RELEASE_RUN_ID = /^[1-9][0-9]*-[1-9][0-9]*$/;
+const CONTAINER_IMAGE =
+  /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
+const NAMESPACE_ID = /^[a-f0-9]{32}$/;
 const ROLES = [
   "access",
   "runtimeHost",
@@ -127,6 +130,395 @@ function exactKeys(value, keys) {
     JSON.stringify(Object.keys(value).sort()) ===
       JSON.stringify([...keys].sort())
   );
+}
+
+function normalizedContainerConfiguration(value) {
+  const standardOne = value?.instance_type === "standard-1" || (
+    value?.vcpu === 0.5 &&
+    value?.memory_mib === 4096 &&
+    value?.disk?.size_mb === 8000
+  );
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    !CONTAINER_IMAGE.test(value.image ?? "") ||
+    !standardOne ||
+    value.observability?.logs?.enabled !== true
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_INVALID");
+  }
+  return {
+    image: value.image,
+    instance_type: "standard-1",
+    observability: { logs: { enabled: true } },
+  };
+}
+
+export function normalizeAliceContainerApplicationRollbackState(value) {
+  const application = value?.application;
+  const applicationVersions = value?.applicationVersions;
+  const applicationInstances = value?.applicationInstances;
+  const health = application?.health?.instances;
+  if (
+    !application ||
+    !Array.isArray(applicationVersions) ||
+    !Array.isArray(applicationInstances) ||
+    applicationInstances.length > 1 ||
+    applicationInstances.some(
+      (instance) => !instance || typeof instance !== "object" ||
+        Array.isArray(instance),
+    ) ||
+    !VERSION_ID.test(application.id ?? "") ||
+    application.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
+    application.name !== "alice-production-runtime" ||
+    !Number.isSafeInteger(application.version) ||
+    application.version < 1 ||
+    application.scheduling_policy !== "default" ||
+    application.max_instances !== 1 ||
+    application.rollout_active_grace_period !== 0 ||
+    !NAMESPACE_ID.test(application.durable_objects?.namespace_id ?? "") ||
+    !health ||
+    health.failed !== 0 ||
+    (application.active_rollout_id !== undefined &&
+      application.active_rollout_id !== null &&
+      application.active_rollout_id !== "") ||
+    applicationVersions.some(
+      (version) =>
+        !Number.isSafeInteger(version?.version) ||
+        version.version < 1 ||
+        !Number.isSafeInteger(version?.percentage) ||
+        ![0, 100].includes(version.percentage),
+    )
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_INVALID");
+  }
+  const activeVersions = applicationVersions.filter(
+    (version) => version.percentage === 100,
+  );
+  if (
+    activeVersions.length !== 1 ||
+    activeVersions[0].version !== application.version
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_INVALID");
+  }
+  const applicationConfiguration = normalizedContainerConfiguration(
+    application.configuration,
+  );
+  const activeConfiguration = normalizedContainerConfiguration(
+    activeVersions[0].configuration,
+  );
+  if (
+    canonicalAliceJson(applicationConfiguration) !==
+      canonicalAliceJson(activeConfiguration)
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_INVALID");
+  }
+  return {
+    schemaVersion: "alice.container-application-state.v1",
+    accountId: application.account_id,
+    applicationId: application.id,
+    applicationName: application.name,
+    applicationVersion: application.version,
+    namespaceId: application.durable_objects.namespace_id,
+    schedulingPolicy: application.scheduling_policy,
+    maxInstances: application.max_instances,
+    rolloutActiveGracePeriod: application.rollout_active_grace_period,
+    target: { configuration: applicationConfiguration },
+  };
+}
+
+function verifyAliceContainerApplicationRollbackState(value) {
+  if (
+    !exactKeys(value, [
+      "schemaVersion",
+      "accountId",
+      "applicationId",
+      "applicationName",
+      "applicationVersion",
+      "namespaceId",
+      "schedulingPolicy",
+      "maxInstances",
+      "rolloutActiveGracePeriod",
+      "target",
+    ]) ||
+    value.schemaVersion !== "alice.container-application-state.v1" ||
+    value.accountId !== ALICE_CLOUDFLARE_TARGET.accountId ||
+    !VERSION_ID.test(value.applicationId ?? "") ||
+    value.applicationName !== "alice-production-runtime" ||
+    !Number.isSafeInteger(value.applicationVersion) ||
+    value.applicationVersion < 1 ||
+    !NAMESPACE_ID.test(value.namespaceId ?? "") ||
+    value.schedulingPolicy !== "default" ||
+    value.maxInstances !== 1 ||
+    value.rolloutActiveGracePeriod !== 0 ||
+    !exactKeys(value.target, ["configuration"])
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_INVALID");
+  }
+  normalizedContainerConfiguration(value.target.configuration);
+  return value;
+}
+
+export function buildAliceCandidateContainerApplicationTarget({
+  previous,
+  materializedWranglerConfig,
+}) {
+  const container = materializedWranglerConfig?.containers?.[0];
+  const durableObjectBindings =
+    materializedWranglerConfig?.durable_objects?.bindings;
+  if (
+    verifyAliceContainerApplicationRollbackState(previous) !== previous ||
+    materializedWranglerConfig?.account_id !== previous.accountId ||
+    !Array.isArray(materializedWranglerConfig?.containers) ||
+    materializedWranglerConfig.containers.length !== 1 ||
+    !Array.isArray(durableObjectBindings) ||
+    durableObjectBindings.length !== 1 ||
+    container?.name !== previous.applicationName ||
+    container?.class_name !== "AliceRuntimeContainer" ||
+    container?.instance_type !== "standard-1" ||
+    container?.max_instances !== previous.maxInstances ||
+    durableObjectBindings[0]?.name !== "ALICE_RUNTIME_CONTAINER" ||
+    durableObjectBindings[0]?.class_name !== container.class_name ||
+    Object.hasOwn(durableObjectBindings[0], "script_name") ||
+    previous.schedulingPolicy !== "default" ||
+    previous.rolloutActiveGracePeriod !== 0
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_TARGET_INVALID");
+  }
+  return {
+    configuration: normalizedContainerConfiguration({
+      image: container.image,
+      instance_type: container.instance_type,
+      observability: materializedWranglerConfig.observability,
+    }),
+  };
+}
+
+function verifyContainerApplicationIdentity(current, expected) {
+  const currentIdentity = {
+    schemaVersion: current?.schemaVersion,
+    accountId: current?.accountId,
+    applicationId: current?.applicationId,
+    applicationName: current?.applicationName,
+    namespaceId: current?.namespaceId,
+    schedulingPolicy: current?.schedulingPolicy,
+    maxInstances: current?.maxInstances,
+    rolloutActiveGracePeriod: current?.rolloutActiveGracePeriod,
+  };
+  const expectedIdentity = {
+    schemaVersion: expected?.schemaVersion,
+    accountId: expected?.accountId,
+    applicationId: expected?.applicationId,
+    applicationName: expected?.applicationName,
+    namespaceId: expected?.namespaceId,
+    schedulingPolicy: expected?.schedulingPolicy,
+    maxInstances: expected?.maxInstances,
+    rolloutActiveGracePeriod: expected?.rolloutActiveGracePeriod,
+  };
+  if (
+    canonicalAliceJson(currentIdentity) !== canonicalAliceJson(expectedIdentity)
+  ) releaseInvalid("ALICE_CONTAINER_APPLICATION_DRIFTED");
+}
+
+function verifyContainerApplicationRollout({ rollout, current, target }) {
+  if (
+    !VERSION_ID.test(rollout?.id ?? "") ||
+    rollout.current_version !== current.applicationVersion ||
+    !Number.isSafeInteger(rollout.target_version) ||
+    rollout.target_version <= rollout.current_version ||
+    !["pending", "progressing", "completed"].includes(rollout.status) ||
+    canonicalAliceJson(normalizedContainerConfiguration(
+      rollout.current_configuration,
+    )) !== canonicalAliceJson(current.target.configuration) ||
+    canonicalAliceJson(normalizedContainerConfiguration(
+      rollout.target_configuration,
+    )) !== canonicalAliceJson(target.configuration)
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_ROLLOUT_INVALID");
+  }
+  return rollout;
+}
+
+export async function transitionAliceContainerApplication({
+  expectedCurrent,
+  target,
+  apiToken,
+  fetchImpl = globalThis.fetch,
+  operations,
+}) {
+  verifyAliceContainerApplicationRollbackState(expectedCurrent);
+  const resolvedOperations = operations ?? aliceContainerApplicationOperations({
+    apiToken,
+    fetchImpl,
+  });
+  if (
+    typeof resolvedOperations?.fetchApplication !== "function" ||
+    typeof resolvedOperations?.createRollout !== "function" ||
+    typeof resolvedOperations?.fetchRollout !== "function" ||
+    typeof resolvedOperations?.sleep !== "function"
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_TRANSITION_INVALID");
+  }
+  const current = await resolvedOperations.fetchApplication();
+  verifyContainerApplicationIdentity(current, expectedCurrent);
+  if (canonicalAliceJson(current) !== canonicalAliceJson(expectedCurrent)) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_DRIFTED");
+  }
+  normalizedContainerConfiguration(target?.configuration);
+  if (canonicalAliceJson(current.target) === canonicalAliceJson(target)) {
+    return { changed: false, current, rollout: null };
+  }
+  const rollout = verifyContainerApplicationRollout({
+    rollout: await resolvedOperations.createRollout({
+      applicationId: current.applicationId,
+      target,
+      body: {
+        description: "Alice protected immutable image transition",
+        strategy: "rolling",
+        target_configuration: target.configuration,
+        step_percentage: 100,
+        kind: "full_auto",
+      },
+    }),
+    current,
+    target,
+  });
+  let terminalRollout = rollout;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (terminalRollout.status === "completed") break;
+    await resolvedOperations.sleep(2_000);
+    terminalRollout = verifyContainerApplicationRollout({
+      rollout: await resolvedOperations.fetchRollout({
+        applicationId: current.applicationId,
+        rollout,
+      }),
+      current,
+      target,
+    });
+  }
+  if (terminalRollout.status !== "completed") {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_ROLLOUT_INVALID");
+  }
+  const after = await resolvedOperations.fetchApplication();
+  verifyContainerApplicationIdentity(after, current);
+  if (
+    after.applicationVersion !== rollout.target_version ||
+    canonicalAliceJson(after.target) !== canonicalAliceJson(target)
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_ROLLOUT_INVALID");
+  }
+  return { changed: true, current: after, rollout: terminalRollout };
+}
+
+async function aliceContainerApiJson({
+  fetchImpl,
+  apiToken,
+  method = "GET",
+  pathname,
+  body,
+}) {
+  if (
+    typeof fetchImpl !== "function" ||
+    typeof apiToken !== "string" ||
+    apiToken.length < 32 ||
+    typeof pathname !== "string" ||
+    !pathname.startsWith(`/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/containers/`)
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
+  }
+  const response = await fetchImpl(`${API_BASE}${pathname}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${apiToken}`,
+      accept: "application/json",
+      "cache-control": "no-cache",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!(response instanceof Response) || !response.ok) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
+  }
+  let envelope;
+  try {
+    envelope = await response.json();
+  } catch {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
+  }
+  if (envelope?.success !== true || !("result" in envelope)) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
+  }
+  return envelope.result;
+}
+
+async function fetchAliceContainerApplicationRollbackState({
+  fetchImpl = globalThis.fetch,
+  apiToken,
+}) {
+  const base = `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/containers`;
+  const applications = await aliceContainerApiJson({
+    fetchImpl,
+    apiToken,
+    pathname: `${base}/applications?name=alice-production-runtime`,
+  });
+  if (
+    !Array.isArray(applications) ||
+    applications.length !== 1 ||
+    applications[0]?.name !== "alice-production-runtime" ||
+    !VERSION_ID.test(applications[0]?.id ?? "")
+  ) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
+  }
+  const applicationId = applications[0].id;
+  const [application, applicationVersions, instancePage] = await Promise.all([
+    aliceContainerApiJson({
+      fetchImpl,
+      apiToken,
+      pathname: `${base}/applications/${applicationId}`,
+    }),
+    aliceContainerApiJson({
+      fetchImpl,
+      apiToken,
+      pathname: `${base}/applications/${applicationId}/versions`,
+    }),
+    aliceContainerApiJson({
+      fetchImpl,
+      apiToken,
+      pathname: `${base}/applications/${applicationId}/instances`,
+    }),
+  ]);
+  return normalizeAliceContainerApplicationRollbackState({
+    application,
+    applicationVersions,
+    applicationInstances: instancePage?.instances,
+  });
+}
+
+function aliceContainerApplicationOperations({ apiToken, fetchImpl }) {
+  const base = `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/containers`;
+  return {
+    fetchApplication: () => fetchAliceContainerApplicationRollbackState({
+      apiToken,
+      fetchImpl,
+    }),
+    createRollout: ({ applicationId, body }) => aliceContainerApiJson({
+      fetchImpl,
+      apiToken,
+      method: "POST",
+      pathname: `${base}/applications/${applicationId}/rollouts`,
+      body,
+    }),
+    fetchRollout: ({ applicationId, rollout }) => aliceContainerApiJson({
+      fetchImpl,
+      apiToken,
+      pathname:
+        `${base}/applications/${applicationId}/rollouts/${rollout.id}`,
+    }),
+    sleep: (milliseconds) => new Promise(
+      (resolve) => setTimeout(resolve, milliseconds),
+    ),
+  };
 }
 
 function canonicalIsoTimestamp(value) {
@@ -686,7 +1078,11 @@ async function verifyReleaseArtifacts({
     const roleConfigPath = configPath(configDir, role);
     const config = readJson(roleConfigPath);
     const expectedMain = bundlePath(artifactRoot, role);
-    if (config.name !== WORKERS[role]) {
+    if (
+      config.name !== WORKERS[role] ||
+      canonicalAliceJson(config.unsafe) !==
+        canonicalAliceJson({ metadata: { keep_bindings: [] } })
+    ) {
       releaseInvalid("ALICE_RELEASE_CONFIG_INVALID");
     }
     const effectiveConfig = aliceEffectiveConfigFromWrangler(role, config, {
@@ -892,6 +1288,8 @@ async function createRollbackAnchor({
   outputPath,
 }) {
   const workers = await captureAliceCloudflareWorkerRollbackState({ apiToken });
+  const containerApplication =
+    await fetchAliceContainerApplicationRollbackState({ apiToken });
   const trafficState = await fetchAliceCloudflareTrafficState({ apiToken });
   const continuity = await fetchAliceCloudflareContinuityState({
     apiToken,
@@ -904,6 +1302,8 @@ async function createRollbackAnchor({
   const terminalWorkers = await captureAliceCloudflareWorkerRollbackState({
     apiToken,
   });
+  const terminalContainerApplication =
+    await fetchAliceContainerApplicationRollbackState({ apiToken });
   const terminalTrafficState = await fetchAliceCloudflareTrafficState({
     apiToken,
   });
@@ -918,6 +1318,8 @@ async function createRollbackAnchor({
     });
   if (
     canonicalAliceJson(workers) !== canonicalAliceJson(terminalWorkers) ||
+    canonicalAliceJson(containerApplication) !==
+      canonicalAliceJson(terminalContainerApplication) ||
     canonicalAliceJson(trafficState) !==
       canonicalAliceJson(terminalTrafficState) ||
     canonicalAliceJson(continuity.sanitized) !==
@@ -934,6 +1336,7 @@ async function createRollbackAnchor({
     previous: {
       capturedAt: new Date().toISOString(),
       coherent: true,
+      containerApplication,
       continuityConfig: continuity.sanitized,
       trafficState,
       workflowVersions,
@@ -972,6 +1375,7 @@ export function verifyAliceCloudflareRollbackAnchor(
     !exactKeys(anchor.previous, [
       "capturedAt",
       "coherent",
+      "containerApplication",
       "continuityConfig",
       "trafficState",
       "workflowVersions",
@@ -984,6 +1388,9 @@ export function verifyAliceCloudflareRollbackAnchor(
     releaseInvalid("ALICE_ROLLBACK_ANCHOR_INVALID");
   }
   try {
+    verifyAliceContainerApplicationRollbackState(
+      anchor.previous.containerApplication,
+    );
     verifyAliceCloudflareContinuityConfig(anchor.previous.continuityConfig);
     verifyAliceCloudflareWorkflowVersionSnapshot(
       anchor.previous.workflowVersions,
@@ -1058,6 +1465,7 @@ export function verifyAliceCloudflarePreparedState({
   anchor,
   uploadedVersions,
   workers,
+  containerApplication,
   traffic,
 }) {
   if (
@@ -1084,6 +1492,8 @@ export function verifyAliceCloudflarePreparedState({
       canonicalAliceJson(anchor.previous.workers.statePlane) ||
     canonicalAliceJson(workers.connectorPlane) !==
       canonicalAliceJson(anchor.previous.workers.connectorPlane) ||
+    canonicalAliceJson(containerApplication) !==
+      canonicalAliceJson(anchor.previous.containerApplication) ||
     canonicalAliceJson(aliceTrafficSemanticState(traffic)) !==
       canonicalAliceJson(expectedTraffic)
   ) {
@@ -1099,11 +1509,13 @@ export function verifyAliceCloudflarePreparedState({
 export function verifyAliceCloudflareAnchorStillCurrent({
   anchor,
   workers,
+  containerApplication,
   traffic,
   continuityConfig,
   workflowVersions,
 }) {
   try {
+    verifyAliceContainerApplicationRollbackState(containerApplication);
     verifyAliceCloudflareWorkerRollbackStateSnapshot(workers);
     aliceTrafficSemanticState(traffic);
     verifyAliceCloudflareContinuityConfig(continuityConfig);
@@ -1117,6 +1529,8 @@ export function verifyAliceCloudflareAnchorStillCurrent({
   if (
     canonicalAliceJson(workers) !==
       canonicalAliceJson(anchor.previous.workers) ||
+    canonicalAliceJson(containerApplication) !==
+      canonicalAliceJson(anchor.previous.containerApplication) ||
     canonicalAliceJson(traffic) !==
       canonicalAliceJson(anchor.previous.trafficState) ||
     canonicalAliceJson(continuityConfig) !==
@@ -1461,6 +1875,17 @@ export async function executeAliceCloudflareRollbacks({
     ((options) => restoreAliceCloudflareWorkerRollbackState(options));
   const restoreContinuity = operations.restoreContinuity ??
     ((options) => restoreAliceCloudflareContinuityState(options));
+  const restoreContainerApplication = operations.restoreContainerApplication ??
+    (async () => {
+      const current = await fetchAliceContainerApplicationRollbackState({
+        apiToken,
+      });
+      return transitionAliceContainerApplication({
+        apiToken,
+        expectedCurrent: current,
+        target: anchor.previous.containerApplication.target,
+      });
+    });
   const failures = [];
   const workflowVersionsBeforeRollback =
     await fetchWorkflowVersions({
@@ -1500,7 +1925,29 @@ export async function executeAliceCloudflareRollbacks({
     failure.failClosedQueueSafety = failClosedQueueSafety;
     throw failure;
   };
-  for (const command of commands.rollbacks) {
+  const edgeRollbacks = commands.rollbacks.filter(
+    (command) => ["access", "runtimeHost"].includes(command.role),
+  );
+  const internalRollbacks = commands.rollbacks.filter(
+    (command) => !["access", "runtimeHost"].includes(command.role),
+  );
+  for (const command of edgeRollbacks) {
+    try {
+      runRollbackCommand(command);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  let containerApplication;
+  try {
+    containerApplication = await restoreContainerApplication({
+      apiToken,
+      expected: anchor.previous.containerApplication,
+    });
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
+  }
+  for (const command of internalRollbacks) {
     try {
       runRollbackCommand(command);
     } catch (error) {
@@ -1564,6 +2011,7 @@ export async function executeAliceCloudflareRollbacks({
     accountId: ALICE_CLOUDFLARE_TARGET.accountId,
     observedAt: new Date().toISOString(),
     traffic: traffic.after,
+    containerApplication: containerApplication.current,
     workerDeployments: workers.deployments,
     workers: workers.restored,
     continuityConfig: continuity.after,
@@ -1775,6 +2223,8 @@ async function main() {
       const freshWorkers = await captureAliceCloudflareWorkerRollbackState({
         apiToken,
       });
+      const freshContainerApplication =
+        await fetchAliceContainerApplicationRollbackState({ apiToken });
       const freshTraffic = await fetchAliceCloudflareTrafficState({ apiToken });
       const freshContinuity = await fetchAliceCloudflareContinuityState({
         apiToken,
@@ -1788,6 +2238,7 @@ async function main() {
       verifyAliceCloudflareAnchorStillCurrent({
         anchor,
         workers: freshWorkers,
+        containerApplication: freshContainerApplication,
         traffic: freshTraffic,
         continuityConfig: freshContinuity.sanitized,
         workflowVersions: freshWorkflowVersions,
@@ -1865,11 +2316,14 @@ async function main() {
       const workers = await captureAliceCloudflareWorkerRollbackState({
         apiToken,
       });
+      const containerApplication =
+        await fetchAliceContainerApplicationRollbackState({ apiToken });
       const traffic = await fetchAliceCloudflareTrafficState({ apiToken });
       const prepared = verifyAliceCloudflarePreparedState({
         anchor,
         uploadedVersions,
         workers,
+        containerApplication,
         traffic,
       });
       writeReadonly(prepareEvidencePath, verifyAliceCloudflarePrepareEvidence({
@@ -1955,11 +2409,14 @@ async function main() {
   const preparedWorkers = await captureAliceCloudflareWorkerRollbackState({
     apiToken,
   });
+  const preparedContainerApplication =
+    await fetchAliceContainerApplicationRollbackState({ apiToken });
   const preparedTraffic = await fetchAliceCloudflareTrafficState({ apiToken });
   verifyAliceCloudflarePreparedState({
     anchor,
     uploadedVersions: prepareEvidence.uploadedVersions,
     workers: preparedWorkers,
+    containerApplication: preparedContainerApplication,
     traffic: preparedTraffic,
   });
   const continuityBeforePromotion = await readSignedContinuity({
@@ -1977,17 +2434,39 @@ async function main() {
     uploadedVersions: prepareEvidence.uploadedVersions,
     rollbackVersions,
   });
-  try {
-    verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
-    for (const command of promotionCommands.promotions.filter(
-      (item) => item.role !== "control",
-    )) {
+  const candidateContainerTarget =
+    buildAliceCandidateContainerApplicationTarget({
+      previous: anchor.previous.containerApplication,
+      materializedWranglerConfig: release.configs.runtimeHost,
+    });
+  const promoteWorkers = (roles, errorCode) => {
+    for (const role of roles) {
+      const command = promotionCommands.promotions.find(
+        (candidate) => candidate.role === role,
+      );
+      if (!command) releaseInvalid("ALICE_WORKER_PROMOTION_INVALID");
       run(wranglerBin, command.argv, {
         cwd: sourceRoot,
         env: commandEnv,
-        errorCode: "ALICE_WORKER_PROMOTION_FAILED",
+        errorCode,
       });
     }
+  };
+  try {
+    verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+    promoteWorkers(
+      ["statePlane", "aiGateway", "connectorPlane"],
+      "ALICE_WORKER_PROMOTION_FAILED",
+    );
+    await transitionAliceContainerApplication({
+      apiToken,
+      expectedCurrent: anchor.previous.containerApplication,
+      target: candidateContainerTarget,
+    });
+    promoteWorkers(
+      ["runtimeHost", "access"],
+      "ALICE_WORKER_PROMOTION_FAILED",
+    );
     await applyAliceCandidateTrafficState({
       apiToken,
       expected: aliceExpectedProductionTrafficState(),
@@ -2031,13 +2510,19 @@ async function main() {
           release.manifest.cloudflare.continuityConfigSha256,
         deliveryPaused: true,
       });
-      for (const command of promotionCommands.promotions) {
-        run(wranglerBin, command.argv, {
-          cwd: sourceRoot,
-          env: commandEnv,
-          errorCode: "ALICE_WORKER_FORWARD_RESTORATION_FAILED",
-        });
-      }
+      promoteWorkers(
+        ["control", "statePlane", "aiGateway", "connectorPlane"],
+        "ALICE_WORKER_FORWARD_RESTORATION_FAILED",
+      );
+      await transitionAliceContainerApplication({
+        apiToken,
+        expectedCurrent: anchor.previous.containerApplication,
+        target: candidateContainerTarget,
+      });
+      promoteWorkers(
+        ["runtimeHost", "access"],
+        "ALICE_WORKER_FORWARD_RESTORATION_FAILED",
+      );
       await applyAliceCandidateTrafficState({
         apiToken,
         expected: aliceExpectedProductionTrafficState(),
