@@ -24,6 +24,8 @@ import {
 
 const SOURCE = "1".repeat(40);
 const ELIZA = "2".repeat(40);
+const RUNTIME_ROOT = "runtime-root";
+const BUILD_CONTEXT = "build-context";
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), "alice-runtime-root-"));
@@ -47,6 +49,27 @@ async function fixture() {
   return root;
 }
 
+function buildContract(root, overrides = {}) {
+  return buildAliceRuntimeRootContract({
+    root,
+    contractKind: RUNTIME_ROOT,
+    sourceCommit: SOURCE,
+    elizaCommit: ELIZA,
+    ...overrides,
+  });
+}
+
+function writeContract(root, output, overrides = {}) {
+  return writeAliceRuntimeRootContract({
+    root,
+    output,
+    contractKind: RUNTIME_ROOT,
+    sourceCommit: SOURCE,
+    elizaCommit: ELIZA,
+    ...overrides,
+  });
+}
+
 async function expectPredicate(fn, predicateId) {
   await assert.rejects(fn, (error) => {
     assert.ok(error instanceof AliceRuntimeRootContractError);
@@ -55,14 +78,48 @@ async function expectPredicate(fn, predicateId) {
   });
 }
 
+test("contract kind is explicit and independently verified", async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  await expectPredicate(
+    () =>
+      buildAliceRuntimeRootContract({
+        root,
+        sourceCommit: SOURCE,
+        elizaCommit: ELIZA,
+      }),
+    "CONTRACT_KIND_INVALID",
+  );
+  await expectPredicate(
+    () => buildContract(root, { contractKind: "unknown" }),
+    "CONTRACT_KIND_INVALID",
+  );
+
+  const runtime = await buildContract(root);
+  assert.equal(runtime.contractKind, RUNTIME_ROOT);
+  assert.equal(
+    verifyAliceRuntimeRootContractShape(runtime, {
+      expectedKind: RUNTIME_ROOT,
+    }),
+    runtime,
+  );
+  await expectPredicate(
+    async () =>
+      verifyAliceRuntimeRootContractShape(runtime, {
+        expectedKind: BUILD_CONTEXT,
+      }),
+    "CONTRACT_KIND_MISMATCH",
+  );
+
+  const context = await buildContract(root, { contractKind: BUILD_CONTEXT });
+  assert.equal(context.contractKind, BUILD_CONTEXT);
+});
+
 test("contract is deterministic across mtimes and directory creation order", async (t) => {
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  const first = await buildAliceRuntimeRootContract({
-    root,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
+  const first = await buildContract(root);
   const now = new Date();
   await utimes(
     path.join(root, "bin", "alice-runtime"),
@@ -72,11 +129,7 @@ test("contract is deterministic across mtimes and directory creation order", asy
   await mkdir(path.join(root, "z-last"));
   await writeFile(path.join(root, "z-last", "tmp"), "x");
   await rm(path.join(root, "z-last"), { recursive: true });
-  const second = await buildAliceRuntimeRootContract({
-    root,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
+  const second = await buildContract(root);
   assert.equal(second.contractSha256, first.contractSha256);
   assert.deepEqual(second, first);
 });
@@ -84,38 +137,22 @@ test("contract is deterministic across mtimes and directory creation order", asy
 test("content and executable-bit changes alter the contract", async (t) => {
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  const first = await buildAliceRuntimeRootContract({
-    root,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
+  const first = await buildContract(root);
   await writeFile(
     path.join(root, "bin", "alice-runtime"),
     "#!/bin/sh\necho changed\n",
   );
-  const contentChanged = await buildAliceRuntimeRootContract({
-    root,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
+  const contentChanged = await buildContract(root);
   assert.notEqual(contentChanged.contractSha256, first.contractSha256);
   await chmod(path.join(root, "bin", "alice-runtime"), 0o644);
-  const modeChanged = await buildAliceRuntimeRootContract({
-    root,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
+  const modeChanged = await buildContract(root);
   assert.notEqual(modeChanged.contractSha256, contentChanged.contractSha256);
 });
 
 test("relative in-root symlinks are admitted and escaping symlinks are rejected", async (t) => {
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  const contract = await buildAliceRuntimeRootContract({
-    root,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
+  const contract = await buildContract(root);
   const alias = contract.entries.find(
     (entry) => entry.path === "node_modules/@elizaos/core-alias",
   );
@@ -130,12 +167,7 @@ test("relative in-root symlinks are admitted and escaping symlinks are rejected"
     path.join(root, "node_modules", "escape"),
   );
   await expectPredicate(
-    () =>
-      buildAliceRuntimeRootContract({
-        root,
-        sourceCommit: SOURCE,
-        elizaCommit: ELIZA,
-      }),
+    () => buildContract(root),
     "SYMLINK_ESCAPE",
   );
 });
@@ -146,23 +178,13 @@ test("forbidden source-control and secret-shaped files fail closed", async (t) =
   await mkdir(path.join(root, ".git"));
   await writeFile(path.join(root, ".git", "HEAD"), "ref: refs/heads/main\n");
   await expectPredicate(
-    () =>
-      buildAliceRuntimeRootContract({
-        root,
-        sourceCommit: SOURCE,
-        elizaCommit: ELIZA,
-      }),
+    () => buildContract(root),
     "FORBIDDEN_PREFIX",
   );
   await rm(path.join(root, ".git"), { recursive: true });
   await writeFile(path.join(root, ".env"), "SECRET=value\n");
   await expectPredicate(
-    () =>
-      buildAliceRuntimeRootContract({
-        root,
-        sourceCommit: SOURCE,
-        elizaCommit: ELIZA,
-      }),
+    () => buildContract(root),
     "FORBIDDEN_BASENAME",
   );
 });
@@ -170,11 +192,7 @@ test("forbidden source-control and secret-shaped files fail closed", async (t) =
 test("manifest shape, summaries, ordering, and digest are independently verified", async (t) => {
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  const contract = await buildAliceRuntimeRootContract({
-    root,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
+  const contract = await buildContract(root);
   assert.equal(verifyAliceRuntimeRootContractShape(contract), contract);
   const mutated = structuredClone(contract);
   mutated.entries[0].mode = 0;
@@ -192,23 +210,14 @@ test("write uses create-only semantics and verify detects first root difference"
   const output = path.join(outputDir, "alice-runtime-root.json");
   t.after(() => rm(root, { recursive: true, force: true }));
   t.after(() => rm(outputDir, { recursive: true, force: true }));
-  const contract = await writeAliceRuntimeRootContract({
-    root,
-    output,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
-  await assert.rejects(() =>
-    writeAliceRuntimeRootContract({
-      root,
-      output,
-      sourceCommit: SOURCE,
-      elizaCommit: ELIZA,
-    }),
-  );
+  const contract = await writeContract(root, output);
+  await assert.rejects(() => writeContract(root, output));
   assert.equal(
-    (await verifyAliceRuntimeRootContract({ root, contract }))
-      .contractSha256,
+    (await verifyAliceRuntimeRootContract({
+      root,
+      contract,
+      expectedKind: RUNTIME_ROOT,
+    })).contractSha256,
     contract.contractSha256,
   );
   await rename(
@@ -216,7 +225,12 @@ test("write uses create-only semantics and verify detects first root difference"
     path.join(root, "bin", "alice-runtime-renamed"),
   );
   await expectPredicate(
-    () => verifyAliceRuntimeRootContract({ root, contract }),
+    () =>
+      verifyAliceRuntimeRootContract({
+        root,
+        contract,
+        expectedKind: RUNTIME_ROOT,
+      }),
     "ROOT_CONTENT_MISMATCH",
   );
 });
@@ -228,11 +242,7 @@ test("hardlinks are represented as ordinary files with equal content digests", a
     path.join(root, "bin", "alice-runtime"),
     path.join(root, "bin", "alice-runtime-hardlink"),
   );
-  const contract = await buildAliceRuntimeRootContract({
-    root,
-    sourceCommit: SOURCE,
-    elizaCommit: ELIZA,
-  });
+  const contract = await buildContract(root);
   const a = contract.entries.find(
     (entry) => entry.path === "bin/alice-runtime",
   );
