@@ -100,6 +100,9 @@ test("routes the only allowed model host through ContainerProxy to the authentic
   expect(containerSource).toContain(
     "AliceRuntimeContainer.outboundByHost = ALICE_RUNTIME_OUTBOUND_BY_HOST",
   );
+  expect(containerSource).toContain(
+    "allowedHosts = Object.keys(ALICE_RUNTIME_OUTBOUND_BY_HOST)",
+  );
   expect(containerSource).toContain("enableInternet = false");
   expect(workerSource).toContain(
     'export { ContainerProxy } from "@cloudflare/containers"',
