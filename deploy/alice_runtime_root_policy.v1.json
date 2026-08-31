@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "alice.runtime-root-policy.v1",
+  "forbiddenPrefixes": [
+    ".git",
+    ".github"
+  ],
+  "forbiddenBasenames": [
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".npmrc",
+    ".pypirc"
+  ],
+  "maxFileBytes": 1073741824
+}
