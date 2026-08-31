@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
   readFile,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,16 +20,29 @@ import {
 
 const SOURCE = "a".repeat(40);
 const ELIZA = "b".repeat(40);
+const sha256 = (bytes) =>
+  `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+
+const policy = {
+  schemaVersion: "alice.runtime-root-policy.v1",
+  forbiddenPrefixes: [".git", ".github"],
+  forbiddenBasenames: [".env", ".npmrc"],
+  maxFileBytes: 1024 * 1024,
+  maxEntryCount: 1000,
+  maxTotalFileBytes: 4 * 1024 * 1024,
+  allowDanglingSymlinks: true,
+};
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), "alice-context-snapshot-"));
   await mkdir(path.join(root, "deploy"));
   await writeFile(path.join(root, ".dockerignore"), ".git\n");
+  const dockerfileBytes = Buffer.from("FROM scratch\nCOPY . /\n");
   await writeFile(
     path.join(root, "deploy", "Dockerfile.runtime-context"),
-    "FROM scratch\nCOPY . /\n",
+    dockerfileBytes,
   );
-  return root;
+  return { root, dockerfileBytes };
 }
 
 async function expectPredicate(fn, predicateId) {
@@ -59,8 +74,8 @@ test("Buildx command exports the single-platform context filesystem exactly", ()
   );
 });
 
-test("snapshot binds the exact Docker-exported filesystem into a root contract", async (t) => {
-  const repoRoot = await fixture();
+test("snapshot binds the exact fixed Docker-exported context", async (t) => {
+  const { root: repoRoot, dockerfileBytes } = await fixture();
   const artifacts = await mkdtemp(
     path.join(tmpdir(), "alice-context-artifacts-"),
   );
@@ -72,20 +87,25 @@ test("snapshot binds the exact Docker-exported filesystem into a root contract",
   const result = await snapshotAliceRuntimeContext({
     repoRoot,
     dockerfile: "deploy/Dockerfile.runtime-context",
+    expectedDockerfileSha256: sha256(dockerfileBytes),
     outputDirectory: output,
     contractPath,
     sourceCommit: SOURCE,
     elizaCommit: ELIZA,
-    execute: async ({ cwd, args }) => {
+    policy,
+    execute: async ({ cwd, args, timeoutMs }) => {
       assert.equal(cwd, repoRoot);
       assert.equal(args.at(-1), ".");
+      assert.equal(timeoutMs, 600000);
       await mkdir(path.join(output, "src"), { recursive: true });
       await writeFile(path.join(output, "src", "index.js"), "alice\n");
     },
   });
 
+  assert.equal(result.contract.contractKind, "build-context");
   assert.equal(result.contract.sourceCommit, SOURCE);
   assert.equal(result.contract.elizaCommit, ELIZA);
+  assert.equal(result.dockerfileSha256, sha256(dockerfileBytes));
   assert.equal(
     result.contract.entries.some((entry) => entry.path === "src/index.js"),
     true,
@@ -96,8 +116,36 @@ test("snapshot binds the exact Docker-exported filesystem into a root contract",
   );
 });
 
-test("preexisting output or contract fails before Docker execution", async (t) => {
-  const repoRoot = await fixture();
+test("Dockerfile bytes are pinned before execution", async (t) => {
+  const { root: repoRoot } = await fixture();
+  const artifacts = await mkdtemp(
+    path.join(tmpdir(), "alice-context-artifacts-"),
+  );
+  t.after(() => rm(repoRoot, { recursive: true, force: true }));
+  t.after(() => rm(artifacts, { recursive: true, force: true }));
+  let called = false;
+  await expectPredicate(
+    () =>
+      snapshotAliceRuntimeContext({
+        repoRoot,
+        dockerfile: "deploy/Dockerfile.runtime-context",
+        expectedDockerfileSha256: `sha256:${"0".repeat(64)}`,
+        outputDirectory: path.join(artifacts, "root"),
+        contractPath: path.join(artifacts, "contract.json"),
+        sourceCommit: SOURCE,
+        elizaCommit: ELIZA,
+        policy,
+        execute: async () => {
+          called = true;
+        },
+      }),
+    "DOCKERFILE_DIGEST_MISMATCH",
+  );
+  assert.equal(called, false);
+});
+
+test("preexisting output fails before Docker execution", async (t) => {
+  const { root: repoRoot, dockerfileBytes } = await fixture();
   const artifacts = await mkdtemp(
     path.join(tmpdir(), "alice-context-artifacts-"),
   );
@@ -112,10 +160,12 @@ test("preexisting output or contract fails before Docker execution", async (t) =
       snapshotAliceRuntimeContext({
         repoRoot,
         dockerfile: "deploy/Dockerfile.runtime-context",
+        expectedDockerfileSha256: sha256(dockerfileBytes),
         outputDirectory: output,
         contractPath,
         sourceCommit: SOURCE,
         elizaCommit: ELIZA,
+        policy,
         execute: async () => {
           called = true;
         },
@@ -126,7 +176,7 @@ test("preexisting output or contract fails before Docker execution", async (t) =
 });
 
 test("Docker failure is preserved and partial output is removed", async (t) => {
-  const repoRoot = await fixture();
+  const { root: repoRoot, dockerfileBytes } = await fixture();
   const artifacts = await mkdtemp(
     path.join(tmpdir(), "alice-context-artifacts-"),
   );
@@ -139,16 +189,19 @@ test("Docker failure is preserved and partial output is removed", async (t) => {
       snapshotAliceRuntimeContext({
         repoRoot,
         dockerfile: "deploy/Dockerfile.runtime-context",
+        expectedDockerfileSha256: sha256(dockerfileBytes),
         outputDirectory: output,
         contractPath,
         sourceCommit: SOURCE,
         elizaCommit: ELIZA,
+        policy,
         execute: async () => {
           await mkdir(output, { recursive: true });
           await writeFile(path.join(output, "partial"), "x");
-          throw new AliceRuntimeContextSnapshotError("DOCKER_BUILD_FAILED", {
-            exitCode: 1,
-          });
+          throw new AliceRuntimeContextSnapshotError(
+            "DOCKER_BUILD_FAILED",
+            { exitCode: 1 },
+          );
         },
       }),
     "DOCKER_BUILD_FAILED",
@@ -156,45 +209,76 @@ test("Docker failure is preserved and partial output is removed", async (t) => {
   await assert.rejects(() => readFile(path.join(output, "partial")));
 });
 
-test("snapshot output and contract must stay outside the source repository", async (t) => {
-  const repoRoot = await fixture();
+test("output cannot be redirected into the checkout through a symlinked parent", async (t) => {
+  const { root: repoRoot, dockerfileBytes } = await fixture();
+  const outside = await mkdtemp(path.join(tmpdir(), "alice-context-link-"));
+  const redirect = path.join(outside, "redirect");
+  await symlink(repoRoot, redirect);
   t.after(() => rm(repoRoot, { recursive: true, force: true }));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  let called = false;
   await expectPredicate(
     () =>
       snapshotAliceRuntimeContext({
         repoRoot,
         dockerfile: "deploy/Dockerfile.runtime-context",
-        outputDirectory: path.join(repoRoot, "output"),
-        contractPath: path.join(
-          tmpdir(),
-          `alice-contract-${process.pid}.json`,
-        ),
+        expectedDockerfileSha256: sha256(dockerfileBytes),
+        outputDirectory: path.join(redirect, "context-root"),
+        contractPath: path.join(outside, "contract.json"),
         sourceCommit: SOURCE,
         elizaCommit: ELIZA,
-        execute: async () => {},
+        policy,
+        execute: async () => {
+          called = true;
+        },
       }),
     "OUTPUT_INSIDE_REPOSITORY",
   );
+  assert.equal(called, false);
+});
+
+test("contract cannot be redirected into the checkout through a symlinked parent", async (t) => {
+  const { root: repoRoot, dockerfileBytes } = await fixture();
+  const outside = await mkdtemp(path.join(tmpdir(), "alice-context-link-"));
+  const redirect = path.join(outside, "redirect");
+  await symlink(repoRoot, redirect);
+  t.after(() => rm(repoRoot, { recursive: true, force: true }));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  let called = false;
+  await expectPredicate(
+    () =>
+      snapshotAliceRuntimeContext({
+        repoRoot,
+        dockerfile: "deploy/Dockerfile.runtime-context",
+        expectedDockerfileSha256: sha256(dockerfileBytes),
+        outputDirectory: path.join(outside, "context-root"),
+        contractPath: path.join(redirect, "contract.json"),
+        sourceCommit: SOURCE,
+        elizaCommit: ELIZA,
+        policy,
+        execute: async () => {
+          called = true;
+        },
+      }),
+    "CONTRACT_INSIDE_REPOSITORY",
+  );
+  assert.equal(called, false);
 });
 
 test("Dockerfile cannot escape the repository root", async (t) => {
-  const repoRoot = await fixture();
+  const { root: repoRoot } = await fixture();
   t.after(() => rm(repoRoot, { recursive: true, force: true }));
   await expectPredicate(
     () =>
       snapshotAliceRuntimeContext({
         repoRoot,
         dockerfile: "../outside.Dockerfile",
-        outputDirectory: path.join(
-          tmpdir(),
-          `alice-output-${process.pid}`,
-        ),
-        contractPath: path.join(
-          tmpdir(),
-          `alice-contract-${process.pid}.json`,
-        ),
+        expectedDockerfileSha256: `sha256:${"0".repeat(64)}`,
+        outputDirectory: path.join(tmpdir(), `alice-output-${process.pid}`),
+        contractPath: path.join(tmpdir(), `alice-contract-${process.pid}.json`),
         sourceCommit: SOURCE,
         elizaCommit: ELIZA,
+        policy,
         execute: async () => {},
       }),
     "DOCKERFILE_PATH_ESCAPE",
