@@ -85,19 +85,27 @@ describe("Alice protected Program admission", () => {
           required: [
             "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
             "ALICE_ACCESS_PROXY_SECRET",
-            "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
-            "ALICE_ELIZA_COMMIT",
-            "ALICE_POLICY_HASH",
+          ],
+        },
+      },
+      runtimeHost: {
+        secrets: {
+          required: [
+            "ALICE_ACCESS_PROXY_SECRET",
+            "ALICE_RUNTIME_API_TOKEN",
+            "ALICE_RUNTIME_RELEASE_TOKEN",
+            "ALICE_RUNTIME_VAULT_PASSPHRASE",
+            "ALICE_STATE_PLANE_SERVICE_TOKEN",
             "ALICE_PROGRAM_DIGEST",
             "ALICE_RELEASE_DIGEST",
-            "ALICE_RUNTIME_API_TOKEN",
-            "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
-            "ALICE_RUNTIME_IMAGE",
-            "ALICE_RUNTIME_RELEASE_TOKEN",
-            "ALICE_RUNTIME_REVISION",
-            "ALICE_RUNTIME_VAULT_PASSPHRASE",
+            "ALICE_POLICY_HASH",
+            "ALICE_CAPABILITY_BOM_SHA256",
             "ALICE_SOURCE_COMMIT",
-            "ALICE_STATE_PLANE_SERVICE_TOKEN",
+            "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
+            "ALICE_RUNTIME_IMAGE",
+            "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
+            "ALICE_ELIZA_COMMIT",
+            "ALICE_RUNTIME_REVISION",
           ],
         },
       },
@@ -114,19 +122,21 @@ describe("Alice protected Program admission", () => {
           ALICE_PROGRAM_DIGEST: `sha256:${"8".repeat(64)}`,
           ALICE_RELEASE_DIGEST: releaseDigest,
           ALICE_RUNTIME_API_TOKEN: secrets.MILADY_API_TOKEN,
+          ALICE_CAPABILITY_BOM_SHA256: `sha256:${"a".repeat(64)}`,
           ALICE_RUNTIME_BUILD_MANIFEST_SHA256: `sha256:${"9".repeat(64)}`,
           ALICE_RUNTIME_IMAGE: runtimeImage,
           ALICE_RUNTIME_REVISION: "49",
           ALICE_RUNTIME_VAULT_PASSPHRASE: secrets.ELIZA_VAULT_PASSPHRASE,
         } as any,
         releaseDigest,
+        true,
       )
     ).not.toThrow();
   });
 
   test("accepts only exact scoped token pairs and release-bound runtime bearer", () => {
     expect(() =>
-      verifyAliceRouteSecretClosure(configs, secrets, releaseDigest),
+      verifyAliceRouteSecretClosure(configs, secrets, releaseDigest, false),
     ).not.toThrow();
 
     for (const mutation of [
@@ -154,6 +164,7 @@ describe("Alice protected Program admission", () => {
           configs,
           { ...secrets, ...mutation },
           releaseDigest,
+          false,
         ),
       ).toThrow("ALICE_RELEASE_SECRETS_INVALID");
     }
@@ -175,6 +186,7 @@ describe("Alice protected Program admission", () => {
         },
         secrets,
         releaseDigest,
+        false,
       ),
     ).toThrow("ALICE_RELEASE_SECRETS_INVALID");
   });
