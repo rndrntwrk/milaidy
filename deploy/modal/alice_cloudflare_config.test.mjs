@@ -373,6 +373,9 @@ function valuesForRole(role) {
 
 test("renders every canonical effective config from its deployable Wrangler file", () => {
   for (const role of releaseRoles) {
+    assert.deepEqual(rendered(role).unsafe, {
+      metadata: { keep_bindings: [] },
+    });
     assert.deepEqual(
       assertAliceWranglerMatchesEffectiveConfig(
         role,
@@ -382,6 +385,19 @@ test("renders every canonical effective config from its deployable Wrangler file
       expected[role],
     );
   }
+});
+
+test("rejects source ownership of upload binding inheritance", () => {
+  const changed = structuredClone(source.access);
+  changed.unsafe = { metadata: { keep_bindings: [] } };
+  assert.throws(
+    () => materializeAliceWranglerConfig(
+      "access",
+      changed,
+      valuesForRole("access"),
+    ),
+    /ALICE_WRANGLER_CONFIG_INVALID/,
+  );
 });
 
 test("materializes exact private state and inert connector bindings without provider credentials", () => {
