@@ -1,0 +1,54 @@
+name: Alice runtime contracts
+
+on:
+  pull_request:
+    paths:
+      - "deploy/Dockerfile.runtime-context"
+      - "deploy/alice_buildkit_timing.mjs"
+      - "deploy/alice_buildkit_timing.test.mjs"
+      - "deploy/alice_ci_dockerignore.mjs"
+      - "deploy/alice_ci_dockerignore.test.mjs"
+      - "deploy/alice_runtime_build_policy.v1.json"
+      - "deploy/alice_runtime_context_policy.v1.json"
+      - "deploy/alice_runtime_context_snapshot.mjs"
+      - "deploy/alice_runtime_context_snapshot.test.mjs"
+      - "deploy/alice_runtime_inputs.mjs"
+      - "deploy/alice_runtime_inputs.test.mjs"
+      - "deploy/alice_runtime_root_contract.mjs"
+      - "deploy/alice_runtime_root_contract.test.mjs"
+      - "deploy/alice_runtime_root_policy.v1.json"
+      - ".github/workflows/alice-runtime-contracts.yml"
+  push:
+    branches:
+      - "feat/alice-runtime-root-contract-2026-08-31"
+    paths:
+      - "deploy/**"
+      - ".github/workflows/alice-runtime-contracts.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alice-runtime-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  alice-runtime-contracts:
+    name: alice-runtime-contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Use exact Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Run runtime contract suite
+        run: node --test deploy/alice_*.test.mjs
