@@ -861,7 +861,8 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
     const consumers = continuityState.readback.queueConsumers;
     if (
       consumers.length !== 1 ||
-      consumers[0]?.script_name !== ALICE_CLOUDFLARE_TARGET.controlWorker
+      continuityState.sanitized.evidenceQueueConsumer?.scriptName !==
+        ALICE_CLOUDFLARE_TARGET.controlWorker
     ) {
       readbackInvalid();
     }

@@ -196,6 +196,7 @@ function providerBindings(config) {
   }
   for (const binding of config.services ?? []) {
     bindings.push({
+      environment: "production",
       name: binding.binding,
       service: binding.service,
       type: "service",
@@ -239,6 +240,7 @@ function providerBindings(config) {
   for (const binding of config.d1_databases ?? []) {
     bindings.push({
       database_id: binding.database_id,
+      id: binding.database_id,
       name: binding.binding,
       type: "d1",
     });
@@ -279,6 +281,7 @@ test("admits exact D1 and Vectorize version resources for the private state plan
       bindings: [
         {
           database_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
           name: "ALICE_STATE_DB",
           type: "d1",
         },
@@ -393,7 +396,7 @@ function fixture(role) {
       ? {
           dead_letter_queue: queue.dead_letter_queue,
           queue_name: queue.queue,
-          script_name: config.name,
+          script: config.name,
           settings: {
             batch_size: queue.max_batch_size,
             max_concurrency: queue.max_concurrency,
@@ -662,6 +665,34 @@ test("extracts the exact provider main-module bytes from Cloudflare multipart co
   const bytes = await readAliceWorkerMainModule(new Response(form));
   assert.equal(new TextDecoder().decode(bytes), workerModules.access);
 
+  const providerForm = new FormData();
+  providerForm.set(
+    "index.js",
+    new Blob([workerModules.access], { type: "application/javascript+module" }),
+    "index.js",
+  );
+  providerForm.set(
+    "index.js.map",
+    new Blob(["{}"], { type: "application/source-map" }),
+    "index.js.map",
+  );
+  const providerBytes = await readAliceWorkerMainModule(
+    new Response(providerForm),
+  );
+  assert.equal(new TextDecoder().decode(providerBytes), workerModules.access);
+
+  providerForm.set(
+    "alternate.js",
+    new Blob(["export default {};\n"], {
+      type: "application/javascript+module",
+    }),
+    "alternate.js",
+  );
+  await assert.rejects(
+    () => readAliceWorkerMainModule(new Response(providerForm)),
+    /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
+  );
+
   const missing = new FormData();
   missing.set("metadata", JSON.stringify({ main_module: "absent.js" }));
   await assert.rejects(
@@ -698,6 +729,14 @@ test("rejects traffic, binding, and observability substitutions in provider stat
   race.deploymentAfterContent.versions[0].version_id = "raced-version";
   await assert.rejects(
     () => verifyAliceWorkerProviderReadback(race),
+    /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
+  );
+
+  const ambiguousQueueConsumer = fixture("control");
+  ambiguousQueueConsumer.queueConsumer.script_name =
+    ambiguousQueueConsumer.queueConsumer.script;
+  await assert.rejects(
+    () => verifyAliceWorkerProviderReadback(ambiguousQueueConsumer),
     /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
   );
 
