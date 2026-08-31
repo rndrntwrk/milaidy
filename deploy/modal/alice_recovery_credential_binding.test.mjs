@@ -273,9 +273,12 @@ test("binds an active Cloudflare token to the exact reviewed recovery policy", (
   );
   assert.deepEqual(
     ALICE_CLOUDFLARE_RECOVERY_PERMISSION_GROUPS.find(
-      (group) => group.name === "Containers Write",
+      (group) => group.name === "Workers Containers Write",
     ),
-    { name: "Containers Write", scope: "com.cloudflare.api.account" },
+    {
+      name: "Workers Containers Write",
+      scope: "com.cloudflare.api.account",
+    },
   );
   const tokenId = "0123456789abcdef0123456789abcdef";
   const provider = cloudflareProviderFixture({

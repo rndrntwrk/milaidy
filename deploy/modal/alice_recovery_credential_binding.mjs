@@ -54,7 +54,7 @@ export const ALICE_CLOUDFLARE_RECOVERY_PERMISSION_GROUPS = Object.freeze([
     scope: "com.cloudflare.api.account",
   }),
   Object.freeze({
-    name: "Containers Write",
+    name: "Workers Containers Write",
     scope: "com.cloudflare.api.account",
   }),
   Object.freeze({
