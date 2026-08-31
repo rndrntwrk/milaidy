@@ -163,8 +163,13 @@ function providerBinding(binding) {
     case "secret_text":
       return { name: binding.name, type: binding.type };
     case "service":
+      if (
+        binding.environment !== undefined &&
+        binding.environment !== "production"
+      ) {
+        mismatch();
+      }
       rejectProviderTargetModifiers(binding, [
-        "environment",
         "entrypoint",
         "namespace",
         "dispatch_namespace",
@@ -217,7 +222,9 @@ function providerBinding(binding) {
         type: binding.type,
       };
     case "d1":
-      rejectProviderTargetModifiers(binding, ["id"]);
+      if (binding.id !== undefined && binding.id !== binding.database_id) {
+        mismatch();
+      }
       return {
         databaseId: binding.database_id,
         name: binding.name,
@@ -469,15 +476,26 @@ export async function readAliceWorkerMainModule(response) {
     if (!/^multipart\/form-data(?:;|$)/i.test(contentType)) mismatch();
     const parts = await response.formData();
     const metadataPart = parts.get("metadata");
-    const metadataText = typeof metadataPart === "string"
-      ? metadataPart
-      : metadataPart instanceof Blob
-        ? await metadataPart.text()
-        : "";
-    const metadata = JSON.parse(metadataText);
-    if (typeof metadata?.main_module !== "string") mismatch();
-    const mainModule = parts.get(metadata.main_module);
-    if (!(mainModule instanceof Blob)) mismatch();
+    let mainModule;
+    if (metadataPart !== null) {
+      const metadataText = typeof metadataPart === "string"
+        ? metadataPart
+        : metadataPart instanceof Blob
+          ? await metadataPart.text()
+          : "";
+      const metadata = JSON.parse(metadataText);
+      if (typeof metadata?.main_module !== "string") mismatch();
+      mainModule = parts.get(metadata.main_module);
+      if (!(mainModule instanceof Blob)) mismatch();
+    } else {
+      const moduleParts = [...parts.values()].filter(
+        (part) =>
+          part instanceof Blob &&
+          /^application\/javascript\+module$/i.test(part.type),
+      );
+      if (moduleParts.length !== 1) mismatch();
+      [mainModule] = moduleParts;
+    }
     return new Uint8Array(await mainModule.arrayBuffer());
   } catch (error) {
     if (
@@ -510,10 +528,13 @@ function expectedQueueConsumer(config) {
 
 function providerQueueConsumer(consumer) {
   if (!consumer) return null;
+  const hasScript = Object.hasOwn(consumer, "script");
+  const hasScriptName = Object.hasOwn(consumer, "script_name");
+  if (hasScript === hasScriptName) mismatch();
   return {
     deadLetterQueue: consumer.dead_letter_queue,
     queueName: consumer.queue_name,
-    scriptName: consumer.script_name,
+    scriptName: hasScript ? consumer.script : consumer.script_name,
     settings: {
       batchSize: consumer.settings?.batch_size,
       maxConcurrency: consumer.settings?.max_concurrency,

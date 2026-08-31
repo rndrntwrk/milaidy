@@ -772,6 +772,14 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   let routeReads = 0;
   let consumerReads = 0;
   let workflowVersionReads = 0;
+  const {
+    script_name: queueConsumerScript,
+    ...providerQueueConsumerFields
+  } = continuityFixture.queueConsumers[0];
+  const providerQueueConsumer = {
+    ...providerQueueConsumerFields,
+    script: queueConsumerScript,
+  };
   let includeRuntimeHostInstance = false;
   let runtimeHostDetailDrift = false;
   let ownerPolicyStableThrough = Number.POSITIVE_INFINITY;
@@ -907,19 +915,19 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       return json({
         success: true,
         result: [
-          continuityFixture.queueConsumers[0],
+          providerQueueConsumer,
           ...(includeExtraConsumer
             ? [{
-                ...continuityFixture.queueConsumers[0],
+                ...providerQueueConsumer,
                 consumer_id: "99999999999999999999999999999999",
-                script_name: "unadmitted-consumer",
+                script: "unadmitted-consumer",
               }]
             : []),
           ...(consumerReads > consumersStableThrough
             ? [{
-                ...continuityFixture.queueConsumers[0],
+                ...providerQueueConsumer,
                 consumer_id: "88888888888888888888888888888888",
-                script_name: "terminal-drift-consumer",
+                script: "terminal-drift-consumer",
               }]
             : []),
         ],
