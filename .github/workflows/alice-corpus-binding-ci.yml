@@ -1,0 +1,468 @@
+name: Alice Corpus Binding CI
+
+on:
+  push:
+    branches:
+      - feat/alice-corpus-runtime-binding-2026-08-22
+    paths:
+      - ".github/workflows/alice-corpus-binding-ci.yml"
+      - ".env.alice-corpus.example"
+      - ".gitignore"
+      - "biome.json"
+      - "packages/agent/src/plugins/alice-corpus/**"
+      - "packages/agent/src/runtime/core-plugins.ts"
+      - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/plugin-collector.ts"
+      - "packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts"
+      - "scripts/verify-alice-corpus-runtime.ts"
+  pull_request:
+    branches:
+      - release/alice-production-core-2026-08-22
+    paths:
+      - ".github/workflows/alice-corpus-binding-ci.yml"
+      - ".env.alice-corpus.example"
+      - ".gitignore"
+      - "biome.json"
+      - "packages/agent/src/plugins/alice-corpus/**"
+      - "packages/agent/src/runtime/core-plugins.ts"
+      - "packages/agent/src/runtime/core-plugins.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/plugin-collector.ts"
+      - "packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts"
+      - "packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts"
+      - "scripts/verify-alice-corpus-runtime.ts"
+  workflow_dispatch:
+
+concurrency:
+  group: alice-corpus-binding-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: "1.3.14"
+
+jobs:
+  focused-corpus-gate:
+    name: Focused corpus admission gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Build isolated corpus test workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/alice-corpus-ci"
+          mkdir -p \
+            "$ROOT/packages/agent/src/plugins" \
+            "$ROOT/packages/agent/src/runtime" \
+            "$ROOT/packages/agent/src/config" \
+            "$ROOT/stubs"
+
+          cp biome.json "$ROOT/biome.json"
+          cp .gitignore "$ROOT/.gitignore"
+          cp -R packages/agent/src/plugins/alice-corpus \
+            "$ROOT/packages/agent/src/plugins/alice-corpus"
+          cp packages/agent/src/runtime/core-plugins.ts \
+            packages/agent/src/runtime/core-plugins.alice-corpus.test.ts \
+            packages/agent/src/runtime/plugin-collector.ts \
+            packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts \
+            "$ROOT/packages/agent/src/runtime/"
+
+          cat > "$ROOT/packages/agent/src/runtime/default-knowledge.ts" <<'EOF'
+          export interface DefaultKnowledgeFragmentDefinition {
+            text: string;
+            embedding?: number[];
+          }
+
+          export interface DefaultKnowledgeDocumentDefinition {
+            key: string;
+            version: number;
+            filename: string;
+            contentType: string;
+            text: string;
+            fragments: readonly DefaultKnowledgeFragmentDefinition[];
+            metadata?: Record<string, unknown>;
+          }
+
+          export async function seedBundledKnowledge(
+            _runtime: unknown,
+            _documents: readonly DefaultKnowledgeDocumentDefinition[] = [],
+          ): Promise<void> {}
+          EOF
+
+          cat > "$ROOT/packages/agent/src/runtime/native-runtime-features.ts" <<'EOF'
+          export function runtimeKnowledgeEnabled(_runtime?: unknown): boolean {
+            return true;
+          }
+          EOF
+
+          cat > "$ROOT/packages/agent/src/config/config.ts" <<'EOF'
+          export interface ElizaConfig {
+            features?: Record<string, unknown> & { shellEnabled?: boolean };
+            cloud?: { enabled?: boolean };
+            env?: Record<string, unknown> & { vars?: Record<string, unknown> };
+            plugins?: {
+              allow?: string[];
+              entries?: Record<
+                string,
+                { enabled?: boolean } & Record<string, unknown>
+              >;
+              installs?: Record<string, unknown>;
+            };
+            connectors?: Record<string, unknown>;
+            channels?: Record<string, unknown>;
+            x402?: { enabled?: boolean };
+            [key: string]: unknown;
+          }
+          EOF
+
+          cat > "$ROOT/stubs/elizaos-core.ts" <<'EOF'
+          export interface IAgentRuntime {
+            agentId: string;
+          }
+
+          export interface AgentRuntime extends IAgentRuntime {}
+
+          export interface HandlerOptions {
+            parameters?: Record<string, unknown>;
+          }
+
+          export interface ActionParameterSchema {
+            type?: string;
+            items?: ActionParameterSchema;
+            [key: string]: unknown;
+          }
+
+          export interface ActionParameter {
+            name: string;
+            description: string;
+            required?: boolean;
+            schema: ActionParameterSchema;
+          }
+
+          export interface Action {
+            name: string;
+            similes?: string[];
+            description: string;
+            validate?: (
+              runtime: IAgentRuntime,
+              ...args: unknown[]
+            ) => boolean | Promise<boolean>;
+            handler?: (
+              runtime: IAgentRuntime,
+              message: unknown,
+              state: unknown,
+              options?: HandlerOptions,
+              callback?: unknown,
+              responses?: unknown,
+            ) => unknown | Promise<unknown>;
+            parameters?: ActionParameter[];
+            [key: string]: unknown;
+          }
+
+          export interface Plugin {
+            name: string;
+            description?: string;
+            init?: (
+              pluginConfig: Record<string, string>,
+              runtime: IAgentRuntime,
+            ) => void | Promise<void>;
+            actions?: Action[];
+            [key: string]: unknown;
+          }
+
+          export const logger = {
+            info: (..._args: unknown[]) => undefined,
+          };
+
+          export function stringToUuid(value: string): string {
+            return value;
+          }
+          EOF
+
+          cat > "$ROOT/stubs/shared-contracts.ts" <<'EOF'
+          export interface ResolvedElizaCloudTopology {
+            shouldLoadPlugin: boolean;
+            services: {
+              inference: boolean;
+              [key: string]: boolean;
+            };
+          }
+
+          export function resolveElizaCloudTopology(
+            _config?: Record<string, unknown>,
+          ): ResolvedElizaCloudTopology {
+            return {
+              shouldLoadPlugin: false,
+              services: { inference: false },
+            };
+          }
+          EOF
+
+          cat > "$ROOT/stubs/shared-onboarding.ts" <<'EOF'
+          export function hasExplicitCanonicalRuntimeConfig(
+            _config?: Record<string, unknown>,
+          ): boolean {
+            return false;
+          }
+
+          export function migrateLegacyRuntimeConfig(
+            _config?: Record<string, unknown>,
+          ): void {}
+          EOF
+
+          cat > "$ROOT/package.json" <<'EOF'
+          {
+            "name": "alice-corpus-focused-ci",
+            "private": true,
+            "type": "module",
+            "devDependencies": {
+              "@biomejs/biome": "2.4.11",
+              "@types/node": "25.2.0",
+              "typescript": "5.9.3",
+              "vitest": "4.0.18"
+            }
+          }
+          EOF
+
+          cat > "$ROOT/vitest.config.ts" <<'EOF'
+          import { defineConfig } from "vitest/config";
+          import path from "node:path";
+
+          export default defineConfig({
+            resolve: {
+              alias: [
+                {
+                  find: "@miladyai/shared/contracts/onboarding",
+                  replacement: path.resolve(
+                    __dirname,
+                    "stubs/shared-onboarding.ts",
+                  ),
+                },
+                {
+                  find: "@miladyai/shared/contracts",
+                  replacement: path.resolve(
+                    __dirname,
+                    "stubs/shared-contracts.ts",
+                  ),
+                },
+                {
+                  find: "@elizaos/core",
+                  replacement: path.resolve(__dirname, "stubs/elizaos-core.ts"),
+                },
+              ],
+            },
+            test: {
+              environment: "node",
+              include: ["packages/**/*.test.ts"],
+              testTimeout: 10_000,
+              hookTimeout: 10_000,
+            },
+          });
+          EOF
+
+          cat > "$ROOT/tsconfig.json" <<'EOF'
+          {
+            "compilerOptions": {
+              "target": "ES2022",
+              "module": "ESNext",
+              "moduleResolution": "Bundler",
+              "strict": true,
+              "skipLibCheck": true,
+              "noEmit": true,
+              "types": ["node", "vitest/globals"],
+              "baseUrl": ".",
+              "paths": {
+                "@elizaos/core": ["stubs/elizaos-core.ts"],
+                "@miladyai/shared/contracts": ["stubs/shared-contracts.ts"],
+                "@miladyai/shared/contracts/onboarding": ["stubs/shared-onboarding.ts"]
+              }
+            },
+            "include": ["packages/**/*.ts", "stubs/**/*.ts", "vitest.config.ts"]
+          }
+          EOF
+
+          cd "$ROOT"
+          bun install --ignore-scripts
+
+      - name: Run focused corpus regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/alice-corpus-ci"
+          bunx vitest run
+
+      - name: Produce Biome-formatted admission surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/alice-corpus-ci"
+          bunx biome check --write \
+            packages/agent/src/plugins/alice-corpus \
+            packages/agent/src/runtime/core-plugins.ts \
+            packages/agent/src/runtime/core-plugins.alice-corpus.test.ts \
+            packages/agent/src/runtime/plugin-collector.ts \
+            packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts || true
+
+      - name: Upload Biome-formatted admission surface
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-corpus-biome-formatted-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/plugins/alice-corpus
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/runtime/core-plugins.ts
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/runtime/core-plugins.alice-corpus.test.ts
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/runtime/plugin-collector.ts
+            ${{ runner.temp }}/alice-corpus-ci/packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Check focused corpus formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/alice-corpus-ci"
+          bunx biome check \
+            packages/agent/src/plugins/alice-corpus \
+            packages/agent/src/runtime/core-plugins.ts \
+            packages/agent/src/runtime/core-plugins.alice-corpus.test.ts \
+            packages/agent/src/runtime/plugin-collector.ts \
+            packages/agent/src/runtime/plugin-collector.alice-corpus.test.ts
+
+      - name: Typecheck focused corpus surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/alice-corpus-ci"
+          bunx tsc -p tsconfig.json
+
+  full-runtime-gate:
+    name: Exact release-runtime gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Free disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python build support
+        run: pip install setuptools
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Initialize exact Eliza workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync -- eliza
+          git submodule update --init eliza
+
+          EXPECTED_SHA="$(git ls-tree HEAD eliza | awk '{print $3}')"
+          ACTUAL_SHA="$(git -C eliza rev-parse HEAD)"
+          if [ -z "$EXPECTED_SHA" ] || [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+            echo "::error::Eliza submodule mismatch: expected $EXPECTED_SHA, got $ACTUAL_SHA"
+            exit 1
+          fi
+
+          git -C eliza submodule sync --recursive
+          git -C eliza submodule update --init --recursive
+
+          REQUIRED_WORKSPACES=(
+            packages/app-core/deploy/cloud-agent-template
+            packages/cloud/api
+            packages/cloud/infra
+            packages/cloud/routing
+            packages/cloud/sdk
+            packages/cloud/shared
+            packages/cloud/test-mocks
+            packages/cloud/e2e
+          )
+          for workspace in "${REQUIRED_WORKSPACES[@]}"; do
+            if [ ! -f "eliza/$workspace/package.json" ]; then
+              echo "::error::Required exact Eliza workspace is missing: eliza/$workspace/package.json"
+              exit 1
+            fi
+          done
+
+          echo "ELIZA_EXACT_SHA=$ACTUAL_SHA" >> "$GITHUB_ENV"
+
+      - name: Apply repository Eliza patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f scripts/apply-eliza-ci-patches.mjs ]; then
+            node scripts/apply-eliza-ci-patches.mjs
+          fi
+
+      - name: Install exact release dependencies
+        shell: bash
+        run: bun install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_python: ${{ env.pythonLocation }}/bin/python3
+
+      - name: Generate local Eliza protobuf types
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d eliza/packages/schemas ] \
+            && [ -f eliza/packages/schemas/buf.gen.yaml ] \
+            && [ ! -f eliza/packages/core/src/types/generated/eliza/v1/agent_pb.ts ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
+      - name: Generate Eliza keyword data
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f eliza/packages/shared/scripts/generate-keywords.mjs ]; then
+            cd eliza
+            node packages/shared/scripts/generate-keywords.mjs --target ts
+          fi
+
+      - name: Run exact corpus admission regression
+        run: >-
+          bunx vitest run
+          packages/agent/src/runtime/eliza.alice-corpus-admission.test.ts
+
+      - name: Typecheck agent package
+        working-directory: packages/agent
+        run: bun run typecheck
+
+      - name: Build agent package
+        working-directory: packages/agent
+        run: bun run build
