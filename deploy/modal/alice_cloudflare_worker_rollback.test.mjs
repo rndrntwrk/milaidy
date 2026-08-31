@@ -55,6 +55,7 @@ function sixRoleRollbackReadbacks() {
           },
           script_runtime: {
             compatibility_date: "2026-08-22",
+            containers: [{ class_name: "AliceRuntimeContainer" }],
             migration_tag: "v2-alice-runtime-container",
             usage_model: "standard",
           },
@@ -165,6 +166,9 @@ test("normalizes immutable version resources and exact provider-owned binding va
   const runtimeHost = rollback.normalizeAliceCloudflareVersionResources(
     fixtures.runtimeHost.version.resources,
   );
+  assert.deepEqual(runtimeHost.script_runtime.containers, [
+    { class_name: "AliceRuntimeContainer" },
+  ]);
   assert.equal(runtimeHost.script_runtime.migration_tag, "v2-alice-runtime-container");
   assert.equal(
     runtimeHost.bindings.find(({ name }) => name === "ALICE_RUNTIME_CONTAINER")
@@ -284,6 +288,13 @@ test("rejects malformed immutable resources and provider additions", () => {
     { ...fixtures.access.version.resources, unknown: true },
     { ...fixtures.access.version.resources, script: {} },
     { ...fixtures.access.version.resources, script_runtime: { placement: {} } },
+    {
+      ...fixtures.runtimeHost.version.resources,
+      script_runtime: {
+        ...fixtures.runtimeHost.version.resources.script_runtime,
+        containers: [{ class_name: "" }],
+      },
+    },
   ]) {
     assert.throws(
       () => rollback.normalizeAliceCloudflareVersionResources(resources),
