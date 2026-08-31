@@ -75,6 +75,8 @@ export function buildAliceRuntimeContainerEnv(
     OPENAI_API_KEY: env.ALICE_RUNTIME_RELEASE_TOKEN,
     OPENAI_BASE_URL: "http://alice-ai-gateway.internal/v1",
     OPENAI_EMBEDDING_URL: "http://alice-ai-gateway.internal/v1",
+    MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+    ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
     ALICE_STATE_PLANE_URL:
       "http://alice-state-plane.internal/v1/eliza-database",
     ALICE_COMPANION_STATE_URL:

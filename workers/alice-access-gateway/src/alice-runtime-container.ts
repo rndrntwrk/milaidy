@@ -12,11 +12,12 @@ type AliceRuntimeContainerEnv = AliceRuntimeContainerEnvironmentSource & {
   ALICE_STATE_PLANE: Fetcher;
 };
 
+const ALICE_RUNTIME_OUTBOUND_BY_HOST = {
+  "alice-ai-gateway.internal": forwardToAliceAiGateway,
+  "alice-state-plane.internal": forwardToAliceStatePlane,
+};
+
 export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {
-  static outboundByHost = {
-    "alice-ai-gateway.internal": forwardToAliceAiGateway,
-    "alice-state-plane.internal": forwardToAliceStatePlane,
-  };
   defaultPort = ALICE_RUNTIME_CONTAINER_PORT;
   requiredPorts = [ALICE_RUNTIME_CONTAINER_PORT];
   sleepAfter = "10m";
@@ -30,3 +31,5 @@ export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {
     this.envVars = buildAliceRuntimeContainerEnv(env);
   }
 }
+
+AliceRuntimeContainer.outboundByHost = ALICE_RUNTIME_OUTBOUND_BY_HOST;
