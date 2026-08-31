@@ -301,6 +301,7 @@ function normalizeScriptRuntime(value) {
     "cache_options",
     "compatibility_date",
     "compatibility_flags",
+    "containers",
     "exports",
     "limits",
     "migration_tag",
@@ -313,10 +314,25 @@ function normalizeScriptRuntime(value) {
   ) {
     invalid();
   }
+  let containers;
+  if (Object.hasOwn(value, "containers")) {
+    if (!Array.isArray(value.containers)) invalid();
+    containers = value.containers.map((container) => {
+      exactKeys(container, ["class_name"], ["class_name"]);
+      return { class_name: stringValue(container.class_name) };
+    });
+    if (new Set(containers.map(({ class_name }) => class_name)).size !==
+        containers.length) {
+      invalid();
+    }
+    containers.sort((left, right) =>
+      left.class_name.localeCompare(right.class_name));
+  }
   return {
     cache_options: normalizeCacheOptions(value.cache_options),
     compatibility_date: stringValue(value.compatibility_date, true),
     compatibility_flags: stringArray(value.compatibility_flags),
+    ...(containers === undefined ? {} : { containers }),
     exports: normalizeExports(value.exports),
     limits: normalizeLimits(value.limits),
     migration_tag: stringValue(value.migration_tag, true),
