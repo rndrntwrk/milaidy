@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   chmod,
   link,
+  lstat,
   mkdir,
   mkdtemp,
   rename,
@@ -116,6 +117,27 @@ test("contract kind is explicit and independently verified", async (t) => {
   assert.equal(context.contractKind, BUILD_CONTEXT);
 });
 
+test("runtime roots bind ownership while build contexts remain runner-ownership independent", async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const runtime = await buildContract(root);
+  for (const entry of runtime.entries) {
+    assert.equal(Number.isSafeInteger(entry.uid), true, entry.path);
+    assert.equal(Number.isSafeInteger(entry.gid), true, entry.path);
+    assert.ok(entry.uid >= 0, entry.path);
+    assert.ok(entry.gid >= 0, entry.path);
+  }
+
+  const context = await buildContract(root, { contractKind: BUILD_CONTEXT });
+  for (const entry of context.entries) {
+    assert.equal(Object.hasOwn(entry, "uid"), false, entry.path);
+    assert.equal(Object.hasOwn(entry, "gid"), false, entry.path);
+  }
+
+  assert.notEqual(runtime.entriesSha256, context.entriesSha256);
+});
+
 test("contract is deterministic across mtimes and directory creation order", async (t) => {
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -156,10 +178,15 @@ test("relative in-root symlinks are admitted and escaping symlinks are rejected"
   const alias = contract.entries.find(
     (entry) => entry.path === "node_modules/@elizaos/core-alias",
   );
+  const aliasInfo = await lstat(
+    path.join(root, "node_modules", "@elizaos", "core-alias"),
+  );
   assert.deepEqual(alias, {
     path: "node_modules/@elizaos/core-alias",
     type: "symlink",
     mode: 0o777,
+    uid: aliasInfo.uid,
+    gid: aliasInfo.gid,
     target: "core",
   });
   await symlink(
