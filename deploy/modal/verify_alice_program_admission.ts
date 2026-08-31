@@ -38,6 +38,7 @@ type RouteSecretSource = {
   ALICE_PROGRAM_DIGEST?: string;
   ALICE_RELEASE_DIGEST?: string;
   ALICE_RUNTIME_API_TOKEN?: string;
+  ALICE_CAPABILITY_BOM_SHA256?: string;
   ALICE_RUNTIME_BUILD_MANIFEST_SHA256?: string;
   ALICE_RUNTIME_IMAGE?: string;
   ALICE_RUNTIME_REVISION?: string;
@@ -55,6 +56,7 @@ type ProtectedAdmissionSecretSource = Omit<
 
 type MaterializedConfigs = {
   access: Record<string, any>;
+  runtimeHost?: Record<string, any>;
   control: Record<string, any>;
   aiGateway: Record<string, any>;
 };
@@ -114,26 +116,28 @@ export function verifyAliceRouteSecretClosure(
   configs: MaterializedConfigs,
   secrets: RouteSecretSource,
   releaseDigest: string,
+  containerMode: boolean,
 ): void {
-  const containerMode = configs?.access?.secrets?.required?.includes(
-    "ALICE_RUNTIME_IMAGE",
-  );
   const containerAccessSecrets = [
     "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
     "ALICE_ACCESS_PROXY_SECRET",
-    "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
-    "ALICE_ELIZA_COMMIT",
-    "ALICE_POLICY_HASH",
+  ];
+  const containerRuntimeHostSecrets = [
+    "ALICE_ACCESS_PROXY_SECRET",
+    "ALICE_RUNTIME_API_TOKEN",
+    "ALICE_RUNTIME_RELEASE_TOKEN",
+    "ALICE_RUNTIME_VAULT_PASSPHRASE",
+    "ALICE_STATE_PLANE_SERVICE_TOKEN",
     "ALICE_PROGRAM_DIGEST",
     "ALICE_RELEASE_DIGEST",
-    "ALICE_RUNTIME_API_TOKEN",
-    "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
-    "ALICE_RUNTIME_IMAGE",
-    "ALICE_RUNTIME_RELEASE_TOKEN",
-    "ALICE_RUNTIME_REVISION",
-    "ALICE_RUNTIME_VAULT_PASSPHRASE",
+    "ALICE_POLICY_HASH",
+    "ALICE_CAPABILITY_BOM_SHA256",
     "ALICE_SOURCE_COMMIT",
-    "ALICE_STATE_PLANE_SERVICE_TOKEN",
+    "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
+    "ALICE_RUNTIME_IMAGE",
+    "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
+    "ALICE_ELIZA_COMMIT",
+    "ALICE_RUNTIME_REVISION",
   ];
   const distinctSecrets = [
     secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN,
@@ -152,6 +156,7 @@ export function verifyAliceRouteSecretClosure(
   if (
     !configs ||
     !secrets ||
+    typeof containerMode !== "boolean" ||
     !DIGEST.test(releaseDigest) ||
     !exactRequiredSecrets(
       configs.access,
@@ -164,6 +169,11 @@ export function verifyAliceRouteSecretClosure(
             "ALICE_MODAL_PROXY_SECRET",
           ],
     ) ||
+    (containerMode &&
+      !exactRequiredSecrets(
+        configs.runtimeHost ?? {},
+        containerRuntimeHostSecrets,
+      )) ||
     !exactRequiredSecrets(configs.control, [
       "ALICE_ACCESS_GATEWAY_SERVICE_TOKEN",
       "ALICE_AI_GATEWAY_SERVICE_TOKEN",
@@ -203,6 +213,7 @@ export function verifyAliceRouteSecretClosure(
         !DIGEST.test(secrets.ALICE_POLICY_HASH ?? "") ||
         !DIGEST.test(secrets.ALICE_PROGRAM_DIGEST ?? "") ||
         !DIGEST.test(secrets.ALICE_RELEASE_DIGEST ?? "") ||
+        !DIGEST.test(secrets.ALICE_CAPABILITY_BOM_SHA256 ?? "") ||
         !DIGEST.test(
           secrets.ALICE_RUNTIME_BUILD_MANIFEST_SHA256 ?? "",
         ) ||
@@ -267,6 +278,8 @@ export async function verifyAliceProgramAdmission({
     rootSecret: secrets.ALICE_RUNTIME_RELEASE_TOKEN_ROOT,
     releaseDigest: config.binding.releaseDigest,
   });
+  const containerMode =
+    config.envelope.schemaVersion === "alice.program-envelope.v2";
   verifyAliceRouteSecretClosure(
     configs,
     {
@@ -283,6 +296,7 @@ export async function verifyAliceProgramAdmission({
       ALICE_PROGRAM_DIGEST: config.binding.programDigest,
       ALICE_RELEASE_DIGEST: config.binding.releaseDigest,
       ALICE_RUNTIME_API_TOKEN: secrets.MILADY_API_TOKEN,
+      ALICE_CAPABILITY_BOM_SHA256: config.capabilityBomSha256,
       ALICE_RUNTIME_BUILD_MANIFEST_SHA256:
         config.envelope.release.runtimeBuildManifestSha256,
       ALICE_RUNTIME_IMAGE: config.envelope.release.runtimeImage,
@@ -290,9 +304,9 @@ export async function verifyAliceProgramAdmission({
       ALICE_RUNTIME_VAULT_PASSPHRASE: secrets.ELIZA_VAULT_PASSPHRASE,
     },
     config.binding.releaseDigest,
+    containerMode,
   );
   const release = config.envelope.release;
-  const containerMode = config.envelope.schemaVersion === "alice.program-envelope.v2";
   const evidence = {
     schemaVersion: containerMode
       ? "alice.program-admission.v2"
@@ -366,6 +380,7 @@ async function main() {
   }
   const configs = {
     access: readConfig(configDir, "access"),
+    runtimeHost: readConfig(configDir, "runtimeHost"),
     control: readConfig(configDir, "control"),
     aiGateway: readConfig(configDir, "aiGateway"),
   };
