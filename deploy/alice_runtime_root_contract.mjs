@@ -148,8 +148,12 @@ function enforceSummary(summary, policy) {
   if (summary.entryCount > policy.maxEntryCount) fail("ENTRY_COUNT_LIMIT_EXCEEDED", { observed: summary.entryCount, maximum: policy.maxEntryCount });
   if (summary.totalFileBytes > policy.maxTotalFileBytes) fail("TOTAL_FILE_BYTES_LIMIT_EXCEEDED", { observed: summary.totalFileBytes, maximum: policy.maxTotalFileBytes });
 }
+function ownershipFields(info, contractKind) {
+  if (contractKind !== "runtime-root") return {};
+  return { uid: info.uid, gid: info.gid };
+}
 
-async function walk(root, policy) {
+async function walk(root, policy, contractKind) {
   const rootLstat = await lstat(root).catch(() => fail("ROOT_MISSING", { root }));
   if (rootLstat.isSymbolicLink()) fail("ROOT_SYMLINK_FORBIDDEN", { root });
   const rootReal = await realpath(root);
@@ -169,14 +173,15 @@ async function walk(root, policy) {
       const absolute = path.join(directory, child.name);
       const info = await lstat(absolute);
       const mode = info.mode & 0o7777;
+      const ownership = ownershipFields(info, contractKind);
       if (info.isDirectory()) {
-        append({ path: relative, type: "directory", mode });
+        append({ path: relative, type: "directory", mode, ...ownership });
         await visit(absolute, relative);
       } else if (info.isFile()) {
         if (info.size > policy.maxFileBytes) fail("FILE_TOO_LARGE", { path: relative, size: info.size });
         total += info.size;
         if (!Number.isSafeInteger(total) || total > policy.maxTotalFileBytes) fail("TOTAL_FILE_BYTES_LIMIT_EXCEEDED", { path: relative, observed: total });
-        append({ path: relative, type: "file", mode, size: info.size, sha256: await hashFile(absolute) });
+        append({ path: relative, type: "file", mode, ...ownership, size: info.size, sha256: await hashFile(absolute) });
       } else if (info.isSymbolicLink()) {
         const target = (await readlink(absolute)).replaceAll("\\", "/");
         validateSymlinkPath(relative, target);
@@ -185,7 +190,7 @@ async function walk(root, policy) {
           const rel = path.relative(rootReal, resolved);
           if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) fail("SYMLINK_ESCAPE", { path: relative });
         }
-        append({ path: relative, type: "symlink", mode, target });
+        append({ path: relative, type: "symlink", mode, ...ownership, target });
       } else fail("SPECIAL_FILE_FORBIDDEN", { path: relative, mode });
     }
   }
@@ -200,7 +205,7 @@ export async function buildAliceRuntimeRootContract({ root, contractKind, source
   assertCommit(elizaCommit, "elizaCommit");
   if (platform !== "linux/amd64") fail("PLATFORM_INVALID", { observed: platform });
   const policy = normalizeAliceRuntimeRootPolicy(rawPolicy);
-  const entries = await walk(root, policy);
+  const entries = await walk(root, policy, contractKind);
   const summary = summarize(entries);
   enforceSummary(summary, policy);
   const unsigned = Object.freeze({
@@ -217,9 +222,10 @@ export async function buildAliceRuntimeRootContract({ root, contractKind, source
   return Object.freeze({ ...unsigned, contractSha256: hashBytes(canonical(unsigned)) });
 }
 
-function validateEntry(entry, previous, policy) {
+function validateEntry(entry, previous, policy, contractKind) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) fail("ENTRY_SHAPE_INVALID");
-  const common = ["path", "type", "mode"];
+  const ownership = contractKind === "runtime-root" ? ["uid", "gid"] : [];
+  const common = ["path", "type", "mode", ...ownership];
   if (entry.type === "file") {
     exactKeys(entry, [...common, "size", "sha256"], "FILE_ENTRY_KEYS_INVALID");
     if (!Number.isSafeInteger(entry.size) || entry.size < 0) fail("FILE_ENTRY_SIZE_INVALID", { path: entry.path });
@@ -231,6 +237,13 @@ function validateEntry(entry, previous, policy) {
   if (normalizeRelative(entry.path) !== entry.path) fail("ENTRY_PATH_NON_CANONICAL", { path: entry.path });
   if (policy) enforcePath(entry.path, policy);
   if (!Number.isSafeInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o7777) fail("ENTRY_MODE_INVALID", { path: entry.path });
+  if (contractKind === "runtime-root") {
+    for (const field of ["uid", "gid"]) {
+      if (!Number.isSafeInteger(entry[field]) || entry[field] < 0) {
+        fail("ENTRY_OWNERSHIP_INVALID", { path: entry.path, field });
+      }
+    }
+  }
   if (previous !== null && Buffer.from(previous).compare(Buffer.from(entry.path)) >= 0) fail("ENTRY_ORDER_INVALID", { previousPath: previous, path: entry.path });
   return entry.path;
 }
@@ -253,7 +266,7 @@ export function verifyAliceRuntimeRootContractShape(value, { expectedKind = null
   const policy = rawPolicy === undefined ? null : normalizeAliceRuntimeRootPolicy(rawPolicy);
   if (policy && value.policySha256 !== hashBytes(canonical(policy))) fail("POLICY_SHA_MISMATCH");
   let previous = null;
-  for (const entry of value.entries) previous = validateEntry(entry, previous, policy);
+  for (const entry of value.entries) previous = validateEntry(entry, previous, policy, value.contractKind);
   const summary = summarize(value.entries);
   if (policy) enforceSummary(summary, policy);
   for (const [key, observed] of Object.entries(summary)) if (value[key] !== observed) fail("SUMMARY_MISMATCH", { field: key, expected: observed, observed: value[key] });
