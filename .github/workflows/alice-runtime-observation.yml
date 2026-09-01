@@ -55,7 +55,7 @@ jobs:
           no-cache: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2528633257a7a0601cb66c819263f8ac7f4608
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
         with:
           driver: docker-container
           buildkitd-flags: --debug
