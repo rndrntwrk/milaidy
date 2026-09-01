@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
 import {
   lstat,
   mkdir,
+  open,
   readFile,
   readdir,
   readlink,
@@ -21,6 +21,16 @@ export const RUNTIME_ROOT_KINDS = Object.freeze(["build-context", "runtime-root"
 const KINDS = new Set(RUNTIME_ROOT_KINDS);
 const SHA = /^sha256:[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
+const FILE_IDENTITY_FIELDS = Object.freeze([
+  "dev",
+  "ino",
+  "mode",
+  "uid",
+  "gid",
+  "size",
+  "mtimeMs",
+  "ctimeMs",
+]);
 
 const DEFAULT_POLICY = Object.freeze({
   schemaVersion: RUNTIME_ROOT_POLICY_SCHEMA,
@@ -47,15 +57,72 @@ const fail = (predicateId, details = {}) => {
 };
 const canonical = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
 const hashBytes = (bytes) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-async function hashFile(file) {
-  const hash = createHash("sha256");
-  await new Promise((resolve, reject) => {
-    const stream = createReadStream(file);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", resolve);
-  });
-  return `sha256:${hash.digest("hex")}`;
+
+export function assertAliceRuntimeStableFileIdentity(before, after, relative) {
+  if (
+    before === null ||
+    typeof before !== "object" ||
+    after === null ||
+    typeof after !== "object"
+  ) {
+    fail("FILE_IDENTITY_INVALID", { path: relative });
+  }
+  for (const field of FILE_IDENTITY_FIELDS) {
+    const expected = before[field];
+    const observed = after[field];
+    if (
+      typeof expected !== "number" ||
+      !Number.isFinite(expected) ||
+      typeof observed !== "number" ||
+      !Number.isFinite(observed)
+    ) {
+      fail("FILE_IDENTITY_INVALID", { path: relative, field });
+    }
+    if (!Object.is(expected, observed)) {
+      fail("FILE_CHANGED_DURING_HASH", {
+        path: relative,
+        field,
+        expected,
+        observed,
+      });
+    }
+  }
+  return true;
+}
+
+async function hashFile(file, expectedInfo, relative) {
+  let handle;
+  try {
+    handle = await open(file, "r");
+  } catch (error) {
+    fail("FILE_CHANGED_DURING_HASH", {
+      path: relative,
+      phase: "open",
+      code: typeof error?.code === "string" ? error.code : null,
+    });
+  }
+  try {
+    const opened = await handle.stat();
+    assertAliceRuntimeStableFileIdentity(expectedInfo, opened, relative);
+    const hash = createHash("sha256");
+    await new Promise((resolve, reject) => {
+      const stream = handle.createReadStream({ autoClose: false });
+      stream.on("data", (chunk) => hash.update(chunk));
+      stream.on("error", reject);
+      stream.on("end", resolve);
+    });
+    const after = await handle.stat();
+    assertAliceRuntimeStableFileIdentity(opened, after, relative);
+    return `sha256:${hash.digest("hex")}`;
+  } catch (error) {
+    if (error instanceof AliceRuntimeRootContractError) throw error;
+    fail("FILE_HASH_READ_FAILED", {
+      path: relative,
+      code: typeof error?.code === "string" ? error.code : null,
+    });
+  } finally {
+    await handle.close().catch(() => {});
+  }
 }
 function exactKeys(value, expected, predicateId) {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail(predicateId);
@@ -181,7 +248,7 @@ async function walk(root, policy, contractKind) {
         if (info.size > policy.maxFileBytes) fail("FILE_TOO_LARGE", { path: relative, size: info.size });
         total += info.size;
         if (!Number.isSafeInteger(total) || total > policy.maxTotalFileBytes) fail("TOTAL_FILE_BYTES_LIMIT_EXCEEDED", { path: relative, observed: total });
-        append({ path: relative, type: "file", mode, ...ownership, size: info.size, sha256: await hashFile(absolute) });
+        append({ path: relative, type: "file", mode, ...ownership, size: info.size, sha256: await hashFile(absolute, info, relative) });
       } else if (info.isSymbolicLink()) {
         const target = (await readlink(absolute)).replaceAll("\\", "/");
         validateSymlinkPath(relative, target);
