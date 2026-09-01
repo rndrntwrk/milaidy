@@ -95,7 +95,7 @@ describe("Alice durable mutation evidence outbox wiring", () => {
       durable.indexOf("async alarm(): Promise<void>"),
     );
     expect(constructor).toContain("reconcileBudgetLimit");
-    expect(constructor).toContain('kind: "control.budget-invariant"');
+    expect(constructor).toContain('kind: "control.budget.invariant"');
     expect(constructor).toContain("stageEvidence");
     expect(constructor).toContain('ctx.storage.put("state"');
     expect(constructor.indexOf("stageEvidence")).toBeLessThan(

@@ -170,7 +170,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
           occurredAt: new Date(
             reconciled.pause?.pausedAt ?? Date.now(),
           ).toISOString(),
-          kind: "control.budget-invariant",
+          kind: "control.budget.invariant",
           actor: "authority:budget-invariant",
           outcome: reconciled.code,
           binding: snapshot.binding,
