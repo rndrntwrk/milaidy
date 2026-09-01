@@ -12,6 +12,7 @@ on:
       - "deploy/alice_runtime_context_policy.v1.json"
       - "deploy/alice_runtime_context_snapshot.mjs"
       - "deploy/alice_runtime_context_snapshot.test.mjs"
+      - "deploy/alice_runtime_contracts.repository.test.mjs"
       - "deploy/alice_runtime_inputs.mjs"
       - "deploy/alice_runtime_inputs.test.mjs"
       - "deploy/alice_runtime_root_contract.mjs"
