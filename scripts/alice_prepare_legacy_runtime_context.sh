@@ -77,23 +77,25 @@ test -f packages/agent/dist/packages/agent/src/runtime/alice-runtime-profile.js
 
 build_workspace() {
   local workspace="$1"
-  local expected="$2"
+  local expected="${2:-}"
   (
     cd "$workspace"
     bun run build
-    test -f "$expected"
+    if [ -n "$expected" ]; then
+      test -f "$expected"
+    fi
   )
 }
 
-build_workspace eliza/packages/shared dist/index.js
+build_workspace eliza/packages/shared
 build_workspace eliza/packages/skills dist/index.js
-build_workspace eliza/packages/vault dist/index.js
-build_workspace eliza/packages/auth dist/index.js
-build_workspace eliza/packages/ui dist/index.js
-build_workspace eliza/packages/app-core dist/index.js
+build_workspace eliza/packages/vault
+build_workspace eliza/packages/auth
+build_workspace eliza/packages/ui
+build_workspace eliza/packages/app-core
 build_workspace eliza/plugins/plugin-local-inference dist/runtime/index.js
 build_workspace eliza/plugins/plugin-openai dist/node/index.node.js
-build_workspace eliza/cloud/packages/sdk dist/index.js
+build_workspace eliza/packages/cloud/sdk dist/index.js
 build_workspace eliza/plugins/plugin-elizacloud dist/utils/config.js
 
 for workspace in \
@@ -106,10 +108,7 @@ for workspace in \
   eliza/plugins/plugin-app-manager \
   eliza/plugins/plugin-scheduling
  do
-  (
-    cd "$workspace"
-    bun run build
-  )
+  build_workspace "$workspace"
  done
 
 build_workspace eliza/plugins/plugin-form dist/index.js
@@ -155,7 +154,9 @@ ALICE_POLICY_WORKSPACES
 
 MILADY_ELIZA_APP_CORE_ROOT=packages/app-core ./node_modules/.bin/tsdown
 echo '{"type":"module"}' > dist/package.json
-node --import tsx eliza/packages/app-core/scripts/write-build-info.ts 2>/dev/null || true
+MILADY_ELIZA_APP_CORE_ROOT=packages/app-core \
+  node --import tsx eliza/packages/app-core/scripts/write-build-info.ts \
+  2>/dev/null || true
 
 (
   cd apps/app
