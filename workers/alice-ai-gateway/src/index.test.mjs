@@ -357,7 +357,6 @@ test("chat preserves response-only OpenAI streaming after budget reservation", a
 
 test("chat rejects every unapproved or authority-shaped provider field before charging", async () => {
   for (const extra of [
-    { tools: [{ type: "function", function: { name: "execute" } }] },
     { functions: [{ name: "execute" }] },
     { max_completion_tokens: 4096 },
     { n: 8 },
@@ -399,6 +398,9 @@ test("chat preserves a synchronous OpenAI-compatible completion from Workers AI"
   const body = {
     model: "workers-ai/@cf/openai/gpt-oss-20b",
     messages: [{ role: "user", content: "Are you online?" }],
+    tools: [{ type: "function", function: { name: "HANDLE_RESPONSE" } }],
+    tool_choice: "required",
+    prompt_cache_key: "alice-stage-1-prefix",
   };
 
   const response = await worker.fetch(jsonRequest("/v1/chat/completions", body), env);
@@ -419,7 +421,12 @@ test("chat preserves a synchronous OpenAI-compatible completion from Workers AI"
   assert.deepEqual(directCalls, [
     {
       model: "@cf/openai/gpt-oss-20b",
-      input: { messages: body.messages, max_tokens: 1024 },
+      input: {
+        messages: body.messages,
+        tools: body.tools,
+        tool_choice: "required",
+        max_tokens: 1024,
+      },
       options: {
         gateway: {
           id: "alice-production",

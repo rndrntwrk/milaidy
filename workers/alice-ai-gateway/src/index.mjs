@@ -9,7 +9,7 @@ import {
 const MAX_BODY_BYTES = 1_048_576;
 const CHAT_MODELS = new Map(Object.entries(ALICE_AI_CHAT_MODELS));
 const EMBEDDING_MODELS = new Set(ALICE_AI_EMBEDDING_MODELS);
-const CHAT_ALLOWED_FIELDS = new Set([
+const CHAT_FORWARDED_FIELDS = new Set([
   "model",
   "messages",
   "stream",
@@ -21,6 +21,14 @@ const CHAT_ALLOWED_FIELDS = new Set([
   "stop",
   "seed",
   "response_format",
+  "tools",
+  "tool_choice",
+]);
+const CHAT_ALLOWED_FIELDS = new Set([
+  ...CHAT_FORWARDED_FIELDS,
+  // Milady's OpenAI client always supplies this advisory cache hint. Alice's
+  // Workers AI binding has caching disabled, so accept but do not forward it.
+  "prompt_cache_key",
 ]);
 const textEncoder = new TextEncoder();
 const AI_GATEWAY_OPTIONS = ALICE_AI_GATEWAY_OPTIONS;
@@ -383,7 +391,7 @@ async function handleChat(request, body, releaseBinding, env) {
 
   try {
     const input = {};
-    for (const field of CHAT_ALLOWED_FIELDS) {
+    for (const field of CHAT_FORWARDED_FIELDS) {
       if (field !== "model" && body[field] !== undefined) input[field] = body[field];
     }
     input.max_tokens = budget.maxTokens;
