@@ -17,6 +17,7 @@ import test from "node:test";
 
 import {
   AliceRuntimeRootContractError,
+  assertAliceRuntimeStableFileIdentity,
   buildAliceRuntimeRootContract,
   verifyAliceRuntimeRootContract,
   verifyAliceRuntimeRootContractShape,
@@ -136,6 +137,48 @@ test("runtime roots bind ownership while build contexts remain runner-ownership 
   }
 
   assert.notEqual(runtime.entriesSha256, context.entriesSha256);
+});
+
+test("file identity must remain stable across open, hash, and final readback", async () => {
+  const stable = {
+    dev: 2049,
+    ino: 44,
+    mode: 0o100755,
+    uid: 1001,
+    gid: 1001,
+    size: 128,
+    mtimeMs: 1_777_000_000_000,
+    ctimeMs: 1_777_000_000_001,
+  };
+  assert.doesNotThrow(() =>
+    assertAliceRuntimeStableFileIdentity(stable, { ...stable }, "bin/alice"),
+  );
+  for (const [field, value] of [
+    ["dev", 2050],
+    ["ino", 45],
+    ["mode", 0o100644],
+    ["uid", 1002],
+    ["gid", 1002],
+    ["size", 129],
+    ["mtimeMs", stable.mtimeMs + 1],
+    ["ctimeMs", stable.ctimeMs + 1],
+  ]) {
+    assert.throws(
+      () =>
+        assertAliceRuntimeStableFileIdentity(
+          stable,
+          { ...stable, [field]: value },
+          "bin/alice",
+        ),
+      (error) => {
+        assert.ok(error instanceof AliceRuntimeRootContractError);
+        assert.equal(error.predicateId, "FILE_CHANGED_DURING_HASH");
+        assert.equal(error.details.path, "bin/alice");
+        assert.equal(error.details.field, field);
+        return true;
+      },
+    );
+  }
 });
 
 test("contract is deterministic across mtimes and directory creation order", async (t) => {
