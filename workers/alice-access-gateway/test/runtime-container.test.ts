@@ -43,6 +43,8 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     OPENAI_API_KEY: "runtime-release-token-with-at-least-32-bytes",
     OPENAI_BASE_URL: "http://alice-ai-gateway.internal/v1",
     OPENAI_EMBEDDING_URL: "http://alice-ai-gateway.internal/v1",
+    MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+    ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
     ALICE_STATE_PLANE_URL:
       "http://alice-state-plane.internal/v1/eliza-database",
     ALICE_COMPANION_STATE_URL:
@@ -93,6 +95,13 @@ test("routes the only allowed model host through ContainerProxy to the authentic
   );
   expect(containerSource).toContain(
     '"alice-ai-gateway.internal": forwardToAliceAiGateway',
+  );
+  expect(containerSource).not.toContain("static outboundByHost =");
+  expect(containerSource).toContain(
+    "AliceRuntimeContainer.outboundByHost = ALICE_RUNTIME_OUTBOUND_BY_HOST",
+  );
+  expect(containerSource).toContain(
+    "allowedHosts = Object.keys(ALICE_RUNTIME_OUTBOUND_BY_HOST)",
   );
   expect(containerSource).toContain("enableInternet = false");
   expect(workerSource).toContain(
