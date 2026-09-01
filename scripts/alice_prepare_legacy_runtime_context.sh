@@ -33,6 +33,67 @@ bun install --ignore-scripts --frozen-lockfile
   bun install --ignore-scripts --frozen-lockfile
 )
 
+export ALICE_WRANGLER_BIN="$SUBJECT_ROOT/node_modules/.bin/wrangler"
+export ALICE_WORKER_CONTRACT_REPLAY=1
+export ALICE_REPLAY_SOURCE_COMMIT="$ALICE_EXPECTED_SOURCE_COMMIT"
+
+bun test \
+  packages/app-core/src/api/server.health-probes.test.ts \
+  packages/agent/src/api/alice-production-auth-boundary.test.ts \
+  packages/agent/src/api/alice-production-capabilities.test.ts \
+  packages/agent/src/api/alice-production-chat.test.ts \
+  packages/agent/src/api/alice-production-guard.test.ts \
+  packages/agent/src/api/alice-production-proof.test.ts \
+  packages/agent/src/api/alice-release-metadata.test.ts \
+  packages/agent/src/runtime/alice-capability-inventory.test.ts \
+  packages/agent/src/runtime/alice-production-plugin-policy.test.ts \
+  packages/agent/src/runtime/alice-production-runtime-plugin.test.ts \
+  packages/agent/src/runtime/alice-production-startup-guard.test.ts \
+  deploy/modal/alice_production_acceptance.test.ts \
+  deploy/modal/verify_alice_program_admission.test.ts \
+  workers/alice-access-gateway/test/index.test.ts \
+  workers/alice-production-control/test/*.test.ts \
+  workers/alice-state-plane/test/*.test.ts \
+  workers/alice-connector-plane/test/*.test.ts
+
+node --test \
+  deploy/modal/alice_capability_bom.test.mjs \
+  deploy/modal/alice_cloudflare_container_image.test.mjs \
+  deploy/modal/alice_cloudflare_bootstrap.test.mjs \
+  workers/alice-ai-gateway/src/index.test.mjs \
+  deploy/modal/alice_cloudflare_config.test.mjs \
+  deploy/modal/alice_cloudflare_continuity.test.mjs \
+  deploy/modal/alice_cloudflare_live_readback.test.mjs \
+  deploy/modal/alice_cloudflare_provider_config.test.mjs \
+  deploy/modal/alice_cloudflare_provider_readback.test.mjs \
+  deploy/modal/alice_cloudflare_recovery_preprovision.test.mjs \
+  deploy/modal/alice_program_signing_key.test.mjs \
+  deploy/modal/alice_terminal_publication.test.mjs \
+  deploy/modal/alice_cloudflare_release.test.mjs \
+  deploy/modal/alice_cloudflare_traffic.test.mjs \
+  deploy/modal/alice_cloudflare_worker_rollback.test.mjs \
+  deploy/modal/alice_deployment_manifest.test.mjs \
+  deploy/modal/alice_modal_promote.test.mjs \
+  deploy/modal/alice_modal_release.test.mjs \
+  deploy/modal/alice_modal_safe_bootstrap.test.mjs \
+  deploy/modal/alice_recovery_credential_binding.test.mjs \
+  deploy/modal/alice_release_controller.test.mjs \
+  deploy/modal/alice_release_deadline.test.mjs \
+  deploy/modal/alice_smoke_model_server.test.mjs \
+  deploy/modal/verify_alice_runtime_boundary.test.mjs \
+  deploy/modal/verify_alice_capability_bom.test.mjs \
+  deploy/modal/write_alice_runtime_build_manifest.test.mjs \
+  deploy/modal/alice_worker_bundle_artifact.test.mjs \
+  deploy/modal/alice_workflow_binding_canary.test.mjs \
+  scripts/deploy-alice-cloudflare-workflow.test.mjs \
+  scripts/alice-capability-production-source.test.mjs \
+  scripts/build-cloud-agent-workflow.test.mjs
+
+python3 -m unittest \
+  deploy.modal.test_alice_registry_runtime \
+  deploy.modal.test_alice_modal_provider_readback \
+  deploy.modal.test_alice_safe_bootstrap
+
 ./node_modules/.bin/wrangler types \
   --config workers/alice-production-control/wrangler.jsonc \
   --env-interface AliceEnv \
@@ -51,6 +112,11 @@ bun install --ignore-scripts --frozen-lockfile
 ./node_modules/.bin/wrangler types \
   --config workers/alice-connector-plane/wrangler.jsonc \
   workers/alice-connector-plane/worker-configuration.d.ts
+
+bun x tsc --project workers/alice-production-control/tsconfig.json --noEmit
+bun x tsc --project workers/alice-access-gateway/tsconfig.json --noEmit
+bun x tsc --project workers/alice-state-plane/tsconfig.json --noEmit
+bun x tsc --project workers/alice-connector-plane/tsconfig.json --noEmit
 
 node eliza/packages/app-core/scripts/build-native-plugins.mjs
 
