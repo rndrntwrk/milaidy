@@ -1363,12 +1363,13 @@ function verifyAliceBootstrapBoundaryActionPlan(identityActions) {
     boundaryInvalid("ALICE_BOOTSTRAP_PLAN_DRIFT");
   }
   for (const role of BOOTSTRAP_VERSION_BOUNDARY_ROLES) {
-    const expected = role === "access"
-      ? { upload: "inactive", promote: false }
-      : { upload: "none", promote: false };
+    const action = identityActions[role];
     if (
-      !exactObjectKeys(identityActions[role], ["promote", "upload"]) ||
-      canonicalAliceJson(identityActions[role]) !== canonicalAliceJson(expected)
+      !exactObjectKeys(action, ["promote", "upload"]) ||
+      action.promote !== false ||
+      (role === "access"
+        ? action.upload !== "inactive" && action.upload !== "none"
+        : action.upload !== "none")
     ) {
       boundaryInvalid("ALICE_BOOTSTRAP_PLAN_DRIFT");
     }
@@ -1425,6 +1426,7 @@ export function verifyAliceBootstrapVersionBoundary(value) {
   }
   for (const role of BOOTSTRAP_VERSION_BOUNDARY_ROLES) {
     const selected = value.roles[role];
+    const activeExisting = selected?.selectionMode === "active-existing";
     if (
       !exactObjectKeys(selected, [
         "activeDeploymentIdAfter",
@@ -1436,16 +1438,17 @@ export function verifyAliceBootstrapVersionBoundary(value) {
         "selectionMode",
       ]) ||
       selected.scriptName !== ROLE_WORKERS[role] ||
-      selected.selectionMode !==
-        (role === "access" ? "inactive-upload" : "active-existing") ||
+      (role === "access"
+        ? selected.selectionMode !== "inactive-upload" && !activeExisting
+        : !activeExisting) ||
       !VERSION_ID.test(selected.bootstrapSelectedVersionId ?? "") ||
       !VERSION_ID.test(selected.activeDeploymentIdBefore ?? "") ||
       selected.activeDeploymentIdAfter !== selected.activeDeploymentIdBefore ||
       !VERSION_ID.test(selected.activeVersionIdBefore ?? "") ||
       selected.activeVersionIdAfter !== selected.activeVersionIdBefore ||
-      (role === "access"
-        ? selected.bootstrapSelectedVersionId === selected.activeVersionIdAfter
-        : selected.bootstrapSelectedVersionId !== selected.activeVersionIdAfter)
+      (activeExisting
+        ? selected.bootstrapSelectedVersionId !== selected.activeVersionIdAfter
+        : selected.bootstrapSelectedVersionId === selected.activeVersionIdAfter)
     ) {
       boundaryInvalid();
     }
@@ -1491,7 +1494,10 @@ export function buildAliceBootstrapVersionBoundary({
     }
     roles[role] = {
       scriptName: ROLE_WORKERS[role],
-      selectionMode: role === "access" ? "inactive-upload" : "active-existing",
+      selectionMode:
+        role === "access" && identityActions[role].upload === "inactive"
+          ? "inactive-upload"
+          : "active-existing",
       bootstrapSelectedVersionId: versionIds[role],
       activeDeploymentIdBefore: before.deploymentId,
       activeDeploymentIdAfter: after.deploymentId,
