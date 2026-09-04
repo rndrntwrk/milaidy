@@ -450,6 +450,7 @@ describe("SubscriptionStatus", () => {
     expect(setOpenaiConnected).toHaveBeenCalledWith(true);
     expect(handleSelectSubscription).toHaveBeenCalledWith(
       "openai-subscription",
+      false,
     );
     expect(loadSubscriptionStatus).toHaveBeenCalledTimes(1);
     expect(mockClient.restartAgent).toHaveBeenCalledTimes(1);

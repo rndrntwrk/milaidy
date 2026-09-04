@@ -1546,6 +1546,9 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
   const openAiBuild = workflow.indexOf(
     "cd eliza/plugins/plugin-openai\n          bun run build",
   );
+  const codexCliBuild = workflow.indexOf(
+    "cd eliza/plugins/plugin-codex-cli\n          bun run build",
+  );
   const elizaCloudBuild = workflow.indexOf(
     "cd eliza/plugins/plugin-elizacloud\n          bun run build",
   );
@@ -1571,6 +1574,10 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
     "OpenAI-compatible provider output must exist before Alice is bundled",
   );
   assert.ok(
+    codexCliBuild >= 0 && runtimeBuild > codexCliBuild,
+    "ChatGPT subscription provider output must exist before Alice is bundled",
+  );
+  assert.ok(
     cloudSdkBuild >= 0 && elizaCloudBuild > cloudSdkBuild,
     "Cloud SDK output must exist before plugin-elizacloud is built",
   );
@@ -1586,6 +1593,7 @@ test("cloud image materializes Alice's current Eliza inference and skills runtim
     "skills",
     "plugin-local-inference",
     "plugin-openai",
+    "plugin-codex-cli",
     "plugin-elizacloud",
     "cloud-sdk",
   ]) {

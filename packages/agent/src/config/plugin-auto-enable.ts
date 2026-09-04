@@ -53,6 +53,7 @@ const PROVIDER_PLUGINS: Record<string, string> = {
   "google-genai": "@elizaos/plugin-google-genai",
   "vercel-ai-gateway": "@elizaos/plugin-vercel-ai-gateway",
   openai: "@elizaos/plugin-openai",
+  "codex-cli": "@elizaos/plugin-codex-cli",
   anthropic: "@elizaos/plugin-anthropic",
   "pi-ai": "@elizaos/plugin-pi-ai",
   qwen: "@elizaos/plugin-qwen",

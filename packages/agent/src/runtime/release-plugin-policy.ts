@@ -8,6 +8,7 @@ const BASELINE_RUNTIME_SUPPORT_PACKAGES = [
 const BASELINE_PROVIDER_PLUGINS = [
   "@elizaos/plugin-elizacloud",
   "@elizaos/plugin-openai",
+  "@elizaos/plugin-codex-cli",
   "@elizaos/plugin-anthropic",
   "@elizaos/plugin-ollama",
 ] as const;

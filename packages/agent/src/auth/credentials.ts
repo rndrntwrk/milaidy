@@ -22,6 +22,7 @@ import {
   type SubscriptionProvider,
 } from "./types.js";
 import type { AccountCredentialRecord } from "./account-storage.js";
+import { createAliceOpenAiCodexCredentialStoreFromEnvironment } from "./alice-openai-codex-store.js";
 
 const AUTH_DIR = path.join(
   process.env.ELIZA_HOME || path.join(os.homedir(), ".eliza"),
@@ -42,6 +43,93 @@ function ensureAuthDir(): void {
 
 function credentialPath(provider: SubscriptionProvider): string {
   return path.join(AUTH_DIR, `${provider}.json`);
+}
+
+function codexAuthPath(): string {
+  return (
+    process.env.CODEX_AUTH_PATH?.trim() ||
+    path.join(os.homedir(), ".codex", "auth.json")
+  );
+}
+
+function decodeJwtPayload(value: string): Record<string, unknown> | null {
+  const payload = value.split(".")[1];
+  if (!payload) return null;
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return null;
+  }
+}
+
+function codexAccountId(access: string): string {
+  const payload = decodeJwtPayload(access);
+  const auth = payload?.["https://api.openai.com/auth"];
+  if (!auth || typeof auth !== "object" || Array.isArray(auth)) return "";
+  const accountId = (auth as Record<string, unknown>).chatgpt_account_id;
+  return typeof accountId === "string" ? accountId : "";
+}
+
+function codexExpiresAt(access: string): number {
+  const exp = decodeJwtPayload(access)?.exp;
+  return typeof exp === "number" && Number.isSafeInteger(exp)
+    ? exp * 1000
+    : 0;
+}
+
+function writeCodexAuthCache(credentials: OAuthCredentials): void {
+  const filePath = codexAuthPath();
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  const value = {
+    OPENAI_API_KEY: null,
+    auth_mode: "chatgpt",
+    last_refresh: new Date().toISOString(),
+    tokens: {
+      id_token: "",
+      access_token: credentials.access,
+      refresh_token: credentials.refresh,
+      account_id: codexAccountId(credentials.access),
+    },
+  };
+  const temporary = `${filePath}.tmp.${process.pid}`;
+  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  fs.renameSync(temporary, filePath);
+  fs.chmodSync(filePath, 0o600);
+}
+
+export async function persistOpenAiCodexCredentials(
+  credentials: OAuthCredentials,
+): Promise<void> {
+  await createAliceOpenAiCodexCredentialStoreFromEnvironment()?.write(
+    credentials,
+  );
+}
+
+export async function deletePersistentOpenAiCodexCredentials(): Promise<void> {
+  await createAliceOpenAiCodexCredentialStoreFromEnvironment()?.delete();
+}
+
+export async function deleteOpenAiCodexCredentials(): Promise<void> {
+  const codexPlugin = await import("@elizaos/plugin-codex-cli");
+  codexPlugin.setCodexAuthPersistHook(undefined);
+  deleteCredentials("openai-codex");
+  fs.rmSync(codexAuthPath(), { force: true });
+  await deletePersistentOpenAiCodexCredentials();
+}
+
+async function restoreOpenAiCodexCredentials(): Promise<boolean> {
+  if (loadCredentials("openai-codex")) return false;
+  const stored =
+    await createAliceOpenAiCodexCredentialStoreFromEnvironment()?.read();
+  if (!stored) return false;
+  saveCredentials("openai-codex", stored);
+  return true;
 }
 
 /**
@@ -194,6 +282,9 @@ export async function getAccessToken(
 
     // Save refreshed credentials
     saveCredentials(provider, refreshed);
+    if (provider === "openai-codex") {
+      await persistOpenAiCodexCredentials(refreshed);
+    }
     return refreshed.access;
   } catch (err) {
     logger.error(`[auth] Failed to refresh ${provider} token: ${err}`);
@@ -465,8 +556,8 @@ async function importClaudeCodeOAuthToken(): Promise<string | null> {
  * subprocesses) but never injecting it into `process.env.ANTHROPIC_API_KEY`
  * or installing the stealth fetch interceptor.
  *
- * Codex / ChatGPT subscription tokens *are* applied to the environment
- * because OpenAI permits direct API usage with those tokens.
+ * Codex / ChatGPT subscription tokens are materialized only into the Codex
+ * account-auth cache. They are never exposed as OPENAI_API_KEY.
  *
  * When a `config` is provided and the active subscription provider has
  * credentials, `model.primary` is auto-set so the user doesn't need to
@@ -504,13 +595,37 @@ export async function applySubscriptionCredentials(config?: {
     }
   }
 
-  // ── OpenAI Codex subscription → set OPENAI_API_KEY ────────────────────
+  // ── OpenAI Codex subscription → official Codex account-auth cache ─────
+  const restoredCodexFromDurableState = await restoreOpenAiCodexCredentials();
   const codexToken = await getAccessToken("openai-codex");
   if (codexToken) {
-    process.env.OPENAI_API_KEY = codexToken;
+    const stored = loadCredentials("openai-codex");
+    if (!stored) throw new Error("OPENAI_CODEX_CREDENTIALS_MISSING");
+    writeCodexAuthCache(stored.credentials);
+    const codexPlugin = await import("@elizaos/plugin-codex-cli");
+    codexPlugin.setCodexAuthPersistHook(async (auth) => {
+      const credentials: OAuthCredentials = {
+        access: auth.tokens.access_token,
+        refresh: auth.tokens.refresh_token,
+        expires: codexExpiresAt(auth.tokens.access_token),
+      };
+      if (credentials.expires <= 0) {
+        throw new Error("OPENAI_CODEX_CREDENTIALS_INVALID");
+      }
+      await persistOpenAiCodexCredentials(credentials);
+    });
     logger.info(
-      "[auth] Applied OpenAI Codex subscription credentials to environment",
+      "[auth] Applied OpenAI Codex subscription account credentials",
     );
+    if (restoredCodexFromDurableState && config) {
+      config.agents ??= {};
+      config.agents.defaults ??= {};
+      config.agents.defaults.subscriptionProvider = "openai-codex";
+      config.agents.defaults.model = {
+        ...config.agents.defaults.model,
+        primary: "codex-cli",
+      };
+    }
   }
 
   // Auto-set model.primary from subscription provider — now includes

@@ -48,6 +48,7 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/api\/broadcast\/[a-zA-Z0-9-]+\/(?:stage|scene|vrm|background)$/,
   /^\/api\/conversations(?:\/[^/]+\/messages)?$/,
   /^\/api\/memories\/feed$/,
+  /^\/api\/subscription\/status$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
@@ -56,6 +57,12 @@ const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
   /^\/api\/companion\/stage$/,
   /^\/api\/avatar\/(?:vrm|background)$/,
+  /^\/api\/subscription\/openai\/(?:start|exchange)$/,
+  /^\/api\/agent\/restart$/,
+];
+
+const FULL_PROFILE_ALLOWED_DELETE_PATHS = [
+  /^\/api\/subscription\/openai-codex$/,
 ];
 
 function matches(pathname: string, patterns: RegExp[]): boolean {
@@ -109,9 +116,19 @@ export function evaluateAliceProductionRequest(
         ? { allowed: true }
         : { allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" };
     }
-    return matches(pathname, FULL_PROFILE_ALLOWED_WRITE_PATHS)
-      ? { allowed: true }
-      : { allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" };
+    if (
+      normalizedMethod === "POST" &&
+      matches(pathname, FULL_PROFILE_ALLOWED_WRITE_PATHS)
+    ) {
+      return { allowed: true };
+    }
+    if (
+      normalizedMethod === "DELETE" &&
+      matches(pathname, FULL_PROFILE_ALLOWED_DELETE_PATHS)
+    ) {
+      return { allowed: true };
+    }
+    return { allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" };
   }
 
   if (normalizedMethod === "GET" || normalizedMethod === "HEAD") {

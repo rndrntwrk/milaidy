@@ -269,6 +269,7 @@
     "@elizaos/plugin-ollama": "2.0.3-beta.7",
     "@elizaos/plugin-discord": "workspace:*",
     "@elizaos/plugin-openai": "workspace:*",
+    "@elizaos/plugin-codex-cli": "workspace:*",
     "@elizaos/plugin-streaming": "2.0.3-beta.7",
     "@elizaos/plugin-workflow": "workspace:*",
     "@elizaos/plugin-x402": "2.0.3-beta.7",

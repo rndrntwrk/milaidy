@@ -92,6 +92,36 @@ describe("private Alice state service", () => {
       recordId: "companion-stage-v1",
       ownerId: "alice-owner-production",
     })).status).toBe(200);
+    expect((await invoke("/v1/state", "openai-codex-credentials", {
+      operation: "record.put",
+      kind: "configVersion",
+      recordId: "openai-codex-credentials-v1",
+      ownerId: "alice-owner-production",
+      sessionId: "openai-codex-production",
+      payload: {
+        schemaVersion: "alice.openai-codex-auth-state.v1",
+        state: "active",
+        algorithm: "aes-256-gcm",
+        kdf: "pbkdf2-sha256",
+        iterations: 210000,
+        salt: "a".repeat(32),
+        iv: "b".repeat(24),
+        ciphertext: "c".repeat(64),
+        tag: "d".repeat(32),
+      },
+      updatedAt: 1_777_000_000_000,
+      idempotencyKey: "openai-codex-valid-001",
+    })).status).toBe(200);
+    expect((await invoke("/v1/state", "openai-codex-credentials", {
+      operation: "record.put",
+      kind: "configVersion",
+      recordId: "openai-codex-credentials-v1",
+      ownerId: "alice-owner-production",
+      sessionId: "openai-codex-production",
+      payload: { schemaVersion: "alice.openai-codex-auth-state.v1", accessToken: "raw" },
+      updatedAt: 1_777_000_000_000,
+      idempotencyKey: "openai-codex-invalid-001",
+    })).status).toBe(400);
     expect((await invoke("/v1/state", "companion-stage", {
       operation: "record.put",
       kind: "configVersion",
@@ -127,7 +157,7 @@ describe("private Alice state service", () => {
       updatedAt: 1_777_000_000_000,
       idempotencyKey: "companion-stage-invalid-001",
     })).status).toBe(403);
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
   });
 
   test("commits a bounded Eliza value and rejects unauthorized, extra, or secret-bearing shapes", async () => {

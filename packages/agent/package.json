@@ -142,6 +142,7 @@
     "@elizaos/plugin-local-embedding": "2.0.0-beta.1",
     "@elizaos/plugin-ollama": "2.0.3-beta.7",
     "@elizaos/plugin-openai": "workspace:*",
+    "@elizaos/plugin-codex-cli": "workspace:*",
     "@elizaos/plugin-pdf": "workspace:*",
     "@elizaos/plugin-personality": "2.0.0-alpha.9",
     "@elizaos/plugin-pi-ai": "1.7.3-alpha.4",

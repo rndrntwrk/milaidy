@@ -54,6 +54,35 @@ function validCompanionStagePayload(value: unknown): boolean {
   );
 }
 
+function validOpenAiCodexPayload(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  if (
+    exactKeys(payload, ["schemaVersion", "state"]) &&
+    payload.schemaVersion === "alice.openai-codex-auth-state.v1" &&
+    payload.state === "deleted"
+  ) return true;
+  if (
+    !exactKeys(payload, [
+      "algorithm", "ciphertext", "iterations", "iv", "kdf", "salt",
+      "schemaVersion", "state", "tag",
+    ]) ||
+    payload.schemaVersion !== "alice.openai-codex-auth-state.v1" ||
+    payload.state !== "active" ||
+    payload.algorithm !== "aes-256-gcm" ||
+    payload.kdf !== "pbkdf2-sha256" ||
+    payload.iterations !== 210_000
+  ) return false;
+  const encoded = /^[A-Za-z0-9_-]+$/;
+  return [payload.salt, payload.iv, payload.ciphertext, payload.tag].every(
+    (field) =>
+      typeof field === "string" &&
+      field.length >= 16 &&
+      field.length <= 65_536 &&
+      encoded.test(field),
+  );
+}
+
 function containerScopeAllows(
   request: Request,
   pathname: string,
@@ -69,6 +98,23 @@ function containerScopeAllows(
   if (scope === "eliza-database") {
     return pathname === "/v1/eliza-database" &&
       (operation.operation === "eliza.load" || operation.operation === "eliza.commit");
+  }
+  if (scope === "openai-codex-credentials") {
+    if (
+      pathname !== "/v1/state" ||
+      operation.kind !== "configVersion" ||
+      operation.recordId !== "openai-codex-credentials-v1"
+    ) return false;
+    if (operation.operation === "record.get") {
+      return exactKeys(operation, ["kind", "operation", "ownerId", "recordId"]);
+    }
+    return operation.operation === "record.put" &&
+      exactKeys(operation, [
+        "idempotencyKey", "kind", "operation", "ownerId", "payload",
+        "recordId", "sessionId", "updatedAt",
+      ]) &&
+      operation.sessionId === "openai-codex-production" &&
+      validOpenAiCodexPayload(operation.payload);
   }
   if (
     scope !== "companion-stage" ||

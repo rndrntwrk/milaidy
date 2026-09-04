@@ -198,6 +198,12 @@ try {
 } catch {
   pluginOpenai = null;
 }
+let pluginCodexCli: unknown = null;
+try {
+  pluginCodexCli = require("@elizaos/plugin-codex-cli");
+} catch {
+  pluginCodexCli = null;
+}
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
   getSandboxManager: () => SandboxManager | null;
@@ -297,6 +303,9 @@ export const STATIC_ELIZA_PLUGINS: Record<
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
   ...(pluginCommands ? { "@elizaos/plugin-commands": pluginCommands } : {}),
   ...(pluginOpenai ? { "@elizaos/plugin-openai": pluginOpenai } : {}),
+  ...(pluginCodexCli
+    ? { "@elizaos/plugin-codex-cli": pluginCodexCli }
+    : {}),
   ...(pluginOllama ? { "@elizaos/plugin-ollama": pluginOllama } : {}),
   // Bun parses static imports eagerly, so keep the cloud plugin behind a
   // deferred loader until it is actually enabled.

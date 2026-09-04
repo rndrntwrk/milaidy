@@ -436,6 +436,12 @@ jobs:
           bun run build
           test -f dist/node/index.node.js
 
+      - name: Build @elizaos/plugin-codex-cli
+        run: |
+          cd eliza/plugins/plugin-codex-cli
+          bun run build
+          test -f dist/node/index.node.js
+
       - name: Build @elizaos/cloud-sdk
         run: |
           cd eliza/packages/cloud/sdk

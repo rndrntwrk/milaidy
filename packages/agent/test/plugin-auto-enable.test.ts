@@ -2,6 +2,22 @@ import { describe, expect, test } from "vitest";
 import { applyPluginAutoEnable } from "../src/config/plugin-auto-enable";
 
 describe("applyPluginAutoEnable", () => {
+  test("selects the Codex account-login provider without enabling OpenAI API auth", () => {
+    const { config, changes } = applyPluginAutoEnable({
+      config: {
+        agents: { defaults: { subscriptionProvider: "openai-codex" } },
+      },
+      env: {},
+    });
+
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-codex-cli");
+    expect(config.plugins?.entries?.["codex-cli"]?.enabled).toBe(true);
+    expect(config.plugins?.allow).not.toContain("@elizaos/plugin-openai");
+    expect(changes).toContain(
+      "Auto-enabled plugin: @elizaos/plugin-codex-cli (subscription: openai-codex)",
+    );
+  });
+
   test("maps features.tts to plugin-edge-tts", () => {
     const { config } = applyPluginAutoEnable({
       config: { features: { tts: true } },

@@ -1153,6 +1153,7 @@ const FULL_RUNTIME_API_READS = [
   /^\/api\/broadcast\/[a-zA-Z0-9-]+\/(?:stage|scene|vrm|background)$/,
   /^\/api\/conversations(?:\/[^/]+\/messages)?$/,
   /^\/api\/memories\/feed$/,
+  /^\/api\/subscription\/status$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
@@ -1161,7 +1162,11 @@ const FULL_RUNTIME_WRITES = [
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
   /^\/api\/companion\/stage$/,
   /^\/api\/avatar\/(?:vrm|background)$/,
+  /^\/api\/subscription\/openai\/(?:start|exchange)$/,
+  /^\/api\/agent\/restart$/,
 ];
+
+const FULL_RUNTIME_DELETES = [/^\/api\/subscription\/openai-codex$/];
 
 function isFullRuntimeUiPath(pathname: string): boolean {
   if (
@@ -1200,7 +1205,11 @@ function isFullRuntimeRequest(method: string, pathname: string): boolean {
       isFullRuntimeApiRead(pathname)
     );
   }
-  return FULL_RUNTIME_WRITES.some((pattern) => pattern.test(pathname));
+  if (normalized === "POST") {
+    return FULL_RUNTIME_WRITES.some((pattern) => pattern.test(pathname));
+  }
+  return normalized === "DELETE" &&
+    FULL_RUNTIME_DELETES.some((pattern) => pattern.test(pathname));
 }
 
 function isFullRuntimeWebSocketRequest(request: Request, pathname: string): boolean {
@@ -1222,10 +1231,8 @@ function isFullRuntimeProductApi(method: string, pathname: string): boolean {
       !SAFE_RUNTIME_READS.some((pattern) => pattern.test(pathname))
     );
   }
-  return (
-    pathname !== "/v1/chat/completions" &&
-    FULL_RUNTIME_WRITES.some((pattern) => pattern.test(pathname))
-  );
+  return pathname !== "/v1/chat/completions" &&
+    isFullRuntimeRequest(method, pathname);
 }
 
 function isAdmittedRuntimeRequest(method: string, pathname: string): boolean {
@@ -1238,7 +1245,7 @@ function isAdmittedRuntimeRequest(method: string, pathname: string): boolean {
       isFullRuntimeApiRead(pathname)
     );
   }
-  return FULL_RUNTIME_WRITES.some((pattern) => pattern.test(pathname));
+  return isFullRuntimeRequest(method, pathname);
 }
 
 function sanitizedUpstreamResponse(response: Response): Response {

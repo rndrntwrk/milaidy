@@ -21,8 +21,10 @@ const authMocks = vi.hoisted(() => ({
   startAnthropicLogin: vi.fn(),
   startCodexLogin: vi.fn(),
   saveCredentials: vi.fn(),
+  persistOpenAiCodexCredentials: vi.fn(async () => undefined),
   applySubscriptionCredentials: vi.fn(async () => undefined),
   deleteCredentials: vi.fn(),
+  deleteOpenAiCodexCredentials: vi.fn(async () => undefined),
 }));
 
 vi.mock("../src/auth/index.ts", () => ({
@@ -30,16 +32,20 @@ vi.mock("../src/auth/index.ts", () => ({
   startAnthropicLogin: authMocks.startAnthropicLogin,
   startCodexLogin: authMocks.startCodexLogin,
   saveCredentials: authMocks.saveCredentials,
+  persistOpenAiCodexCredentials: authMocks.persistOpenAiCodexCredentials,
   applySubscriptionCredentials: authMocks.applySubscriptionCredentials,
   deleteCredentials: authMocks.deleteCredentials,
+  deleteOpenAiCodexCredentials: authMocks.deleteOpenAiCodexCredentials,
 }));
 vi.mock("@miladyai/agent/auth", () => ({
   getSubscriptionStatus: authMocks.getSubscriptionStatus,
   startAnthropicLogin: authMocks.startAnthropicLogin,
   startCodexLogin: authMocks.startCodexLogin,
   saveCredentials: authMocks.saveCredentials,
+  persistOpenAiCodexCredentials: authMocks.persistOpenAiCodexCredentials,
   applySubscriptionCredentials: authMocks.applySubscriptionCredentials,
   deleteCredentials: authMocks.deleteCredentials,
+  deleteOpenAiCodexCredentials: authMocks.deleteOpenAiCodexCredentials,
 }));
 
 const {
@@ -47,8 +53,10 @@ const {
   startAnthropicLogin,
   startCodexLogin,
   saveCredentials,
+  persistOpenAiCodexCredentials,
   applySubscriptionCredentials,
   deleteCredentials,
+  deleteOpenAiCodexCredentials,
 } = authMocks;
 
 function makeCredentials(expires = Date.now() + 60_000): OAuthCredentials {
@@ -324,6 +332,7 @@ describe("subscription auth routes (e2e contract)", () => {
       expect(exchangeRes.data.expiresAt).toBe(credentials.expires);
       expect(submitCode).toHaveBeenCalledWith("openai-auth-code");
       expect(saveCredentials).toHaveBeenCalledWith("openai-codex", credentials);
+      expect(persistOpenAiCodexCredentials).toHaveBeenCalledWith(credentials);
       expect(applySubscriptionCredentials).toHaveBeenCalledTimes(1);
       expect(closeFn).toHaveBeenCalledTimes(1);
     });
@@ -463,6 +472,7 @@ describe("subscription auth routes (e2e contract)", () => {
       expect(exchangeRes.data.expiresAt).toBe(credentials.expires);
       expect(submitCode).not.toHaveBeenCalled();
       expect(saveCredentials).toHaveBeenCalledWith("openai-codex", credentials);
+      expect(persistOpenAiCodexCredentials).toHaveBeenCalledWith(credentials);
       expect(applySubscriptionCredentials).toHaveBeenCalledTimes(1);
       expect(closeFn).toHaveBeenCalledTimes(1);
     });
@@ -493,7 +503,8 @@ describe("subscription auth routes (e2e contract)", () => {
       const res = await req(port, "DELETE", "/api/subscription/openai-codex");
       expect(res.status).toBe(200);
       expect(res.data.success).toBe(true);
-      expect(deleteCredentials).toHaveBeenCalledWith("openai-codex");
+      expect(deleteCredentials).not.toHaveBeenCalledWith("openai-codex");
+      expect(deleteOpenAiCodexCredentials).toHaveBeenCalledTimes(1);
     });
 
     it("DELETE /api/subscription/unknown-provider returns 400", async () => {
