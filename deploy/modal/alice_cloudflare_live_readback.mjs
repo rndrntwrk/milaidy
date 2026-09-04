@@ -256,7 +256,8 @@ export async function fetchAliceRuntimeHostContainerState({
       !Array.isArray(instances) ||
       !Array.isArray(durableObjects) ||
       instances.length !== 0 ||
-      durableObjects.length !== 0
+      durableObjects.length !== 1 ||
+      durableObjects[0]?.name !== application.name
     ) {
       readbackInvalid();
     }
