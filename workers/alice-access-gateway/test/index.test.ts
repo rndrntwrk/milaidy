@@ -470,7 +470,7 @@ describe("Alice Access gateway", () => {
     const { token, jwks } = await accessFixture();
 
     const response = await invokeGateway(
-      new Request("https://alice.rndrntwrk.com/ws", {
+      new Request("https://alice.rndrntwrk.com/ws?clientId=ui-canary", {
         headers: {
           connection: "Upgrade",
           upgrade: "websocket",
@@ -513,6 +513,7 @@ describe("Alice Access gateway", () => {
     ]);
     expect(env.runtimeRequests[0]!.headers.get("upgrade")).toBeNull();
     expect(env.runtimeRequests[1]!.headers.get("upgrade")).toBe("websocket");
+    expect(new URL(env.runtimeRequests[1]!.url).search).toBe("?clientId=ui-canary");
     expect(env.runtimeRequests[2]!.headers.get("upgrade")).toBeNull();
   });
 
