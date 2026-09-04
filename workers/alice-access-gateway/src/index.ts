@@ -1335,7 +1335,9 @@ export async function handleRequest(
       !(
         fullRuntime &&
         (normalizedMethod === "GET" || normalizedMethod === "HEAD") &&
-        (isFullRuntimeUiPath(path) || isFullRuntimeApiRead(path))
+        (isFullRuntimeUiPath(path) ||
+          isFullRuntimeApiRead(path) ||
+          fullRuntimeWebSocket)
       )
     ) {
       return jsonResponse({ ok: false, code: "ALICE_PRODUCTION_QUERY_DENIED" }, 403);
