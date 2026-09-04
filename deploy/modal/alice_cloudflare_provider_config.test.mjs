@@ -361,8 +361,10 @@ test("rejects account- or zone-scope applications that can shadow either Alice h
   }
 });
 
-test("binds one enabled, short-lived Service Auth token and exact policy order", async () => {
-  const canonical = await buildAliceAccessPolicyProviderConfig(accessReadback());
+test("binds one enabled Service Auth token for up to 30 days and exact policy order", async () => {
+  const readback = accessReadback();
+  readback.serviceTokens[0].expires_at = "2026-09-21T12:00:00.000Z";
+  const canonical = await buildAliceAccessPolicyProviderConfig(readback);
   assert.equal(canonical.deploymentController.application.id, releaseAppId);
   assert.equal(canonical.deploymentController.policy.precedence, 1);
   assert.equal(canonical.deploymentController.serviceToken.id, serviceTokenId);
@@ -371,6 +373,10 @@ test("binds one enabled, short-lived Service Auth token and exact policy order",
     serviceClientIdSha256,
   );
   assert.equal(canonical.deploymentController.serviceToken.enabled, true);
+  assert.equal(
+    canonical.deploymentController.serviceToken.expiresAt,
+    "2026-09-21T12:00:00.000Z",
+  );
 
   for (const mutate of [
     (raw) => {
@@ -380,6 +386,7 @@ test("binds one enabled, short-lived Service Auth token and exact policy order",
     (raw) => { raw.deploymentPolicies[0].precedence = 2; },
     (raw) => { raw.serviceTokens[0].enabled = false; },
     (raw) => { raw.serviceTokens[0].expires_at = raw.observedAt; },
+    (raw) => { raw.serviceTokens[0].expires_at = "2026-09-21T12:00:00.001Z"; },
     (raw) => { raw.serviceTokens[0].client_id = "wrong-client.access"; },
     (raw) => { raw.deploymentPolicies.push({ ...raw.deploymentPolicies[0] }); },
   ]) {

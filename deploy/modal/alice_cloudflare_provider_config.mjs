@@ -388,7 +388,7 @@ export async function buildAliceAccessPolicyProviderConfig(readback) {
       observedAtMs === null ||
       expiresAtMs === null ||
       expiresAtMs <= observedAtMs + 300_000 ||
-      expiresAtMs > observedAtMs + 7 * 86_400_000
+      expiresAtMs > observedAtMs + 30 * 86_400_000
     ) {
       accessInvalid();
     }
