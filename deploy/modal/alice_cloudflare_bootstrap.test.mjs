@@ -525,7 +525,7 @@ test("extracts the Access namespace from the selected staged version only", () =
   );
 });
 
-test("binds the inactive Access selection and revalidates the exact provider phase twice", async () => {
+test("binds inactive or exact active Access and revalidates the provider phase twice", async () => {
   const sourceCommit = "4b82f4f28ec704077da7fb416d163286bfe00a8d";
   const stagedAccessVersionId = "97d7d9c2-471f-47ee-ac5d-5cda28b66fac";
   const activeDeploymentIds = {
@@ -600,6 +600,39 @@ test("binds the inactive Access selection and revalidates the exact provider pha
       boundary.roles[role].activeVersionIdAfter,
     );
   }
+  const activeAccessBoundary = bootstrapModule.buildAliceBootstrapVersionBoundary({
+    sourceCommit,
+    producerRun: { id: "33876477967", attempt: 1 },
+    identityActions: {
+      ...Object.fromEntries(Object.keys(activeVersionIds).map((role) => [
+        role,
+        { upload: "none", promote: false },
+      ])),
+    },
+    versionIds: activeVersionIds,
+    activeBefore: activeIdentities,
+    activeAfter: structuredClone(activeIdentities),
+    trafficBefore: observedTraffic,
+    trafficAfter: structuredClone(observedTraffic),
+  });
+  assert.equal(activeAccessBoundary.roles.access.selectionMode, "active-existing");
+  assert.equal(
+    activeAccessBoundary.roles.access.bootstrapSelectedVersionId,
+    activeVersionIds.access,
+  );
+  assert.throws(
+    () => bootstrapModule.verifyAliceBootstrapVersionBoundary({
+      ...activeAccessBoundary,
+      roles: {
+        ...activeAccessBoundary.roles,
+        access: {
+          ...activeAccessBoundary.roles.access,
+          bootstrapSelectedVersionId: stagedAccessVersionId,
+        },
+      },
+    }),
+    /ALICE_CLOUDFLARE_BOOTSTRAP_VERSION_BOUNDARY_INVALID/,
+  );
 
   const selectedVersions = {
     access: {
