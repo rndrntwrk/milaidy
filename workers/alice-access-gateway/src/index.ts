@@ -540,11 +540,22 @@ async function verifyUpstreamRelease(
   }
   const proofUrl = new URL("https://alice-runtime.internal");
   proofUrl.pathname = "/api/alice-production/proof";
+  const proofHeaders = upstreamHeaders(request, env);
+  for (const name of [
+    "connection",
+    "sec-websocket-extensions",
+    "sec-websocket-key",
+    "sec-websocket-protocol",
+    "sec-websocket-version",
+    "upgrade",
+  ]) {
+    proofHeaders.delete(name);
+  }
   const response = await fetchAliceRuntimeContainer(
     env.ALICE_RUNTIME_CONTAINER,
     new Request(proofUrl, {
       method: "GET",
-      headers: upstreamHeaders(request, env),
+      headers: proofHeaders,
       redirect: "manual",
     }),
   );

@@ -511,7 +511,9 @@ describe("Alice Access gateway", () => {
       "/ws",
       "/api/alice-production/proof",
     ]);
+    expect(env.runtimeRequests[0]!.headers.get("upgrade")).toBeNull();
     expect(env.runtimeRequests[1]!.headers.get("upgrade")).toBe("websocket");
+    expect(env.runtimeRequests[2]!.headers.get("upgrade")).toBeNull();
   });
 
   test("proxies the complete full-gated root, Companion, broadcast, and asset surfaces", async () => {
