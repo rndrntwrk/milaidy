@@ -213,22 +213,22 @@ jobs:
 
       - name: Hydrate exact reviewed Eliza PR head
         env:
-          EXPECTED_ELIZA_SHA: c23902bf3f43969736bb9a0f52c99f32239b8aab
+          EXPECTED_ELIZA_SHA: aa5f9c05c585cbc03bb72f9509e504d544531f3a
         run: |
           set -euo pipefail
           test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
             "https://github.com/rndrntwrk/eliza.git"
           test "$(git config -f .gitmodules --get submodule.eliza.branch)" = \
             "alice/runtime-stable-2026-08-22"
-          reviewed_eliza_ref="refs/pull/6/head"
+          reviewed_eliza_ref="refs/pull/7/head"
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "$eliza_sha" = "$EXPECTED_ELIZA_SHA"
           git clone --no-checkout --filter=blob:none \
             https://github.com/rndrntwrk/eliza.git eliza
           git -C eliza fetch --depth=1 origin \
-            "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-6"
+            "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-7"
           reviewed_eliza_sha="$(git -C eliza rev-parse \
-            refs/remotes/origin/alice-reviewed-pr-6)"
+            refs/remotes/origin/alice-reviewed-pr-7)"
           test "$reviewed_eliza_sha" = "$EXPECTED_ELIZA_SHA"
           test "$eliza_sha" = "$reviewed_eliza_sha"
           git -C eliza fetch --depth=1 origin "$eliza_sha"
@@ -280,7 +280,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_IMAGE: ${{ inputs.runtime_image }}
-          ELIZA_SHA: c23902bf3f43969736bb9a0f52c99f32239b8aab
+          ELIZA_SHA: aa5f9c05c585cbc03bb72f9509e504d544531f3a
         run: |
           set -euo pipefail
           printf '%s' "$RUNTIME_IMAGE" | grep -Eq '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$'
@@ -698,7 +698,7 @@ jobs:
           ALICE_SOURCE_ROOT: ${{ github.workspace }}
           ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
           ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.SOURCE_SHA }}
-          ALICE_ELIZA_COMMIT: c23902bf3f43969736bb9a0f52c99f32239b8aab
+          ALICE_ELIZA_COMMIT: aa5f9c05c585cbc03bb72f9509e504d544531f3a
           ALICE_CLOUDFLARE_RUNTIME_IMAGE: ${{ env.ALICE_CLOUDFLARE_RUNTIME_IMAGE }}
           ALICE_RUNTIME_BUILD_MANIFEST_SHA256: ${{ env.ALICE_RUNTIME_BUILD_MANIFEST_SHA256 }}
           ALICE_CAPABILITY_BOM_SHA256: ${{ env.ALICE_CAPABILITY_BOM_SHA256 }}
@@ -1241,22 +1241,22 @@ jobs:
 
       - name: Hydrate exact reviewed Eliza PR head
         env:
-          EXPECTED_ELIZA_SHA: c23902bf3f43969736bb9a0f52c99f32239b8aab
+          EXPECTED_ELIZA_SHA: aa5f9c05c585cbc03bb72f9509e504d544531f3a
         run: |
           set -euo pipefail
           test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
             "https://github.com/rndrntwrk/eliza.git"
           test "$(git config -f .gitmodules --get submodule.eliza.branch)" = \
             "alice/runtime-stable-2026-08-22"
-          reviewed_eliza_ref="refs/pull/6/head"
+          reviewed_eliza_ref="refs/pull/7/head"
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "$eliza_sha" = "$EXPECTED_ELIZA_SHA"
           git clone --no-checkout --filter=blob:none \
             https://github.com/rndrntwrk/eliza.git eliza
           git -C eliza fetch --depth=1 origin \
-            "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-6"
+            "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-7"
           reviewed_eliza_sha="$(git -C eliza rev-parse \
-            refs/remotes/origin/alice-reviewed-pr-6)"
+            refs/remotes/origin/alice-reviewed-pr-7)"
           test "$reviewed_eliza_sha" = "$EXPECTED_ELIZA_SHA"
           test "$eliza_sha" = "$reviewed_eliza_sha"
           git -C eliza fetch --depth=1 origin "$eliza_sha"
