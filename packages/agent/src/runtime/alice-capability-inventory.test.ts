@@ -113,6 +113,7 @@ describe("Alice final-image capability runtime inventory", () => {
       "adapter:remote-model-execution",
       "adapter:remote-training",
       "adapter:stream-compositor",
+      "package:@elizaos/plugin-codex-cli",
     ]);
   });
 

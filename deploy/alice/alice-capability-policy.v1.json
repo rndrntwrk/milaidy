@@ -373,6 +373,22 @@
       "policyState": "disabled"
     },
     {
+      "id": "package:@elizaos/plugin-codex-cli",
+      "classification": "delegated",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-codex-cli",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [
+        "@elizaos/plugin-codex-cli",
+        "codex-cli"
+      ],
+      "adapter": "codex-subscription-executor",
+      "policyState": "delegated"
+    },
+    {
       "id": "package:@elizaos/plugin-coding-tools",
       "classification": "policy-disabled",
       "source": {
