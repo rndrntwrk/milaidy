@@ -781,6 +781,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     script: queueConsumerScript,
   };
   let includeRuntimeHostInstance = false;
+  let runtimeHostDurableObjectName = "alice-production-runtime";
   let runtimeHostDetailDrift = false;
   let ownerPolicyStableThrough = Number.POSITIVE_INFINITY;
   let routesStableThrough = Number.POSITIVE_INFINITY;
@@ -893,7 +894,11 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       return json({
         success: true,
         result: {
-          durable_objects: [],
+          durable_objects: [{
+            assigned_at: "2026-09-04T10:28:14Z",
+            id: "6".repeat(64),
+            name: runtimeHostDurableObjectName,
+          }],
           instances: includeRuntimeHostInstance
             ? [{ id: "unexpected-runtime-instance" }]
             : [],
@@ -1230,6 +1235,13 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
   );
   includeRuntimeHostInstance = false;
+
+  runtimeHostDurableObjectName = "unexpected-runtime";
+  await assert.rejects(
+    () => fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput),
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
+  );
+  runtimeHostDurableObjectName = "alice-production-runtime";
 
   runtimeHostDetailDrift = true;
   await assert.rejects(
