@@ -325,7 +325,7 @@ export function buildAliceRuntimeHostEffectiveConfig(inputs) {
           name: "alice-production-runtime",
           className: "AliceRuntimeContainer",
           image: inputs.runtimeImage,
-          instanceType: "standard-1",
+          instanceType: "standard-4",
           maxInstances: 1,
         },
       ],

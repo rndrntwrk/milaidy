@@ -133,24 +133,24 @@ function exactKeys(value, keys) {
 }
 
 function normalizedContainerConfiguration(value) {
-  const standardOne = value?.instance_type === "standard-1" || (
-    value?.vcpu === 0.5 &&
-    value?.memory_mib === 4096 &&
-    value?.disk?.size_mb === 8000
+  const standardFour = value?.instance_type === "standard-4" || (
+    value?.vcpu === 4 &&
+    value?.memory_mib === 12288 &&
+    value?.disk?.size_mb === 20000
   );
   if (
     !value ||
     typeof value !== "object" ||
     Array.isArray(value) ||
     !CONTAINER_IMAGE.test(value.image ?? "") ||
-    !standardOne ||
+    !standardFour ||
     value.observability?.logs?.enabled !== true
   ) {
     releaseInvalid("ALICE_CONTAINER_APPLICATION_INVALID");
   }
   return {
     image: value.image,
-    instance_type: "standard-1",
+    instance_type: "standard-4",
     observability: { logs: { enabled: true } },
   };
 }
@@ -276,7 +276,7 @@ export function buildAliceCandidateContainerApplicationTarget({
     durableObjectBindings.length !== 1 ||
     container?.name !== previous.applicationName ||
     container?.class_name !== "AliceRuntimeContainer" ||
-    container?.instance_type !== "standard-1" ||
+    container?.instance_type !== "standard-4" ||
     container?.max_instances !== previous.maxInstances ||
     durableObjectBindings[0]?.name !== "ALICE_RUNTIME_CONTAINER" ||
     durableObjectBindings[0]?.class_name !== container.class_name ||

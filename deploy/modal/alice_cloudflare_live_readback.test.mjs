@@ -725,10 +725,10 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     configuration: {
       image:
         `registry.cloudflare.com/${accountId}/alice-runtime@sha256:${"4".repeat(64)}`,
-      vcpu: 0.5,
-      memory: "4GiB",
-      memory_mib: 4096,
-      disk: { size_mb: 8000, size: "8GB" },
+      vcpu: 4,
+      memory: "12GiB",
+      memory_mib: 12288,
+      disk: { size_mb: 20000, size: "20GB" },
       network: { assign_ipv6: "none", assign_ipv4: "none", mode: "private" },
       command: [],
       entrypoint: [],
@@ -1088,7 +1088,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
           containers: [{
             class_name: "AliceRuntimeContainer",
             image: runtimeHostApplication.configuration.image,
-            instance_type: "standard-1",
+            instance_type: "standard-4",
             max_instances: 1,
             name: runtimeHostApplication.name,
           }],
