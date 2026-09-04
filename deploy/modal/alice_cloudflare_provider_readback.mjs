@@ -358,7 +358,7 @@ export function verifyAliceContainerApplicationReadback({
     durableObjectBindings.length !== 1 ||
     container?.name !== "alice-production-runtime" ||
     container?.class_name !== "AliceRuntimeContainer" ||
-    container?.instance_type !== "standard-1" ||
+    container?.instance_type !== "standard-4" ||
     container?.max_instances !== 1 ||
     durableObjectBindings[0]?.name !== "ALICE_RUNTIME_CONTAINER" ||
     durableObjectBindings[0]?.class_name !== container.class_name ||
@@ -374,9 +374,9 @@ export function verifyAliceContainerApplicationReadback({
     application.max_instances !== container.max_instances ||
     !CLOUDFLARE_CONTAINER_IMAGE.test(expectedImage ?? "") ||
     application.configuration?.image !== expectedImage ||
-    application.configuration?.vcpu !== 0.5 ||
-    application.configuration?.memory_mib !== 4096 ||
-    application.configuration?.disk?.size_mb !== 8000 ||
+    application.configuration?.vcpu !== 4 ||
+    application.configuration?.memory_mib !== 12288 ||
+    application.configuration?.disk?.size_mb !== 20000 ||
     !(ports === undefined || (Array.isArray(ports) && ports.length === 0)) ||
     application.durable_objects?.namespace_id !== expectedNamespaceId ||
     !health ||

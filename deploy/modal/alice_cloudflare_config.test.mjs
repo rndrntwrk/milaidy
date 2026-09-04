@@ -524,7 +524,7 @@ test("materializes one immutable Container image only into the runtime host", ()
     expected.access.bindings.secretNames.includes("ALICE_RUNTIME_IMAGE"),
     false,
   );
-  assert.equal(host.containers[0].instance_type, "standard-1");
+  assert.equal(host.containers[0].instance_type, "standard-4");
   assert.equal(host.containers[0].max_instances, 1);
 });
 

@@ -1189,7 +1189,7 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
           class_name: "AliceRuntimeContainer",
           image:
             `registry.cloudflare.com/${sourceConfig.account_id}/alice-runtime:REPLACED_BY_PRODUCTION_DEPLOY`,
-          instance_type: "standard-1",
+          instance_type: "standard-4",
           max_instances: 1,
         }],
         d1_databases: [{ binding: "DB", database_id: "provider-id" }],
@@ -1240,7 +1240,7 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
             class_name: "AliceRuntimeContainer",
             image:
               `registry.cloudflare.com/${sourceConfig.account_id}/alice-runtime:REPLACED_BY_PRODUCTION_DEPLOY`,
-            instance_type: "standard-1",
+            instance_type: "standard-4",
             max_instances: 1,
           }],
         },

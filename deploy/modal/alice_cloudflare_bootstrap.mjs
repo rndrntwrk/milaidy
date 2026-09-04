@@ -1041,7 +1041,7 @@ export function buildAliceBootstrapPrivateWorkerConfig({
       container?.name !== "alice-production-runtime" ||
       container?.class_name !== "AliceRuntimeContainer" ||
       container?.image !== RUNTIME_IMAGE_PLACEHOLDER ||
-      container?.instance_type !== "standard-1" ||
+      container?.instance_type !== "standard-4" ||
       container?.max_instances !== 1
     ) {
       invalid();

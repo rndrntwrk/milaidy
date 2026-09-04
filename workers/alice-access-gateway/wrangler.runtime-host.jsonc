@@ -61,7 +61,7 @@
       "name": "alice-production-runtime",
       "class_name": "AliceRuntimeContainer",
       "image": "registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime:REPLACED_BY_PRODUCTION_DEPLOY",
-      "instance_type": "standard-1",
+      "instance_type": "standard-4",
       "max_instances": 1
     }
   ],

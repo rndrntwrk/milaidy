@@ -65,7 +65,7 @@ function aliceTestContainerApplicationState({
       configuration: {
         image:
           `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${imageDigit.repeat(64)}`,
-        instance_type: "standard-1",
+        instance_type: "standard-4",
         observability: { logs: { enabled: true } },
       },
     },
@@ -185,9 +185,9 @@ test("promotes and restores one exact captured Container application target", as
     max_instances: 1,
     configuration: {
       image: previousImage,
-      vcpu: 0.5,
-      memory_mib: 4096,
-      disk: { size_mb: 8000 },
+      vcpu: 4,
+      memory_mib: 12288,
+      disk: { size_mb: 20000 },
       observability: { logs: { enabled: true } },
     },
     durable_objects: { namespace_id: "5".repeat(32) },
@@ -213,7 +213,7 @@ test("promotes and restores one exact captured Container application target", as
         name: rawApplication.name,
         class_name: "AliceRuntimeContainer",
         image: candidateImage,
-        instance_type: "standard-1",
+        instance_type: "standard-4",
         max_instances: 1,
       }],
       durable_objects: {
