@@ -98,6 +98,15 @@ describe("native feature bootstrap wiring", () => {
     expect(elizaSource).toContain('"@elizaos/plugin-openai": pluginOpenai');
   });
 
+  it("guards plugin-codex-cli bootstrap behind a runtime require", () => {
+    expect(elizaSource).toContain(
+      'pluginCodexCli = require("@elizaos/plugin-codex-cli");',
+    );
+    expect(elizaSource).toContain(
+      '"@elizaos/plugin-codex-cli": pluginCodexCli',
+    );
+  });
+
   it("does not bootstrap the legacy personality alpha against Eliza beta.7", () => {
     expect(elizaSource).not.toContain(
       'import * as pluginPersonality from "@elizaos/plugin-personality";',

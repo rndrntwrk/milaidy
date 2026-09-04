@@ -13,8 +13,10 @@ export type SubscriptionAuthApi = Pick<
   | "startAnthropicLogin"
   | "startCodexLogin"
   | "saveCredentials"
+  | "persistOpenAiCodexCredentials"
   | "applySubscriptionCredentials"
   | "deleteCredentials"
+  | "deleteOpenAiCodexCredentials"
 >;
 
 export interface SubscriptionRouteState {
@@ -194,8 +196,11 @@ export async function handleSubscriptionRoutes(
     }>(req, res);
     if (!body) return true;
     try {
-      const { saveCredentials, applySubscriptionCredentials } =
-        await loadSubscriptionAuth();
+      const {
+        saveCredentials,
+        persistOpenAiCodexCredentials,
+        applySubscriptionCredentials,
+      } = await loadSubscriptionAuth();
       const flow = state._codexFlow;
 
       if (!flow) {
@@ -231,6 +236,15 @@ export async function handleSubscriptionRoutes(
         return true;
       }
       saveCredentials("openai-codex", credentials);
+      await persistOpenAiCodexCredentials(credentials);
+      state.config.agents ??= {};
+      state.config.agents.defaults ??= {};
+      state.config.agents.defaults.subscriptionProvider = "openai-codex";
+      state.config.agents.defaults.model = {
+        ...state.config.agents.defaults.model,
+        primary: "codex-cli",
+      };
+      ctx.saveConfig(state.config);
       await applySubscriptionCredentials(state.config);
       flow.close();
       delete state._codexFlow;
@@ -253,8 +267,13 @@ export async function handleSubscriptionRoutes(
     const provider = pathname.split("/").pop();
     if (provider === "anthropic-subscription" || provider === "openai-codex") {
       try {
-        const { deleteCredentials } = await loadSubscriptionAuth();
-        deleteCredentials(provider);
+        const { deleteCredentials, deleteOpenAiCodexCredentials } =
+          await loadSubscriptionAuth();
+        if (provider === "openai-codex") {
+          await deleteOpenAiCodexCredentials();
+        } else {
+          deleteCredentials(provider);
+        }
 
         if (provider === "anthropic-subscription" && state.config.env) {
           delete (state.config.env as Record<string, unknown>)
@@ -262,6 +281,12 @@ export async function handleSubscriptionRoutes(
         }
         if (state.config.agents?.defaults?.subscriptionProvider === provider) {
           delete state.config.agents.defaults.subscriptionProvider;
+        }
+        if (
+          provider === "openai-codex" &&
+          state.config.agents?.defaults?.model?.primary === "codex-cli"
+        ) {
+          delete state.config.agents.defaults.model.primary;
         }
         const llmBackend = state.config.serviceRouting?.llmText?.backend;
         const deletedProviderId =

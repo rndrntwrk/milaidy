@@ -53,12 +53,18 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     OPENAI_PLANNER_MODEL: "workers-ai/@cf/openai/gpt-oss-120b",
     OPENAI_EMBEDDING_MODEL: "@cf/baai/bge-m3",
     OPENAI_EMBEDDING_DIMENSIONS: "1024",
+    CODEX_AUTH_PATH: "/tmp/alice-runtime/codex/auth.json",
+    CODEX_CLI_SMALL_MODEL: "gpt-5.6-luna",
+    CODEX_CLI_LARGE_MODEL: "gpt-5.6-sol",
+    CODEX_REASONING_EFFORT: "max",
     MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
     ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
     ALICE_STATE_PLANE_URL:
       "http://alice-state-plane.internal/v1/eliza-database",
     ALICE_COMPANION_STATE_URL:
       "http://alice-state-plane.internal/v1/companion-state",
+    ALICE_OPENAI_CODEX_STATE_URL:
+      "http://alice-state-plane.internal/v1/openai-codex-credentials",
     ALICE_STATE_OWNER_ID: "alice-owner-production",
     ELIZA_VAULT_PASSPHRASE: "runtime-vault-passphrase-with-at-least-32-bytes",
     ALICE_PROGRAM_DIGEST: digest("1"),
@@ -111,9 +117,12 @@ test("routes the only allowed model host through ContainerProxy to the authentic
     "AliceRuntimeContainer.outboundByHost = ALICE_RUNTIME_OUTBOUND_BY_HOST",
   );
   expect(containerSource).toContain(
-    "allowedHosts = Object.keys(ALICE_RUNTIME_OUTBOUND_BY_HOST)",
+    "allowedHosts = ALICE_RUNTIME_ALLOWED_HOSTS",
   );
   expect(containerSource).toContain("enableInternet = false");
+  for (const host of ["auth.openai.com", "chatgpt.com"]) {
+    expect(containerSource).toContain(`"${host}"`);
+  }
   expect(workerSource).toContain(
     'export { ContainerProxy } from "@cloudflare/containers"',
   );
@@ -351,6 +360,27 @@ test("admits only owner-bound Eliza and Companion state operations", async () =>
     "alice-owner-production",
   );
 
+  await (runtimeContainer as any).forwardToAliceStatePlane(
+    new Request(
+      "http://alice-state-plane.internal/v1/openai-codex-credentials",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "record.get",
+          kind: "configVersion",
+          recordId: "openai-codex-credentials-v1",
+          ownerId: "alice-owner-production",
+        }),
+      },
+    ),
+    env,
+  );
+  expect(new URL(forwarded[1]!.url).pathname).toBe("/v1/state");
+  expect(forwarded[1]!.headers.get("x-alice-container-state-scope")).toBe(
+    "openai-codex-credentials",
+  );
+
   expect((await
     (runtimeContainer as any).forwardToAliceStatePlane(
       new Request("http://alice-state-plane.internal/v1/eliza-database", {
@@ -384,7 +414,7 @@ test("admits only owner-bound Eliza and Companion state operations", async () =>
       }),
       env,
     );
-  expect(forwarded).toHaveLength(2);
+  expect(forwarded).toHaveLength(3);
 
   expect(() =>
     (runtimeContainer as any).forwardToAliceStatePlane(

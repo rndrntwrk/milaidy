@@ -17,12 +17,18 @@ const ALICE_RUNTIME_OUTBOUND_BY_HOST = {
   "alice-state-plane.internal": forwardToAliceStatePlane,
 };
 
+const ALICE_RUNTIME_ALLOWED_HOSTS = [
+  ...Object.keys(ALICE_RUNTIME_OUTBOUND_BY_HOST),
+  "auth.openai.com",
+  "chatgpt.com",
+];
+
 export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {
   defaultPort = ALICE_RUNTIME_CONTAINER_PORT;
   requiredPorts = [ALICE_RUNTIME_CONTAINER_PORT];
   sleepAfter = "10m";
   enableInternet = false;
-  allowedHosts = Object.keys(ALICE_RUNTIME_OUTBOUND_BY_HOST);
+  allowedHosts = ALICE_RUNTIME_ALLOWED_HOSTS;
   pingEndpoint = "/health/live";
   constructor(
     ctx: DurableObjectState<Record<string, never>>,

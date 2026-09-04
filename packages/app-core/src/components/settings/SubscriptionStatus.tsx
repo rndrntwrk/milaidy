@@ -240,7 +240,7 @@ export function SubscriptionStatus({
         setOpenaiConnected(true);
         setOpenaiOAuthStarted(false);
         setOpenaiCallbackUrl("");
-        await handleSelectSubscription("openai-subscription");
+        await handleSelectSubscription("openai-subscription", false);
         await loadSubscriptionStatus();
         await client.restartAgent();
         return;

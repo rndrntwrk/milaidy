@@ -33,8 +33,10 @@ function buildCtx(
       startAnthropicLogin: vi.fn(),
       startCodexLogin: vi.fn(),
       saveCredentials: vi.fn(),
+      persistOpenAiCodexCredentials: vi.fn(),
       applySubscriptionCredentials: vi.fn(),
       deleteCredentials: vi.fn(),
+      deleteOpenAiCodexCredentials: vi.fn(),
     })),
     ...overrides,
   };
@@ -59,8 +61,10 @@ describe("handleSubscriptionRoutes", () => {
         startAnthropicLogin: vi.fn(),
         startCodexLogin: vi.fn(),
         saveCredentials: vi.fn(),
+        persistOpenAiCodexCredentials: vi.fn(),
         applySubscriptionCredentials: vi.fn(),
         deleteCredentials: vi.fn(),
+        deleteOpenAiCodexCredentials: vi.fn(),
       })),
     });
 
@@ -123,6 +127,7 @@ describe("handleSubscriptionRoutes", () => {
   test("DELETE /api/subscription/anthropic-subscription clears saved token and invalid runtime route only", async () => {
     const { res, getStatus, getJson } = createMockHttpResponse();
     const deleteCredentials = vi.fn();
+    const deleteOpenAiCodexCredentials = vi.fn();
     const saveConfig = vi.fn();
     const ctx = buildCtx({
       method: "DELETE",
@@ -157,8 +162,10 @@ describe("handleSubscriptionRoutes", () => {
         startAnthropicLogin: vi.fn(),
         startCodexLogin: vi.fn(),
         saveCredentials: vi.fn(),
+        persistOpenAiCodexCredentials: vi.fn(),
         applySubscriptionCredentials: vi.fn(),
         deleteCredentials,
+        deleteOpenAiCodexCredentials,
       })),
     });
 
@@ -185,6 +192,7 @@ describe("handleSubscriptionRoutes", () => {
   test("DELETE /api/subscription/openai-codex clears only the matching runtime route", async () => {
     const { res, getStatus, getJson } = createMockHttpResponse();
     const deleteCredentials = vi.fn();
+    const deleteOpenAiCodexCredentials = vi.fn();
     const saveConfig = vi.fn();
     const ctx = buildCtx({
       method: "DELETE",
@@ -196,6 +204,7 @@ describe("handleSubscriptionRoutes", () => {
           agents: {
             defaults: {
               subscriptionProvider: "openai-codex",
+              model: { primary: "codex-cli" },
             },
           },
           serviceRouting: {
@@ -216,8 +225,10 @@ describe("handleSubscriptionRoutes", () => {
         startAnthropicLogin: vi.fn(),
         startCodexLogin: vi.fn(),
         saveCredentials: vi.fn(),
+        persistOpenAiCodexCredentials: vi.fn(),
         applySubscriptionCredentials: vi.fn(),
         deleteCredentials,
+        deleteOpenAiCodexCredentials,
       })),
     });
 
@@ -226,8 +237,10 @@ describe("handleSubscriptionRoutes", () => {
     expect(handled).toBe(true);
     expect(getStatus()).toBe(200);
     expect(getJson()).toEqual({ success: true });
-    expect(deleteCredentials).toHaveBeenCalledWith("openai-codex");
+    expect(deleteCredentials).not.toHaveBeenCalled();
+    expect(deleteOpenAiCodexCredentials).toHaveBeenCalledTimes(1);
     expect(ctx.state.config.agents?.defaults?.subscriptionProvider).toBeUndefined();
+    expect(ctx.state.config.agents?.defaults?.model?.primary).toBeUndefined();
     expect(ctx.state.config.serviceRouting).toEqual({
       embeddings: {
         backend: "elizacloud",

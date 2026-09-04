@@ -587,10 +587,15 @@ describe("Alice Access gateway", () => {
     for (const [method, pathname] of [
       ["GET", "/api/auth/status"],
       ["GET", "/api/config"],
+      ["GET", "/api/subscription/status"],
       ["GET", "/api/memories/feed?limit=10"],
       ["GET", "/api/companion/stage"],
       ["GET", "/api/broadcast/alice-cam/scene"],
       ["POST", "/api/companion/stage"],
+      ["POST", "/api/subscription/openai/start"],
+      ["POST", "/api/subscription/openai/exchange"],
+      ["POST", "/api/agent/restart"],
+      ["DELETE", "/api/subscription/openai-codex"],
     ]) {
       const response = await invokeGateway(
         new Request(`https://alice.rndrntwrk.com${pathname}`, {

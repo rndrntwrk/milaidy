@@ -107,6 +107,11 @@ RUN set -x; \
     cp eliza/plugins/plugin-openai/package.json node_modules/@elizaos/plugin-openai/; \
     cp -a eliza/plugins/plugin-openai/dist node_modules/@elizaos/plugin-openai/dist; \
     ls node_modules/@elizaos/plugin-openai/dist/node/index.node.js 2>/dev/null && echo "@elizaos/plugin-openai runtime OK" || echo "WARN: OpenAI runtime missing"; \
+    rm -rf node_modules/@elizaos/plugin-codex-cli; \
+    mkdir -p node_modules/@elizaos/plugin-codex-cli; \
+    cp eliza/plugins/plugin-codex-cli/package.json node_modules/@elizaos/plugin-codex-cli/; \
+    cp -a eliza/plugins/plugin-codex-cli/dist node_modules/@elizaos/plugin-codex-cli/dist; \
+    ls node_modules/@elizaos/plugin-codex-cli/dist/node/index.node.js 2>/dev/null && echo "@elizaos/plugin-codex-cli runtime OK" || echo "WARN: Codex runtime missing"; \
     # plugin-elizacloud imports the exact pinned Cloud SDK from its compiled
     # Node entry. Keep that leaf package physical at the image boundary too.
     rm -rf node_modules/@elizaos/cloud-sdk; \
@@ -404,6 +409,7 @@ const requiredLockedPackages = [
   '@elizaos/plugin-anthropic',
   '@elizaos/plugin-local-inference',
   '@elizaos/plugin-openai',
+  '@elizaos/plugin-codex-cli',
   '@elizaos/plugin-elizacloud',
   '@elizaos/cloud-sdk',
   '@elizaos/plugin-commands',
@@ -486,7 +492,7 @@ RUN node deploy/modal/alice_capability_bom.mjs --materialize-policy-workspaces
 # Fail during image assembly—not after a multi-minute pull—if latest official
 # app-manager cannot evaluate against Alice's @elizaos/agent compatibility host.
 RUN node --import ./node_modules/tsx/dist/loader.mjs --input-type=module \
-  -e "const fs = await import('node:fs'); await import('@scure/bip39/wordlists/portuguese'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await import('@elizaos/plugin-elizacloud/endpoint-config'); await import('@elizaos/plugin-elizacloud'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-form'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
+  -e "const fs = await import('node:fs'); await import('@scure/bip39/wordlists/portuguese'); const skills = await import('@elizaos/skills'); await import('@elizaos/plugin-local-inference/runtime'); await import('@elizaos/plugin-openai'); await import('@elizaos/plugin-codex-cli'); await import('@elizaos/plugin-elizacloud/endpoint-config'); await import('@elizaos/plugin-elizacloud'); await Promise.all([import('@elizaos/plugin-app-manager'), import('@elizaos/plugin-agent-orchestrator'), import('@elizaos/plugin-commands'), import('@elizaos/plugin-form'), import('@elizaos/plugin-sql')]); if (!fs.existsSync(skills.getSkillsDir())) throw new Error('@elizaos/skills corpus missing')"
 
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \

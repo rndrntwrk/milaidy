@@ -661,7 +661,7 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     expect(changes.every((c) => !c.includes("subscription"))).toBe(true);
   });
 
-  it("force-enables openai plugin when subscriptionProvider is openai-codex", () => {
+  it("force-enables codex-cli when subscriptionProvider is openai-codex", () => {
     const params = makeParams({
       config: {
         agents: { defaults: { subscriptionProvider: "openai-codex" } },
@@ -669,7 +669,8 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("@elizaos/plugin-openai");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-codex-cli");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-openai");
     expect(changes.some((c) => c.includes("subscription"))).toBe(true);
   });
 

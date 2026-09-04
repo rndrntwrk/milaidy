@@ -149,6 +149,7 @@ import { handleAliceCorpusRoutes } from "./alice-corpus-routes.js";
 import { handleAliceOperatorRoutes } from "./alice-operator-routes.js";
 import {
   evaluateAliceProductionRequest,
+  isAliceFullRuntimeProfile,
   isAliceProductionChatIngressAuthenticated,
   isAliceProductionRequestAuthenticated,
   isAliceProductionRuntime,
@@ -3552,10 +3553,11 @@ function extractWebSocketHandshakeToken(
   return extractWsQueryToken(url);
 }
 
-function isWebSocketAuthorized(
+export function isWebSocketAuthorized(
   request: http.IncomingMessage,
   url: URL,
 ): boolean {
+  if (isCloudflareAccessAuthenticated(request)) return true;
   const expected = getConfiguredApiToken();
   if (!expected) return !isCloudProvisionedContainer();
 
@@ -3573,7 +3575,10 @@ export function resolveWebSocketUpgradeRejection(
   req: http.IncomingMessage,
   wsUrl: URL,
 ): WebSocketUpgradeRejection | null {
-  if (isAliceProductionRuntime(process.env)) {
+  if (
+    isAliceProductionRuntime(process.env) &&
+    !isAliceFullRuntimeProfile(process.env)
+  ) {
     return {
       status: 403,
       reason: "Alice production WebSocket mutation surface is disabled",

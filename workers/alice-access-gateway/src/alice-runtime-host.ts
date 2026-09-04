@@ -85,12 +85,18 @@ export function buildAliceRuntimeContainerEnv(
     OPENAI_PLANNER_MODEL: "workers-ai/@cf/openai/gpt-oss-120b",
     OPENAI_EMBEDDING_MODEL: "@cf/baai/bge-m3",
     OPENAI_EMBEDDING_DIMENSIONS: "1024",
+    CODEX_AUTH_PATH: "/tmp/alice-runtime/codex/auth.json",
+    CODEX_CLI_SMALL_MODEL: "gpt-5.6-luna",
+    CODEX_CLI_LARGE_MODEL: "gpt-5.6-sol",
+    CODEX_REASONING_EFFORT: "max",
     MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
     ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
     ALICE_STATE_PLANE_URL:
       "http://alice-state-plane.internal/v1/eliza-database",
     ALICE_COMPANION_STATE_URL:
       "http://alice-state-plane.internal/v1/companion-state",
+    ALICE_OPENAI_CODEX_STATE_URL:
+      "http://alice-state-plane.internal/v1/openai-codex-credentials",
     ALICE_STATE_OWNER_ID: ALICE_RUNTIME_STATE_OWNER_ID,
     ELIZA_VAULT_PASSPHRASE: env.ALICE_RUNTIME_VAULT_PASSPHRASE,
     ALICE_RUNTIME_PROFILE: "full-gated",
@@ -184,7 +190,9 @@ export function forwardToAliceStatePlane(
     !("ALICE_STATE_PLANE" in env) ||
     !isFetchBinding(env.ALICE_STATE_PLANE) ||
     request.method !== "POST" ||
-    (pathname !== "/v1/eliza-database" && pathname !== "/v1/companion-state")
+    (pathname !== "/v1/eliza-database" &&
+      pathname !== "/v1/companion-state" &&
+      pathname !== "/v1/openai-codex-credentials")
   ) {
     throw new Error("ALICE_STATE_PLANE_FORWARD_INVALID");
   }
@@ -197,11 +205,15 @@ export function forwardToAliceStatePlane(
   headers.set("x-alice-state-token", env.ALICE_STATE_PLANE_SERVICE_TOKEN);
   headers.set(
     "x-alice-container-state-scope",
-    pathname === "/v1/eliza-database" ? "eliza-database" : "companion-stage",
+    pathname === "/v1/eliza-database"
+      ? "eliza-database"
+      : pathname === "/v1/companion-state"
+        ? "companion-stage"
+        : "openai-codex-credentials",
   );
   headers.set("x-alice-state-owner", ALICE_RUNTIME_STATE_OWNER_ID);
   const upstreamUrl = new URL(request.url);
-  if (pathname === "/v1/companion-state") upstreamUrl.pathname = "/v1/state";
+  if (pathname !== "/v1/eliza-database") upstreamUrl.pathname = "/v1/state";
   return env.ALICE_STATE_PLANE.fetch(
     new Request(new Request(upstreamUrl, request), { headers }),
   );
