@@ -151,6 +151,39 @@ jobs:
           if (!response.ok || value.ok !== true) process.exitCode = 1;
           NODE
 
+      - name: Read Worker content identity diagnostics without mutation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          const account = '036df6c823669b8fa2f66cf4c16eeb29';
+          const workers = ['alice-access-gateway', 'alice-production-control', 'alice-ai-gateway', 'alice-state-plane', 'alice-connector-plane', 'alice-runtime-container-host'];
+          const read = pathname => fetch(`https://api.cloudflare.com/client/v4/accounts/${account}${pathname}`, {
+            method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(30_000),
+            headers: { authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, 'cache-control': 'no-cache' },
+          });
+          for (const worker of workers) {
+            const root = `/workers/scripts/${worker}`;
+            const deployments = await read(`${root}/deployments`);
+            if (!deployments.ok) throw new Error(`ALICE_DIAGNOSTIC_DEPLOYMENTS_HTTP_${deployments.status}`);
+            const deployment = (await deployments.json()).result?.deployments?.[0];
+            const versionId = deployment?.versions?.[0]?.version_id;
+            if (!/^[a-f0-9-]{36}$/.test(versionId ?? '')) throw new Error('ALICE_DIAGNOSTIC_VERSION_INVALID');
+            const metadata = await read(`${root}/versions/${versionId}`);
+            if (!metadata.ok) throw new Error(`ALICE_DIAGNOSTIC_VERSION_HTTP_${metadata.status}`);
+            const version = (await metadata.json()).result;
+            const content = await read(`${root}/content/v2`);
+            const etag = content.headers.get('etag')?.replace(/^W\//, '').replaceAll('"', '') ?? null;
+            console.log(JSON.stringify({ worker, versionId, httpStatus: content.status,
+              contentType: content.headers.get('content-type'), contentEtag: etag,
+              versionEtag: version?.resources?.script?.etag ?? null,
+              contentIdentityMatches: etag === version?.resources?.script?.etag,
+            }));
+            await content.body?.cancel();
+            if (!content.ok) throw new Error(`ALICE_DIAGNOSTIC_CONTENT_HTTP_${content.status}`);
+          }
+          NODE
+
   deploy:
     name: Promote attested Alice Worker bytes
     if: ${{ !inputs.read_status_only }}
