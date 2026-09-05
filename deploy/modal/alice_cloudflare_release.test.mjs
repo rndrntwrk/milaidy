@@ -313,8 +313,8 @@ test("promotes and restores one exact captured Container application target", as
   assert.equal(polls, 31, "a rollout may safely exceed the old one-minute limit");
   assert.equal(cold.current.target.configuration.image, candidateImage);
 
-  // Cloudflare separates the desired application configuration from its
-  // allocated version; changing only the rollout leaves the old desired image.
+  // The public API ignores image fields in PATCH; only a rollout replaces
+  // deployment configuration. Preserve this observed provider boundary.
   const providerApplication = structuredClone(rawApplication);
   let providerVersion = structuredClone(rawVersion);
   const providerMutations = [];
@@ -322,22 +322,21 @@ test("promotes and restores one exact captured Container application target", as
     const pathname = new URL(url).pathname;
     let result;
     if (init.method === "PATCH") {
-      providerMutations.push("configuration");
-      providerApplication.configuration = JSON.parse(init.body).configuration;
+      providerMutations.push("PATCH");
       result = providerApplication;
     } else if (init.method === "POST") {
-      assert.deepEqual(providerMutations, ["configuration"]);
-      assert.deepEqual(providerApplication.configuration, candidateTarget.configuration);
-      providerMutations.push("rollout");
+      assert.ok(pathname.endsWith("/rollouts"));
+      providerMutations.push("POST rollout");
+      const configuration = JSON.parse(init.body).target_configuration;
       result = {
         id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         current_version: 1, target_version: 2, status: "completed",
         current_configuration: providerVersion.configuration,
-        target_configuration: JSON.parse(init.body).target_configuration,
+        target_configuration: configuration,
       };
       providerApplication.version = 2;
-      providerVersion = { ...providerVersion, version: 2,
-        configuration: providerApplication.configuration };
+      providerApplication.configuration = configuration;
+      providerVersion = { ...providerVersion, version: 2, configuration };
     } else if (pathname.endsWith("/applications")) result = [providerApplication];
     else if (pathname.endsWith("/versions")) result = [providerVersion];
     else if (pathname.endsWith("/instances")) result = { instances: [] };
@@ -349,7 +348,7 @@ test("promotes and restores one exact captured Container application target", as
     apiToken: "a".repeat(32), fetchImpl: providerFetch,
   });
   assert.equal(providerTransition.current.applicationVersion, 2);
-  assert.deepEqual(providerMutations, ["configuration", "rollout"]);
+  assert.deepEqual(providerMutations, ["POST rollout"]);
 
   const pending = {
     id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -366,11 +365,7 @@ test("promotes and restores one exact captured Container application target", as
   const fetchImpl = async (url, init) => {
     const pathname = new URL(url).pathname;
     let result;
-    if (init.method === "PATCH") {
-      requests.push({ pathname, body: JSON.parse(init.body) });
-      application.configuration = JSON.parse(init.body).configuration;
-      result = application;
-    } else if (init.method === "POST") {
+    if (init.method === "POST") {
       requests.push({ pathname, body: JSON.parse(init.body) });
       assert.ok(pathname.endsWith(`/rollouts/${pending.id}`));
       pending.status = "reverted";
@@ -389,18 +384,12 @@ test("promotes and restores one exact captured Container application target", as
   assert.deepEqual(requests[0].body, { action: "revert" });
   assert.equal(recovered.changed, false);
   assert.deepEqual(recovered.current, previous);
-  application.configuration = candidateTarget.configuration;
-  const interrupted = await restoreAliceContainerApplication({
-    expected: previous, apiToken: "a".repeat(32), fetchImpl,
-  });
-  assert.deepEqual(interrupted.current, previous);
-  assert.deepEqual(requests[1].body, { configuration: previous.target.configuration });
   pending.status = "progressing";
   pending.current_configuration = candidateTarget.configuration;
   await assert.rejects(() => restoreAliceContainerApplication({
     expected: previous, apiToken: "a".repeat(32), fetchImpl,
   }), /ALICE_CONTAINER_APPLICATION_DRIFTED/);
-  assert.equal(requests.length, 2, "recovery cannot revert a rollout from a different source image");
+  assert.equal(requests.length, 1, "recovery cannot revert a rollout from a different source image");
 });
 
 test("materializes Container runtime secrets only for the separate runtime host", () => {
