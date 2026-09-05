@@ -13,6 +13,7 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/alice_cloudflare_bootstrap.test.mjs',
   'deploy/modal/alice_cloudflare_release.mjs',
   'deploy/modal/alice_cloudflare_release.test.mjs',
+  'deploy/modal/alice_release_pause.mjs',
   'scripts/deploy-alice-cloudflare-workflow.test.mjs',
   'scripts/verify-alice-release-source.mjs',
   'scripts/verify-alice-release-source.test.mjs',

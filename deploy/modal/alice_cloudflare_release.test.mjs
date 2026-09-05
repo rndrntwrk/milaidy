@@ -24,6 +24,7 @@ import {
   verifyAliceWorkflowRollbackContinuity,
 } from "./alice_cloudflare_release.mjs";
 import * as aliceCloudflareRelease from "./alice_cloudflare_release.mjs";
+import { verifyAliceFirstReleasePauseInputs } from "./alice_release_pause.mjs";
 import {
   aliceEffectiveConfigFromWrangler,
   bindAliceWranglerDeploymentEntrypoint,
@@ -1364,6 +1365,53 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     }),
     prepareEvidence,
   );
+  const resourceNames = [
+    "accessWorker", "runtimeHostWorker", "statePlaneWorker",
+    "connectorPlaneWorker", "controlWorker", "evidenceQueue",
+    "evidenceDeadLetterQueue", "evidenceBucket", "evidenceSentinel",
+    "evidenceQueueConsumer",
+  ];
+  const pauseInputs = {
+    admission: {
+      schemaVersion: "alice.program-admission.v2",
+      programDigest: `sha256:${"3".repeat(64)}`,
+      releaseDigest: `sha256:${"4".repeat(64)}`,
+      policyHash: `sha256:${"5".repeat(64)}`,
+      sourceCommit,
+      deploymentControllerCommit: "6".repeat(40),
+      elizaCommit: "7".repeat(40),
+      runtimeImage: anchor.previous.containerApplication.target.configuration.image,
+      runtimeBuildManifestSha256: `sha256:${"8".repeat(64)}`,
+      capabilityBomSha256: `sha256:${"9".repeat(64)}`,
+      deploymentManifestSha256,
+      releaseEpoch: 2,
+      runtimeRevision: 50,
+      rollbackBoundary: "container:alice-runtime:v50",
+    },
+    bootstrapState: {
+      schemaVersion: "alice.cloudflare-bootstrap-state.v2",
+      mode: "release",
+      activeVersionId: anchor.previous.workers.control.serving.versionId,
+      createdByRun: Object.fromEntries(resourceNames.map(name => [name, false])),
+      preexisting: Object.fromEntries(resourceNames
+        .filter(name => name !== "controlWorker").map(name => [name, true])),
+    },
+    anchor,
+    anchorSha256: `sha256:${"a".repeat(64)}`,
+    prepareEvidence,
+    prepareEvidenceSha256: `sha256:${"b".repeat(64)}`,
+  };
+  const firstPause = verifyAliceFirstReleasePauseInputs(pauseInputs);
+  assert.equal(firstPause.active.releaseEpoch, 0,
+    "installed release code must still prove an unadmitted authority before pause");
+  assert.equal(firstPause.active.rollbackBoundary, "release:unadmitted");
+  assert.throws(() => verifyAliceFirstReleasePauseInputs({
+    ...pauseInputs,
+    bootstrapState: {
+      ...pauseInputs.bootstrapState,
+      activeVersionId: uploadedVersions.control,
+    },
+  }), /ALICE_DEPLOYMENT_PAUSE_INVALID/);
   assert.throws(
     () => verifyAliceCloudflarePrepareEvidence({
       ...prepareEvidence,
