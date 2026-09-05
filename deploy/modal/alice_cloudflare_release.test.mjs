@@ -16,6 +16,7 @@ import {
   executeAliceCloudflareRollbacks,
   materializeAliceWorkerSecretFiles,
   normalizeAliceContainerApplicationRollbackState,
+  restoreAliceContainerApplication,
   parseAliceWranglerUploadVersionId,
   transitionAliceContainerApplication,
   verifyAliceCloudflareAnchorStillCurrent,
@@ -76,6 +77,14 @@ function aliceTestContainerApplicationState({
 
 test("builds one exact-byte staged upload, promotion, and rollback sequence", () => {
   const sourceCommit = "1".repeat(40);
+  const rollbackVersions = {
+    access: "11111111-1111-4111-8111-111111111111",
+    runtimeHost: "66666666-6666-4666-8666-666666666666",
+    control: "22222222-2222-4222-8222-222222222222",
+    aiGateway: "33333333-3333-4333-8333-333333333333",
+    statePlane: "44444444-4444-4444-8444-444444444444",
+    connectorPlane: "55555555-5555-4555-8555-555555555555",
+  };
   const commands = buildAliceProtectedCloudflareCommands({
     wranglerBin: "/tools/wrangler",
     configDir: "/release/config",
@@ -90,14 +99,7 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
       statePlane: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       connectorPlane: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
     },
-    rollbackVersions: {
-      access: "11111111-1111-4111-8111-111111111111",
-      runtimeHost: "66666666-6666-4666-8666-666666666666",
-      control: "22222222-2222-4222-8222-222222222222",
-      aiGateway: "33333333-3333-4333-8333-333333333333",
-      statePlane: "44444444-4444-4444-8444-444444444444",
-      connectorPlane: "55555555-5555-4555-8555-555555555555",
-    },
+    rollbackVersions,
   });
   assert.deepEqual(commands.uploads.map((command) => command.role), [
     "control",
@@ -155,13 +157,9 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
     "/release/bundles/alice-runtime-container-host/index.js",
   );
   for (const command of commands.rollbacks) {
-    assert.deepEqual(command.argv.slice(0, 2), ["versions", "deploy"]);
-    assert.equal(
-      command.argv[command.argv.indexOf("--percentage") + 1],
-      "100",
-    );
-    assert.ok(command.argv.includes("--version-id"));
-    assert.equal(command.argv.includes("rollback"), false);
+    assert.equal(command.argv[0], "rollback");
+    assert.equal(command.argv[1], rollbackVersions[command.role]);
+    assert.ok(command.argv.includes("--yes"));
   }
   assert.equal("triggers" in commands, false);
   const serializedCommands = JSON.stringify(commands);
@@ -297,6 +295,64 @@ test("promotes and restores one exact captured Container application target", as
     /ALICE_CONTAINER_APPLICATION_DRIFTED/,
   );
   assert.equal(mutated, false);
+
+  current = previous;
+  let polls = 0;
+  const cold = await transitionAliceContainerApplication({
+    expectedCurrent: previous, target: candidateTarget,
+    operations: {
+      ...operations,
+      createRollout: async options => ({
+        ...await operations.createRollout(options), status: "progressing",
+      }),
+      fetchRollout: async ({ rollout }) => ({
+        ...rollout, status: ++polls > 30 ? "completed" : "progressing",
+      }),
+    },
+  });
+  assert.equal(polls, 31, "a rollout may safely exceed the old one-minute limit");
+  assert.equal(cold.current.target.configuration.image, candidateImage);
+
+  const pending = {
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    current_version: 1, target_version: 2, status: "progressing",
+    current_configuration: rawApplication.configuration,
+    target_configuration: candidateTarget.configuration,
+  };
+  const application = { ...rawApplication, active_rollout_id: pending.id };
+  assert.throws(() => normalizeAliceContainerApplicationRollbackState({
+    application, applicationVersions: [rawVersion], applicationInstances: [],
+    applicationRollout: pending,
+  }), /ALICE_CONTAINER_APPLICATION_INVALID/);
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    const pathname = new URL(url).pathname;
+    let result;
+    if (init.method === "POST") {
+      requests.push({ pathname, body: JSON.parse(init.body) });
+      assert.ok(pathname.endsWith(`/rollouts/${pending.id}`));
+      pending.status = "reverted";
+      result = { rollout: pending };
+    } else if (pathname.endsWith("/applications")) result = [application];
+    else if (pathname.endsWith("/versions")) result = [rawVersion];
+    else if (pathname.endsWith("/instances")) result = { instances: [] };
+    else if (pathname.includes("/rollouts/")) result = pending;
+    else result = application;
+    return Response.json({ success: true, result });
+  };
+  const recovered = await restoreAliceContainerApplication({
+    expected: previous, apiToken: "a".repeat(32), fetchImpl,
+  });
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].body, { action: "revert" });
+  assert.equal(recovered.changed, false);
+  assert.deepEqual(recovered.current, previous);
+  pending.status = "progressing";
+  pending.current_configuration = candidateTarget.configuration;
+  await assert.rejects(() => restoreAliceContainerApplication({
+    expected: previous, apiToken: "a".repeat(32), fetchImpl,
+  }), /ALICE_CONTAINER_APPLICATION_DRIFTED/);
+  assert.equal(requests.length, 1, "recovery cannot revert a rollout from a different source image");
 });
 
 test("materializes Container runtime secrets only for the separate runtime host", () => {

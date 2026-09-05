@@ -161,7 +161,19 @@ export function normalizeAliceContainerApplicationRollbackState(value) {
   const application = value?.application;
   const applicationVersions = value?.applicationVersions;
   const applicationInstances = value?.applicationInstances;
+  const rollout = value?.applicationRollout;
   const health = application?.health?.instances;
+  const hasRollout = Boolean(application?.active_rollout_id);
+  const terminalRollout = !hasRollout || (
+    VERSION_ID.test(rollout?.id ?? "") &&
+    rollout?.id === application.active_rollout_id &&
+    ["completed", "reverted"].includes(rollout.status) &&
+    application.version === (rollout.status === "completed"
+      ? rollout.target_version : rollout.current_version) &&
+    canonicalAliceJson(normalizedContainerConfiguration(application.configuration)) ===
+      canonicalAliceJson(normalizedContainerConfiguration(rollout.status === "completed"
+        ? rollout.target_configuration : rollout.current_configuration))
+  );
   if (
     !application ||
     !Array.isArray(applicationVersions) ||
@@ -182,9 +194,7 @@ export function normalizeAliceContainerApplicationRollbackState(value) {
     !NAMESPACE_ID.test(application.durable_objects?.namespace_id ?? "") ||
     !health ||
     health.failed !== 0 ||
-    (application.active_rollout_id !== undefined &&
-      application.active_rollout_id !== null &&
-      application.active_rollout_id !== "") ||
+    !terminalRollout ||
     applicationVersions.some(
       (version) =>
         !Number.isSafeInteger(version?.version) ||
@@ -387,9 +397,11 @@ export async function transitionAliceContainerApplication({
     target,
   });
   let terminalRollout = rollout;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  // Cloudflare may drain a replaced process for up to 15 minutes. Keep this
+  // bounded inside the workflow's separate mutation and recovery deadlines.
+  for (let attempt = 0; attempt < 240; attempt += 1) {
     if (terminalRollout.status === "completed") break;
-    await resolvedOperations.sleep(2_000);
+    await resolvedOperations.sleep(5_000);
     terminalRollout = verifyContainerApplicationRollout({
       rollout: await resolvedOperations.fetchRollout({
         applicationId: current.applicationId,
@@ -454,7 +466,7 @@ async function aliceContainerApiJson({
   return envelope.result;
 }
 
-async function fetchAliceContainerApplicationRollbackState({
+async function fetchAliceContainerApplicationProviderState({
   fetchImpl = globalThis.fetch,
   apiToken,
 }) {
@@ -490,10 +502,59 @@ async function fetchAliceContainerApplicationRollbackState({
       pathname: `${base}/applications/${applicationId}/instances`,
     }),
   ]);
-  return normalizeAliceContainerApplicationRollbackState({
+  const applicationRollout = application.active_rollout_id
+    ? await aliceContainerApiJson({
+        fetchImpl, apiToken,
+        pathname: `${base}/applications/${applicationId}/rollouts/${application.active_rollout_id}`,
+      })
+    : null;
+  return {
     application,
     applicationVersions,
     applicationInstances: instancePage?.instances,
+    applicationRollout,
+  };
+}
+
+async function fetchAliceContainerApplicationRollbackState(options) {
+  return normalizeAliceContainerApplicationRollbackState(
+    await fetchAliceContainerApplicationProviderState(options),
+  );
+}
+
+export async function restoreAliceContainerApplication({
+  apiToken, expected, fetchImpl = globalThis.fetch,
+}) {
+  verifyAliceContainerApplicationRollbackState(expected);
+  let observed = await fetchAliceContainerApplicationProviderState({ apiToken, fetchImpl });
+  const rollout = observed.applicationRollout;
+  if (rollout && ["pending", "progressing", "failed"].includes(rollout.status)) {
+    if (
+      !VERSION_ID.test(rollout.id ?? "") ||
+      rollout.id !== observed.application.active_rollout_id ||
+      observed.application.id !== expected.applicationId ||
+      observed.application.account_id !== expected.accountId ||
+      observed.application.name !== expected.applicationName ||
+      observed.application.durable_objects?.namespace_id !== expected.namespaceId ||
+      !Number.isSafeInteger(rollout.current_version) ||
+      rollout.current_version < expected.applicationVersion ||
+      canonicalAliceJson(normalizedContainerConfiguration(rollout.current_configuration)) !==
+        canonicalAliceJson(expected.target.configuration)
+    ) releaseInvalid("ALICE_CONTAINER_APPLICATION_DRIFTED");
+    const reverted = await aliceContainerApiJson({
+      apiToken, fetchImpl, method: "POST",
+      pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/containers/applications/${expected.applicationId}/rollouts/${rollout.id}`,
+      body: { action: "revert" },
+    });
+    if (reverted.rollout?.id !== rollout.id || reverted.rollout.status !== "reverted") {
+      releaseInvalid("ALICE_CONTAINER_APPLICATION_ROLLBACK_INVALID");
+    }
+    observed = await fetchAliceContainerApplicationProviderState({ apiToken, fetchImpl });
+  }
+  const current = normalizeAliceContainerApplicationRollbackState(observed);
+  verifyContainerApplicationIdentity(current, expected);
+  return transitionAliceContainerApplication({
+    apiToken, fetchImpl, expectedCurrent: current, target: expected.target,
   });
 }
 
@@ -812,14 +873,10 @@ export function buildAliceProtectedCloudflareCommands({
     return [{
       role,
       argv: [
-        "versions",
-        "deploy",
+        "rollback",
+        versionId,
         "--config",
         configPath(configDir, role),
-        "--version-id",
-        versionId,
-        "--percentage",
-        "100",
         "--message",
         `Alice rollback from ${sourceCommit}`,
         "--yes",
@@ -1908,16 +1965,7 @@ export async function executeAliceCloudflareRollbacks({
   const restoreContinuity = operations.restoreContinuity ??
     ((options) => restoreAliceCloudflareContinuityState(options));
   const restoreContainerApplication = operations.restoreContainerApplication ??
-    (async () => {
-      const current = await fetchAliceContainerApplicationRollbackState({
-        apiToken,
-      });
-      return transitionAliceContainerApplication({
-        apiToken,
-        expectedCurrent: current,
-        target: anchor.previous.containerApplication.target,
-      });
-    });
+    ((options) => restoreAliceContainerApplication(options));
   const failures = [];
   const workflowVersionsBeforeRollback =
     await fetchWorkflowVersions({
@@ -2551,7 +2599,7 @@ async function main() {
       );
       await transitionAliceContainerApplication({
         apiToken,
-        expectedCurrent: anchor.previous.containerApplication,
+        expectedCurrent: rollbackEvidence.containerApplication,
         target: candidateContainerTarget,
       });
       promoteWorkers(
@@ -2631,9 +2679,11 @@ const invokedPath = process.argv[1]
   : "";
 if (invokedPath === import.meta.url) {
   main().catch((error) => {
-    process.stderr.write(
-      `${error instanceof Error ? error.message : String(error)}\n`,
-    );
+    const report = value => {
+      process.stderr.write(`${value instanceof Error ? value.message.split("\n")[0] : "ALICE_RELEASE_FAILED"}\n`);
+      if (value instanceof AggregateError) value.errors.forEach(report);
+    };
+    report(error);
     process.exitCode = 1;
   });
 }
