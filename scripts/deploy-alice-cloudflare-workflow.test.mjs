@@ -44,6 +44,16 @@ function namedWorkflowSteps(source) {
   });
 }
 
+test("status-only dispatch cannot start deployment or recovery and prints no credential headers", () => {
+  assert.match(workflow, /name: Promote attested Alice Worker bytes\n    if: \$\{\{ !inputs\.read_status_only \}\}/);
+  assert.match(workflow, /if: \$\{\{ always\(\) && !inputs\.read_status_only && \(needs\.deploy\.result/);
+  const statusJob = workflow.slice(workflow.indexOf("  read-status:"), workflow.indexOf("\n  deploy:"));
+  assert.match(statusJob, /test "\$REF_PROTECTED" = "true"/);
+  assert.match(statusJob, /method: 'GET', redirect: 'manual'/);
+  assert.doesNotMatch(statusJob, /method: '(POST|PUT|PATCH|DELETE)'|console\.log\((raw|value|response|process\.env)/);
+  assert.match(statusJob, /const digest = v =>/);
+});
+
 test("production deployment uses Container Program v2 without a Modal promotion path", () => {
   assert.match(workflow, /^      runtime_revision:/m);
   assert.doesNotMatch(workflow, /^      modal_revision:/m);

@@ -1,9 +1,14 @@
 name: Deploy Alice Cloudflare Production
-run-name: Alice production deploy watchdog-${{ inputs.recovery_watchdog_run_id }}
+run-name: ${{ inputs.read_status_only && 'Alice deployment status' || format('Alice production deploy watchdog-{0}', inputs.recovery_watchdog_run_id) }}
 
 on:
   workflow_dispatch:
     inputs:
+      read_status_only:
+        description: "Read authenticated deployment status without any deployment or recovery mutation"
+        required: false
+        default: false
+        type: boolean
       source_sha:
         description: "Exact attested Alice runtime commit"
         required: true
@@ -80,8 +85,75 @@ permissions:
   packages: read
 
 jobs:
+  read-status:
+    name: Read authenticated Alice deployment status
+    if: ${{ inputs.read_status_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: alice-production
+    permissions:
+      contents: read
+    steps:
+      - name: Enforce current protected controller before status credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
+          test "$REF_PROTECTED" = "true"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" --jq .object.sha)" = "$GITHUB_SHA"
+
+      - name: Read deployment status without mutation
+        env:
+          ALICE_RELEASE_ACCESS_CLIENT_ID: ${{ secrets.ALICE_RELEASE_ACCESS_CLIENT_ID }}
+          ALICE_RELEASE_ACCESS_CLIENT_SECRET: ${{ secrets.ALICE_RELEASE_ACCESS_CLIENT_SECRET }}
+          ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          const nonce = crypto.randomBytes(32).toString('base64url');
+          const response = await fetch('https://alice-release.rndrntwrk.com/control/internal/v1/deployment/status', {
+            method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(30_000),
+            headers: {
+              accept: 'application/json', 'cache-control': 'no-store',
+              'cf-access-client-id': process.env.ALICE_RELEASE_ACCESS_CLIENT_ID,
+              'cf-access-client-secret': process.env.ALICE_RELEASE_ACCESS_CLIENT_SECRET,
+              'x-alice-deployment-pause-token': process.env.ALICE_DEPLOYMENT_PAUSE_TOKEN,
+              'x-alice-deployment-edge-nonce': nonce,
+            },
+          });
+          const raw = await response.text();
+          if (raw.length > 32_768) throw new Error('ALICE_STATUS_RESPONSE_TOO_LARGE');
+          const value = JSON.parse(raw);
+          const digest = v => /^sha256:[a-f0-9]{64}$/.test(v ?? '') ? v : null;
+          const code = v => /^[A-Z_]{3,100}$/.test(v ?? '') ? v : null;
+          const integer = v => Number.isSafeInteger(v) && v >= 0 ? v : null;
+          const boundary = v => /^(release:unadmitted|(?:container|modal):alice-runtime:v[0-9]+)$/.test(v ?? '') ? v : null;
+          const binding = v => Object.fromEntries(['programDigest', 'releaseDigest', 'policyHash'].map(k => [k, digest(v?.[k])]));
+          const authority = value.authority;
+          console.log(JSON.stringify({
+            observedAt: new Date().toISOString(), httpStatus: response.status,
+            ok: value.ok === true, code: code(value.code),
+            authority: authority ? {
+              binding: binding(authority.binding),
+              deploymentManifestSha256: digest(authority.deploymentManifestSha256),
+              activeReleaseEpoch: integer(authority.activeReleaseEpoch),
+              highestReleaseEpoch: integer(authority.highestReleaseEpoch),
+              admissionGeneration: integer(authority.admissionGeneration),
+              rollbackBoundary: boundary(authority.rollbackBoundary),
+              pausedAll: Array.isArray(authority.pausedScopes) && authority.pausedScopes.includes('all'),
+            } : null,
+            candidateCode: code(value.candidateAdmission?.code),
+            edgeReady: value.edgeReadiness?.nonce === nonce,
+            candidateBinding: binding(value.edgeReadiness?.servingCandidate?.binding),
+          }));
+          if (!response.ok || value.ok !== true) process.exitCode = 1;
+          NODE
+
   deploy:
     name: Promote attested Alice Worker bytes
+    if: ${{ !inputs.read_status_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     environment: alice-production
@@ -1221,7 +1293,7 @@ jobs:
   recover-cloudflare:
     name: Independently restore Cloudflare after deploy-job loss
     needs: [deploy, accept]
-    if: ${{ always() && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
+    if: ${{ always() && !inputs.read_status_only && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: alice-production-cloudflare-recovery
