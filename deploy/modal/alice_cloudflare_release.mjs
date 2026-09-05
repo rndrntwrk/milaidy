@@ -551,8 +551,31 @@ export async function restoreAliceContainerApplication({
     }
     observed = await fetchAliceContainerApplicationProviderState({ apiToken, fetchImpl });
   }
+  // PATCH changes the desired configuration before a rollout is created.
+  // Recover that interrupted gap from the independently allocated version.
+  const allocatedConfiguration = Array.isArray(observed.applicationVersions)
+    ? observed.applicationVersions.find(version =>
+      version.version === observed.application.version && version.percentage === 100
+    )?.configuration : undefined;
+  const allocated = normalizeAliceContainerApplicationRollbackState({
+    ...observed,
+    application: { ...observed.application, configuration: allocatedConfiguration },
+  });
+  verifyContainerApplicationIdentity(allocated, expected);
+  if (canonicalAliceJson(normalizedContainerConfiguration(observed.application.configuration)) !==
+    canonicalAliceJson(allocated.target.configuration)) {
+    await aliceContainerApiJson({
+      apiToken, fetchImpl, method: "PATCH",
+      pathname: `/accounts/${expected.accountId}/containers/applications/${expected.applicationId}`,
+      body: { configuration: allocated.target.configuration },
+    });
+    observed = await fetchAliceContainerApplicationProviderState({ apiToken, fetchImpl });
+  }
   const current = normalizeAliceContainerApplicationRollbackState(observed);
   verifyContainerApplicationIdentity(current, expected);
+  if (canonicalAliceJson(current) !== canonicalAliceJson(allocated)) {
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_DRIFTED");
+  }
   return transitionAliceContainerApplication({
     apiToken, fetchImpl, expectedCurrent: current, target: expected.target,
   });
@@ -565,13 +588,25 @@ function aliceContainerApplicationOperations({ apiToken, fetchImpl }) {
       apiToken,
       fetchImpl,
     }),
-    createRollout: ({ applicationId, body }) => aliceContainerApiJson({
-      fetchImpl,
-      apiToken,
-      method: "POST",
-      pathname: `${base}/applications/${applicationId}/rollouts`,
-      body,
-    }),
+    createRollout: async ({ applicationId, body }) => {
+      // Match pinned Wrangler: update future-instance configuration first,
+      // then replace existing instances through the rollout API.
+      const configured = await aliceContainerApiJson({
+        fetchImpl, apiToken, method: "PATCH",
+        pathname: `${base}/applications/${applicationId}`,
+        body: { configuration: body.target_configuration },
+      });
+      if (configured.id !== applicationId ||
+        configured.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
+        canonicalAliceJson(normalizedContainerConfiguration(configured.configuration)) !==
+          canonicalAliceJson(normalizedContainerConfiguration(body.target_configuration))) {
+        releaseInvalid("ALICE_CONTAINER_APPLICATION_DRIFTED");
+      }
+      return aliceContainerApiJson({
+        fetchImpl, apiToken, method: "POST",
+        pathname: `${base}/applications/${applicationId}/rollouts`, body,
+      });
+    },
     fetchRollout: ({ applicationId, rollout }) => aliceContainerApiJson({
       fetchImpl,
       apiToken,
