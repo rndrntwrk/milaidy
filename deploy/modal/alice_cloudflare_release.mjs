@@ -781,7 +781,6 @@ export function buildAliceProtectedCloudflareCommands({
       "--config",
       configPath(configDir, role),
       "--no-bundle",
-      "--strict",
       "--tag",
       tag,
       "--message",
@@ -1508,6 +1507,7 @@ export function verifyAliceCloudflarePreparedState({
 
 export function verifyAliceCloudflareAnchorStillCurrent({
   anchor,
+  configs,
   workers,
   containerApplication,
   traffic,
@@ -1538,6 +1538,36 @@ export function verifyAliceCloudflareAnchorStillCurrent({
     canonicalAliceJson(workflowVersions) !==
       canonicalAliceJson(anchor.previous.workflowVersions)
   ) releaseInvalid("ALICE_CLOUDFLARE_ANCHOR_DRIFTED");
+  // Wrangler --strict rejects every API-origin Worker, including our recovery
+  // baseline. Keep its substantive conflict checks beside exact-state admission.
+  if (!exactKeys(configs, ROLES)) releaseInvalid("ALICE_WRANGLER_CONFIG_INVALID");
+  for (const role of ROLES) {
+    const config = configs[role];
+    if (config?.name !== WORKERS[role] ||
+      config.account_id !== ALICE_CLOUDFLARE_TARGET.accountId) {
+      releaseInvalid("ALICE_WRANGLER_CONFIG_INVALID");
+    }
+    const publicNames = new Set([
+      ...Object.keys(config.vars ?? {}),
+      ...(config.durable_objects?.bindings ?? []).map((binding) => binding.name),
+      ...["services", "workflows", "d1_databases", "r2_buckets", "vectorize"]
+        .flatMap((key) => (config[key] ?? []).map((binding) => binding.binding)),
+      ...(config.queues?.producers ?? []).map((binding) => binding.binding),
+      config.ai?.binding,
+      config.version_metadata?.binding,
+    ]);
+    if (workers[role].versionResources.bindings.some((binding) =>
+      binding.type === "secret_text" && publicNames.has(binding.name))) {
+      releaseInvalid("ALICE_WORKER_SECRET_BINDING_CONFLICT");
+    }
+    for (const workflow of config.workflows ?? []) {
+      if (workflow.name !== continuityConfig.workflow.name ||
+        (workflow.script_name ?? config.name) !== continuityConfig.workflow.scriptName ||
+        workflow.class_name !== continuityConfig.workflow.className) {
+        releaseInvalid("ALICE_WORKER_WORKFLOW_OWNER_CONFLICT");
+      }
+    }
+  }
   return { anchorFresh: true };
 }
 
@@ -2237,6 +2267,7 @@ async function main() {
         });
       verifyAliceCloudflareAnchorStillCurrent({
         anchor,
+        configs: release.configs,
         workers: freshWorkers,
         containerApplication: freshContainerApplication,
         traffic: freshTraffic,

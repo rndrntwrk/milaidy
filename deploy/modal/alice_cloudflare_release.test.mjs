@@ -108,7 +108,8 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   for (const command of commands.uploads) {
     assert.deepEqual(command.argv.slice(0, 2), ["versions", "upload"]);
     assert.ok(command.argv.includes("--no-bundle"));
-    assert.ok(command.argv.includes("--strict"));
+    assert.equal(command.argv.includes("--strict"), false,
+      "API-managed Workers must not trigger Wrangler's unconditional CI abort");
     assert.ok(command.argv.includes(`alice-${sourceCommit}-123456789-2`));
     assert.equal(command.argv.includes("deploy"), false);
   }
@@ -1265,16 +1266,45 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     }),
     anchor,
   );
-  assert.deepEqual(verifyAliceCloudflareAnchorStillCurrent({
+  const configs = Object.fromEntries(Object.entries(anchor.previous.workers).map(
+    ([role, snapshot]) => [role, {
+      account_id: anchor.accountId,
+      name: snapshot.worker,
+      vars: {},
+      secrets: { required: [] },
+    }],
+  ));
+  anchor.previous.workers.control.versionResources.bindings = [
+    { name: "ALICE_CONTROL_RECOVERY_TOKEN", type: "secret_text" },
+  ];
+  configs.control.secrets.required = ["ALICE_CONTROL_RECOVERY_TOKEN"];
+  configs.control.workflows = [{
+    binding: "ALICE_PLANS",
+    name: continuityConfig.workflow.name,
+    class_name: continuityConfig.workflow.className,
+  }];
+  const uploadPreflight = {
     anchor,
+    configs,
     workers: anchor.previous.workers,
     containerApplication: anchor.previous.containerApplication,
     traffic: anchor.previous.trafficState,
     continuityConfig: anchor.previous.continuityConfig,
     workflowVersions: anchor.previous.workflowVersions,
-  }), { anchorFresh: true });
+  };
+  assert.deepEqual(verifyAliceCloudflareAnchorStillCurrent(uploadPreflight),
+    { anchorFresh: true });
+  configs.control.vars.ALICE_CONTROL_RECOVERY_TOKEN = "must-stay-secret";
+  assert.throws(() => verifyAliceCloudflareAnchorStillCurrent(uploadPreflight),
+    /ALICE_WORKER_SECRET_BINDING_CONFLICT/);
+  delete configs.control.vars.ALICE_CONTROL_RECOVERY_TOKEN;
+  configs.access.workflows = configs.control.workflows;
+  assert.throws(() => verifyAliceCloudflareAnchorStillCurrent(uploadPreflight),
+    /ALICE_WORKER_WORKFLOW_OWNER_CONFLICT/);
+  delete configs.access.workflows;
   assert.throws(() => verifyAliceCloudflareAnchorStillCurrent({
     anchor,
+    configs,
     workers: anchor.previous.workers,
     containerApplication: anchor.previous.containerApplication,
     traffic: {
