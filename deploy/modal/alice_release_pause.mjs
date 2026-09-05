@@ -106,13 +106,14 @@ export function verifyAliceFirstReleasePauseInputs({
       candidateExpected.release.deploymentManifestSha256,
   });
   if (
-    bootstrap.mode !== "bootstrap" ||
     bootstrap.activeVersionId !==
       anchor.previous.workers.control.serving.versionId ||
     prepared.controlVersionId === bootstrap.activeVersionId ||
     !DIGEST.test(anchorSha256 ?? "") ||
     !DIGEST.test(prepareEvidenceSha256 ?? "")
   ) invalid();
+  // Installed Worker code is not proof of admission. The authenticated status
+  // check in pauseAliceReleaseMachine must still prove this unadmitted tuple.
   const zero = `sha256:${"0".repeat(64)}`;
   const active = {
     binding: {
