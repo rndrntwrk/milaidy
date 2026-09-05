@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { canonicalAliceJson as canonical } from "../../workers/alice-effective-config.js";
 
 import {
   aliceCloudflareCommandEnv,
@@ -1405,6 +1406,50 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
   assert.equal(firstPause.active.releaseEpoch, 0,
     "installed release code must still prove an unadmitted authority before pause");
   assert.equal(firstPause.active.rollbackBoundary, "release:unadmitted");
+  const previous = structuredClone(pauseInputs);
+  previous.usePreviousRelease = true;
+  const digest = value => `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
+  const keys = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const publicJwk = keys.publicKey.export({ format: "jwk" });
+  previous.admission.programPublicJwkSha256 = digest(canonical(publicJwk));
+  const previousManifest = canonical({ source: {
+    sourceCommit: "1".repeat(40), deploymentControllerCommit: "2".repeat(40),
+    runtimeImage: previous.anchor.previous.containerApplication.target.configuration.image,
+  } });
+  const previousEnvelope = {
+    schemaVersion: "alice.program-envelope.v2",
+    release: {
+      ...JSON.parse(previousManifest).source,
+      releaseEpoch: 1, runtimeRevision: 49,
+      policyHash: `sha256:${"c".repeat(64)}`,
+      deploymentManifestSha256: digest(previousManifest),
+      rollbackBoundary: "container:alice-runtime:v49",
+    },
+  };
+  const previousVars = {
+    ALICE_PROGRAM_ENVELOPE_B64: Buffer.from(canonical(previousEnvelope)).toString("base64url"),
+    ALICE_PROGRAM_PUBLIC_JWK_B64: Buffer.from(canonical(publicJwk)).toString("base64url"),
+    ALICE_PROGRAM_SIGNATURE_B64: crypto.sign("RSA-SHA256", Buffer.from(canonical(previousEnvelope)), keys.privateKey).toString("base64url"),
+    ALICE_DEPLOYMENT_MANIFEST_B64: Buffer.from(previousManifest).toString("base64url"),
+    ALICE_DEPLOYMENT_MANIFEST_SHA256: digest(previousManifest),
+  };
+  const resources = previous.anchor.previous.workers.control.versionResources;
+  resources.bindings = [
+    ...resources.bindings.filter(binding => !Object.hasOwn(previousVars, binding.name)),
+    ...Object.entries(previousVars).map(([name, text]) => ({ name, text, type: "plain_text" })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+  assert.deepEqual(verifyAliceFirstReleasePauseInputs(previous).active, {
+    binding: {
+      programDigest: digest(canonical(previousEnvelope)),
+      releaseDigest: digest(canonical(previousEnvelope.release)),
+      policyHash: previousEnvelope.release.policyHash,
+    },
+    deploymentManifestSha256: digest(previousManifest),
+    releaseEpoch: 1, rollbackBoundary: "container:alice-runtime:v49",
+  });
+  const signatureBinding = resources.bindings.find(binding => binding.name === "ALICE_PROGRAM_SIGNATURE_B64");
+  signatureBinding.text = Buffer.alloc(256).toString("base64url");
+  assert.throws(() => verifyAliceFirstReleasePauseInputs(previous), /ALICE_PREVIOUS_RELEASE_PAUSE_INVALID/);
   assert.throws(() => verifyAliceFirstReleasePauseInputs({
     ...pauseInputs,
     bootstrapState: {

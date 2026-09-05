@@ -85,6 +85,62 @@ function candidateFromAdmission(admission) {
   return { binding, release, rollbackBoundary };
 }
 
+function previousReleaseFromAnchor(anchor, admission) {
+  try {
+    const bindings = anchor.previous.workers.control.versionResources.bindings;
+    const value = (name) => {
+      const matches = bindings.filter(binding => binding.name === name);
+      if (matches.length !== 1 || matches[0].type !== "plain_text") invalid();
+      return matches[0].text;
+    };
+    const decode = name => {
+      const encoded = value(name);
+      if (!/^[A-Za-z0-9_-]+$/.test(encoded ?? "")) invalid();
+      return Buffer.from(encoded, "base64url");
+    };
+    const digest = bytes => `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`;
+    const envelope = JSON.parse(decode("ALICE_PROGRAM_ENVELOPE_B64"));
+    const publicJwk = JSON.parse(decode("ALICE_PROGRAM_PUBLIC_JWK_B64"));
+    const manifestBytes = decode("ALICE_DEPLOYMENT_MANIFEST_B64");
+    const manifest = JSON.parse(manifestBytes);
+    const release = envelope.release;
+    if (
+      envelope.schemaVersion !== "alice.program-envelope.v2" ||
+      !DIGEST.test(admission.programPublicJwkSha256 ?? "") ||
+      digest(canonicalAliceJson(publicJwk)) !== admission.programPublicJwkSha256 ||
+      publicJwk.kty !== "RSA" || Object.hasOwn(publicJwk, "d") ||
+      !crypto.verify("RSA-SHA256", Buffer.from(canonicalAliceJson(envelope)),
+        crypto.createPublicKey({ key: publicJwk, format: "jwk" }),
+        decode("ALICE_PROGRAM_SIGNATURE_B64")) ||
+      !Number.isSafeInteger(release?.releaseEpoch) || release.releaseEpoch < 1 ||
+      release.releaseEpoch >= admission.releaseEpoch ||
+      !Number.isSafeInteger(release.runtimeRevision) || release.runtimeRevision < 49 ||
+      !DIGEST.test(release.policyHash ?? "") ||
+      release.deploymentManifestSha256 !== digest(manifestBytes) ||
+      release.deploymentManifestSha256 !== value("ALICE_DEPLOYMENT_MANIFEST_SHA256") ||
+      release.sourceCommit !== manifest.source?.sourceCommit ||
+      release.deploymentControllerCommit !== manifest.source?.deploymentControllerCommit ||
+      release.runtimeImage !== manifest.source?.runtimeImage ||
+      release.runtimeImage !== anchor.previous.containerApplication.target.configuration.image ||
+      release.rollbackBoundary !== `container:alice-runtime:v${release.runtimeRevision}`
+    ) invalid();
+    // This verifies the historical release being paused, not permission to run
+    // it again. The authenticated status must independently match this tuple.
+    return {
+      binding: {
+        programDigest: digest(canonicalAliceJson(envelope)),
+        releaseDigest: digest(canonicalAliceJson(release)),
+        policyHash: release.policyHash,
+      },
+      deploymentManifestSha256: release.deploymentManifestSha256,
+      releaseEpoch: release.releaseEpoch,
+      rollbackBoundary: release.rollbackBoundary,
+    };
+  } catch {
+    invalid("ALICE_PREVIOUS_RELEASE_PAUSE_INVALID");
+  }
+}
+
 export function verifyAliceFirstReleasePauseInputs({
   admission,
   bootstrapState,
@@ -92,6 +148,7 @@ export function verifyAliceFirstReleasePauseInputs({
   anchorSha256,
   prepareEvidence,
   prepareEvidenceSha256,
+  usePreviousRelease = false,
 }) {
   const candidateExpected = candidateFromAdmission(admission);
   const bootstrap = verifyAliceBootstrapState(bootstrapState);
@@ -112,8 +169,9 @@ export function verifyAliceFirstReleasePauseInputs({
     !DIGEST.test(anchorSha256 ?? "") ||
     !DIGEST.test(prepareEvidenceSha256 ?? "")
   ) invalid();
-  // Installed Worker code is not proof of admission. The authenticated status
-  // check in pauseAliceReleaseMachine must still prove this unadmitted tuple.
+  if (typeof usePreviousRelease !== "boolean") invalid();
+  // Installed code alone does not select admission state. The caller's initial
+  // status read chooses a tuple; pauseAliceReleaseMachine must prove it exactly.
   const zero = `sha256:${"0".repeat(64)}`;
   const active = {
     binding: {
@@ -125,7 +183,11 @@ export function verifyAliceFirstReleasePauseInputs({
     releaseEpoch: 0,
     rollbackBoundary: "release:unadmitted",
   };
-  return { active, candidateExpected, prepared };
+  return {
+    active: usePreviousRelease ? previousReleaseFromAnchor(anchor, admission) : active,
+    candidateExpected,
+    prepared,
+  };
 }
 
 export function buildAliceFirstReleasePauseEvidence({
@@ -136,6 +198,7 @@ export function buildAliceFirstReleasePauseEvidence({
   prepareEvidence,
   prepareEvidenceSha256,
   result,
+  usePreviousRelease = false,
   observedAt = new Date().toISOString(),
 }) {
   const { active, candidateExpected, prepared } =
@@ -146,6 +209,7 @@ export function buildAliceFirstReleasePauseEvidence({
       anchorSha256,
       prepareEvidence,
       prepareEvidenceSha256,
+      usePreviousRelease,
     });
   return verifyAliceDeploymentPauseEvidence({
     schemaVersion: "alice.deployment-pause-evidence.v1",
@@ -183,6 +247,32 @@ async function main() {
     .update(fs.readFileSync(anchorPath)).digest("hex")}`;
   const prepareEvidenceSha256 = `sha256:${crypto.createHash("sha256")
     .update(fs.readFileSync(preparePath)).digest("hex")}`;
+  verifyAliceFirstReleasePauseInputs({
+    admission, bootstrapState, anchor, anchorSha256,
+    prepareEvidence, prepareEvidenceSha256,
+  });
+  const statusResponse = await fetch(
+    "https://alice-release.rndrntwrk.com/control/internal/v1/deployment/status",
+    {
+      method: "GET", redirect: "manual", signal: AbortSignal.timeout(30_000),
+      headers: {
+        accept: "application/json", "cache-control": "no-store",
+        "cf-access-client-id": process.env.ALICE_RELEASE_ACCESS_CLIENT_ID,
+        "cf-access-client-secret": process.env.ALICE_RELEASE_ACCESS_CLIENT_SECRET,
+        "x-alice-deployment-pause-token": process.env.ALICE_DEPLOYMENT_PAUSE_TOKEN,
+        "x-alice-deployment-edge-nonce": crypto.randomBytes(32).toString("base64url"),
+      },
+    },
+  );
+  const statusText = await statusResponse.text();
+  if (statusText.length > 32_768) invalid("ALICE_DEPLOYMENT_STATUS_INVALID");
+  let status;
+  try { status = JSON.parse(statusText); }
+  catch { invalid("ALICE_DEPLOYMENT_STATUS_INVALID"); }
+  if (!statusResponse.ok || status.ok !== true || status.code !== "DEPLOYMENT_STATUS_READ" ||
+    !Number.isSafeInteger(status.authority?.activeReleaseEpoch) ||
+    status.authority.activeReleaseEpoch < 0) invalid("ALICE_DEPLOYMENT_STATUS_INVALID");
+  const usePreviousRelease = status.authority.activeReleaseEpoch > 0;
   const { active, candidateExpected } = verifyAliceFirstReleasePauseInputs({
     admission,
     bootstrapState,
@@ -190,7 +280,14 @@ async function main() {
     anchorSha256,
     prepareEvidence,
     prepareEvidenceSha256,
+    usePreviousRelease,
   });
+  process.stdout.write(`${JSON.stringify({
+    phase: "verified-pause-source",
+    activeReleaseEpoch: active.releaseEpoch,
+    deploymentManifestSha256: active.deploymentManifestSha256,
+    rollbackBoundary: active.rollbackBoundary,
+  })}\n`);
   const result = await pauseAliceReleaseMachine({
     fetchImpl: (url, init) => fetch(url, {
       ...init,
@@ -211,6 +308,7 @@ async function main() {
     prepareEvidence,
     prepareEvidenceSha256,
     result,
+    usePreviousRelease,
   });
   writeReadonly(outputPath, evidence);
   process.stdout.write(`${JSON.stringify({
