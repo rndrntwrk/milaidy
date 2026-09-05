@@ -2573,7 +2573,7 @@ async function main() {
   try {
     verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
     promoteWorkers(
-      ["statePlane", "aiGateway", "connectorPlane"],
+      ["statePlane", "aiGateway", "connectorPlane", "runtimeHost"],
       "ALICE_WORKER_PROMOTION_FAILED",
     );
     await transitionAliceContainerApplication({
@@ -2582,7 +2582,7 @@ async function main() {
       target: candidateContainerTarget,
     });
     promoteWorkers(
-      ["runtimeHost", "access"],
+      ["access"],
       "ALICE_WORKER_PROMOTION_FAILED",
     );
     await applyAliceCandidateTrafficState({
@@ -2629,7 +2629,7 @@ async function main() {
         deliveryPaused: true,
       });
       promoteWorkers(
-        ["control", "statePlane", "aiGateway", "connectorPlane"],
+        ["control", "statePlane", "aiGateway", "connectorPlane", "runtimeHost"],
         "ALICE_WORKER_FORWARD_RESTORATION_FAILED",
       );
       await transitionAliceContainerApplication({
@@ -2638,7 +2638,7 @@ async function main() {
         target: candidateContainerTarget,
       });
       promoteWorkers(
-        ["runtimeHost", "access"],
+        ["access"],
         "ALICE_WORKER_FORWARD_RESTORATION_FAILED",
       );
       await applyAliceCandidateTrafficState({

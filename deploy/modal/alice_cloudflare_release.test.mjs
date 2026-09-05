@@ -1184,6 +1184,12 @@ test("the protected command requires attested bundles and terminal live readback
   assert.match(source, /restoreAliceCloudflareWorkerRollbackState/);
   assert.match(source, /alice\.cloudflare-rollback-evidence\.v2/);
   assert.match(source, /transitionAliceContainerApplication/);
+  const imageTransitions = [...source.matchAll(/await transitionAliceContainerApplication\(\{/g)];
+  assert.equal(imageTransitions.length, 2);
+  for (const transition of imageTransitions) {
+    const promotion = source.slice(source.lastIndexOf("promoteWorkers(", transition.index), transition.index);
+    assert.match(promotion, /"runtimeHost"/, "the candidate host must supply startup settings before each image transition");
+  }
   assert.match(source, /workerDeployments: workers\.deployments/);
   assert.match(source, /fetchAliceCloudflareContinuityState/);
   assert.match(source, /ALICE_CONTINUITY_CHANGED_DURING_PROMOTION/);
