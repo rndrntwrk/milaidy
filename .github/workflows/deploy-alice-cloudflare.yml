@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: "Exact protected Alice release commit"
+        description: "Exact attested Alice runtime commit"
         required: true
         type: string
       recovery_watchdog_run_id:
-        description: "In-progress protected push recovery watchdog run ID"
+        description: "In-progress recovery dispatch run ID"
         required: true
         type: string
       build_run_id:
@@ -33,7 +33,7 @@ on:
         required: true
         type: number
       preimport_workflow_sha:
-        description: "Exact protected Alice release commit that ran preimport"
+        description: "Exact protected controller commit that ran preimport"
         required: true
         type: string
       preimport_workflow_ref:
@@ -87,6 +87,7 @@ jobs:
     environment: alice-production
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
+      CONTROLLER_SHA: ${{ github.sha }}
       RECOVERY_WATCHDOG_RUN_ID: ${{ inputs.recovery_watchdog_run_id }}
 
     steps:
@@ -126,7 +127,7 @@ jobs:
           printf '%s' "$PREIMPORT_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
           test "$PREIMPORT_RUN_ATTEMPT" = "1"
           printf '%s' "$PREIMPORT_WORKFLOW_SHA" | grep -Eq '^[a-f0-9]{40}$'
-          test "$PREIMPORT_WORKFLOW_SHA" = "$SOURCE_SHA"
+          test "$PREIMPORT_WORKFLOW_SHA" = "$CONTROLLER_SHA"
           test "$PREIMPORT_WORKFLOW_REF" = "$EXPECTED_REF"
           printf '%s' "$PREIMPORT_ARTIFACT_ID" | grep -Eq '^[1-9][0-9]*$'
           printf '%s' "$PREIMPORT_ARTIFACT_DIGEST" | grep -Eq \
@@ -141,19 +142,21 @@ jobs:
           printf '%s' "$POLICY_HASH" | grep -Eq '^sha256:[a-f0-9]{64}$'
           printf '%s' "$ARTIFACT_NAME" | grep -Eq "^alice-worker-bundles-${SOURCE_SHA}-${BUILD_RUN_ID}-[1-9][0-9]*$"
           test "$GITHUB_REF" = "$EXPECTED_REF"
-          test "$GITHUB_SHA" = "$SOURCE_SHA"
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$GITHUB_SHA" = "$CONTROLLER_SHA"
+          test "$(git rev-parse HEAD)" = "$CONTROLLER_SHA"
+          node scripts/verify-alice-release-source.mjs "$SOURCE_SHA" "$CONTROLLER_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           test "$(gh api \
             "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" \
-            --jq .object.sha)" = "$SOURCE_SHA"
+            --jq .object.sha)" = "$CONTROLLER_SHA"
 
           watchdog_json="$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}")"
-          test "$(printf '%s' "$watchdog_json" | jq -r .head_sha)" = "$SOURCE_SHA"
+          test "$(printf '%s' "$watchdog_json" | jq -r .head_sha)" = "$CONTROLLER_SHA"
+          test "$(printf '%s' "$watchdog_json" | jq -r .display_title)" = "Alice production recovery ${SOURCE_SHA}"
           test "$(printf '%s' "$watchdog_json" | jq -r .head_branch)" = \
             "release/alice-production-core-2026-08-22"
-          test "$(printf '%s' "$watchdog_json" | jq -r .event)" = "push"
+          test "$(printf '%s' "$watchdog_json" | jq -r .event)" = "workflow_dispatch"
           test "$(printf '%s' "$watchdog_json" | jq -r .run_attempt)" = "1"
           test "$(printf '%s' "$watchdog_json" | jq -r .path)" = \
             ".github/workflows/recover-alice-production-watchdog.yml"
@@ -454,6 +457,7 @@ jobs:
               process.env.ALICE_CAPABILITY_BOM_SHA256 ||
             evidence.runtimeImage !== output.runtimeImage ||
             manifest.source.sourceCommit !== process.env.SOURCE_SHA ||
+            manifest.source.deploymentControllerCommit !== process.env.CONTROLLER_SHA ||
             manifest.source.runtimeImage !== evidence.runtimeImage ||
             manifest.release.runtimeRevision !== evidence.runtimeRevision
           ) {
@@ -490,7 +494,7 @@ jobs:
           protected_sha="$(gh api \
             "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" \
             --jq .object.sha)"
-          test "$protected_sha" = "$SOURCE_SHA"
+          test "$protected_sha" = "$CONTROLLER_SHA"
 
       - name: Verify Cloudflare recovery readiness before first mutation
         env:
@@ -547,7 +551,8 @@ jobs:
 
           watchdog_json="$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${RECOVERY_WATCHDOG_RUN_ID}")"
-          test "$(printf '%s' "$watchdog_json" | jq -r .head_sha)" = "$SOURCE_SHA"
+          test "$(printf '%s' "$watchdog_json" | jq -r .head_sha)" = "$CONTROLLER_SHA"
+          test "$(printf '%s' "$watchdog_json" | jq -r .display_title)" = "Alice production recovery ${SOURCE_SHA}"
           test "$(printf '%s' "$watchdog_json" | jq -r .status)" = "in_progress"
           test "$(printf '%s' "$watchdog_json" | jq -r .conclusion)" = "null"
           jobs_json="$(gh api \
@@ -697,7 +702,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
           ALICE_SOURCE_ROOT: ${{ github.workspace }}
           ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
-          ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.CONTROLLER_SHA }}
           ALICE_ELIZA_COMMIT: aa5f9c05c585cbc03bb72f9509e504d544531f3a
           ALICE_CLOUDFLARE_RUNTIME_IMAGE: ${{ env.ALICE_CLOUDFLARE_RUNTIME_IMAGE }}
           ALICE_RUNTIME_BUILD_MANIFEST_SHA256: ${{ env.ALICE_RUNTIME_BUILD_MANIFEST_SHA256 }}
@@ -1106,6 +1111,7 @@ jobs:
     environment: alice-production-cloudflare-recovery
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
+      CONTROLLER_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout exact promoted release source
@@ -1122,8 +1128,9 @@ jobs:
           test "$GITHUB_RUN_ATTEMPT" = "1"
           printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
           test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
-          test "$GITHUB_SHA" = "$SOURCE_SHA"
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$GITHUB_SHA" = "$CONTROLLER_SHA"
+          test "$(git rev-parse HEAD)" = "$CONTROLLER_SHA"
+          node scripts/verify-alice-release-source.mjs "$SOURCE_SHA" "$CONTROLLER_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Setup Bun
@@ -1220,6 +1227,7 @@ jobs:
     environment: alice-production-cloudflare-recovery
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
+      CONTROLLER_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout exact failed release source
@@ -1235,8 +1243,9 @@ jobs:
           set -euo pipefail
           printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
           test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
-          test "$GITHUB_SHA" = "$SOURCE_SHA"
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$GITHUB_SHA" = "$CONTROLLER_SHA"
+          test "$(git rev-parse HEAD)" = "$CONTROLLER_SHA"
+          node scripts/verify-alice-release-source.mjs "$SOURCE_SHA" "$CONTROLLER_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Hydrate exact reviewed Eliza PR head

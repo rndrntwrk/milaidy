@@ -67,7 +67,7 @@ test("protected deployment consumes one exact successful build and immutable art
   assert.match(workflow, /environment: alice-production/);
   assert.match(
     workflow,
-    /test "\$GITHUB_REF" = "\$EXPECTED_REF"[\s\S]*?test "\$GITHUB_SHA" = "\$SOURCE_SHA"/,
+    /test "\$GITHUB_REF" = "\$EXPECTED_REF"[\s\S]*?test "\$GITHUB_SHA" = "\$CONTROLLER_SHA"/,
   );
   assert.match(
     workflow,
@@ -110,7 +110,7 @@ test("protected deployment consumes one exact successful preimport artifact", ()
   assert.match(identity, /\.expired/);
   assert.match(identity, /preimport_artifact_record_count/);
   assert.match(identity, /test "\$preimport_artifact_record_count" = "1"/);
-  assert.match(identity, /test "\$PREIMPORT_WORKFLOW_SHA" = "\$SOURCE_SHA"/);
+  assert.match(identity, /test "\$PREIMPORT_WORKFLOW_SHA" = "\$CONTROLLER_SHA"/);
   assert.match(identity, /test "\$PREIMPORT_WORKFLOW_REF" = "\$EXPECTED_REF"/);
   const download = workflow.match(
     /- name: Download exact preimport evidence artifact[\s\S]*?(?=\n      - name:)/,

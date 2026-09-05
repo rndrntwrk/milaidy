@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { verifyAliceReleaseSource } from "../../scripts/verify-alice-release-source.mjs";
+
 import {
   ALICE_CLOUDFLARE_TARGET,
   canonicalAliceJson,
@@ -931,7 +933,7 @@ export async function fetchAliceBootstrapResourceSnapshot({
   };
 }
 
-function verifyProtectedRefStillExact({ sourceRoot, sourceCommit }) {
+function verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit }) {
   const protectedRefSha = run(
     "gh",
     [
@@ -945,7 +947,7 @@ function verifyProtectedRefStillExact({ sourceRoot, sourceCommit }) {
       errorCode: "ALICE_PROTECTED_REF_READBACK_INVALID",
     },
   ).trim();
-  if (protectedRefSha !== sourceCommit) {
+  if (protectedRefSha !== deploymentControllerCommit) {
     invalid("ALICE_PROTECTED_REF_READBACK_INVALID");
   }
 }
@@ -2097,6 +2099,7 @@ async function main() {
   const bootstrapVersionBoundaryPath =
     process.env.ALICE_BOOTSTRAP_VERSION_BOUNDARY_PATH;
   const sourceCommit = process.env.ALICE_SOURCE_COMMIT;
+  const deploymentControllerCommit = process.env.ALICE_DEPLOYMENT_CONTROLLER_COMMIT;
   const releaseRunId = process.env.ALICE_RELEASE_RUN_ID;
   const runtimeImage = process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE;
   const apiToken = process.env.CLOUDFLARE_API_TOKEN;
@@ -2106,6 +2109,7 @@ async function main() {
       bootstrapVersionBoundaryPath].every(absolute) ||
     !absolute(bootstrapPreflightPath) ||
     !COMMIT.test(sourceCommit ?? "") ||
+    !COMMIT.test(deploymentControllerCommit ?? "") ||
     !RELEASE_RUN_ID.test(releaseRunId ?? "") ||
     !RUNTIME_IMAGE.test(runtimeImage ?? "") ||
     typeof apiToken !== "string" ||
@@ -2114,6 +2118,7 @@ async function main() {
   ) {
     invalid();
   }
+  verifyAliceReleaseSource({ sourceRoot, sourceCommit, deploymentControllerCommit });
   verifyAliceWorkerBundleArtifact(fs.readFileSync(artifactPath, "utf8"), {
     root: artifactRoot,
     expectedSourceCommit: sourceCommit,
@@ -2246,7 +2251,7 @@ async function main() {
   });
   verifyAliceBootstrapBoundaryActionPlan(identityActions);
   const priorVersionId = priorVersionIds.control;
-  verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+  verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
   let versionIds = { ...priorVersionIds };
   let versionId = versionIds.control;
   let mode = "release";
