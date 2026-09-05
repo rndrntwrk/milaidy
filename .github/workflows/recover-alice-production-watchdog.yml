@@ -1,13 +1,16 @@
 name: Recover Alice Production Watchdog
-run-name: Alice production recovery watchdog ${{ github.sha }}
+run-name: Alice production recovery ${{ inputs.source_sha }}
 
 on:
-  push:
-    branches:
-      - release/alice-production-core-2026-08-22
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact attested runtime source to recover
+        required: true
+        type: string
 
 concurrency:
-  group: alice-production-recovery-${{ github.sha }}
+  group: alice-production-recovery
   cancel-in-progress: false
 
 permissions:
@@ -21,10 +24,11 @@ jobs:
     timeout-minutes: 240
     environment: alice-production-cloudflare-recovery
     env:
-      SOURCE_SHA: ${{ github.sha }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      CONTROLLER_SHA: ${{ github.sha }}
 
     steps:
-      - name: Checkout exact protected push source
+      - name: Checkout exact protected deployment controller
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.sha }}
@@ -32,14 +36,18 @@ jobs:
           submodules: false
           persist-credentials: false
 
-      - name: Validate exact protected push source
+      - name: Validate exact protected deployment controller
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = "1"
           printf '%s' "$SOURCE_SHA" | grep -Eq '^[a-f0-9]{40}$'
           test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
-          test "$GITHUB_SHA" = "$SOURCE_SHA"
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$GITHUB_SHA" = "$CONTROLLER_SHA"
+          test "$(git rev-parse HEAD)" = "$CONTROLLER_SHA"
+          node scripts/verify-alice-release-source.mjs "$SOURCE_SHA" "$CONTROLLER_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" --jq .object.sha)" = "$CONTROLLER_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Hydrate exact reviewed Eliza PR head
@@ -141,7 +149,7 @@ jobs:
             runs_json="$(gh api --paginate --slurp \
               "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-alice-cloudflare.yml/runs?branch=release%2Falice-production-core-2026-08-22&event=workflow_dispatch&per_page=100")"
             matches="$(printf '%s' "$runs_json" | jq \
-              --arg title "$expected_title" --arg sha "$SOURCE_SHA" \
+              --arg title "$expected_title" --arg sha "$CONTROLLER_SHA" \
               '[.[].workflow_runs[] |
                 select(.display_title == $title and .head_sha == $sha and
                   .run_attempt == 1 and
@@ -158,7 +166,7 @@ jobs:
           test -n "$parent_json"
           parent_run_id="$(printf '%s' "$parent_json" | jq -r .id)"
           printf '%s' "$parent_run_id" | grep -Eq '^[1-9][0-9]*$'
-          test "$(printf '%s' "$parent_json" | jq -r .head_sha)" = "$SOURCE_SHA"
+          test "$(printf '%s' "$parent_json" | jq -r .head_sha)" = "$CONTROLLER_SHA"
           test "$(printf '%s' "$parent_json" | jq -r .display_title)" = "$expected_title"
           test "$(printf '%s' "$parent_json" | jq -r .run_attempt)" = "1"
           echo "parent_run_id=$parent_run_id" >> "$GITHUB_OUTPUT"
@@ -167,7 +175,7 @@ jobs:
         env:
           PARENT_RUN_ID: ${{ steps.parent.outputs.parent_run_id }}
           ALICE_RECOVERY_PROVIDER: cloudflare
-          ALICE_SOURCE_COMMIT: ${{ github.sha }}
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
           ALICE_WATCHDOG_RUN_ID: ${{ github.run_id }}
           ALICE_WATCHDOG_RUN_ATTEMPT: ${{ github.run_attempt }}
           ALICE_PARENT_RUN_ID: ${{ steps.parent.outputs.parent_run_id }}
@@ -186,7 +194,7 @@ jobs:
       - name: Publish exact Cloudflare recovery readiness
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: alice-watchdog-ready-cloudflare-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.parent.outputs.parent_run_id }}-1
+          name: alice-watchdog-ready-cloudflare-${{ env.SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.parent.outputs.parent_run_id }}-1
           path: ${{ runner.temp }}/alice-cloudflare-watchdog-readiness/readiness.json
           if-no-files-found: error
           retention-days: 1
@@ -203,7 +211,7 @@ jobs:
           do
             parent_json="$(gh api \
               "repos/${GITHUB_REPOSITORY}/actions/runs/${PARENT_RUN_ID}")"
-            test "$(printf '%s' "$parent_json" | jq -r .head_sha)" = "$SOURCE_SHA"
+            test "$(printf '%s' "$parent_json" | jq -r .head_sha)" = "$CONTROLLER_SHA"
             test "$(printf '%s' "$parent_json" | jq -r .run_attempt)" = "1"
             test "$(printf '%s' "$parent_json" | jq -r .path)" = \
               ".github/workflows/deploy-alice-cloudflare.yml"
@@ -322,7 +330,7 @@ jobs:
         if: ${{ always() && steps.monitor.outputs.recovery_required == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: alice-watchdog-cloudflare-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: alice-watchdog-cloudflare-${{ env.SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/alice-independent-cloudflare-recovery/alice-release/cloudflare-watchdog-recovery.json
           if-no-files-found: warn
           retention-days: 90

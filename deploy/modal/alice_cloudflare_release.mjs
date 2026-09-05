@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { verifyAliceReleaseSource } from "../../scripts/verify-alice-release-source.mjs";
+
 import {
   ALICE_CLOUDFLARE_TARGET,
   canonicalAliceJson,
@@ -950,8 +952,8 @@ export function aliceCloudflareCommandEnv(ambient = process.env) {
   return commandEnv;
 }
 
-function verifyProtectedSource({ sourceRoot, sourceCommit }) {
-  if (!absolute(sourceRoot) || !COMMIT.test(sourceCommit ?? "")) releaseInvalid();
+function verifyProtectedSource({ sourceRoot, deploymentControllerCommit }) {
+  if (!absolute(sourceRoot) || !COMMIT.test(deploymentControllerCommit ?? "")) releaseInvalid();
   const head = run("git", ["rev-parse", "HEAD"], {
     cwd: sourceRoot,
     errorCode: "ALICE_RELEASE_SOURCE_INVALID",
@@ -967,9 +969,9 @@ function verifyProtectedSource({ sourceRoot, sourceCommit }) {
     errorCode: "ALICE_RELEASE_SOURCE_INVALID",
   });
   if (
-    head !== sourceCommit ||
+    head !== deploymentControllerCommit ||
     branch !== PROTECTED_BRANCH ||
-    (process.env.GITHUB_SHA && process.env.GITHUB_SHA !== sourceCommit) ||
+    (process.env.GITHUB_SHA && process.env.GITHUB_SHA !== deploymentControllerCommit) ||
     dirty !== ""
   ) {
     releaseInvalid("ALICE_RELEASE_SOURCE_INVALID");
@@ -1029,7 +1031,7 @@ function verifyGitHubAttestations({ sourceRoot, sourceCommit, artifactRoot }) {
   }
 }
 
-function verifyProtectedRefStillExact({ sourceRoot, sourceCommit }) {
+function verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit }) {
   const protectedRefSha = run(
     "gh",
     [
@@ -1043,7 +1045,7 @@ function verifyProtectedRefStillExact({ sourceRoot, sourceCommit }) {
       errorCode: "ALICE_PROTECTED_REF_READBACK_INVALID",
     },
   ).trim();
-  if (protectedRefSha !== sourceCommit) {
+  if (protectedRefSha !== deploymentControllerCommit) {
     releaseInvalid("ALICE_PROTECTED_REF_READBACK_INVALID");
   }
 }
@@ -2111,7 +2113,9 @@ async function main() {
   });
   const expectedDurableObjectNamespaceIds = readJson(namespaceIdsPath);
   const sourceCommit = release.manifest.source.sourceCommit;
-  verifyProtectedSource({ sourceRoot, sourceCommit });
+  const deploymentControllerCommit = release.manifest.source.deploymentControllerCommit;
+  verifyProtectedSource({ sourceRoot, deploymentControllerCommit });
+  verifyAliceReleaseSource({ sourceRoot, sourceCommit, deploymentControllerCommit });
   verifyWrangler(wranglerBin, sourceRoot);
   const confirmation = `${sourceCommit}:${release.deploymentManifestSha256}`;
   if (process.env.ALICE_PRODUCTION_RELEASE_CONFIRM !== confirmation) {
@@ -2163,7 +2167,7 @@ async function main() {
   });
 
   if (phase === "capture") {
-    verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+    verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
     await createRollbackAnchor({
       apiToken,
       sourceCommit,
@@ -2249,7 +2253,7 @@ async function main() {
     });
     let rollbackRequired = false;
     try {
-      verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+      verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
       const freshWorkers = await captureAliceCloudflareWorkerRollbackState({
         apiToken,
       });
@@ -2282,14 +2286,14 @@ async function main() {
         manifest: release.manifest,
         commandEnv,
       });
-      verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+      verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
       applyAliceStateMigrationsBeforeWorkerMutation({
         wranglerBin,
         sourceRoot,
         configPath: configPath(configDir, "statePlane"),
         commandEnv,
       });
-      verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+      verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
       rollbackRequired = true;
       await setAliceEvidenceQueueDeliveryPaused({
         apiToken,
@@ -2312,7 +2316,7 @@ async function main() {
         uploadedVersions[command.role] =
           parseAliceWranglerUploadVersionId(output);
       }
-      verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+      verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
       const prePromotionTraffic = await fetchAliceCloudflareTrafficState({
         apiToken,
       });
@@ -2484,7 +2488,7 @@ async function main() {
     }
   };
   try {
-    verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+    verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
     promoteWorkers(
       ["statePlane", "aiGateway", "connectorPlane"],
       "ALICE_WORKER_PROMOTION_FAILED",
@@ -2533,7 +2537,7 @@ async function main() {
     });
     writeReadonly(rollbackProofPath, rollbackEvidence);
     try {
-      verifyProtectedRefStillExact({ sourceRoot, sourceCommit });
+      verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit });
       await setAliceEvidenceQueueDeliveryPaused({
         apiToken,
         expectedDurableObjectNamespaceIds,

@@ -1093,7 +1093,7 @@ test("the protected command requires attested bundles and terminal live readback
   assert.match(source, /ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH/);
   assert.match(
     source,
-    /verifyProtectedRefStillExact\(\{ sourceRoot, sourceCommit \}\);[\s\S]*const promotionCommands/,
+    /verifyProtectedRefStillExact\(\{ sourceRoot, deploymentControllerCommit \}\);[\s\S]*const promotionCommands/,
   );
   assert.doesNotMatch(source, /"--outfile"/);
   assert.match(source, /"--outdir"/);
@@ -1131,7 +1131,7 @@ test("the protected command requires attested bundles and terminal live readback
   );
   const firstUploadMutation = source.indexOf("rollbackRequired = true;");
   const protectedReads = [...source.matchAll(
-    /verifyProtectedRefStillExact\(\{ sourceRoot, sourceCommit \}\);/g,
+    /verifyProtectedRefStillExact\(\{ sourceRoot, deploymentControllerCommit \}\);/g,
   )].map((match) => match.index);
   assert.ok(firstUploadMutation >= 0);
   assert.ok(
