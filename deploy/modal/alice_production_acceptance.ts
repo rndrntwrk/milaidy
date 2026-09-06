@@ -740,13 +740,12 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         runtime.value.runtime !== "ok" || runtime.value.database !== "ok" ||
         runtime.value.agentState !== "running" ||
         runtime.value.startup?.phase !== "running" ||
-        !Number.isSafeInteger(runtime.value.plugins?.loaded) ||
-        runtime.value.plugins.loaded < FULL_REQUIRED_RUNTIME_PLUGINS.length ||
-        runtime.value.plugins?.failed !== 0 ||
         runtime.value.aliceRelease?.releaseDigest !== expected.binding.releaseDigest ||
         runtime.value.aliceRelease?.deploymentManifestSha256 !==
           expected.release.deploymentManifestSha256) invalid();
 
+    // Health reports the plugin catalogue; the production proof checks the
+    // actual runtime plugin inventory and required action-planning surface.
     const proof = await ownerJson(
       fetchImpl,
       ownerAuthorization,

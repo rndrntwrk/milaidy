@@ -432,7 +432,9 @@ function mockRuntime(
         ready: true,
         runtime: "ok",
         database: "ok",
-        plugins: { loaded: 42, failed: 0 },
+        // Health counts the disabled catalogue before the plugin list is read.
+        // The production proof below verifies the actual loaded runtime plugins.
+        plugins: { loaded: 0, failed: 2 },
         coordinator: "ok",
         connectors: { discord: "configured", telegram: "configured" },
         uptime: 42,
@@ -607,6 +609,29 @@ describe("Alice terminal production acceptance", () => {
     await expect(
       runAliceProductionAcceptance(acceptanceInput(data, runtime)),
     ).rejects.toThrow("ALICE_PRODUCTION_ACCEPTANCE_INVALID");
+  });
+
+  test("requires the runtime plugin proof independently of catalogue counters", async () => {
+    const data = containerFixture();
+    const runtime = mockRuntime(data);
+    const input = acceptanceInput(data, runtime);
+    let chatRequests = 0;
+    input.fetchImpl = async (url, init) => {
+      const pathname = new URL(String(url)).pathname;
+      if (pathname === "/v1/chat/completions") chatRequests += 1;
+      const response = await runtime.fetchImpl(url, init);
+      if (pathname !== "/api/alice-production/proof") return response;
+      const proof = await response.json();
+      proof.requiredRuntimePluginNames = proof.requiredRuntimePluginNames.filter(
+        (name: string) => name !== "sql",
+      );
+      return Response.json(proof);
+    };
+    await expect(runAliceProductionAcceptance(input)).rejects.toThrow(
+      "ALICE_PRODUCTION_ACCEPTANCE_INVALID",
+    );
+    expect(runtime.paused).toBe(true);
+    expect(chatRequests).toBe(0);
   });
 
   test("waits for the initial Container proof before accepting the full application", async () => {
