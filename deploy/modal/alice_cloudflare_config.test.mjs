@@ -774,6 +774,30 @@ test("binds deploy configs to relocatable artifact-relative entrypoints", () => 
         expected[role],
       );
       if (role === "statePlane") {
+        assert.deepEqual(
+          assertAliceWranglerMatchesEffectiveConfig(
+            role,
+            relocated,
+            expected[role],
+            { deploymentMainPath: relocated.main },
+          ),
+          expected[role],
+        );
+        assert.throws(
+          () => assertAliceWranglerMatchesEffectiveConfig(
+            role,
+            {
+              ...relocated,
+              d1_databases: [{
+                ...relocated.d1_databases[0],
+                migrations_dir: "../../other/migrations",
+              }],
+            },
+            expected[role],
+            { deploymentMainPath: relocated.main },
+          ),
+          /ALICE_WRANGLER_EFFECTIVE_CONFIG_MISMATCH/,
+        );
         assert.equal(
           path.resolve(
             path.dirname(relocatedConfigPath),
