@@ -69,20 +69,6 @@ async function boundedJson(response) {
   }
 }
 
-function parseProviderOutput(output) {
-  if (typeof output !== "string") invalid();
-  const bytes = Buffer.from(output, "utf8");
-  if (bytes.byteLength < 2 || bytes.byteLength > 64 * 1024) invalid();
-  let value;
-  try {
-    value = JSON.parse(output);
-  } catch {
-    invalid();
-  }
-  if (!object(value)) invalid();
-  return value;
-}
-
 function verifyPlanResult(value, { planId, intentId, binding }) {
   if (
     !object(value) ||
@@ -282,7 +268,7 @@ export async function runAliceWorkflowBindingCanary({
   }
   if (!providerInstance) invalid();
   const providerOutput = verifyPlanResult(
-    parseProviderOutput(providerInstance.output),
+    providerInstance.output,
     { planId, intentId, binding },
   );
 

@@ -110,7 +110,7 @@ test("proves a bounded runtime.health plan used the exact binding Workflow versi
           trigger: { source: "binding" },
           output: providerReads === 1
             ? null
-            : JSON.stringify({
+            : {
                 schemaVersion: "alice.plan-result.v1",
                 planId: "alice-canary-12345678123442348123456789012345",
                 releaseDigest: binding.releaseDigest,
@@ -121,7 +121,7 @@ test("proves a bounded runtime.health plan used the exact binding Workflow versi
                 }],
                 status: "queued-for-execution",
                 completed: false,
-              }),
+              },
         },
       });
     }
@@ -205,7 +205,7 @@ for (const failure of ["wrong-instance", "api-trigger", "extra-output-field"]) {
           status: "complete",
           versionId: candidate.id,
           trigger: { source: failure === "api-trigger" ? "api" : "binding" },
-          output: JSON.stringify(output),
+          output,
         },
       });
     };

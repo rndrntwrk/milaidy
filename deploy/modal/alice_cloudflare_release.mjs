@@ -1035,6 +1035,20 @@ function verifyProtectedSource({ sourceRoot, deploymentControllerCommit }) {
   }
 }
 
+export function verifyAliceReleaseExecutionSource({
+  sourceRoot, sourceCommit, deploymentControllerCommit, phase,
+  executionControllerCommit = process.env.GITHUB_SHA,
+}) {
+  const controller = phase === "rollback" && executionControllerCommit
+    ? executionControllerCommit : deploymentControllerCommit;
+  verifyProtectedSource({ sourceRoot, deploymentControllerCommit: controller });
+  verifyAliceReleaseSource({ sourceRoot, sourceCommit, deploymentControllerCommit });
+  if (controller !== deploymentControllerCommit) {
+    verifyAliceReleaseSource({ sourceRoot, sourceCommit, deploymentControllerCommit: controller });
+  }
+  return controller;
+}
+
 function verifyWrangler(wranglerBin, sourceRoot) {
   if (!absolute(wranglerBin)) releaseInvalid();
   const output = run(wranglerBin, ["--version"], {
@@ -2162,8 +2176,7 @@ async function main() {
   const expectedDurableObjectNamespaceIds = readJson(namespaceIdsPath);
   const sourceCommit = release.manifest.source.sourceCommit;
   const deploymentControllerCommit = release.manifest.source.deploymentControllerCommit;
-  verifyProtectedSource({ sourceRoot, deploymentControllerCommit });
-  verifyAliceReleaseSource({ sourceRoot, sourceCommit, deploymentControllerCommit });
+  verifyAliceReleaseExecutionSource({ sourceRoot, sourceCommit, deploymentControllerCommit, phase });
   verifyWrangler(wranglerBin, sourceRoot);
   const confirmation = `${sourceCommit}:${release.deploymentManifestSha256}`;
   if (process.env.ALICE_PRODUCTION_RELEASE_CONFIRM !== confirmation) {
