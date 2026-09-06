@@ -718,7 +718,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     account_id: accountId,
     created_at: "2026-08-29T12:00:00.000Z",
     name: "alice-production-runtime",
-    version: 1,
+    version: 2,
     scheduling_policy: "default",
     instances: 1,
     max_instances: 1,
@@ -783,6 +783,8 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   let includeRuntimeHostInstance = false;
   let runtimeHostDurableObjectName = "alice-production-runtime";
   let runtimeHostDetailDrift = false;
+  let runtimeHostDetailReads = 0;
+  let runtimeHostDetailIdentityDrift = false;
   let ownerPolicyStableThrough = Number.POSITIVE_INFINITY;
   let routesStableThrough = Number.POSITIVE_INFINITY;
   let consumersStableThrough = Number.POSITIVE_INFINITY;
@@ -874,7 +876,11 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       });
     }
     if (pathname === `/accounts/${accountId}/containers/applications`) {
-      return json({ success: true, result: [runtimeHostApplication] });
+      return json({ success: true, result: [{
+        ...runtimeHostApplication,
+        version: 1,
+        configuration: { ...runtimeHostApplication.configuration, image: "previous-image" },
+      }] });
     }
     if (
       pathname ===
@@ -882,7 +888,9 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     ) {
       return json({
         success: true,
-        result: runtimeHostDetailDrift
+        result: runtimeHostDetailIdentityDrift
+          ? { ...runtimeHostApplication, id: "77777777-7777-4777-8777-777777777777" }
+          : runtimeHostDetailDrift && ++runtimeHostDetailReads % 2 === 0
           ? { ...runtimeHostApplication, max_instances: 2 }
           : runtimeHostApplication,
       });
@@ -1242,6 +1250,13 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
   );
   runtimeHostDurableObjectName = "alice-production-runtime";
+
+  runtimeHostDetailIdentityDrift = true;
+  await assert.rejects(
+    () => fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput),
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
+  );
+  runtimeHostDetailIdentityDrift = false;
 
   runtimeHostDetailDrift = true;
   await assert.rejects(
