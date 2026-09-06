@@ -256,7 +256,7 @@ export async function runAliceWorkflowBindingCanary({
     if (!response.ok || body.success !== true || !object(body.result)) invalid();
     const instance = body.result;
     if (
-      instance.id !== planId ||
+      instance.params?.planId !== planId ||
       instance.versionId !== expectedWorkflowVersionId ||
       instance.trigger?.source !== "binding"
     ) {
