@@ -65,3 +65,28 @@ test('renaming runtime code into a controller path still requires a rebuild', t 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /ALICE_RELEASE_SOURCE_REBUILD_REQUIRED/);
 });
+
+
+test('rollback accepts a newer verified controller for an immutable older manifest and rejects runtime drift', t => {
+  const f = fixture(t);
+  const releaseModule = fileURLToPath(new URL('../deploy/modal/alice_cloudflare_release.mjs', import.meta.url));
+  fs.writeFileSync(path.join(f.root, '.github/workflows/recover-alice-production-watchdog.yml'), 'on: workflow_dispatch\n');
+  f.git('add', '.'); f.git('commit', '-m', 'Recovery controller correction');
+  const run = phase => {
+    const controller = f.git('rev-parse', 'HEAD');
+    const args = {sourceRoot: f.root, sourceCommit: f.source, deploymentControllerCommit: f.source, phase};
+    return spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import {verifyAliceReleaseExecutionSource} from ${JSON.stringify(releaseModule)}; verifyAliceReleaseExecutionSource(${JSON.stringify(args)});`], {
+      cwd: f.root, encoding: 'utf8',
+      env: {...process.env, GITHUB_REF: 'refs/heads/release/alice-production-core-2026-08-22', GITHUB_SHA: controller},
+    });
+  };
+  const recovery = run('rollback');
+  assert.equal(recovery.status, 0, recovery.stderr);
+  assert.match(run('promote').stderr, /ALICE_RELEASE_SOURCE_INVALID/);
+  fs.writeFileSync(path.join(f.root, 'runtime.js'), 'export const version = 2;\n');
+  f.git('add', '.'); f.git('commit', '-m', 'Unqualified runtime change');
+  const drift = run('rollback');
+  assert.equal(drift.status, 1);
+  assert.match(drift.stderr, /ALICE_RELEASE_SOURCE_REBUILD_REQUIRED/);
+});
