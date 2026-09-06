@@ -435,7 +435,7 @@ function verifyFullRuntimePage(
     response.headers.get("content-type") !== "text/html; charset=utf-8" ||
     csp.includes("'unsafe-eval'") ||
     !/<div\s+id=["']root["']\s*>/.test(html) ||
-    !/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']\/assets\/[a-zA-Z0-9._/-]+["'][^>]*><\/script>/.test(
+    !/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["'](?:\.\/|\/)assets\/[a-zA-Z0-9._/-]+["'][^>]*><\/script>/.test(
       html,
     ) ||
     html.includes('id="alice-transcript"') ||
