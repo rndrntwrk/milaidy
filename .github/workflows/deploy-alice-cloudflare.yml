@@ -276,8 +276,8 @@ jobs:
           import crypto from 'node:crypto';
           import {signRecoveryReceipt} from './workers/alice-production-control/src/recovery.ts';
           const origin = 'https://alice.rndrntwrk.com';
-          const pauseId = 'pause-16ffdf02-051f-4295-9b85-a815bc44d0e4';
-          const manifest = 'sha256:d8af6cca1ad86d94be2ae9cdc67ff9e410e262186100a99263767566a5f1b4cd';
+          const pauseId = 'pause-273593c4-ec72-45c2-9ca7-9a748b2f11d2';
+          const manifest = 'sha256:827f66b0f0b80377e7dcfac0bb6e653ee162409ff672d06ad7754c49aa9a6519';
           const workerVersion = '7a69b4c1-30a5-455c-9b49-eb6e6ba4baca';
           const owner = 'owner:sha256:622fc274c3ca129a051721c9d7301b8525c7177e782e3c13ded1f483697d7e10';
           const call = async (path, method = 'GET', extraHeaders = {}) => {
@@ -307,7 +307,7 @@ jobs:
           };
           const before = await readAuthority();
           assert.equal(before.deploymentManifestSha256, manifest);
-          assert.equal(before.activeReleaseEpoch, 2); assert.equal(before.highestReleaseEpoch, 2);
+          assert.equal(before.activeReleaseEpoch, 3); assert.equal(before.highestReleaseEpoch, 3);
           assert.deepEqual(before.pausedScopes, ['all']); assert.equal(before.budget.usedUnits, 0);
           const pause = before.activePauses.all;
           assert.equal(pause.pauseId, pauseId); assert.equal(pause.pausedBy, owner);
@@ -319,7 +319,7 @@ jobs:
             pauseId, pausedAt: pause.pausedAt, subject: owner, pauseBinding: pause.binding,
             pauseDeploymentManifestSha256: manifest, pauseRollbackBoundary: pause.rollbackBoundary,
             currentBinding: before.binding, currentDeploymentManifestSha256: manifest,
-            currentReleaseEpoch: 2, currentRollbackBoundary: before.rollbackBoundary,
+            currentReleaseEpoch: 3, currentRollbackBoundary: before.rollbackBoundary,
             issuedAt, expiresAt, nonce: 'owner-recovery-' + crypto.randomUUID(),
           }, process.env.ALICE_CONTROL_RECOVERY_TOKEN);
           const checkTime = Date.now();
@@ -336,12 +336,12 @@ jobs:
             assert.equal(resumed.value.evidenceQueued, true);
             const after = await readAuthority();
             assert.deepEqual(after.binding, before.binding); assert.equal(after.deploymentManifestSha256, manifest);
-            assert.equal(after.activeReleaseEpoch, 2); assert.equal(after.highestReleaseEpoch, 2);
+            assert.equal(after.activeReleaseEpoch, 3); assert.equal(after.highestReleaseEpoch, 3);
             assert.deepEqual(after.pausedScopes, []); assert.equal(after.budget.usedUnits, 0);
             assert.equal(after.admissionGeneration, before.admissionGeneration + 1);
             await verifyDenied();
             console.log(JSON.stringify({code: 'OWNER_PAUSE_RECOVERED', pauseId,
-              releaseEpoch: 2, admissionGeneration: after.admissionGeneration, pausedScopes: [],
+              releaseEpoch: 3, admissionGeneration: after.admissionGeneration, pausedScopes: [],
               runtimeAdmission: 'denied', budgetUsedUnits: 0, providerMutationPerformed: false,
               receiptSha256: 'sha256:' + crypto.createHash('sha256').update(receipt).digest('hex')}));
           } catch {

@@ -580,6 +580,37 @@ describe("Alice Access gateway", () => {
     }
   });
 
+  test("preserves full-runtime health without applying the response-only plugin filter", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+    const health = runtimeHealth({
+      plugins: { loaded: fullRuntimeProof().requiredRuntimePluginNames.length, failed: 0 },
+      startup: { phase: "running", attempt: 1 },
+    });
+    const response = await invokeGateway(
+      new Request("https://alice.rndrntwrk.com/api/health", {
+        headers: { "cf-access-jwt-assertion": token },
+      }),
+      env,
+      async (request) => {
+        if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+          return Response.json(jwks);
+        }
+        if (new URL(request.url).pathname === "/api/alice-production/proof") {
+          return Response.json(fullRuntimeProof());
+        }
+        expect(new URL(request.url).pathname).toBe("/api/health");
+        return Response.json(health, {
+          headers: { "set-cookie": "must-not-cross-gateway=1" },
+        });
+      },
+      now,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(health);
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
   test("proxies only the reviewed full-gated Companion and broadcast API surface", async () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();

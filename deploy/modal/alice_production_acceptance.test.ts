@@ -381,7 +381,7 @@ function mockRuntime(
     if (url.pathname === "/" && authenticated) {
       if (failRoot) return new Response("bad", { status: 200 });
       if (paused) return json({ ok: false, code: "RUNTIME_PAUSED", blockingScopes: ["all"] }, 503);
-      const html = '<!doctype html><html><body><div id="root"></div><script type="module" src="/assets/full-alice.js"></script></body></html>';
+      const html = '<!doctype html><html><body><div id="root"></div><script type="module" crossorigin src="./assets/full-alice.js"></script></body></html>';
       return new Response(html, {
         status: 200,
         headers: {
@@ -397,7 +397,7 @@ function mockRuntime(
     ) {
       if (paused) return json({ ok: false, code: "RUNTIME_PAUSED", blockingScopes: ["all"] }, 503);
       return new Response(
-        '<!doctype html><html><body><div id="root"></div><script type="module" src="/assets/full-alice.js"></script></body></html>',
+        '<!doctype html><html><head><base href="/"></head><body><div id="root"></div><script type="module" crossorigin src="./assets/full-alice.js"></script></body></html>',
         {
           status: 200,
           headers: {

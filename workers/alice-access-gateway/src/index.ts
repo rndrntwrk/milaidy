@@ -1227,8 +1227,9 @@ function isFullRuntimeProductApi(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
   if (normalized === "GET" || normalized === "HEAD") {
     return (
-      isFullRuntimeApiRead(pathname) &&
-      !SAFE_RUNTIME_READS.some((pattern) => pattern.test(pathname))
+      pathname === "/api/health" ||
+      (isFullRuntimeApiRead(pathname) &&
+        !SAFE_RUNTIME_READS.some((pattern) => pattern.test(pathname)))
     );
   }
   return pathname !== "/v1/chat/completions" &&
