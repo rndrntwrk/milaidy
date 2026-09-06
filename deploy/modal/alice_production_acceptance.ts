@@ -646,7 +646,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         method: "GET",
         headers: { ...ownerHeaders(ownerAuthorization), accept: "text/html" },
         redirect: "manual",
-        signal: AbortSignal.timeout(Math.max(1, Math.min(30_000, startupDeadline - now()))),
+        signal: AbortSignal.timeout(Math.max(1, startupDeadline - now())),
       });
       if (!containerMode || response.status !== 503) {
         rootResponse = response;
