@@ -303,12 +303,13 @@ test("chat rejects unsupported models before inference", async () => {
   assert.equal(gatewayCallCount(), 0);
 });
 
-test("chat preserves response-only OpenAI streaming after budget reservation", async () => {
+test("chat accepts the deployed OpenAI SDK streaming usage hint after budget reservation", async () => {
   const { env, directCalls, controlCalls, gatewayCallCount } = createEnv();
   const body = {
     model: "workers-ai/@cf/openai/gpt-oss-120b",
     messages: [{ role: "user", content: "stream a bounded response" }],
     stream: true,
+    stream_options: { include_usage: true },
   };
 
   const response = await worker.fetch(jsonRequest("/v1/chat/completions", body), env);
@@ -361,6 +362,7 @@ test("chat rejects every unapproved or authority-shaped provider field before ch
     { max_completion_tokens: 4096 },
     { n: 8 },
     { provider: { routing: "unbounded" } },
+    { stream_options: { include_usage: true, execute: true } },
   ]) {
     const { env, directCalls, controlCalls } = createEnv();
     const response = await worker.fetch(
