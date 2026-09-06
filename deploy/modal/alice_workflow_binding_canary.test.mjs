@@ -30,7 +30,7 @@ const binding = {
   policyHash: `sha256:${"3".repeat(64)}`,
 };
 
-test("resolves exactly one candidate Workflow version beyond the rollback anchor", () => {
+test("resolves one new or uniquely retained candidate Workflow version", () => {
   assert.deepEqual(
     resolveAliceCandidateWorkflowVersion({
       previous,
@@ -39,10 +39,18 @@ test("resolves exactly one candidate Workflow version beyond the rollback anchor
     }),
     candidate,
   );
-  assert.throws(
-    () => resolveAliceCandidateWorkflowVersion({
+  assert.deepEqual(
+    resolveAliceCandidateWorkflowVersion({
       previous,
       current: previous,
+      expectedWorkflowId: workflowId,
+    }),
+    previous[0],
+  );
+  assert.throws(
+    () => resolveAliceCandidateWorkflowVersion({
+      previous: [...previous, candidate],
+      current: [...previous, candidate],
       expectedWorkflowId: workflowId,
     }),
     /ALICE_WORKFLOW_CANDIDATE_VERSION_INVALID/,
