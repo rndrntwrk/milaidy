@@ -437,7 +437,7 @@ function mockRuntime(
         connectors: { discord: "configured", telegram: "configured" },
         uptime: 42,
         agentState: "running",
-        startup: { phase: "ready", attempt: 1 },
+        startup: { phase: "running", attempt: 0 },
         aliceRelease: { ...data.expected.release, ...data.binding },
       });
     }
@@ -607,6 +607,47 @@ describe("Alice terminal production acceptance", () => {
     await expect(
       runAliceProductionAcceptance(acceptanceInput(data, runtime)),
     ).rejects.toThrow("ALICE_PRODUCTION_ACCEPTANCE_INVALID");
+  });
+
+  test("waits for the initial Container proof before accepting the full application", async () => {
+    const data = containerFixture();
+    const runtime = mockRuntime(data);
+    let rootAttempts = 0;
+    const input = acceptanceInput(data, runtime);
+    input.fetchImpl = async (url, init) => {
+      if (new URL(String(url)).pathname === "/" &&
+          new Headers(init?.headers).has("cookie") && ++rootAttempts === 1) {
+        return Response.json({ ok: false, code: "RUNTIME_RELEASE_MISMATCH" }, { status: 503 });
+      }
+      return runtime.fetchImpl(url, init);
+    };
+    const evidence = await runAliceProductionAcceptance(input);
+    expect(rootAttempts).toBe(2);
+    expect(evidence.terminal).toBe(true);
+    expect(evidence.durableChat.recoveredAfterPauseResume).toBe(true);
+    expect(runtime.paused).toBe(false);
+  });
+
+  test("pauses without running chat when the initial Container proof never becomes ready", async () => {
+    const data = containerFixture();
+    const runtime = mockRuntime(data);
+    const input = acceptanceInput(data, runtime);
+    let clock = nowMs;
+    input.now = () => clock;
+    input.sleepImpl = async () => { clock += 300_000; };
+    input.fetchImpl = async (url, init) => {
+      if (new URL(String(url)).pathname === "/" &&
+          new Headers(init?.headers).has("cookie")) {
+        return Response.json({ ok: false, code: "RUNTIME_RELEASE_MISMATCH" }, { status: 503 });
+      }
+      if (new URL(String(url)).pathname === "/v1/chat/completions") {
+        throw new Error("CHAT_MUST_NOT_RUN_WITHOUT_RUNTIME_PROOF");
+      }
+      return runtime.fetchImpl(url, init);
+    };
+    await expect(runAliceProductionAcceptance(input)).rejects.toThrow("ALICE_RUNTIME_STARTUP_TIMEOUT");
+    expect(runtime.paused).toBe(true);
+    expect(runtime.pauseCount).toBe(1);
   });
 
   test("proves authenticated UI, durable chat/task recovery, gates, pause, rollback, and provenance", async () => {
