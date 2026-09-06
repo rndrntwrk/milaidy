@@ -211,7 +211,18 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
     ) {
       throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
     }
-    identityConfig = { ...config, main: CANONICAL_MAIN[role] };
+    identityConfig = { ...clone(config), main: CANONICAL_MAIN[role] };
+    if (role === "statePlane" && config.main === canonicalArtifactMain(role)) {
+      if (
+        !Array.isArray(identityConfig.d1_databases) ||
+        identityConfig.d1_databases.length !== 1 ||
+        identityConfig.d1_databases[0]?.migrations_dir !==
+          canonicalArtifactMigrationDir()
+      ) {
+        throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
+      }
+      identityConfig.d1_databases[0].migrations_dir = "migrations";
+    }
   }
   if (role === "access") {
     const common = commonBindings(identityConfig);

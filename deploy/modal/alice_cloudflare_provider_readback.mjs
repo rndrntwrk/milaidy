@@ -80,12 +80,13 @@ function normalizeObservability(value) {
       enabled: value?.logs?.enabled,
       head_sampling_rate: value?.logs?.head_sampling_rate,
       invocation_logs: value?.logs?.invocation_logs,
-      persist: value?.logs?.persist,
+      persist: value?.logs?.persist === undefined ? true : value.logs.persist,
     },
     traces: {
-      enabled: value?.traces?.enabled,
-      head_sampling_rate: value?.traces?.head_sampling_rate,
-      persist: value?.traces?.persist,
+      enabled: value?.traces?.enabled === undefined ? false : value.traces.enabled,
+      head_sampling_rate: value?.traces?.head_sampling_rate === undefined
+        ? 1 : value.traces.head_sampling_rate,
+      persist: value?.traces?.persist === undefined ? true : value.traces.persist,
     },
   }));
 }

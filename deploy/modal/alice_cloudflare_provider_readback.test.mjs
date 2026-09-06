@@ -611,6 +611,22 @@ test("normalizes the pre-mutation runtimeHost application against its current im
   );
 });
 
+test("matches explicit Cloudflare logging defaults without admitting enabled tracing", async () => {
+  const candidate = fixture("connectorPlane");
+  candidate.scriptSettings.observability.logs.persist = true;
+  candidate.scriptSettings.observability.traces = {
+    enabled: false,
+    head_sampling_rate: 1,
+    persist: true,
+  };
+  await verifyAliceWorkerProviderReadback(candidate);
+  candidate.scriptSettings.observability.traces.enabled = true;
+  await assert.rejects(
+    () => verifyAliceWorkerProviderReadback(candidate),
+    /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
+  );
+});
+
 test("accepts only a 100 percent deployed Worker version matching the signed effective config", async () => {
   for (const role of [
     "access",
