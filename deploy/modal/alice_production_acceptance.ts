@@ -779,7 +779,9 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       {},
     );
     if (revoke.response.status !== 404 || revoke.value.ok !== false ||
-        revoke.value.code !== "CAPABILITY_NOT_FOUND") invalid();
+        revoke.value.result?.ok !== false ||
+        revoke.value.result?.code !== "CAPABILITY_NOT_FOUND" ||
+        revoke.value.evidenceQueued !== false) invalid();
 
     const preBudgetState = await ownerJson(
       fetchImpl,

@@ -489,7 +489,11 @@ function mockRuntime(
       return json({ ok: false, code: "CAPABILITY_GRANT_DISABLED" }, 403);
     }
     if (url.pathname.endsWith("/capabilities/acceptance-unissued/revoke")) {
-      return json({ ok: false, code: "CAPABILITY_NOT_FOUND" }, 404);
+      return json({
+        ok: false,
+        result: { ok: false, code: "CAPABILITY_NOT_FOUND" },
+        evidenceQueued: false,
+      }, 404);
     }
     if (url.pathname === "/control/api/v1/state") {
       return json({ ok: true, authority: authority() });
@@ -632,6 +636,30 @@ describe("Alice terminal production acceptance", () => {
     );
     expect(runtime.paused).toBe(true);
     expect(chatRequests).toBe(0);
+  });
+
+  test("rejects a different revocation result before reserving model budget", async () => {
+    const data = containerFixture();
+    const runtime = mockRuntime(data);
+    const input = acceptanceInput(data, runtime);
+    let budgetRequests = 0;
+    input.fetchImpl = async (url, init) => {
+      const pathname = new URL(String(url)).pathname;
+      if (pathname === "/control/api/v1/model/reserve") budgetRequests += 1;
+      if (pathname.endsWith("/capabilities/acceptance-unissued/revoke")) {
+        return Response.json({
+          ok: false,
+          result: { ok: false, code: "CAPABILITY_ID_INVALID" },
+          evidenceQueued: false,
+        }, { status: 404 });
+      }
+      return runtime.fetchImpl(url, init);
+    };
+    await expect(runAliceProductionAcceptance(input)).rejects.toThrow(
+      "ALICE_PRODUCTION_ACCEPTANCE_INVALID",
+    );
+    expect(runtime.paused).toBe(true);
+    expect(budgetRequests).toBe(0);
   });
 
   test("waits for the initial Container proof before accepting the full application", async () => {
