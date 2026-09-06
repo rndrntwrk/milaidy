@@ -104,7 +104,7 @@ test("proves a bounded runtime.health plan used the exact binding Workflow versi
       return Response.json({
         success: true,
         result: {
-          id: "alice-canary-12345678123442348123456789012345",
+          params: { planId: "alice-canary-12345678123442348123456789012345" },
           status: providerReads === 1 ? "running" : "complete",
           versionId: candidate.id,
           trigger: { source: "binding" },
@@ -201,7 +201,7 @@ for (const failure of ["wrong-instance", "api-trigger", "extra-output-field"]) {
       return Response.json({
         success: true,
         result: {
-          id: failure === "wrong-instance" ? "different-instance" : planId,
+          params: { planId: failure === "wrong-instance" ? "different-instance" : planId },
           status: "complete",
           versionId: candidate.id,
           trigger: { source: failure === "api-trigger" ? "api" : "binding" },
