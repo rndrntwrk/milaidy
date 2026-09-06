@@ -1,9 +1,14 @@
 name: Deploy Alice Cloudflare Production
-run-name: ${{ inputs.read_status_only && 'Alice deployment status' || format('Alice production deploy watchdog-{0}', inputs.recovery_watchdog_run_id) }}
+run-name: ${{ !inputs.read_status_only && inputs.recover_owner_pause_only && 'Alice owner pause recovery' || inputs.read_status_only && 'Alice deployment status' || format('Alice production deploy watchdog-{0}', inputs.recovery_watchdog_run_id) }}
 
 on:
   workflow_dispatch:
     inputs:
+      recover_owner_pause_only:
+        description: "Resume only the exact failed owner pause; do not deploy or start provider recovery"
+        required: false
+        default: false
+        type: boolean
       read_status_only:
         description: "Read authenticated deployment status without any deployment or recovery mutation"
         required: false
@@ -232,9 +237,124 @@ jobs:
           }
           BUN
 
+  recover-owner-pause:
+    name: Recover the exact failed Alice owner pause
+    if: ${{ !inputs.read_status_only && inputs.recover_owner_pause_only }}
+    runs-on: ["alice-owner-${{ github.sha }}-${{ github.run_id }}"]
+    timeout-minutes: 10
+    environment: alice-production-cloudflare-recovery
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout protected recovery controller
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Enforce current protected controller
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
+          test "$REF_PROTECTED" = "true"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" --jq .object.sha)" = "$GITHUB_SHA"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+      - name: Verify recovery key and resume only the selected owner pause
+        env:
+          ALICE_OWNER_AUTHORIZATION: ${{ secrets.ALICE_OWNER_AUTHORIZATION }}
+          ALICE_CONTROL_RECOVERY_TOKEN: ${{ secrets.ALICE_CONTROL_RECOVERY_TOKEN }}
+        run: |
+          bun - <<'BUN'
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          import {signRecoveryReceipt} from './workers/alice-production-control/src/recovery.ts';
+          const origin = 'https://alice.rndrntwrk.com';
+          const pauseId = 'pause-16ffdf02-051f-4295-9b85-a815bc44d0e4';
+          const manifest = 'sha256:d8af6cca1ad86d94be2ae9cdc67ff9e410e262186100a99263767566a5f1b4cd';
+          const workerVersion = '7a69b4c1-30a5-455c-9b49-eb6e6ba4baca';
+          const owner = 'owner:sha256:622fc274c3ca129a051721c9d7301b8525c7177e782e3c13ded1f483697d7e10';
+          const call = async (path, method = 'GET', extraHeaders = {}) => {
+            const response = await fetch(origin + path, {
+              method, redirect: 'manual', signal: AbortSignal.timeout(30_000),
+              headers: {cookie: `CF_Authorization=${process.env.ALICE_OWNER_AUTHORIZATION}`,
+                origin, 'sec-fetch-site': 'same-origin', 'cache-control': 'no-store',
+                accept: 'application/json', ...(method === 'GET' ? {} : {'content-type': 'application/json'}),
+                ...extraHeaders}, ...(method === 'GET' ? {} : {body: '{}'}),
+            });
+            const raw = await response.text();
+            assert(raw.length < 32_768, 'RECOVERY_RESPONSE_TOO_LARGE');
+            return {status: response.status, value: JSON.parse(raw)};
+          };
+          const readAuthority = async () => {
+            const r = await call('/control/api/v1/state');
+            assert.equal(r.status, 200); assert.equal(r.value.ok, true);
+            return r.value.authority;
+          };
+          const verifyDenied = async () => {
+            const r = await call('/control/health');
+            assert.equal(r.status, 503); assert.equal(r.value.releaseAdmission, 'denied');
+            assert.equal(r.value.release?.workerVersion?.id, workerVersion);
+            assert.equal(r.value.release?.releaseEpoch, 1);
+            assert.equal(r.value.authentication?.actor, owner);
+            assert.equal(r.value.authentication?.exactOwnerBound, true);
+          };
+          const before = await readAuthority();
+          assert.equal(before.deploymentManifestSha256, manifest);
+          assert.equal(before.activeReleaseEpoch, 2); assert.equal(before.highestReleaseEpoch, 2);
+          assert.deepEqual(before.pausedScopes, ['all']); assert.equal(before.budget.usedUnits, 0);
+          const pause = before.activePauses.all;
+          assert.equal(pause.pauseId, pauseId); assert.equal(pause.pausedBy, owner);
+          assert.equal(pause.resumedAt, null); assert.deepEqual(pause.binding, before.binding);
+          assert.equal(pause.deploymentManifestSha256, manifest);
+          await verifyDenied();
+          const sign = async (issuedAt, expiresAt) => signRecoveryReceipt({
+            schemaVersion: 'alice.recovery-receipt.v3', action: 'control.resume', scope: 'all',
+            pauseId, pausedAt: pause.pausedAt, subject: owner, pauseBinding: pause.binding,
+            pauseDeploymentManifestSha256: manifest, pauseRollbackBoundary: pause.rollbackBoundary,
+            currentBinding: before.binding, currentDeploymentManifestSha256: manifest,
+            currentReleaseEpoch: 2, currentRollbackBoundary: before.rollbackBoundary,
+            issuedAt, expiresAt, nonce: 'owner-recovery-' + crypto.randomUUID(),
+          }, process.env.ALICE_CONTROL_RECOVERY_TOKEN);
+          const checkTime = Date.now();
+          const expired = await sign(checkTime - 120_000, checkTime - 60_000);
+          const keyCheck = await call('/control/api/v1/pauses/all', 'DELETE', {'x-alice-recovery-receipt': expired});
+          assert.equal(keyCheck.status, 403);
+          assert.equal(keyCheck.value.code, 'RECOVERY_RECEIPT_NOT_CURRENT', 'PROTECTED_RECOVERY_KEY_NOT_VERIFIED');
+          assert.deepEqual(await readAuthority(), before);
+          const issuedAt = Date.now();
+          const receipt = await sign(issuedAt, issuedAt + 300_000);
+          try {
+            const resumed = await call('/control/api/v1/pauses/all', 'DELETE', {'x-alice-recovery-receipt': receipt});
+            assert.equal(resumed.status, 200); assert.equal(resumed.value.result?.code, 'SCOPE_RESUMED');
+            assert.equal(resumed.value.evidenceQueued, true);
+            const after = await readAuthority();
+            assert.deepEqual(after.binding, before.binding); assert.equal(after.deploymentManifestSha256, manifest);
+            assert.equal(after.activeReleaseEpoch, 2); assert.equal(after.highestReleaseEpoch, 2);
+            assert.deepEqual(after.pausedScopes, []); assert.equal(after.budget.usedUnits, 0);
+            assert.equal(after.admissionGeneration, before.admissionGeneration + 1);
+            await verifyDenied();
+            console.log(JSON.stringify({code: 'OWNER_PAUSE_RECOVERED', pauseId,
+              releaseEpoch: 2, admissionGeneration: after.admissionGeneration, pausedScopes: [],
+              runtimeAdmission: 'denied', budgetUsedUnits: 0, providerMutationPerformed: false,
+              receiptSha256: 'sha256:' + crypto.createHash('sha256').update(receipt).digest('hex')}));
+          } catch {
+            const paused = await call('/control/api/v1/pauses/all', 'POST');
+            assert.equal(paused.status, 200); assert.equal(paused.value.result?.ok, true);
+            assert((await readAuthority()).pausedScopes.includes('all'));
+            throw new Error('OWNER_RECOVERY_FAILED_AND_PAUSE_RESTORED');
+          }
+          BUN
+
   deploy:
     name: Promote attested Alice Worker bytes
-    if: ${{ !inputs.read_status_only }}
+    if: ${{ !inputs.read_status_only && !inputs.recover_owner_pause_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     environment: alice-production
@@ -1374,7 +1494,7 @@ jobs:
   recover-cloudflare:
     name: Independently restore Cloudflare after deploy-job loss
     needs: [deploy, accept]
-    if: ${{ always() && !inputs.read_status_only && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
+    if: ${{ always() && !inputs.read_status_only && !inputs.recover_owner_pause_only && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: alice-production-cloudflare-recovery
