@@ -638,15 +638,30 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     resumed = true;
     currentPause = null;
 
-    const rootResponse = await fetchImpl(`${OWNER_ORIGIN}/`, {
-      method: "GET",
-      headers: {
-        ...ownerHeaders(ownerAuthorization),
-        accept: "text/html",
-      },
-      redirect: "manual",
-    });
-    const rootHtml = new TextDecoder().decode(await boundedBody(rootResponse));
+    let rootResponse: Response | null = null;
+    let rootHtml = "";
+    const startupDeadline = now() + 5 * 60_000;
+    for (let attempt = 0; attempt < 60 && now() < startupDeadline; attempt += 1) {
+      const response = await fetchImpl(`${OWNER_ORIGIN}/`, {
+        method: "GET",
+        headers: { ...ownerHeaders(ownerAuthorization), accept: "text/html" },
+        redirect: "manual",
+        signal: AbortSignal.timeout(Math.max(1, Math.min(30_000, startupDeadline - now()))),
+      });
+      if (!containerMode || response.status !== 503) {
+        rootResponse = response;
+        rootHtml = new TextDecoder().decode(await boundedBody(response));
+        break;
+      }
+      // The gateway requires the Container proof even for the first page load.
+      // Starting the process and opening its port can precede runtime readiness.
+      const unavailable = await boundedJson(response);
+      if (unavailable.ok !== false || unavailable.code !== "RUNTIME_RELEASE_MISMATCH") {
+        invalid("ALICE_RUNTIME_STARTUP_RESPONSE_INVALID");
+      }
+      await sleepImpl(Math.max(0, Math.min(5_000, startupDeadline - now())));
+    }
+    if (!rootResponse) invalid("ALICE_RUNTIME_STARTUP_TIMEOUT");
     const rootHtmlSha256 = verifyFullRuntimePage(rootResponse, rootHtml);
     const companionResponse = await fetchImpl(`${OWNER_ORIGIN}/companion`, {
       method: "GET",
