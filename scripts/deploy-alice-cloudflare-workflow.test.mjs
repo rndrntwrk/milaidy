@@ -45,9 +45,9 @@ function namedWorkflowSteps(source) {
 }
 
 test("status-only dispatch cannot start deployment or recovery and prints no credential headers", () => {
-  assert.match(workflow, /name: Promote attested Alice Worker bytes\n    if: \$\{\{ !inputs\.read_status_only \}\}/);
-  assert.match(workflow, /if: \$\{\{ always\(\) && !inputs\.read_status_only && \(needs\.deploy\.result/);
-  const statusJob = workflow.slice(workflow.indexOf("  read-status:"), workflow.indexOf("\n  deploy:"));
+  assert.match(workflow, /name: Promote attested Alice Worker bytes\n    if: \$\{\{ !inputs\.read_status_only && !inputs\.recover_owner_pause_only \}\}/);
+  assert.match(workflow, /if: \$\{\{ always\(\) && !inputs\.read_status_only && !inputs\.recover_owner_pause_only && \(needs\.deploy\.result/);
+  const statusJob = workflow.slice(workflow.indexOf("  read-status:"), workflow.indexOf("\n  recover-owner-pause:"));
   assert.match(statusJob, /test "\$REF_PROTECTED" = "true"/);
   assert.match(statusJob, /method: 'GET', redirect: 'manual'/);
   assert.doesNotMatch(statusJob, /method: '(POST|PUT|PATCH|DELETE)'|console\.log\((raw|value|response|process\.env)/);
