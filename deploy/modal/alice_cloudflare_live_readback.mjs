@@ -244,7 +244,18 @@ export async function fetchAliceRuntimeHostContainerState({
       client,
       `/accounts/${accountId}/containers/applications/${application.id}`,
     ));
-    if (!canonicalEqual(application, detailed)) readbackInvalid();
+    // The list can retain the previous rollout's configuration. Resolve the
+    // resource there, then bracket instance inspection with exact detail reads.
+    if (
+      !UUID.test(application.id ?? "") ||
+      detailed?.id !== application.id ||
+      application.account_id !== accountId ||
+      detailed.account_id !== accountId ||
+      detailed.name !== application.name ||
+      !canonicalEqual(application.durable_objects, detailed.durable_objects)
+    ) {
+      readbackInvalid();
+    }
     const instancePage = result(await apiGetJson(
       client,
       `/accounts/${accountId}/containers/dash/applications/${application.id}/instances`,
@@ -261,7 +272,12 @@ export async function fetchAliceRuntimeHostContainerState({
     ) {
       readbackInvalid();
     }
-    return { application: detailed, applicationInstances: instances };
+    const terminalDetail = result(await apiGetJson(
+      client,
+      `/accounts/${accountId}/containers/applications/${application.id}`,
+    ));
+    if (!canonicalEqual(detailed, terminalDetail)) readbackInvalid();
+    return { application: terminalDetail, applicationInstances: instances };
   } catch (error) {
     if (
       error instanceof Error &&
