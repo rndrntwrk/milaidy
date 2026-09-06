@@ -25,9 +25,12 @@ function fixture(t) {
   return {root, git, source, run: controller => spawnSync(process.execPath, [verifier, source, controller], {cwd: root, encoding: 'utf8'})};
 }
 
-test('recovery renewal can reuse an ancestor build without changing its runtime', t => {
+test('recovery and acceptance corrections can reuse an unchanged runtime build', t => {
   const f = fixture(t);
   fs.writeFileSync(path.join(f.root, '.github/workflows/recover-alice-production-watchdog.yml'), 'on: workflow_dispatch\n');
+  fs.mkdirSync(path.join(f.root, 'deploy/modal'), {recursive: true});
+  fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_production_acceptance.ts'), 'export const phase = "running";\n');
+  fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_production_acceptance.test.ts'), 'test("acceptance", () => {});\n');
   f.git('add', '.'); f.git('commit', '-m', 'Renew recovery');
   const controller = f.git('rev-parse', 'HEAD');
   const result = f.run(controller);
