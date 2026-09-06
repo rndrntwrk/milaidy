@@ -23,6 +23,8 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/alice_cloudflare_provider_readback.test.mjs',
   'deploy/modal/alice_production_acceptance.ts',
   'deploy/modal/alice_production_acceptance.test.ts',
+  'deploy/modal/alice_reaccept_qualified_candidate.ts',
+  'deploy/modal/alice_reaccept_qualified_candidate.test.ts',
   'deploy/modal/alice_release_pause.mjs',
   'scripts/deploy-alice-cloudflare-workflow.test.mjs',
   'scripts/verify-alice-release-source.mjs',
