@@ -913,8 +913,14 @@ jobs:
                 }
                 const response = await fetch(`${base}/api/health`, { headers: authHeaders });
                 const health = await response.json();
-                if (response.status !== 200 || health.agentState !== "running") {
-                  console.error(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond }));
+                if (
+                  response.status !== 200 || health.agentState !== "running" ||
+                  health.ready !== true || health.runtime !== "ok" ||
+                  health.database !== "ok" || health.startup?.phase !== "running"
+                ) {
+                  console.error(JSON.stringify({ status: response.status, agentState: health.agentState,
+                    ready: health.ready, runtime: health.runtime, database: health.database,
+                    startupPhase: health.startup?.phase }));
                   process.exit(2);
                 }
                 const capabilitiesResponse = await fetch(`${base}/api/alice-production/capabilities`, { headers: authHeaders });
@@ -928,10 +934,21 @@ jobs:
                   console.error(JSON.stringify({ capabilitiesStatus: capabilitiesResponse.status, capabilities }));
                   process.exit(2);
                 }
-                const readyResponse = await fetch(`${base}/health/ready`, { headers: authHeaders });
-                if (readyResponse.status !== 200) {
-                  console.error(JSON.stringify({ readyStatus: readyResponse.status }));
-                  process.exit(2);
+                for (const pathname of ["/health", "/health/ready"]) {
+                  const readyResponse = await fetch(`${base}${pathname}`, { headers: authHeaders });
+                  const contentType = readyResponse.headers.get("content-type") ?? "";
+                  const ready = contentType.startsWith("application/json")
+                    ? await readyResponse.json() : null;
+                  if (
+                    readyResponse.status !== 200 || ready?.ok !== true ||
+                    ready?.ready !== true || ready?.agentState !== "running" ||
+                    !Number.isSafeInteger(ready?.uptime) || ready.uptime < 0 ||
+                    JSON.stringify(Object.keys(ready).sort()) !==
+                      JSON.stringify(["agentState", "ok", "ready", "uptime"])
+                  ) {
+                    console.error(JSON.stringify({ pathname, readyStatus: readyResponse.status, contentType }));
+                    process.exit(2);
+                  }
                 }
                 const emoteResponse = await fetch(`${base}/api/emotes`, { headers: authHeaders });
                 const emoteBody = await emoteResponse.json();

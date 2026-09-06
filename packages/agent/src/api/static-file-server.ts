@@ -241,8 +241,15 @@ export function serveStaticUi(
   const root = resolveUiDir();
   if (!root) return false;
 
-  // Keep API and WebSocket namespaces exclusively owned by server handlers.
-  if (isAuthProtectedRoute(pathname)) return false;
+  // Health responses must reach their server handlers instead of SPA fallback.
+  if (
+    isAuthProtectedRoute(pathname) ||
+    pathname === "/health" ||
+    pathname === "/health/live" ||
+    pathname === "/health/ready"
+  ) {
+    return false;
+  }
 
   let decodedPath: string;
   try {
