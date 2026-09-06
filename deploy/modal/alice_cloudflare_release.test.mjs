@@ -1472,6 +1472,17 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     "evidenceQueueConsumer",
   ];
   const pauseInputs = {
+    authority: {
+      binding: {
+        programDigest: `sha256:${"0".repeat(64)}`,
+        releaseDigest: `sha256:${"0".repeat(64)}`,
+        policyHash: `sha256:${"0".repeat(64)}`,
+      },
+      deploymentManifestSha256: `sha256:${"0".repeat(64)}`,
+      activeReleaseEpoch: 0,
+      highestReleaseEpoch: 0,
+      rollbackBoundary: "release:unadmitted",
+    },
     admission: {
       schemaVersion: "alice.program-admission.v2",
       programDigest: `sha256:${"3".repeat(64)}`,
@@ -1506,7 +1517,18 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     "installed release code must still prove an unadmitted authority before pause");
   assert.equal(firstPause.active.rollbackBoundary, "release:unadmitted");
   const previous = structuredClone(pauseInputs);
-  previous.usePreviousRelease = true;
+  previous.admission.releaseEpoch = 3;
+  previous.authority = {
+    binding: {
+      programDigest: `sha256:${"d".repeat(64)}`,
+      releaseDigest: `sha256:${"e".repeat(64)}`,
+      policyHash: `sha256:${"f".repeat(64)}`,
+    },
+    deploymentManifestSha256: `sha256:${"c".repeat(64)}`,
+    activeReleaseEpoch: 2,
+    highestReleaseEpoch: 2,
+    rollbackBoundary: "container:alice-runtime:v50",
+  };
   const digest = value => `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
   const keys = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
   const publicJwk = keys.publicKey.export({ format: "jwk" });
@@ -1538,17 +1560,14 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     ...Object.entries(previousVars).map(([name, text]) => ({ name, text, type: "plain_text" })),
   ].sort((a, b) => a.name.localeCompare(b.name));
   assert.deepEqual(verifyAliceFirstReleasePauseInputs(previous).active, {
-    binding: {
-      programDigest: digest(canonical(previousEnvelope)),
-      releaseDigest: digest(canonical(previousEnvelope.release)),
-      policyHash: previousEnvelope.release.policyHash,
-    },
-    deploymentManifestSha256: digest(previousManifest),
-    releaseEpoch: 1, rollbackBoundary: "container:alice-runtime:v49",
-  });
-  const signatureBinding = resources.bindings.find(binding => binding.name === "ALICE_PROGRAM_SIGNATURE_B64");
-  signatureBinding.text = Buffer.alloc(256).toString("base64url");
-  assert.throws(() => verifyAliceFirstReleasePauseInputs(previous), /ALICE_PREVIOUS_RELEASE_PAUSE_INVALID/);
+    binding: previous.authority.binding,
+    deploymentManifestSha256: previous.authority.deploymentManifestSha256,
+    releaseEpoch: 2, rollbackBoundary: "container:alice-runtime:v50",
+  }, "a provider rollback to release 1 must pause the retained release 2 authority");
+  assert.throws(() => verifyAliceFirstReleasePauseInputs({
+    ...previous,
+    authority: { ...previous.authority, highestReleaseEpoch: 3 },
+  }), /ALICE_DEPLOYMENT_AUTHORITY_INVALID/);
   assert.throws(() => verifyAliceFirstReleasePauseInputs({
     ...pauseInputs,
     bootstrapState: {
