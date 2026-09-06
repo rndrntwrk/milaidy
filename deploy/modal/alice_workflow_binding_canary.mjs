@@ -137,6 +137,9 @@ export function resolveAliceCandidateWorkflowVersion({
       }
     }
     const additions = after.filter((version) => !previousById.has(version.id));
+    // An unchanged Workflow can retain its sole provider version. The live
+    // binding canary must still execute this exact version for the candidate.
+    if (additions.length === 0 && after.length === 1) return after[0];
     if (additions.length !== 1) {
       invalid("ALICE_WORKFLOW_CANDIDATE_VERSION_INVALID");
     }
