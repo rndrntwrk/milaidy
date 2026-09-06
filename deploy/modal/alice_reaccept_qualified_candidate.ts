@@ -12,11 +12,9 @@ import {
   verifyReleaseArtifacts,
 } from "./alice_cloudflare_release.mjs";
 import {
-  fetchAliceCloudflarePostDeploymentReadback,
-  fetchAliceCloudflareProviderState,
   fetchAliceCloudflareContinuityState,
 } from "./alice_cloudflare_live_readback.mjs";
-import { captureAliceCloudflareWorkerRollbackState } from "./alice_cloudflare_worker_rollback.mjs";
+import { captureAliceCloudflareWorkerRollbackState, normalizeAliceCloudflareVersionResources } from "./alice_cloudflare_worker_rollback.mjs";
 import { fetchAliceCloudflareTrafficState } from "./alice_cloudflare_traffic.mjs";
 import { validateAliceOwnerAuthorization } from "./alice_release_controller.mjs";
 import { assertAliceAcceptanceRecoveryPause } from "./alice_production_acceptance";
@@ -52,12 +50,10 @@ export function planAliceQualifiedRestoration({ workers, application, anchor, ca
   const withoutVersion = ({ applicationVersion: _, ...state }: any) => state;
   const expectedApplication = { ...anchor.previous.containerApplication, ...(retained ? { target } : {}) };
   if (!equal(withoutVersion(application), withoutVersion(expectedApplication))) fail("CONTAINER_STATE_DRIFTED");
-  if (prior) {
-    for (const role of roles) {
-      const current = workers[role], previous = anchor.previous.workers[role];
-      if (!equal(current.scriptSettings, previous.scriptSettings) ||
-          !equal(current.versionResources, previous.versionResources)) fail("WORKER_SETTINGS_DRIFTED");
-    }
+  for (const role of roles) {
+    const current = workers[role], previous = anchor.previous.workers[role];
+    if (!equal(current.scriptSettings, previous.scriptSettings) ||
+        (prior && !equal(current.versionResources, previous.versionResources))) fail("WORKER_SETTINGS_DRIFTED");
   }
   return retained ? [] : [...roles];
 }
@@ -163,9 +159,6 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
   if (ghJson(`git/ref/heads/${branch}`).object.sha !== process.env.CONTROLLER_SHA) fail("CONTROLLER_DRIFTED");
   const apiToken = process.env.CLOUDFLARE_API_TOKEN!;
   const vars = release.configs.control.vars;
-  const providerOptions = { apiToken, ownerEmailSha256: vars.ALICE_OWNER_EMAIL_SHA256,
-    accessAudience: vars.ALICE_ACCESS_AUDIENCE, releaseAccessAudience: vars.ALICE_RELEASE_ACCESS_AUDIENCE,
-    releaseServiceTokenIdSha256: vars.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 };
   const namespaces = read(path.join(releaseRoot, "durable-object-namespace-ids.json"));
   const expected = read(path.join(releaseRoot, "deployment-pause-evidence.json")).candidateExpected;
   const owner = await validateAliceOwnerAuthorization(process.env.ALICE_OWNER_AUTHORIZATION, {
@@ -179,15 +172,11 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
     assertAliceAcceptanceRecoveryPause({ state: await response.json(), expected, pauseId: selection.ownerPauseId, ownerActor: owner.actor });
   };
   await checkPause();
-  const [workers, application, provider, continuity, traffic] = await Promise.all([
+  const [workers, application, continuity, traffic] = await Promise.all([
     captureAliceCloudflareWorkerRollbackState({ apiToken }), fetchAliceContainerApplicationRollbackState({ apiToken }),
-    fetchAliceCloudflareProviderState(providerOptions),
     fetchAliceCloudflareContinuityState({ apiToken, expectedDurableObjectNamespaceIds: namespaces }),
     fetchAliceCloudflareTrafficState({ apiToken }),
   ]);
-  for (const key of Object.keys(provider.sanitized)) {
-    if (!equal(provider.sanitized[key], candidate.provider[key])) fail("PROVIDER_DRIFTED");
-  }
   if (!equal(traffic, anchor.previous.trafficState)) fail("TRAFFIC_DRIFTED");
   if (![anchor.previous.continuityConfig, candidate.provider.continuityConfig].some(c => equal(c, continuity.sanitized))) fail("CONTINUITY_DRIFTED");
   const target = buildAliceCandidateContainerApplicationTarget({ previous: anchor.previous.containerApplication, materializedWranglerConfig: release.configs.runtimeHost });
@@ -201,12 +190,16 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
     if (!response.ok || value.success !== true) fail("PROVIDER_REQUEST_FAILED");
     return value.result;
   };
-  // Resolve every immutable version before selecting any of them. No Worker upload or secret write occurs here.
+  // Account access, AI Gateway and Vectorize controls are unchanged by version selection.
+  // Their original qualification stays in live-readback.json; this retry verifies the
+  // Worker, Container, traffic and queue state with the same scope as independent recovery.
+  const candidateResources: Record<string, any> = {};
   for (const role of roles) {
     const worker = candidate.workers[role];
     const version = await api(`/accounts/${account}/workers/scripts/${worker.worker}/versions/${worker.versionId}`);
     if (version.id !== worker.versionId || !version.resources?.bindings?.some((b: any) =>
       b.name === "ALICE_DEPLOYMENT_MANIFEST_SHA256" && b.text === release.deploymentManifestSha256)) fail("VERSION_BINDING_INVALID");
+    candidateResources[role] = normalizeAliceCloudflareVersionResources(version.resources);
   }
   await checkPause();
   if (verifyOnly) {
@@ -222,14 +215,27 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
     });
   }
   await restoreAliceCloudflareContinuityState({ apiToken, expectedDurableObjectNamespaceIds: namespaces, expectedConfig: candidate.provider.continuityConfig });
-  const readback = await fetchAliceCloudflarePostDeploymentReadback({ ...providerOptions,
-    serializedManifest: release.serializedManifest, materializedWranglerConfigs: release.configs,
-    expectedEffectiveConfigs: release.effectiveConfigs, expectedDurableObjectNamespaceIds: namespaces });
+  const [restoredWorkers, restoredApplication, restoredTraffic, restoredContinuity] = await Promise.all([
+    captureAliceCloudflareWorkerRollbackState({ apiToken }), fetchAliceContainerApplicationRollbackState({ apiToken }),
+    fetchAliceCloudflareTrafficState({ apiToken }),
+    fetchAliceCloudflareContinuityState({ apiToken, expectedDurableObjectNamespaceIds: namespaces }),
+  ]);
   for (const role of roles) {
-    if (readback.workers[role].versionId !== candidate.workers[role].versionId) fail("RESTORED_VERSION_INVALID");
+    const observed = restoredWorkers[role];
+    if (observed.serving.versionId !== candidate.workers[role].versionId ||
+        !equal(observed.versionResources, candidateResources[role]) ||
+        !equal(observed.scriptSettings, workers[role].scriptSettings)) fail("RESTORED_VERSION_INVALID");
   }
+  if (planAliceQualifiedRestoration({ workers: restoredWorkers, application: restoredApplication, anchor, candidate, target }).length !== 0 ||
+      !equal(restoredTraffic, traffic) || !equal(restoredContinuity.sanitized, candidate.provider.continuityConfig)) fail("RESTORED_STATE_INVALID");
   await checkPause();
-  write(path.join(releaseRoot, "reaccept-live-readback.json"), readback);
+  write(path.join(releaseRoot, "reaccept-live-readback.json"), {
+    schemaVersion: "alice.reaccept-component-readback.v1", observedAt: new Date().toISOString(),
+    originalRunId: selection.runId, deploymentManifestSha256: release.deploymentManifestSha256,
+    originalFullReadbackSha256: digest(fs.readFileSync(path.join(releaseRoot, "live-readback.json"))),
+    workers: restoredWorkers, containerApplication: restoredApplication,
+    traffic: restoredTraffic, continuityConfig: restoredContinuity.sanitized,
+  });
   console.log(JSON.stringify({ code: "ALICE_REACCEPT_EXISTING_VERSIONS_VERIFIED", originalRunId: selection.runId,
     selectedExistingWorkers: restoreRoles.length, runtimeImage: admission.runtimeImage }));
 }
