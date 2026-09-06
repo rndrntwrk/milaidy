@@ -45,8 +45,8 @@ function namedWorkflowSteps(source) {
 }
 
 test("status-only dispatch cannot start deployment or recovery and prints no credential headers", () => {
-  assert.match(workflow, /name: Promote attested Alice Worker bytes\n    if: \$\{\{ !inputs\.read_status_only && !inputs\.recover_owner_pause_only \}\}/);
-  assert.match(workflow, /if: \$\{\{ always\(\) && !inputs\.read_status_only && !inputs\.recover_owner_pause_only && \(needs\.deploy\.result/);
+  assert.match(workflow, /name: Promote attested Alice Worker bytes\n    if: \$\{\{ !inputs\.read_status_only && !inputs\.recover_owner_pause_only && !inputs\.reaccept_candidate \}\}/);
+  assert.match(workflow, /if: \$\{\{ always\(\) && !inputs\.read_status_only && !inputs\.recover_owner_pause_only && \(\(!inputs\.reaccept_candidate && needs\.deploy\.result/);
   const statusJob = workflow.slice(workflow.indexOf("  read-status:"), workflow.indexOf("\n  recover-owner-pause:"));
   assert.match(statusJob, /test "\$REF_PROTECTED" = "true"/);
   assert.match(statusJob, /method: 'GET', redirect: 'manual'/);
@@ -562,4 +562,16 @@ test("every direct gh boundary receives only a step-local GitHub token", () => {
     );
   }
   assert.deepEqual(missing, []);
+});
+
+
+test("acceptance retry skips promotion and journals existing versions before any restoration", () => {
+  const accept = workflow.slice(workflow.indexOf("\n  accept:"), workflow.indexOf("\n  recover-cloudflare:"));
+  const prepare = accept.indexOf("alice_reaccept_qualified_candidate.ts prepare");
+  const journal = accept.indexOf("Publish existing rollback journal");
+  const restore = accept.indexOf("alice_reaccept_qualified_candidate.ts restore");
+  const prove = accept.indexOf("Prove terminal authenticated Alice production acceptance");
+  assert.ok(prepare >= 0 && prepare < journal && journal < restore && restore < prove);
+  assert.match(accept, /needs\.deploy\.result == 'success' \|\| inputs\.reaccept_candidate != ''/);
+  assert.doesNotMatch(accept, /docker (build|push)|wrangler versions upload|alice_cloudflare_release\.mjs/);
 });

@@ -204,6 +204,22 @@ function assertCandidateState(
   return { ...authority, pausedScopes: observedPausedScopes };
 }
 
+export function assertAliceAcceptanceRecoveryPause({
+  state, expected, pauseId, ownerActor,
+}: Record<string, any>) {
+  const authority = assertCandidateState(state, expected, ["all"]);
+  const pause = authority.activePauses?.all;
+  if (!/^pause-[A-Za-z0-9-]{8,128}$/.test(pauseId ?? "") ||
+      pause?.pauseId !== pauseId || pause.pausedBy !== ownerActor ||
+      pause.resumedAt !== null || !Number.isSafeInteger(pause.pausedAt) ||
+      !exact(pause.binding, expected.binding) ||
+      pause.deploymentManifestSha256 !== expected.release.deploymentManifestSha256 ||
+      pause.rollbackBoundary !== expected.rollbackBoundary) {
+    invalid("ALICE_PRODUCTION_ACCEPTANCE_INVALID_RECOVERY_PAUSE");
+  }
+  return pause;
+}
+
 type EvidenceObject = {
   key: string;
   kind: string;
@@ -509,6 +525,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     manifest,
     programAdmission,
     deploymentPauseEvidence,
+    recoveryPauseId,
     rollbackAnchor,
     cloudflareRollbackProof,
     cloudflareLiveReadback,
@@ -593,6 +610,14 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     ownerEmailSha256: ownerAccess.ownerEmailSha256,
     nowSeconds: Math.floor(startedAt / 1000),
   });
+  let recoveryPause = null;
+  if (recoveryPauseId) {
+    const state = await ownerJson(fetchImpl, ownerAuthorization, "/control/api/v1/state");
+    if (!state.response.ok) invalid();
+    recoveryPause = assertAliceAcceptanceRecoveryPause({
+      state: state.value, expected, pauseId: recoveryPauseId, ownerActor: owner.actor,
+    });
+  }
 
   const unauthenticated = await fetchImpl(`${OWNER_ORIGIN}/`, {
     method: "GET",
@@ -615,7 +640,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       deploymentPaused: true,
     });
     activated = true;
-    currentPause = deploymentPauseEvidence.result.pause;
+    currentPause = recoveryPause ?? deploymentPauseEvidence.result.pause;
     const startedDate = new Date(startedAt).toISOString().slice(0, 10);
     const evidenceBefore = await listEvidenceSnapshot({
       fetchImpl,
@@ -630,7 +655,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       owner,
       recoveryToken: controlRecoveryToken,
       pause: currentPause,
-      pauseExpected: deploymentPauseEvidence.active,
+      pauseExpected: recoveryPause ? expected : deploymentPauseEvidence.active,
       currentExpected: expected,
       nowMs: now(),
       nonce: `acceptance-initial-${randomUuid()}`,
@@ -780,8 +805,9 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     );
     if (revoke.response.status !== 404 || revoke.value.ok !== false ||
         revoke.value.result?.ok !== false ||
-        revoke.value.result?.code !== "CAPABILITY_NOT_FOUND" ||
-        revoke.value.evidenceQueued !== false) invalid();
+        revoke.value.result?.code !== "CAPABILITY_NOT_FOUND") {
+      invalid("ALICE_PRODUCTION_ACCEPTANCE_INVALID_CAPABILITY_REVOKE");
+    }
 
     const preBudgetState = await ownerJson(
       fetchImpl,
@@ -1178,6 +1204,7 @@ async function main() {
     releaseAccessClientId: process.env.ALICE_RELEASE_ACCESS_CLIENT_ID,
     releaseAccessClientSecret: process.env.ALICE_RELEASE_ACCESS_CLIENT_SECRET,
     deploymentPauseToken: process.env.ALICE_DEPLOYMENT_PAUSE_TOKEN,
+    recoveryPauseId: process.env.ALICE_RECOVERY_PAUSE_ID,
     cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN,
     deploymentRunId: process.env.ALICE_DEPLOYMENT_RUN_ID,
     deploymentRunAttempt: Number(process.env.ALICE_DEPLOYMENT_RUN_ATTEMPT),

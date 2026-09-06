@@ -492,7 +492,8 @@ function mockRuntime(
       return json({
         ok: false,
         result: { ok: false, code: "CAPABILITY_NOT_FOUND" },
-        evidenceQueued: false,
+        // Flushing an empty evidence outbox succeeds even for a missing capability.
+        evidenceQueued: true,
       }, 404);
     }
     if (url.pathname === "/control/api/v1/state") {
@@ -606,6 +607,48 @@ describe("Alice terminal production acceptance", () => {
     );
   });
 
+  test("reaccepts the exact current owner pause and rejects a different pause before admission", async () => {
+    const data = containerFixture();
+    const pause = {
+      pauseId: "pause-recovery-acceptance",
+      pausedAt: nowMs - 1_000,
+      pausedBy: `owner:sha256:${crypto.createHash("sha256").update("owner-subject").digest("hex")}`,
+      resumedAt: null,
+      binding: data.binding,
+      deploymentManifestSha256: data.programAdmission.deploymentManifestSha256,
+      rollbackBoundary: data.expected.rollbackBoundary,
+    };
+    for (const pauseId of [pause.pauseId, "pause-unrelated-owner-pause"]) {
+      const runtime = mockRuntime(data);
+      const input: any = { ...acceptanceInput(data, runtime), recoveryPauseId: pauseId };
+      const receipts: any[] = [];
+      let admissions = 0;
+      input.signReceiptImpl = async (payload: any) => {
+        receipts.push(payload);
+        return `${b64(payload)}.${"s".repeat(43)}`;
+      };
+      input.fetchImpl = async (url: any, init: any) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/control/api/v1/release/admit") admissions++;
+        const response = await runtime.fetchImpl(url, init);
+        if (pathname !== "/control/api/v1/state") return response;
+        const state = await response.json();
+        state.authority.activePauses = runtime.paused ? { all: pause } : {};
+        return Response.json(state);
+      };
+      if (pauseId === pause.pauseId) {
+        expect((await runAliceProductionAcceptance(input)).terminal).toBe(true);
+        expect(receipts[0].pauseId).toBe(pause.pauseId);
+        expect(receipts[0].pauseBinding).toEqual(data.binding);
+      } else {
+        await expect(runAliceProductionAcceptance(input)).rejects.toThrow("INVALID_RECOVERY_PAUSE");
+        expect(admissions).toBe(0);
+        expect(receipts).toHaveLength(0);
+        expect(runtime.paused).toBe(true);
+      }
+    }
+  });
+
   test("rejects terminal Cloudflare proof without the private runtime host", async () => {
     const data = containerFixture();
     delete data.cloudflareLiveReadback.workers.runtimeHost;
@@ -650,7 +693,7 @@ describe("Alice terminal production acceptance", () => {
         return Response.json({
           ok: false,
           result: { ok: false, code: "CAPABILITY_ID_INVALID" },
-          evidenceQueued: false,
+          evidenceQueued: true,
         }, { status: 404 });
       }
       return runtime.fetchImpl(url, init);

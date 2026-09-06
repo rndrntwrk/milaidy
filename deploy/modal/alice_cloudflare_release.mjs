@@ -516,7 +516,7 @@ async function fetchAliceContainerApplicationProviderState({
   };
 }
 
-async function fetchAliceContainerApplicationRollbackState(options) {
+export async function fetchAliceContainerApplicationRollbackState(options) {
   return normalizeAliceContainerApplicationRollbackState(
     await fetchAliceContainerApplicationProviderState(options),
   );
@@ -1107,7 +1107,7 @@ function verifyProtectedRefStillExact({ sourceRoot, deploymentControllerCommit }
   }
 }
 
-async function verifyReleaseArtifacts({
+export async function verifyReleaseArtifacts({
   sourceRoot,
   manifestPath,
   artifactPath,
