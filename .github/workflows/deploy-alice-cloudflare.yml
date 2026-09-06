@@ -188,7 +188,7 @@ jobs:
     name: Verify owner access from the acceptance runner without mutation
     needs: read-status
     if: ${{ inputs.read_status_only && needs.read-status.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ["alice-owner-${{ github.sha }}-${{ github.run_id }}"]
     timeout-minutes: 5
     environment: alice-production-cloudflare-recovery
     permissions:
@@ -1259,7 +1259,7 @@ jobs:
     name: Independently recover and accept terminal Alice
     needs: deploy
     if: ${{ needs.deploy.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ["alice-owner-${{ github.sha }}-${{ github.run_id }}"]
     timeout-minutes: 30
     environment: alice-production-cloudflare-recovery
     env:
