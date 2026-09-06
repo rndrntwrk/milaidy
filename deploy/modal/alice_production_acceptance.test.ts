@@ -437,7 +437,7 @@ function mockRuntime(
         connectors: { discord: "configured", telegram: "configured" },
         uptime: 42,
         agentState: "running",
-        startup: { phase: "ready", attempt: 1 },
+        startup: { phase: "running", attempt: 0 },
         aliceRelease: { ...data.expected.release, ...data.binding },
       });
     }

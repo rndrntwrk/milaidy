@@ -739,7 +739,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     if (!runtime.response.ok || runtime.value.ready !== true ||
         runtime.value.runtime !== "ok" || runtime.value.database !== "ok" ||
         runtime.value.agentState !== "running" ||
-        runtime.value.startup?.phase !== "ready" ||
+        runtime.value.startup?.phase !== "running" ||
         !Number.isSafeInteger(runtime.value.plugins?.loaded) ||
         runtime.value.plugins.loaded < FULL_REQUIRED_RUNTIME_PLUGINS.length ||
         runtime.value.plugins?.failed !== 0 ||
