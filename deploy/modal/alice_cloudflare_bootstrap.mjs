@@ -502,7 +502,7 @@ export function verifyAliceBootstrapPreimportContinuity(snapshot) {
     if (
       !RESOURCE_ID.test(queue?.queue_id ?? "") ||
       queue?.queue_name !== expectedName ||
-      queue?.settings?.delivery_paused !== true ||
+      typeof queue?.settings?.delivery_paused !== "boolean" ||
       queue?.settings?.delivery_delay !== 0 ||
       queue?.settings?.message_retention_period !== 86_400
     ) {
@@ -515,12 +515,15 @@ export function verifyAliceBootstrapPreimportContinuity(snapshot) {
       snapshot?.queues?.evidence,
       ALICE_CLOUDFLARE_TARGET.evidenceQueue,
     );
-    verifyQueue(
+    const deadLetterQueue = verifyQueue(
       snapshot?.queues?.deadLetter,
       ALICE_CLOUDFLARE_TARGET.evidenceDlq,
     );
     verifyAliceBootstrapBucket(snapshot?.bucket);
+    // A serving release consumes evidence while inactive versions are prepared.
+    // The journaled release controller owns pausing it before Worker promotion.
     if (
+      deadLetterQueue.settings.delivery_paused !== true ||
       snapshot?.sentinelBodyVerified !== true ||
       !Array.isArray(snapshot?.sentinelObjects) ||
       snapshot.sentinelObjects.length !== 1 ||
@@ -2426,7 +2429,7 @@ async function main() {
       mode,
       publicHttpTrafficChanged: false,
       queueConsumerAttached: true,
-      queueDeliveryPaused: true,
+      queueDeliveryPaused: preflightSecond.queues.evidence.settings.delivery_paused,
     })}\n`,
   );
 }
