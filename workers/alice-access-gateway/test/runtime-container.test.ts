@@ -35,6 +35,8 @@ test("builds a fail-closed Container environment for gateway auth, release proof
   });
 
   expect(result).toMatchObject({
+    NODE_EXTRA_CA_CERTS: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
+    CODEX_CA_CERTIFICATE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
     MILADY_CLOUD_PROVISIONED: "1",
     MILADY_CONFIG_PATH: "/app/deploy/modal/alice-runtime-defaults.json",
     MILADY_PERSIST_CONFIG_PATH: "/tmp/alice-runtime/config/milady.json",
@@ -80,6 +82,7 @@ test("builds a fail-closed Container environment for gateway auth, release proof
   expect("ALICE_MODAL_REVISION" in result).toBe(false);
   expect("ALICE_STATE_PLANE_SERVICE_TOKEN" in result).toBe(false);
   expect("ELIZA_SKIP_PLUGINS" in result).toBe(false);
+  expect("NODE_TLS_REJECT_UNAUTHORIZED" in result).toBe(false);
   const defaults = JSON.parse(
     readFileSync(
       new URL(

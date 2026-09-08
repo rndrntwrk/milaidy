@@ -58,6 +58,9 @@ export function buildAliceRuntimeContainerEnv(
   }
   return {
     NODE_ENV: "production",
+    // Trust the ephemeral CA injected by Cloudflare's HTTPS interception.
+    NODE_EXTRA_CA_CERTS: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
+    CODEX_CA_CERTIFICATE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
     PORT: String(ALICE_RUNTIME_CONTAINER_PORT),
     APP_PORT: String(ALICE_RUNTIME_CONTAINER_PORT),
     APP_API_BIND: "0.0.0.0",
