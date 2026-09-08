@@ -62,7 +62,7 @@ async function fixture() {
     ...providerReadbacks,
     cloudflareContinuityReadback: aliceTestCloudflareContinuityReadback(),
     workerBundleArtifact: aliceTestVerifiedWorkerBundleArtifact({
-      sourceCommit: releaseSource.sourceCommit,
+      sourceCommit: releaseSource.deploymentControllerCommit,
     }),
     accessEffectiveConfig: buildAliceAccessEffectiveConfig({
       accessIssuer: "https://rndrntwrk.cloudflareaccess.com",

@@ -2124,7 +2124,7 @@ async function main() {
   verifyAliceReleaseSource({ sourceRoot, sourceCommit, deploymentControllerCommit });
   verifyAliceWorkerBundleArtifact(fs.readFileSync(artifactPath, "utf8"), {
     root: artifactRoot,
-    expectedSourceCommit: sourceCommit,
+    expectedSourceCommit: deploymentControllerCommit,
   });
   fs.mkdirSync(outputDir, { recursive: false, mode: 0o700 });
   const controlConfigPath = path.join(outputDir, "control.bootstrap.wrangler.json");

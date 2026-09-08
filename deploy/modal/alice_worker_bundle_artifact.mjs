@@ -237,12 +237,18 @@ export function assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
   serializedArtifact,
   artifactRoot,
   manifest,
+  phase,
 }) {
   let artifact;
   try {
+    const artifactSource = JSON.parse(serializedArtifact).sourceCommit;
+    const expectedSource = phase === "rollback" &&
+      artifactSource === manifest?.source?.sourceCommit
+      ? manifest.source.sourceCommit
+      : manifest?.source?.deploymentControllerCommit;
     artifact = verifyAliceWorkerBundleArtifact(serializedArtifact, {
       root: artifactRoot,
-      expectedSourceCommit: manifest?.source?.sourceCommit,
+      expectedSourceCommit: expectedSource,
     });
   } catch {
     throw new Error("ALICE_WORKER_BUNDLE_MANIFEST_MISMATCH");

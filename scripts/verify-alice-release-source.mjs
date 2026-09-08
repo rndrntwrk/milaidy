@@ -3,8 +3,8 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
 const COMMIT = /^[a-f0-9]{40}$/;
-// These files control release execution; none changes the built runtime or
-// attested Worker bundles. Any other changed path requires a fresh build.
+// Runtime image inputs remain frozen. The two host modules are rebuilt and
+// attested by preimport; all other Worker bytes remain from the original build.
 const CONTROLLER_PATHS = new Set([
   '.github/workflows/recover-alice-production-watchdog.yml',
   '.github/workflows/alice-cloudflare-container-bringup.yml',
@@ -31,6 +31,19 @@ const CONTROLLER_PATHS = new Set([
   'scripts/deploy-alice-cloudflare-workflow.test.mjs',
   'scripts/verify-alice-release-source.mjs',
   'scripts/verify-alice-release-source.test.mjs',
+  'scripts/build-alice-host-worker-artifact.mjs',
+  'scripts/build-alice-host-worker-artifact.test.mjs',
+  'deploy/modal/alice_worker_bundle_artifact.mjs',
+  'deploy/modal/alice_worker_bundle_artifact.test.mjs',
+  'deploy/modal/alice_deployment_manifest.mjs',
+  'deploy/modal/alice_deployment_manifest.test.mjs',
+  'workers/alice-access-gateway/src/alice-runtime-container.ts',
+  'workers/alice-access-gateway/src/alice-runtime-host.ts',
+  'workers/alice-access-gateway/test/runtime-container.test.ts',
+  'workers/alice-access-gateway/test/runtime-https.test.ts',
+  'workers/alice-access-gateway/test/index.test.ts',
+  'workers/alice-ai-gateway/src/index.test.mjs',
+  'workers/alice-production-control/test/runtime-config.test.ts',
 ]);
 
 export function verifyAliceReleaseSource({sourceRoot, sourceCommit, deploymentControllerCommit}) {

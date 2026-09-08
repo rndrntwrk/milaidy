@@ -53,7 +53,7 @@ import { verifyAliceDeploymentPauseEvidence } from "./alice_release_controller.m
 const PROTECTED_BRANCH = "release/alice-production-core-2026-08-22";
 const REPOSITORY = "rndrntwrk/milaidy";
 const SIGNER_WORKFLOW =
-  "rndrntwrk/milaidy/.github/workflows/build-cloud-agent.yml";
+  "rndrntwrk/milaidy/.github/workflows/alice-cloudflare-container-bringup.yml";
 const WRANGLER_VERSION = "4.122.0";
 const API_BASE = "https://api.cloudflare.com/client/v4";
 const COMMIT = /^[a-f0-9]{40}$/;
@@ -1073,10 +1073,12 @@ function verifyBun(bunBin, sourceRoot) {
   }
 }
 
-function verifyGitHubAttestations({ sourceRoot, sourceCommit, artifactRoot }) {
+function verifyGitHubAttestations({ sourceRoot, deploymentControllerCommit, artifactRoot }) {
   for (const filePath of [
     path.join(artifactRoot, "alice-worker-bundles.json"),
     ...ROLES.map((role) => bundlePath(artifactRoot, role)),
+    ...["0001_alice_state.sql", "0002_execution_records.sql", "0003_eliza_database.sql"]
+      .map(name => path.join(artifactRoot, "alice-state-plane/migrations", name)),
   ]) {
     run(
       "gh",
@@ -1089,7 +1091,7 @@ function verifyGitHubAttestations({ sourceRoot, sourceCommit, artifactRoot }) {
         "--signer-workflow",
         SIGNER_WORKFLOW,
         "--source-digest",
-        sourceCommit,
+        deploymentControllerCommit,
         "--source-ref",
         `refs/heads/${PROTECTED_BRANCH}`,
         "--deny-self-hosted-runners",
@@ -1127,6 +1129,7 @@ export async function verifyReleaseArtifacts({
   artifactPath,
   artifactRoot,
   configDir,
+  phase,
 }) {
   if (
     ![sourceRoot, manifestPath, artifactPath, artifactRoot, configDir].every(absolute) ||
@@ -1141,6 +1144,7 @@ export async function verifyReleaseArtifacts({
     serializedArtifact,
     artifactRoot,
     manifest,
+    phase,
   });
   const deploymentManifestSha256 =
     digestAliceDeploymentManifest(serializedManifest);
@@ -2187,6 +2191,7 @@ async function main() {
     artifactPath,
     artifactRoot,
     configDir,
+    phase,
   });
   const expectedDurableObjectNamespaceIds = readJson(namespaceIdsPath);
   const sourceCommit = release.manifest.source.sourceCommit;
@@ -2233,7 +2238,7 @@ async function main() {
   }
 
   verifyBun(bunBin, sourceRoot);
-  verifyGitHubAttestations({ sourceRoot, sourceCommit, artifactRoot });
+  verifyGitHubAttestations({ sourceRoot, deploymentControllerCommit, artifactRoot });
   const admission = runProgramAdmissionPreflight({
     bunBin,
     sourceRoot,

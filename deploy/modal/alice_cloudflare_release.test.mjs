@@ -938,7 +938,7 @@ test(
         serializedArtifact,
         artifactRoot: artifactRootA,
         manifest: {
-          source: { sourceCommit },
+          source: { sourceCommit, deploymentControllerCommit: sourceCommit },
           cloudflare: {
             accessWorkerBundleSha256: digests.access,
             runtimeHostWorkerBundleSha256: digests.runtimeHost,
@@ -1166,7 +1166,8 @@ test("the protected command requires attested bundles and terminal live readback
   );
   assert.match(source, /gh[\s\S]*attestation[\s\S]*verify/);
   assert.match(source, /--source-digest/);
-  assert.match(source, /build-cloud-agent\.yml/);
+  assert.match(source, /alice-cloudflare-container-bringup\.yml/);
+  assert.match(source, /verifyGitHubAttestations\(\{ sourceRoot, deploymentControllerCommit, artifactRoot \}\)/);
   assert.match(source, /fetchAliceCloudflarePostDeploymentReadback/);
   assert.match(source, /applyAliceCandidateTrafficState/);
   assert.match(source, /restoreAliceTrafficState/);

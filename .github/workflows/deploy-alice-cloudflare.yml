@@ -492,6 +492,21 @@ jobs:
             "$PREIMPORT_ARTIFACT_DIGEST"
           test "$(printf '%s' "$preimport_artifact_record" | cut -f3)" = "false"
 
+          host_artifact_name="alice-host-worker-bundles-${CONTROLLER_SHA}-${PREIMPORT_RUN_ID}-${PREIMPORT_RUN_ATTEMPT}"
+          host_artifact_record="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${PREIMPORT_RUN_ID}/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name == \"${host_artifact_name}\") | [.id, .digest, .expired, .workflow_run.id, .workflow_run.head_sha] | @tsv")"
+          test "$(printf '%s' "$host_artifact_record" | awk 'NF { count++ } END { print count + 0 }')" = "1"
+          host_artifact_id="$(printf '%s' "$host_artifact_record" | cut -f1)"
+          host_artifact_digest="$(printf '%s' "$host_artifact_record" | cut -f2)"
+          printf '%s' "$host_artifact_id" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$host_artifact_digest" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          test "$(printf '%s' "$host_artifact_record" | cut -f3)" = "false"
+          test "$(printf '%s' "$host_artifact_record" | cut -f4)" = "$PREIMPORT_RUN_ID"
+          test "$(printf '%s' "$host_artifact_record" | cut -f5)" = "$CONTROLLER_SHA"
+          echo "ALICE_HOST_WORKER_ARTIFACT_ID=$host_artifact_id" >> "$GITHUB_ENV"
+          echo "ALICE_HOST_WORKER_ARTIFACT_DIGEST=$host_artifact_digest" >> "$GITHUB_ENV"
+
       - name: Hydrate exact reviewed Eliza PR head
         env:
           EXPECTED_ELIZA_SHA: aa5f9c05c585cbc03bb72f9509e504d544531f3a
@@ -540,12 +555,13 @@ jobs:
       - name: Install exact release dependencies
         run: bash scripts/alice-frozen-install-retry.sh
 
-      - name: Download immutable Worker bundle artifact
+      - name: Download exact controller host Worker artifact
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           github-token: ${{ github.token }}
-          run-id: ${{ inputs.build_run_id }}
-          name: ${{ inputs.worker_artifact_name }}
+          run-id: ${{ inputs.preimport_run_id }}
+          artifact-ids: ${{ env.ALICE_HOST_WORKER_ARTIFACT_ID }}
+          merge-multiple: true
           path: ${{ runner.temp }}/alice-worker-bundles
 
       - name: Download exact preimport evidence artifact
@@ -626,8 +642,8 @@ jobs:
           do
             gh attestation verify "$subject" \
               --repo rndrntwrk/milaidy \
-              --signer-workflow rndrntwrk/milaidy/.github/workflows/build-cloud-agent.yml \
-              --source-digest "$SOURCE_SHA" \
+              --signer-workflow rndrntwrk/milaidy/.github/workflows/alice-cloudflare-container-bringup.yml \
+              --source-digest "$CONTROLLER_SHA" \
               --source-ref refs/heads/release/alice-production-core-2026-08-22 \
               --deny-self-hosted-runners
           done
