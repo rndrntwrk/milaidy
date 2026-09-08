@@ -636,6 +636,31 @@ test("normalizes the pre-mutation runtimeHost application against its current im
     applicationDurableObjects: [binding], expectedApplicationImage: image,
     materializedWranglerConfig: config, expectedNamespaceId: namespaceId };
   assert.equal(verifyAliceContainerApplicationReadback(boundInput).image, image);
+  // Captured after the paused 2026-09-08 rollout: the actor remains assigned,
+  // but the inactive container has no live dashboard placement.
+  const inactiveInput = { ...boundInput, applicationInstances: [],
+    applicationCanonicalInstances: [{ ...canonicalInstance, status: { state: "inactive" } }],
+    applicationDurableObjects: [{ id: binding.id, name: binding.name }] };
+  const inactive = normalizeAliceContainerInstanceReadback(inactiveInput);
+  assert.deepEqual(inactive.applicationCanonicalInstances, inactiveInput.applicationCanonicalInstances);
+  assert.deepEqual(inactive.applicationDurableObjects, inactiveInput.applicationDurableObjects);
+  assert.deepEqual(inactive.applicationInstances, []);
+  assert.equal(verifyAliceContainerApplicationReadback(inactiveInput).image, image);
+  for (const tamper of [
+    (value) => { value.applicationCanonicalInstances[0].id = "7".repeat(64); },
+    (value) => { value.applicationCanonicalInstances[0].image = candidateImage; },
+    (value) => { value.applicationCanonicalInstances[0].status.state = "starting"; },
+    (value) => { value.applicationDurableObjects[0].deployment_id = binding.deployment_id; },
+    (value) => { value.applicationDurableObjects[0].placement_id = binding.placement_id; },
+    (value) => { value.applicationInstances = [instance]; },
+  ]) {
+    const invalid = structuredClone(inactiveInput); tamper(invalid);
+    assert.throws(() => normalizeAliceContainerInstanceReadback(invalid), /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/);
+  }
+  const laterInactive = structuredClone(inactiveInput);
+  laterInactive.applicationCanonicalInstances[0].status.updated_at = "2026-09-08T20:11:03Z";
+  laterInactive.applicationDurableObjects[0].assigned_at = "2026-09-08T20:11:03Z";
+  assert.deepEqual(normalizeAliceContainerInstanceReadback(laterInactive), inactive);
   const refreshed = structuredClone(boundInput);
   refreshed.applicationInstances[0].current_placement.events.push({ name: "DurableObjectConnected" });
   refreshed.applicationInstances[0].current_placement.last_update = "2026-09-08T13:43:00Z";

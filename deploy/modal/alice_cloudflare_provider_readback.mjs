@@ -346,28 +346,41 @@ export function normalizeAliceContainerInstanceReadback({
     !CLOUDFLARE_CONTAINER_IMAGE.test(application.configuration?.image ?? "") ||
     !Array.isArray(applicationInstances) || applicationInstances.length > 1 ||
     !Array.isArray(applicationCanonicalInstances) ||
-    applicationCanonicalInstances.length !== applicationInstances.length ||
+    applicationCanonicalInstances.length > 1 ||
     !Array.isArray(applicationDurableObjects) || applicationDurableObjects.length !== 1 ||
     applicationDurableObjects[0]?.name !== application.name
   ) mismatch();
+  const canonicalInstance = applicationCanonicalInstances[0];
+  const binding = applicationDurableObjects[0];
+  if (applicationCanonicalInstances.length === 1 && (
+    !/^[a-f0-9]{64}$/.test(binding.id ?? "") ||
+    canonicalInstance?.id !== binding.id ||
+    canonicalInstance.application_id !== application.id ||
+    canonicalInstance.name !== application.name ||
+    canonicalInstance.image !== application.configuration.image
+  )) mismatch();
   if (applicationInstances.length === 0) {
+    if (canonicalInstance) {
+      if (canonicalInstance.status?.state !== "inactive" ||
+        Object.hasOwn(binding, "deployment_id") || Object.hasOwn(binding, "placement_id")) mismatch();
+      // A paused rollout can leave an assigned actor without a live placement.
+      // Preserve its inactive identity; owner acceptance must still prove startup.
+      return { applicationInstances: [], applicationCanonicalInstances: [{
+        id: canonicalInstance.id, application_id: canonicalInstance.application_id,
+        name: canonicalInstance.name, image: canonicalInstance.image,
+        status: { state: "inactive" },
+      }], applicationDurableObjects: [{ id: binding.id, name: binding.name }] };
+    }
     return { applicationInstances: [], applicationCanonicalInstances: [],
       applicationDurableObjects: [{ name: application.name }] };
   }
   const instance = applicationInstances[0];
-  const canonicalInstance = applicationCanonicalInstances[0];
-  const binding = applicationDurableObjects[0];
   const placement = instance?.current_placement;
   const status = placement?.status;
   if (
     !UUID.test(instance?.id ?? "") ||
     !UUID.test(placement?.id ?? "") ||
-    !/^[a-f0-9]{64}$/.test(binding.id ?? "") ||
-    canonicalInstance?.id !== binding.id ||
-    canonicalInstance.application_id !== application.id ||
-    canonicalInstance.name !== application.name ||
-    canonicalInstance.image !== application.configuration.image ||
-    canonicalInstance.status?.state !== "running" ||
+    canonicalInstance?.status?.state !== "running" ||
     binding.deployment_id !== instance.id || placement?.deployment_id !== instance.id ||
     binding.placement_id !== placement?.id ||
     binding.id !== placement?.durable_object_actor_id || binding.id !== status?.durable_object_id ||
