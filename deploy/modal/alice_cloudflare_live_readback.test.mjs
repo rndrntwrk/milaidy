@@ -3,6 +3,9 @@ import test from "node:test";
 
 import {
   aliceCloudflareContinuitySentinelBytes,
+  buildAliceCandidateCloudflareContinuityReadback,
+  buildAliceCloudflareContinuityConfig,
+  digestAliceCloudflareContinuityConfig,
 } from "./alice_cloudflare_continuity.mjs";
 import {
   fetchAliceCloudflareContinuityState,
@@ -11,6 +14,7 @@ import {
   fetchAliceCloudflareWorkflowVersionState,
   verifyAliceCloudflareWorkflowVersionSnapshot,
 } from "./alice_cloudflare_live_readback.mjs";
+import { setAliceEvidenceQueueDeliveryPaused } from "./alice_cloudflare_release.mjs";
 import {
   aliceTestCloudflareContinuityReadback,
   aliceTestProviderReadbacks,
@@ -98,7 +102,7 @@ function providerApi(calls) {
   };
 }
 
-function continuityApi(calls) {
+function continuityApi(calls, fixture = continuityFixture) {
   return async (url, options) => {
     const parsed = new URL(url);
     calls.push({ url: parsed.href, options });
@@ -106,32 +110,32 @@ function continuityApi(calls) {
     if (pathname === `/accounts/${accountId}/queues`) {
       return json({
         success: true,
-        result: [continuityFixture.queue, continuityFixture.deadLetterQueue],
+        result: [fixture.queue, fixture.deadLetterQueue],
       });
     }
     if (
       pathname ===
-      `/accounts/${accountId}/queues/${continuityFixture.queue.queue_id}/consumers`
+      `/accounts/${accountId}/queues/${fixture.queue.queue_id}/consumers`
     ) {
-      return json({ success: true, result: continuityFixture.queueConsumers });
+      return json({ success: true, result: fixture.queueConsumers });
     }
     if (
       pathname ===
-      `/accounts/${accountId}/queues/${continuityFixture.deadLetterQueue.queue_id}/consumers`
+      `/accounts/${accountId}/queues/${fixture.deadLetterQueue.queue_id}/consumers`
     ) {
       return json({
         success: true,
-        result: continuityFixture.deadLetterQueueConsumers,
+        result: fixture.deadLetterQueueConsumers,
       });
     }
     if (pathname === `/accounts/${accountId}/event_subscriptions/subscriptions`) {
-      return json({ success: true, result: continuityFixture.eventSubscriptions });
+      return json({ success: true, result: fixture.eventSubscriptions });
     }
     if (pathname === `/accounts/${accountId}/workflows/alice-production-plans`) {
-      return json({ success: true, result: continuityFixture.workflow });
+      return json({ success: true, result: fixture.workflow });
     }
     if (pathname === `/accounts/${accountId}/r2/buckets/alice-production-evidence`) {
-      return json({ success: true, result: continuityFixture.bucket });
+      return json({ success: true, result: fixture.bucket });
     }
     if (
       pathname ===
@@ -145,14 +149,14 @@ function continuityApi(calls) {
       return json({
         success: true,
         result: [{
-          key: continuityFixture.sentinel.key,
-          etag: continuityFixture.sentinel.etag,
-          size: continuityFixture.sentinel.size,
-          last_modified: continuityFixture.sentinel.uploaded,
-          storage_class: continuityFixture.sentinel.storage_class,
+          key: fixture.sentinel.key,
+          etag: fixture.sentinel.etag,
+          size: fixture.sentinel.size,
+          last_modified: fixture.sentinel.uploaded,
+          storage_class: fixture.sentinel.storage_class,
           http_metadata: {
-            contentType: continuityFixture.sentinel.content_type,
-            cacheControl: continuityFixture.sentinel.cache_control,
+            contentType: fixture.sentinel.content_type,
+            cacheControl: fixture.sentinel.cache_control,
           },
         }],
         result_info: { is_truncated: false, per_page: 2 },
@@ -1263,4 +1267,77 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     () => fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput),
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
   );
+});
+
+
+test("queue write waits for its pause flag while preserving signed continuity", async () => {
+  for (const deliveryPaused of [false, true]) {
+    const fixture = aliceTestCloudflareContinuityReadback();
+    fixture.queue.settings.delivery_paused = !deliveryPaused;
+    const expectedContinuityDigest = digestAliceCloudflareContinuityConfig(
+      buildAliceCloudflareContinuityConfig(
+        buildAliceCandidateCloudflareContinuityReadback(fixture),
+      ),
+    );
+    let writes = 0;
+    let sleeps = 0;
+    const baseFetch = continuityApi([], fixture);
+    const result = await setAliceEvidenceQueueDeliveryPaused({
+      apiToken: "test-token",
+      expectedDurableObjectNamespaceIds: fixture.durableObjectNamespaceIds,
+      expectedContinuityDigest,
+      deliveryPaused,
+      fetchImpl: async (url, options) => {
+        if (options.method === "PUT") {
+          writes++;
+          assert.equal(JSON.parse(options.body).settings.delivery_paused, deliveryPaused);
+          return json({ success: true, result: fixture.queue });
+        }
+        return baseFetch(url, options);
+      },
+      sleep: async (ms) => {
+        assert.equal(ms, 1_000);
+        sleeps++;
+        fixture.queue.settings.delivery_paused = deliveryPaused;
+      },
+    });
+    assert.equal(writes, 1);
+    assert.equal(sleeps, 1);
+    assert.equal(result.mutated, true);
+    assert.equal(result.before.queue.settings.delivery_paused, !deliveryPaused);
+    assert.equal(result.after.queue.settings.delivery_paused, deliveryPaused);
+  }
+});
+
+test("queue write stops on persistent stale reads or any other continuity drift", async () => {
+  for (const fault of ["stale", "dlq", "consumer"]) {
+    const fixture = aliceTestCloudflareContinuityReadback();
+    fixture.queue.settings.delivery_paused = true;
+    const expectedContinuityDigest = digestAliceCloudflareContinuityConfig(
+      buildAliceCloudflareContinuityConfig(
+        buildAliceCandidateCloudflareContinuityReadback(fixture),
+      ),
+    );
+    let writes = 0;
+    let sleeps = 0;
+    const baseFetch = continuityApi([], fixture);
+    await assert.rejects(() => setAliceEvidenceQueueDeliveryPaused({
+      apiToken: "test-token",
+      expectedDurableObjectNamespaceIds: fixture.durableObjectNamespaceIds,
+      expectedContinuityDigest,
+      deliveryPaused: false,
+      fetchImpl: async (url, options) => {
+        if (options.method === "PUT") {
+          writes++;
+          if (fault === "dlq") fixture.deadLetterQueue.settings.delivery_paused = false;
+          if (fault === "consumer") fixture.queueConsumers[0].settings.batch_size = 9;
+          return json({ success: true, result: fixture.queue });
+        }
+        return baseFetch(url, options);
+      },
+      sleep: async () => { sleeps++; },
+    }), /ALICE_(CONTINUITY_CHANGED_DURING_PROMOTION|CLOUDFLARE_LIVE_READBACK_INVALID)/);
+    assert.equal(writes, 1);
+    assert.equal(sleeps, fault === "stale" ? 5 : 0);
+  }
 });
