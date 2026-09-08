@@ -348,6 +348,17 @@ test("binds the candidate queue posture without provider timestamp circularity",
   const candidate = buildAliceCandidateCloudflareContinuityReadback(paused);
   assert.equal(candidate.queue.settings.delivery_paused, false);
   assert.equal(candidate.deadLetterQueue.settings.delivery_paused, true);
+  assert.deepEqual(
+    buildAliceCandidateCloudflareContinuityReadback(candidate),
+    candidate,
+  );
+  assert.throws(
+    () => buildAliceCandidateCloudflareContinuityReadback({
+      ...candidate,
+      deadLetterQueue: readback.deadLetterQueue,
+    }),
+    /ALICE_CLOUDFLARE_CONTINUITY_CONFIG_INVALID/,
+  );
 
   const providerAfterResume = {
     ...candidate,
