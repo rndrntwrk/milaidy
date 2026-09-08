@@ -1584,7 +1584,19 @@ test("requires the exact existing continuity resources before pre-import mutatio
     bootstrapModule.verifyAliceBootstrapPreimportContinuity(preflight),
     { evidenceQueue: preflight.queues.evidence },
   );
+  const servingPreflight = structuredClone(preflight);
+  servingPreflight.queues.evidence.settings.delivery_paused = false;
+  assert.deepEqual(
+    bootstrapModule.verifyAliceBootstrapPreimportContinuity(servingPreflight),
+    { evidenceQueue: servingPreflight.queues.evidence },
+  );
+  const missingDeliveryState = structuredClone(preflight);
+  delete missingDeliveryState.queues.evidence.settings.delivery_paused;
+  const unpausedDeadLetter = structuredClone(preflight);
+  unpausedDeadLetter.queues.deadLetter.settings.delivery_paused = false;
   for (const invalidPreflight of [
+    missingDeliveryState,
+    unpausedDeadLetter,
     { ...preflight, queues: { ...preflight.queues, evidence: null } },
     { ...preflight, consumers: { ...preflight.consumers, evidence: [] } },
     { ...preflight, bucket: null },
