@@ -333,9 +333,61 @@ function expectedDurableObjectNamespaceIds(config, expected) {
   return normalized;
 }
 
+export function normalizeAliceContainerInstanceReadback({
+  application,
+  applicationInstances,
+  applicationDurableObjects,
+}) {
+  if (
+    application?.name !== "alice-production-runtime" ||
+    !Number.isSafeInteger(application.version) || application.version < 1 ||
+    !CLOUDFLARE_CONTAINER_IMAGE.test(application.configuration?.image ?? "") ||
+    !Array.isArray(applicationInstances) || applicationInstances.length > 1 ||
+    !Array.isArray(applicationDurableObjects) || applicationDurableObjects.length !== 1 ||
+    applicationDurableObjects[0]?.name !== application.name
+  ) mismatch();
+  if (applicationInstances.length === 0) {
+    return { applicationInstances: [], applicationDurableObjects: [{ name: application.name }] };
+  }
+  const instance = applicationInstances[0];
+  const binding = applicationDurableObjects[0];
+  const placement = instance?.current_placement;
+  const status = placement?.status;
+  if (
+    !UUID.test(instance?.id ?? "") ||
+    !UUID.test(placement?.id ?? "") ||
+    !/^[a-f0-9]{64}$/.test(binding.id ?? "") ||
+    binding.deployment_id !== instance.id || placement?.deployment_id !== instance.id ||
+    binding.placement_id !== placement?.id ||
+    binding.id !== placement?.durable_object_actor_id || binding.id !== status?.durable_object_id ||
+    instance.app_version !== application.version || placement?.deployment_version !== application.version ||
+    instance.image !== application.configuration?.image ||
+    placement?.terminate !== false || status?.health !== "running" ||
+    status?.container_status !== "running" || status?.durable_object !== "connected"
+  ) mismatch();
+  // Preserve the association and deployment identity, excluding changing events
+  // and timestamps from the before/after comparison.
+  return {
+    applicationInstances: [{
+      id: instance.id, app_version: instance.app_version, image: instance.image,
+      current_placement: {
+        id: placement.id, deployment_id: placement.deployment_id,
+        deployment_version: placement.deployment_version,
+        durable_object_actor_id: placement.durable_object_actor_id,
+        terminate: placement.terminate,
+        status: { health: status.health, container_status: status.container_status,
+          durable_object: status.durable_object, durable_object_id: status.durable_object_id },
+      },
+    }],
+    applicationDurableObjects: [{ id: binding.id, name: binding.name,
+      deployment_id: binding.deployment_id, placement_id: binding.placement_id }],
+  };
+}
+
 export function verifyAliceContainerApplicationReadback({
   application,
   applicationInstances,
+  applicationDurableObjects,
   expectedApplicationImage,
   materializedWranglerConfig,
   expectedNamespaceId,
@@ -350,8 +402,6 @@ export function verifyAliceContainerApplicationReadback({
   // here; actual running Containers are verified via applicationInstances.
   if (
     !application ||
-    !Array.isArray(applicationInstances) ||
-    applicationInstances.length !== 0 ||
     materializedWranglerConfig?.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
     !Array.isArray(materializedWranglerConfig?.containers) ||
     materializedWranglerConfig.containers.length !== 1 ||
@@ -397,6 +447,7 @@ export function verifyAliceContainerApplicationReadback({
   ) {
     mismatch();
   }
+  normalizeAliceContainerInstanceReadback({ application, applicationInstances, applicationDurableObjects });
   return {
     applicationId: application.id,
     applicationName: application.name,
@@ -644,6 +695,7 @@ export async function verifyAliceWorkerProviderReadback({
   workflow,
   containerApplication,
   containerApplicationInstances,
+  containerApplicationDurableObjects,
   materializedWranglerConfig,
   expectedEffectiveConfig,
   serializedManifest,
@@ -660,6 +712,7 @@ export async function verifyAliceWorkerProviderReadback({
     ? verifyAliceContainerApplicationReadback({
         application: containerApplication,
         applicationInstances: containerApplicationInstances,
+        applicationDurableObjects: containerApplicationDurableObjects,
         materializedWranglerConfig,
         expectedNamespaceId: continuityNamespaceIds[0]?.namespaceId,
       })
@@ -673,7 +726,8 @@ export async function verifyAliceWorkerProviderReadback({
     materializedWranglerConfig.name !== expectedEffectiveConfig?.worker?.name ||
     (role !== "runtimeHost" &&
       (containerApplication !== undefined ||
-        containerApplicationInstances !== undefined))
+        containerApplicationInstances !== undefined ||
+        containerApplicationDurableObjects !== undefined))
   ) {
     mismatch();
   }

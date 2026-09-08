@@ -22,6 +22,7 @@ import {
 } from "./alice_cloudflare_continuity.mjs";
 import {
   readAliceWorkerMainModule,
+  normalizeAliceContainerInstanceReadback,
   verifyAliceProviderControlFingerprints,
   verifyAliceWorkerProviderReadback,
 } from "./alice_cloudflare_provider_readback.mjs";
@@ -261,23 +262,17 @@ export async function fetchAliceRuntimeHostContainerState({
       `/accounts/${accountId}/containers/dash/applications/${application.id}/instances`,
       { per_page: 100 },
     ));
-    const instances = instancePage?.instances;
-    const durableObjects = instancePage?.durable_objects ?? [];
-    if (
-      !Array.isArray(instances) ||
-      !Array.isArray(durableObjects) ||
-      instances.length !== 0 ||
-      durableObjects.length !== 1 ||
-      durableObjects[0]?.name !== application.name
-    ) {
-      readbackInvalid();
-    }
+    const instanceState = normalizeAliceContainerInstanceReadback({
+      application: detailed,
+      applicationInstances: instancePage?.instances,
+      applicationDurableObjects: instancePage?.durable_objects,
+    });
     const terminalDetail = result(await apiGetJson(
       client,
       `/accounts/${accountId}/containers/applications/${application.id}`,
     ));
     if (!canonicalEqual(detailed, terminalDetail)) readbackInvalid();
-    return { application: terminalDetail, applicationInstances: instances };
+    return { application: terminalDetail, ...instanceState };
   } catch (error) {
     if (
       error instanceof Error &&
@@ -958,6 +953,8 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
           containerApplication: runtimeHostContainerState.application,
           containerApplicationInstances:
             runtimeHostContainerState.applicationInstances,
+          containerApplicationDurableObjects:
+            runtimeHostContainerState.applicationDurableObjects,
         } : {}),
         materializedWranglerConfig: config,
         expectedEffectiveConfig,
