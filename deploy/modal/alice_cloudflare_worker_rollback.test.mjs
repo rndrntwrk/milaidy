@@ -305,6 +305,7 @@ test("rejects malformed immutable resources and provider additions", () => {
 
 test("captures the production-shaped current response for every Alice Worker", async () => {
   const fixtures = sixRoleRollbackReadbacks();
+  const retriedVersionUrls = [];
   const json = (result) => new Response(
     JSON.stringify({ success: true, result }),
     { status: 200, headers: { "content-type": "application/json" } },
@@ -318,7 +319,14 @@ test("captures the production-shaped current response for every Alice Worker", a
     assert.ok(fixture);
     const suffix = match[2];
     if (suffix === "/deployments") return json(fixture.deployment);
-    if (suffix === `/versions/${fixture.version.id}`) return json(fixture.version);
+    if (suffix === `/versions/${fixture.version.id}`) {
+      if (fixture === fixtures.statePlane) {
+        retriedVersionUrls.push(input);
+        if (retriedVersionUrls.length === 1) return new Response("private upstream detail", { status: 503 });
+        if (retriedVersionUrls.length === 2) return Response.json({ success: false, errors: [] }, { status: 503 });
+      }
+      return json(fixture.version);
+    }
     if (suffix === "/script-settings") return json(fixture.scriptSettings);
     throw new Error(`unexpected ${url}`);
   };
@@ -328,6 +336,8 @@ test("captures the production-shaped current response for every Alice Worker", a
     apiToken: "test-api-token",
     baseUrl: "https://api.cloudflare.test/client/v4",
   });
+  assert.equal(retriedVersionUrls.length, 3);
+  assert.equal(new Set(retriedVersionUrls).size, 1);
   assert.deepEqual(Object.keys(captured), [
     "access",
     "runtimeHost",
@@ -372,6 +382,106 @@ test("captures the production-shaped current response for every Alice Worker", a
     captured.runtimeHost.versionResources.script_runtime.migration_tag,
     "v2-alice-runtime-container",
   );
+});
+
+test("capture API diagnostics expose only safe status and numeric Cloudflare codes", async () => {
+  const secret = "must-not-leak-api-token-or-provider-body\n/private/secret/path";
+  const fixture = sixRoleRollbackReadbacks().access;
+  for (const stage of ["deployments-before", "version"]) {
+    for (const [fetchImpl, category, extra] of [
+      [async () => { throw new Error(secret); }, "transport", {}],
+      [async () => new Response(JSON.stringify({
+        success: false,
+        errors: [{ code: 10000, message: secret }, { code: secret }],
+        result: secret,
+      }), { status: 503, headers: { "x-provider-secret": secret.split("\n")[0] } }),
+      "http", { status: 503, cfErrorCodes: [10000] }],
+      [async () => new Response(secret), "json_parse", { status: 200 }],
+      [async () => Response.json({ success: false, errors: [{ code: 10001, message: secret }] }),
+      "envelope", { status: 200, cfErrorCodes: [10001] }],
+      [async () => new Response(secret, { status: 403 }), "http", { status: 403 }],
+    ]) {
+      let failedCalls = 0;
+      await assert.rejects(
+        () => captureAliceCloudflareWorkerRollbackState({
+          fetchImpl: async (input) => {
+            if (stage === "version" && input.endsWith("/deployments")) {
+              return Response.json({ success: true, result: fixture.deployment });
+            }
+            failedCalls += 1;
+            return fetchImpl();
+          },
+          apiToken: secret.split("\n")[0],
+        }),
+        (error) => {
+          assert.equal(error.message, "ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID " + JSON.stringify({
+            role: "access", stage, category, ...extra,
+          }));
+          assert.equal(error.message.split("\n").length, 1);
+          assert.equal(error.message.includes("must-not-leak"), false);
+          assert.equal(error.cause, undefined);
+          return true;
+        },
+      );
+      assert.equal(failedCalls, 1);
+    }
+  }
+});
+
+test("stops after three 503/CF_NONE reads of the same Worker version", async () => {
+  const fixture = sixRoleRollbackReadbacks().access;
+  const versionUrls = [];
+  await assert.rejects(
+    () => captureAliceCloudflareWorkerRollbackState({
+      apiToken: "test-api-token",
+      fetchImpl: async (input, init) => {
+        assert.equal(init.method, "GET");
+        if (input.endsWith("/deployments")) return Response.json({ success: true, result: fixture.deployment });
+        versionUrls.push(input);
+        return new Response("private upstream detail", { status: 503 });
+      },
+    }),
+    (error) => error.message === "ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID " + JSON.stringify({
+      role: "access", stage: "version", category: "http", status: 503,
+    }),
+  );
+  assert.equal(versionUrls.length, 3);
+  assert.equal(new Set(versionUrls).size, 1);
+});
+
+test("capture validation diagnostics identify the rejected stage without provider values", async () => {
+  const fixture = sixRoleRollbackReadbacks().access;
+  for (const [stage, category] of [
+    ["deployments-before", "deployment_identity"],
+    ["version", "version_identity"],
+    ["script-settings", "script_settings"],
+    ["version", "version_resources"],
+  ]) {
+    const secret = "must-not-leak-provider-value";
+    const fetchImpl = async (input) => {
+      let result;
+      if (input.endsWith("/deployments")) {
+        result = category === "deployment_identity" ? { deployments: [{ id: secret }] } : fixture.deployment;
+      } else if (input.endsWith("/script-settings")) {
+        result = category === "script_settings" ? { [secret]: secret } : fixture.scriptSettings;
+      } else {
+        result = { ...fixture.version };
+        if (category === "version_identity") result.id = secret;
+        if (category === "version_resources") result.resources = { [secret]: secret };
+      }
+      return Response.json({ success: true, result });
+    };
+    await assert.rejects(
+      () => captureAliceCloudflareWorkerRollbackState({ fetchImpl, apiToken: "test-api-token" }),
+      (error) => {
+        assert.equal(error.message, "ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID " + JSON.stringify({
+          role: "access", stage, category,
+        }));
+        assert.equal(error.message.includes(secret), false);
+        return true;
+      },
+    );
+  }
 });
 
 test("restores persistent settings and proves the prior serving version twice", async () => {
@@ -581,6 +691,17 @@ test("restores persistent settings and proves the prior serving version twice", 
       apiToken: "test-api-token",
       baseUrl: "https://api.cloudflare.test/client/v4",
     }),
-    /ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID/,
+    (error) => {
+      assert.equal(error.message, "ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID " + JSON.stringify({
+        role: "access",
+        stage: "deployments-after",
+        category: "deployment_drift",
+        beforeDeploymentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        beforeVersionId: "11111111-1111-4111-8111-111111111112",
+        afterDeploymentId: "44444444-4444-4444-8444-444444444444",
+        afterVersionId: "11111111-1111-4111-8111-111111111112",
+      }));
+      return true;
+    },
   );
 });

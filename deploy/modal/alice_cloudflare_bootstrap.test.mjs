@@ -662,6 +662,47 @@ test("binds inactive or exact active Access and revalidates the provider phase t
     ),
     traffic: structuredClone(observedTraffic),
   };
+  const versionUrls = [];
+  let persistent503 = false;
+  const fetchImpl = async (input, init) => {
+    assert.equal(init.method, "GET");
+    const pathname = new URL(input).pathname;
+    const role = Object.keys(boundary.roles).find((key) =>
+      pathname.includes(`/scripts/${boundary.roles[key].scriptName}/`));
+    let result;
+    if (pathname.includes("/versions/")) {
+      if (role === "statePlane") {
+        versionUrls.push(input);
+        if (persistent503 || versionUrls.length === 1) {
+          return new Response("private upstream detail", { status: 503 });
+        }
+        if (versionUrls.length === 2) return Response.json({ success: false, errors: [] }, { status: 503 });
+      }
+      result = capture.versions[role];
+    } else if (pathname.endsWith("/deployments")) {
+      result = capture.activeDeployments[role];
+    } else if (pathname.endsWith("/workers/routes")) {
+      result = capture.traffic.routes;
+    } else if (pathname.endsWith("/workers/domains")) {
+      result = capture.traffic.customDomains;
+    } else {
+      assert.fail("unexpected provider read");
+    }
+    return Response.json({ success: true, result });
+  };
+  assert.deepEqual(await bootstrapModule.captureAliceBootstrapVersionBoundaryCurrent({
+    boundary, fetchImpl, apiToken: "test-api-token",
+  }), capture);
+  assert.equal(versionUrls.length, 3);
+  assert.equal(new Set(versionUrls).size, 1);
+  persistent503 = true;
+  versionUrls.length = 0;
+  await assert.rejects(
+    bootstrapModule.captureAliceBootstrapVersionBoundaryCurrent({ boundary, fetchImpl, apiToken: "test-api-token" }),
+    (error) => error.message === "ALICE_CLOUDFLARE_BOOTSTRAP_API_INVALID:GET_BOUNDARY_STATE_PLANE_VERSION:HTTP_503:CF_NONE",
+  );
+  assert.equal(versionUrls.length, 3);
+  assert.equal(new Set(versionUrls).size, 1);
   let captures = 0;
   const namespaceIds = await bootstrapModule
     .revalidateAliceBootstrapVersionBoundaryCurrent({

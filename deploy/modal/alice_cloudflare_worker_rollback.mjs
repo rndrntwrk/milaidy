@@ -4,6 +4,8 @@ import {
 } from "../../workers/alice-effective-config.js";
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
+const TRANSIENT_VERSION_READ_ATTEMPTS = 3;
+const TRANSIENT_VERSION_READ_DELAY_MS = 100;
 const ROLES = [
   "access",
   "runtimeHost",
@@ -592,26 +594,66 @@ function validInputs({ fetchImpl, apiToken, accountId, baseUrl }) {
   }
 }
 
-async function apiRequest(client, method, pathname, body) {
-  const response = await client.fetchImpl(`${client.baseUrl}${pathname}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${client.apiToken}`,
-      accept: "application/json",
-      "cache-control": "no-cache",
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  if (!(response instanceof Response) || !response.ok) invalid();
-  let envelope;
-  try {
-    envelope = await response.json();
-  } catch {
-    invalid();
+function readbackInvalid(context, category, details = {}) {
+  if (!context) invalid();
+  // Only static labels, numeric status/codes and validated serving IDs belong here.
+  throw new Error("ALICE_CLOUDFLARE_WORKER_ROLLBACK_INVALID " + JSON.stringify({
+    role: context.role,
+    stage: context.stage,
+    category,
+    ...details,
+  }));
+}
+
+async function apiRequest(client, method, pathname, body, context) {
+  const attempts = method === "GET" && context?.stage === "version"
+    ? TRANSIENT_VERSION_READ_ATTEMPTS : 1;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    let response;
+    try {
+      response = await client.fetchImpl(`${client.baseUrl}${pathname}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${client.apiToken}`,
+          accept: "application/json",
+          "cache-control": "no-cache",
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    } catch {
+      readbackInvalid(context, "transport");
+    }
+    if (!(response instanceof Response)) readbackInvalid(context, "response_type");
+    let envelope;
+    try {
+      envelope = await response.json();
+    } catch {
+      if (response.status === 503 && attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, TRANSIENT_VERSION_READ_DELAY_MS));
+        continue;
+      }
+      readbackInvalid(context, response.ok ? "json_parse" : "http", {
+        status: response.status,
+      });
+    }
+    const cfErrorCodes = Array.isArray(envelope?.errors)
+      ? [...new Set(envelope.errors.map((error) => error?.code)
+        .filter((code) => Number.isSafeInteger(code) && code >= 0))].slice(0, 8)
+      : [];
+    if (response.status === 503 && cfErrorCodes.length === 0 && attempt < attempts) {
+      await new Promise((resolve) => setTimeout(resolve, TRANSIENT_VERSION_READ_DELAY_MS));
+      continue;
+    }
+    if (!response.ok || envelope?.success !== true || !("result" in envelope)) {
+      readbackInvalid(context, response.ok ? "envelope" : "http", {
+        status: response.status,
+        ...(cfErrorCodes.length === 0 ? {} : { cfErrorCodes }),
+      });
+    }
+    return envelope.result;
   }
-  if (envelope?.success !== true || !("result" in envelope)) invalid();
-  return envelope.result;
+  invalid();
 }
 
 function deploymentIdentity(value) {
@@ -643,28 +685,45 @@ function normalizedEtag(value) {
 async function captureWorker(client, role) {
   const worker = WORKERS[role];
   const root = `/accounts/${client.accountId}/workers/scripts/${worker}`;
-  const serving = deploymentIdentity(
-    await apiRequest(client, "GET", `${root}/deployments`),
+  const read = (stage, pathname) =>
+    apiRequest(client, "GET", pathname, undefined, { role, stage });
+  const validate = (stage, category, operation) => {
+    try {
+      return operation();
+    } catch {
+      readbackInvalid({ role, stage }, category);
+    }
+  };
+  const deploymentBefore = await read("deployments-before", `${root}/deployments`);
+  const serving = validate("deployments-before", "deployment_identity", () =>
+    deploymentIdentity(deploymentBefore),
   );
-  const version = await apiRequest(
-    client,
-    "GET",
-    `${root}/versions/${serving.versionId}`,
-  );
-  if (version?.id !== serving.versionId) invalid();
+  const version = await read("version", `${root}/versions/${serving.versionId}`);
+  if (version?.id !== serving.versionId) {
+    readbackInvalid({ role, stage: "version" }, "version_identity");
+  }
+  const settings = await read("script-settings", `${root}/script-settings`);
   const snapshot = {
     worker,
     serving,
-    scriptSettings: normalizeAliceCloudflareScriptSettings(
-      await apiRequest(client, "GET", `${root}/script-settings`),
+    scriptSettings: validate("script-settings", "script_settings", () =>
+      normalizeAliceCloudflareScriptSettings(settings),
     ),
-    versionResources: normalizeAliceCloudflareVersionResources(version.resources),
+    versionResources: validate("version", "version_resources", () =>
+      normalizeAliceCloudflareVersionResources(version.resources),
+    ),
   };
-  const servingAfter = deploymentIdentity(
-    await apiRequest(client, "GET", `${root}/deployments`),
+  const deploymentAfter = await read("deployments-after", `${root}/deployments`);
+  const servingAfter = validate("deployments-after", "deployment_identity", () =>
+    deploymentIdentity(deploymentAfter),
   );
   if (canonicalAliceJson(servingAfter) !== canonicalAliceJson(serving)) {
-    invalid();
+    readbackInvalid({ role, stage: "deployments-after" }, "deployment_drift", {
+      beforeDeploymentId: serving.deploymentId,
+      beforeVersionId: serving.versionId,
+      afterDeploymentId: servingAfter.deploymentId,
+      afterVersionId: servingAfter.versionId,
+    });
   }
   return snapshot;
 }

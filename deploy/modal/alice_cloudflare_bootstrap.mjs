@@ -127,8 +127,8 @@ const EXPECTED_DURABLE_OBJECT_BINDINGS = Object.freeze({
     }),
   ]),
 });
-const TRANSIENT_ROUTE_READ_ATTEMPTS = 3;
-const TRANSIENT_ROUTE_READ_DELAY_MS = 100;
+const TRANSIENT_READ_ATTEMPTS = 3;
+const TRANSIENT_READ_DELAY_MS = 100;
 
 function invalid(message = "ALICE_CLOUDFLARE_BOOTSTRAP_INVALID") {
   throw new Error(message);
@@ -206,18 +206,18 @@ async function apiEnvelope(
     headers = {},
     allowNotFound = false,
     requireResult = true,
-    retryTransientRoute503 = false,
+    retryTransient503 = false,
     transientRouteReadSleep = defaultTransientRouteReadSleep,
   },
 ) {
   if (!API_OPERATION.test(operation ?? "")) invalid();
   if (
-    retryTransientRoute503 &&
+    retryTransient503 &&
     (method !== "GET" || typeof transientRouteReadSleep !== "function")
   ) {
     invalid();
   }
-  const attempts = retryTransientRoute503 ? TRANSIENT_ROUTE_READ_ATTEMPTS : 1;
+  const attempts = retryTransient503 ? TRANSIENT_READ_ATTEMPTS : 1;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     let response;
     try {
@@ -246,23 +246,23 @@ async function apiEnvelope(
       value = await response.json();
     } catch {
       if (
-        retryTransientRoute503 &&
+        retryTransient503 &&
         response.status === 503 &&
         attempt < attempts
       ) {
-        await transientRouteReadSleep(TRANSIENT_ROUTE_READ_DELAY_MS);
+        await transientRouteReadSleep(TRANSIENT_READ_DELAY_MS);
         continue;
       }
       providerApiInvalid(operation, response.status, null);
     }
     if (!response.ok) {
       if (
-        retryTransientRoute503 &&
+        retryTransient503 &&
         response.status === 503 &&
         providerErrorCode(value) === undefined &&
         attempt < attempts
       ) {
-        await transientRouteReadSleep(TRANSIENT_ROUTE_READ_DELAY_MS);
+        await transientRouteReadSleep(TRANSIENT_READ_DELAY_MS);
         continue;
       }
       providerApiInvalid(operation, response.status, value);
@@ -364,7 +364,7 @@ async function apiGetAllResults({
       method: "GET",
       operation,
       pathname: `${pathname}${separator}page=${page}&per_page=100`,
-      retryTransientRoute503,
+      retryTransient503: retryTransientRoute503,
       transientRouteReadSleep,
     });
     if (envelope === null || !Array.isArray(envelope.result)) {
@@ -1634,6 +1634,7 @@ export async function captureAliceBootstrapVersionBoundaryCurrent({
       method: "GET",
       operation: `GET_BOUNDARY_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
       pathname: `${workerPath}/versions/${verified.roles[role].bootstrapSelectedVersionId}`,
+      retryTransient503: true,
     });
     activeDeployments[role] = await api({
       fetchImpl,
@@ -2246,6 +2247,7 @@ async function main() {
             `GET_ACTIVE_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
           pathname:
             `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ROLE_WORKERS[role]}/versions/${priorVersionIds[role]}`,
+          retryTransient503: true,
         });
   }
   const identityActions = planAliceBootstrapIdentityActions({
@@ -2296,6 +2298,7 @@ async function main() {
           `GET_${role.replace(/([A-Z])/g, "_$1").toUpperCase()}_VERSION`,
         pathname:
           `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/workers/scripts/${ROLE_WORKERS[role]}/versions/${selectedVersionId}`,
+        retryTransient503: true,
       }),
     fetchActiveVersionId: async (role) =>
       fetchAliceActiveWorkerVersionId({
