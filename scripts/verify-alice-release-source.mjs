@@ -3,8 +3,8 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
 const COMMIT = /^[a-f0-9]{40}$/;
-// Runtime image inputs remain frozen. The two host modules are rebuilt and
-// attested by preimport; all other Worker bytes remain from the original build.
+// Runtime image inputs remain frozen. Control and both host modules are rebuilt
+// and attested; the other three Worker bytes must match the original build.
 const CONTROLLER_PATHS = new Set([
   '.github/workflows/recover-alice-production-watchdog.yml',
   '.github/workflows/alice-cloudflare-container-bringup.yml',
@@ -48,6 +48,8 @@ const CONTROLLER_PATHS = new Set([
   'workers/alice-access-gateway/test/index.test.ts',
   'workers/alice-ai-gateway/src/index.test.mjs',
   'workers/alice-production-control/test/runtime-config.test.ts',
+  'workers/alice-production-control/src/authority.ts',
+  'workers/alice-production-control/test/authority.test.ts',
 ]);
 
 export function verifyAliceReleaseSource({sourceRoot, sourceCommit, deploymentControllerCommit}) {

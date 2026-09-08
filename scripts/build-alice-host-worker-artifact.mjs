@@ -11,8 +11,8 @@ import {
   verifyAliceWorkerBundleArtifact,
 } from '../deploy/modal/alice_worker_bundle_artifact.mjs';
 
-// Only the two Workers containing the container host are rebuilt. Preserve
-// the other four Workers and migrations from the verified original build.
+// Control and both container host Workers may change. Compile all six to prove
+// shared-source changes preserve the other three Workers and migrations.
 export function buildAliceHostWorkerArtifact({
   sourceRoot, sourceCommit, deploymentControllerCommit, baseRoot, outputRoot,
   wranglerBin,
@@ -33,33 +33,39 @@ export function buildAliceHostWorkerArtifact({
   const version = execFileSync(wranglerBin, ['--version'], { cwd: sourceRoot, encoding: 'utf8' });
   if (!/^4\.122\.0$/m.test(version.trim())) throw new Error('ALICE_HOST_WORKER_TOOL_INVALID');
   fs.mkdirSync(outputRoot, { recursive: false });
-  for (const member of [...Object.values(base.bundles), ...base.migrations]) {
+  for (const member of base.migrations) {
     const destination = path.join(outputRoot, member.path);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(path.join(baseRoot, member.path), destination, fs.constants.COPYFILE_EXCL);
   }
-  for (const role of ['control', 'aiGateway', 'statePlane', 'connectorPlane']) {
+  for (const role of ['aiGateway', 'statePlane', 'connectorPlane']) {
     const relative = `${base.bundles[role].path}.map`;
     const sourceMap = path.join(baseRoot, relative);
     if (!fs.existsSync(sourceMap)) continue;
     if (!fs.lstatSync(sourceMap).isFile()) throw new Error('ALICE_HOST_WORKER_SOURCE_MAP_INVALID');
+    fs.mkdirSync(path.dirname(path.join(outputRoot, relative)), { recursive: true });
     fs.copyFileSync(sourceMap, path.join(outputRoot, relative), fs.constants.COPYFILE_EXCL);
   }
   for (const [role, configName, emittedName] of [
-    ['access', 'wrangler.jsonc', 'worker.js'],
-    ['runtimeHost', 'wrangler.runtime-host.jsonc', 'runtime-host.js'],
+    ['access', 'alice-access-gateway/wrangler.jsonc', 'worker.js'],
+    ['runtimeHost', 'alice-access-gateway/wrangler.runtime-host.jsonc', 'runtime-host.js'],
+    ['control', 'alice-production-control/wrangler.jsonc', 'index.js'],
+    ['aiGateway', 'alice-ai-gateway/wrangler.jsonc', 'index.js'],
+    ['statePlane', 'alice-state-plane/wrangler.jsonc', 'index.js'],
+    ['connectorPlane', 'alice-connector-plane/wrangler.jsonc', 'index.js'],
   ]) {
     const destination = path.join(outputRoot, base.bundles[role].path);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
     execFileSync(wranglerBin, [
       'deploy', '--dry-run', '--outdir', path.dirname(destination),
-      '--config', path.join(sourceRoot, 'workers/alice-access-gateway', configName),
+      '--config', path.join(sourceRoot, 'workers', configName),
     ], { cwd: sourceRoot, stdio: 'inherit' });
     fs.renameSync(path.join(path.dirname(destination), emittedName), destination);
   }
   const artifact = buildAliceWorkerBundleArtifact({
     root: outputRoot, sourceCommit: deploymentControllerCommit, wranglerVersion: '4.122.0',
   });
-  if (['control', 'aiGateway', 'statePlane', 'connectorPlane'].some(role =>
+  if (['aiGateway', 'statePlane', 'connectorPlane'].some(role =>
     artifact.bundles[role].sha256 !== base.bundles[role].sha256) ||
     JSON.stringify(artifact.migrations) !== JSON.stringify(base.migrations)) {
     throw new Error('ALICE_HOST_WORKER_BASE_DRIFT');
