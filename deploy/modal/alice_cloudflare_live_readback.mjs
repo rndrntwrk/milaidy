@@ -262,9 +262,15 @@ export async function fetchAliceRuntimeHostContainerState({
       `/accounts/${accountId}/containers/dash/applications/${application.id}/instances`,
       { per_page: 100 },
     ));
+    // The documented endpoint defaults to all instances when per_page is omitted.
+    const canonicalInstancePage = result(await apiGetJson(
+      client,
+      `/accounts/${accountId}/containers/applications/${application.id}/instances`,
+    ));
     const instanceState = normalizeAliceContainerInstanceReadback({
       application: detailed,
       applicationInstances: instancePage?.instances,
+      applicationCanonicalInstances: canonicalInstancePage?.instances,
       applicationDurableObjects: instancePage?.durable_objects,
     });
     const terminalDetail = result(await apiGetJson(
@@ -953,6 +959,8 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
           containerApplication: runtimeHostContainerState.application,
           containerApplicationInstances:
             runtimeHostContainerState.applicationInstances,
+          containerApplicationCanonicalInstances:
+            runtimeHostContainerState.applicationCanonicalInstances,
           containerApplicationDurableObjects:
             runtimeHostContainerState.applicationDurableObjects,
         } : {}),
