@@ -1,0 +1,34 @@
+diff --git a/plugins/plugin-agent-orchestrator/src/services/orchestrator-task-store.ts b/plugins/plugin-agent-orchestrator/src/services/orchestrator-task-store.ts
+--- a/plugins/plugin-agent-orchestrator/src/services/orchestrator-task-store.ts
++++ b/plugins/plugin-agent-orchestrator/src/services/orchestrator-task-store.ts
+@@ -1300,8 +1300,12 @@
+     // packages/core/src/runtime.ts declares `public adapter!: IDatabaseAdapter`);
+     // fall back to the legacy `runtime.databaseAdapter` name that older test
+     // harnesses and some custom container runtimes still use.
+-    const adapter =
++    const runtimeAdapter =
+       options.runtime?.adapter ?? options.runtime?.databaseAdapter;
++    // Alice has a dedicated plugin SQL store; its core adapter is not SQL.
++    const adapter = isRecord(runtimeAdapter) && isRecord(runtimeAdapter.runtimeSql)
++      ? { db: runtimeAdapter.runtimeSql }
++      : runtimeAdapter;
+     const logger = options.runtime?.logger;
+     if (
+       (options.backend === undefined || options.backend === "runtime-db") &&
+diff --git a/plugins/plugin-agent-orchestrator/src/services/session-store.ts b/plugins/plugin-agent-orchestrator/src/services/session-store.ts
+--- a/plugins/plugin-agent-orchestrator/src/services/session-store.ts
++++ b/plugins/plugin-agent-orchestrator/src/services/session-store.ts
+@@ -897,8 +897,12 @@
+     // declares `public adapter!: IDatabaseAdapter`); fall back to the legacy
+     // `runtime.databaseAdapter` name that older test harnesses and some custom
+     // container runtimes still use.
+-    const adapter =
++    const runtimeAdapter =
+       options.runtime?.adapter ?? options.runtime?.databaseAdapter;
++    // Alice has a dedicated plugin SQL store; its core adapter is not SQL.
++    const adapter = isRecord(runtimeAdapter) && isRecord(runtimeAdapter.runtimeSql)
++      ? { db: runtimeAdapter.runtimeSql }
++      : runtimeAdapter;
+     const logger = options.runtime?.logger;
+     if (
+       (options.backend === undefined || options.backend === "runtime-db") &&

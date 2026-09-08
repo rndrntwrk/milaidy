@@ -12,6 +12,7 @@ export type RuntimeDb = {
 
 type RuntimeDbAdapterLike = {
   db?: RuntimeDb;
+  runtimeSql?: RuntimeDb;
   getRawConnection?: () => unknown;
 };
 
@@ -104,14 +105,10 @@ function getRuntimeDbAdapter(runtime: IAgentRuntime): RuntimeDbAdapterLike {
     adapter?: RuntimeDbAdapterLike;
     databaseAdapter?: RuntimeDbAdapterLike;
   };
-  const adapter =
-    runtimeLike.adapter?.db &&
-    typeof runtimeLike.adapter.db.execute === "function"
-      ? runtimeLike.adapter
-      : runtimeLike.databaseAdapter?.db &&
-          typeof runtimeLike.databaseAdapter.db.execute === "function"
-        ? runtimeLike.databaseAdapter
-        : null;
+  const adapter = [runtimeLike.adapter, runtimeLike.databaseAdapter].find(
+    (candidate) =>
+      typeof (candidate?.runtimeSql ?? candidate?.db)?.execute === "function",
+  );
   if (!adapter) {
     throw new Error("runtime database adapter unavailable");
   }
@@ -119,7 +116,8 @@ function getRuntimeDbAdapter(runtime: IAgentRuntime): RuntimeDbAdapterLike {
 }
 
 export function getRuntimeDb(runtime: IAgentRuntime): RuntimeDb {
-  const db = getRuntimeDbAdapter(runtime).db;
+  const adapter = getRuntimeDbAdapter(runtime);
+  const db = adapter.runtimeSql ?? adapter.db;
   if (!db || typeof db.execute !== "function") {
     throw new Error("runtime database adapter unavailable");
   }

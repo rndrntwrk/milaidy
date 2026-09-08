@@ -469,7 +469,9 @@ export function createAliceD1DatabaseAdapter(input: {
 
   proxy = new Proxy(target, {
     get(current, property, receiver) {
-      if (property === "db" && input.sql) return input.sql;
+      // Core Eliza's `db` means its complete relational schema. The separate
+      // plugin SQL store must not opt core memory/identity services into SQL.
+      if (property === "runtimeSql" && input.sql) return input.sql;
       if (property === "initialize" || property === "init") {
         return async () =>
           serialized(async () => {

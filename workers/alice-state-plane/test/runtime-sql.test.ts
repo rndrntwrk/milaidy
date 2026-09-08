@@ -5,6 +5,9 @@ import { createAliceStateService } from "../src/service";
 import { forwardToAliceStatePlane } from "../../alice-access-gateway/src/alice-runtime-host";
 import { createAliceRuntimeSql } from "../../../packages/agent/src/runtime/alice-runtime-sql";
 import { LifeOpsRepository } from "../../../packages/agent/src/lifeops/repository";
+import { ensureTrajectoriesTable } from "../../../packages/agent/src/runtime/trajectory-internals";
+import { OrchestratorTaskStore } from "../../../eliza/plugins/plugin-agent-orchestrator/src/services/orchestrator-task-store";
+import { AcpSessionStore } from "../../../eliza/plugins/plugin-agent-orchestrator/src/services/session-store";
 import type { IAgentRuntime } from "@elizaos/core";
 
 const token = "s".repeat(48);
@@ -83,12 +86,33 @@ describe("private Alice runtime SQL", () => {
     const { sqlite, connect } = setup();
     try {
       const db = connect();
-      const repository = new LifeOpsRepository({ adapter: { db } } as unknown as IAgentRuntime);
+      const repository = new LifeOpsRepository({ adapter: { runtimeSql: db } } as unknown as IAgentRuntime);
       await repository.ensureReady();
       expect((await db.execute(sql.raw("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name LIKE 'life_%'"))).rows)
         .toEqual([{ count: 23 }]);
       await expect(db.execute(sql.raw("ATTACH DATABASE ':memory:' AS other"))).rejects.toThrow("ALICE_SQL_OPERATION_FAILED:400");
       await expect(db.execute(sql.raw("BEGIN"))).rejects.toThrow("ALICE_SQL_OPERATION_FAILED:400");
+    } finally { sqlite.close(); }
+  });
+
+  test("keeps trajectory and orchestrator stores durable through the dedicated SQL capability", async () => {
+    const { sqlite, connect } = setup();
+    try {
+      const runtime = { adapter: { runtimeSql: connect() } };
+      expect(await ensureTrajectoriesTable(runtime as unknown as IAgentRuntime)).toBe(true);
+      const tasks = new OrchestratorTaskStore({ runtime });
+      const sessions = new AcpSessionStore({ runtime });
+      expect(tasks.backend).toBe("runtime-db");
+      expect(sessions.backend).toBe("runtime-db");
+      const task = await tasks.createTask({ title: "Alice persistence", goal: "Survive replacement" });
+      const session = { id: "alice-sql-session", agentType: "codex", workdir: "/tmp/alice",
+        status: "completed", approvalPreset: "readonly" as const,
+        createdAt: new Date(0), lastActivityAt: new Date(0) };
+      await sessions.create(session);
+      const replacement = { adapter: { runtimeSql: connect() } };
+      expect((await new OrchestratorTaskStore({ runtime: replacement }).getTask(task.task.id))?.task.title)
+        .toBe("Alice persistence");
+      expect(await new AcpSessionStore({ runtime: replacement }).get(session.id)).toEqual(session);
     } finally { sqlite.close(); }
   });
 });

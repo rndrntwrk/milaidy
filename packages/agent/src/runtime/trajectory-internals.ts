@@ -686,12 +686,18 @@ export function getRuntimeDb(runtime: IAgentRuntime): RuntimeDb | null {
   const runtimeLike = runtime as unknown as {
     adapter?: {
       db?: RuntimeDb;
+      runtimeSql?: RuntimeDb;
     };
     databaseAdapter?: {
       db?: RuntimeDb;
+      runtimeSql?: RuntimeDb;
     };
   };
-  const db = runtimeLike.adapter?.db || runtimeLike.databaseAdapter?.db;
+  const db =
+    runtimeLike.adapter?.runtimeSql ??
+    runtimeLike.adapter?.db ??
+    runtimeLike.databaseAdapter?.runtimeSql ??
+    runtimeLike.databaseAdapter?.db;
   if (!db || typeof db.execute !== "function") return null;
   return db;
 }
