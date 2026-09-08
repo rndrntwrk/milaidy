@@ -29,6 +29,9 @@ const CHAT_ALLOWED_FIELDS = new Set([
   // Milady's OpenAI client always supplies this advisory cache hint. Alice's
   // Workers AI binding has caching disabled, so accept but do not forward it.
   "prompt_cache_key",
+  // The deployed OpenAI SDK always requests streaming usage metadata. This is
+  // advisory; the binding owns its stream format and we reserve budget upfront.
+  "stream_options",
 ]);
 const textEncoder = new TextEncoder();
 const AI_GATEWAY_OPTIONS = ALICE_AI_GATEWAY_OPTIONS;
@@ -167,6 +170,16 @@ function validateChatFields(body) {
   }
   if (body.stream !== undefined && typeof body.stream !== "boolean") {
     return openAiError(400, "field_not_allowed", "stream must be a boolean.");
+  }
+  if (body.stream_options !== undefined && (
+    body.stream !== true ||
+    body.stream_options === null ||
+    typeof body.stream_options !== "object" ||
+    Array.isArray(body.stream_options) ||
+    Object.keys(body.stream_options).length !== 1 ||
+    typeof body.stream_options.include_usage !== "boolean"
+  )) {
+    return openAiError(400, "field_not_allowed", "Only the streaming include_usage hint is supported.");
   }
   for (const field of ["temperature", "top_p", "frequency_penalty", "presence_penalty"]) {
     if (body[field] !== undefined && !Number.isFinite(body[field])) {

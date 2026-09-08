@@ -36,6 +36,8 @@ test("builds a fail-closed Container environment for gateway auth, release proof
 
   expect(result).toMatchObject({
     MILADY_CLOUD_PROVISIONED: "1",
+    MILADY_CONFIG_PATH: "/app/deploy/modal/alice-runtime-defaults.json",
+    MILADY_PERSIST_CONFIG_PATH: "/tmp/alice-runtime/config/milady.json",
     MILADY_TRUST_CLOUDFLARE_ACCESS: "1",
     MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET:
       "access-proxy-secret-with-at-least-32-bytes",
@@ -78,6 +80,21 @@ test("builds a fail-closed Container environment for gateway auth, release proof
   expect("ALICE_MODAL_REVISION" in result).toBe(false);
   expect("ALICE_STATE_PLANE_SERVICE_TOKEN" in result).toBe(false);
   expect("ELIZA_SKIP_PLUGINS" in result).toBe(false);
+  const defaults = JSON.parse(
+    readFileSync(
+      new URL(
+        `../../../${result.MILADY_CONFIG_PATH.slice("/app/".length)}`,
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  expect(defaults.agents.list[0].name).toBe("Alice");
+  expect(defaults.ui).toMatchObject({
+    assistant: { name: "Alice" },
+    presetId: "alice",
+    avatarIndex: 9,
+  });
 });
 
 test("routes the only allowed model host through ContainerProxy to the authenticated service binding", async () => {

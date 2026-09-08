@@ -65,6 +65,8 @@ export function buildAliceRuntimeContainerEnv(
     ELIZA_API_BIND: "0.0.0.0",
     ELIZA_AUTH_DISABLED: "0",
     MILADY_CLOUD_PROVISIONED: "1",
+    MILADY_CONFIG_PATH: "/app/deploy/modal/alice-runtime-defaults.json",
+    MILADY_PERSIST_CONFIG_PATH: "/tmp/alice-runtime/config/milady.json",
     MILADY_TRUST_CLOUDFLARE_ACCESS: "1",
     MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: env.ALICE_ACCESS_PROXY_SECRET,
     MILADY_API_TOKEN: env.ALICE_RUNTIME_API_TOKEN,
@@ -191,6 +193,7 @@ export function forwardToAliceStatePlane(
     !isFetchBinding(env.ALICE_STATE_PLANE) ||
     request.method !== "POST" ||
     (pathname !== "/v1/eliza-database" &&
+      pathname !== "/v1/runtime-sql" &&
       pathname !== "/v1/companion-state" &&
       pathname !== "/v1/openai-codex-credentials")
   ) {
@@ -207,13 +210,15 @@ export function forwardToAliceStatePlane(
     "x-alice-container-state-scope",
     pathname === "/v1/eliza-database"
       ? "eliza-database"
+      : pathname === "/v1/runtime-sql"
+        ? "runtime-sql"
       : pathname === "/v1/companion-state"
         ? "companion-stage"
         : "openai-codex-credentials",
   );
   headers.set("x-alice-state-owner", ALICE_RUNTIME_STATE_OWNER_ID);
   const upstreamUrl = new URL(request.url);
-  if (pathname !== "/v1/eliza-database") upstreamUrl.pathname = "/v1/state";
+  if (pathname !== "/v1/eliza-database" && pathname !== "/v1/runtime-sql") upstreamUrl.pathname = "/v1/state";
   return env.ALICE_STATE_PLANE.fetch(
     new Request(new Request(upstreamUrl, request), { headers }),
   );

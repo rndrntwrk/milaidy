@@ -618,8 +618,24 @@ describe("Alice Access gateway", () => {
     for (const [method, pathname] of [
       ["GET", "/api/auth/status"],
       ["GET", "/api/config"],
+      ["GET", "/api/config/schema"],
+      ["GET", "/api/plugins"],
+      ["GET", "/api/connectors"],
+      ["PUT", "/api/config"],
+      ["PUT", "/api/plugins/telegram"],
+      ["PUT", "/api/plugins/discord"],
+      ["POST", "/api/connectors"],
+      ["DELETE", "/api/connectors/telegram"],
+      ["GET", "/api/character"],
+      ["GET", "/api/character/random-name"],
       ["GET", "/api/subscription/status"],
       ["GET", "/api/memories/feed?limit=10"],
+      ["GET", "/api/lifeops/overview"],
+      ["GET", "/api/lifeops/activity-signals"],
+      ["GET", "/api/lifeops/connectors/google/status"],
+      ["GET", "/api/workbench/overview"],
+      ["GET", "/api/workbench/tasks"],
+      ["GET", "/api/workbench/tasks/task-1"],
       ["GET", "/api/companion/stage"],
       ["GET", "/api/broadcast/alice-cam/scene"],
       ["POST", "/api/companion/stage"],
@@ -665,6 +681,8 @@ describe("Alice Access gateway", () => {
       ["GET", "/api/sandbox/browser"],
       ["GET", "/api/unreviewed/read"],
       ["POST", "/api/unreviewed/execute"],
+      ["POST", "/api/lifeops/goals"],
+      ["POST", "/api/workbench/tasks"],
     ]) {
       let runtimeRequests = 0;
       const response = await invokeGateway(

@@ -22,6 +22,11 @@
       "database_name": "alice-production-state",
       "database_id": "REPLACED_BY_PRODUCTION_DEPLOY",
       "migrations_dir": "migrations"
+    },
+    {
+      "binding": "ALICE_RUNTIME_SQL_DB",
+      "database_name": "alice-production-runtime-sql",
+      "database_id": "eae7dcce-6f4e-45f2-8460-c57c4d71a380"
     }
   ],
   "vectorize": [

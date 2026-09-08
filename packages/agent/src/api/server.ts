@@ -6838,6 +6838,10 @@ export async function startApiServer(opts?: {
   );
   const aliceProduction = !optionalRuntimeSubsystems;
 
+  // A replacement container must load durable settings before serving the UI.
+  const { initializeAliceConfigPersistence } = await import("../config/config.js");
+  await initializeAliceConfigPersistence();
+
   const port = opts?.port ?? resolveServerOnlyPort(process.env);
   const host = resolveApiBindHost(process.env);
   ensureApiTokenForBindHost(host);

@@ -8,6 +8,7 @@ import {
 } from "@miladyai/shared";
 import type { ElizaConfig } from "../config/config.js";
 import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
+import { runSerializedConfigMutation } from "./config-mutation.js";
 import { applyPluginRuntimeMutation } from "./plugin-runtime-apply.js";
 import {
   CORE_PLUGINS,
@@ -482,196 +483,208 @@ export async function handlePluginRoutes(
       return true;
     }
 
-    const previousConfig = structuredClone(state.config);
-    const previousResolvedPlugins = state.runtime
-      ? await resolvePluginsSnapshotSafe(previousConfig, "plugin update")
-      : undefined;
-
-    if (body.enabled !== undefined) {
-      plugin.enabled = body.enabled;
-    }
-    if (body.config) {
-      const configRejections = resolvePluginConfigMutationRejections(
-        plugin.parameters,
-        body.config,
+    return runSerializedConfigMutation(state.config, async () => {
+      const previousConfig = structuredClone(state.config);
+      const previousPlugin = structuredClone(plugin);
+      const previousEnv = Object.fromEntries(
+        Object.keys(body.config ?? {}).map((key) => [key, process.env[key]]),
       );
-      if (configRejections.length > 0) {
-        json(
-          res,
-          { ok: false, plugin, validationErrors: configRejections },
-          422,
+      const persistSettings = async (): Promise<boolean> => {
+        try {
+          await saveElizaConfig(state.config);
+          return true;
+        } catch {
+          for (const key of Object.keys(state.config)) {
+            if (!Object.hasOwn(previousConfig, key)) delete (state.config as Record<string, unknown>)[key];
+          }
+          Object.assign(state.config, previousConfig);
+          Object.assign(plugin, previousPlugin);
+          for (const [key, value] of Object.entries(previousEnv)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+          }
+          error(res, "Plugin settings save failed", 503);
+          return false;
+        }
+      };
+      const previousResolvedPlugins = state.runtime
+        ? await resolvePluginsSnapshotSafe(previousConfig, "plugin update")
+        : undefined;
+
+      if (body.enabled !== undefined) {
+        plugin.enabled = body.enabled;
+      }
+      if (body.config) {
+        const configRejections = resolvePluginConfigMutationRejections(
+          plugin.parameters,
+          body.config,
         );
-        return true;
+        if (configRejections.length > 0) {
+          json(
+            res,
+            { ok: false, plugin, validationErrors: configRejections },
+            422,
+          );
+          return true;
+        }
+
+        // Only validate the fields actually being submitted — not all required
+        // fields. Users may save partial config (e.g. just the API key) from
+        // the Settings page; blocking the save because OTHER required fields
+        // aren't set yet is counterproductive.
+        const configObj = body.config;
+        const submittedParamInfos: PluginParamInfo[] = plugin.parameters
+          .filter((p) => p.key in configObj)
+          .map((p) => ({
+            key: p.key,
+            required: p.required,
+            sensitive: p.sensitive,
+            type: p.type,
+            description: p.description,
+            default: p.default,
+          }));
+        const configValidation = validatePluginConfig(
+          pluginId,
+          plugin.category,
+          plugin.envKey,
+          plugin.configKeys,
+          body.config,
+          submittedParamInfos,
+        );
+
+        if (!configValidation.valid) {
+          json(
+            res,
+            { ok: false, plugin, validationErrors: configValidation.errors },
+            422,
+          );
+          return true;
+        }
+
+        const allowedParamKeys = new Set(plugin.parameters.map((p) => p.key));
+
+        // Persist config values to state.config.env so they survive restarts
+        if (!state.config.env) {
+          state.config.env = {};
+        }
+        for (const [key, value] of Object.entries(body.config)) {
+          if (
+            allowedParamKeys.has(key) &&
+            !BLOCKED_ENV_KEYS.has(key.toUpperCase()) &&
+            typeof value === "string" &&
+            value.trim()
+          ) {
+            process.env[key] = value;
+            (state.config.env as Record<string, unknown>)[key] = value;
+          }
+        }
+        plugin.configured = true;
+
+        // Save config even when only config values changed (no enable toggle)
+        if (body.enabled === undefined) {
+          if (!(await persistSettings())) return true;
+        }
       }
 
-      // Only validate the fields actually being submitted — not all required
-      // fields. Users may save partial config (e.g. just the API key) from
-      // the Settings page; blocking the save because OTHER required fields
-      // aren't set yet is counterproductive.
-      const configObj = body.config;
-      const submittedParamInfos: PluginParamInfo[] = plugin.parameters
-        .filter((p) => p.key in configObj)
-        .map((p) => ({
-          key: p.key,
-          required: p.required,
-          sensitive: p.sensitive,
-          type: p.type,
-          description: p.description,
-          default: p.default,
-        }));
-      const configValidation = validatePluginConfig(
+      // Refresh validation
+      const refreshParamInfos: PluginParamInfo[] = plugin.parameters.map((p) => ({
+        key: p.key,
+        required: p.required,
+        sensitive: p.sensitive,
+        type: p.type,
+        description: p.description,
+        default: p.default,
+      }));
+      const updated = validatePluginConfig(
         pluginId,
         plugin.category,
         plugin.envKey,
         plugin.configKeys,
-        body.config,
-        submittedParamInfos,
+        undefined,
+        refreshParamInfos,
       );
+      plugin.validationErrors = updated.errors;
+      plugin.validationWarnings = updated.warnings;
 
-      if (!configValidation.valid) {
-        json(
-          res,
-          { ok: false, plugin, validationErrors: configValidation.errors },
-          422,
+      // Update config.plugins.entries so the runtime loads/skips this plugin
+      if (body.enabled !== undefined) {
+        const packageName = `@elizaos/plugin-${pluginId}`;
+
+        if (!state.config.plugins) {
+          state.config.plugins = {};
+        }
+        if (!state.config.plugins.entries) {
+          (state.config.plugins as Record<string, unknown>).entries = {};
+        }
+
+        const entries = (state.config.plugins as Record<string, unknown>)
+          .entries as Record<string, Record<string, unknown>>;
+        entries[pluginId] = { enabled: body.enabled };
+        logger.info(
+          `[eliza-api] ${body.enabled ? "Enabled" : "Disabled"} plugin: ${packageName}`,
         );
-        return true;
-      }
 
-      const allowedParamKeys = new Set(plugin.parameters.map((p) => p.key));
-
-      // Persist config values to state.config.env so they survive restarts
-      if (!state.config.env) {
-        state.config.env = {};
-      }
-      for (const [key, value] of Object.entries(body.config)) {
-        if (
-          allowedParamKeys.has(key) &&
-          !BLOCKED_ENV_KEYS.has(key.toUpperCase()) &&
-          typeof value === "string" &&
-          value.trim()
-        ) {
-          process.env[key] = value;
-          (state.config.env as Record<string, unknown>)[key] = value;
+        // Persist capability toggle state in config.features so the runtime
+        // can gate related behaviour (e.g. disabling image description when
+        // vision is toggled off).
+        const CAPABILITY_FEATURE_IDS = new Set([
+          "vision",
+          "browser",
+          "computeruse",
+          "coding-agent",
+        ]);
+        if (CAPABILITY_FEATURE_IDS.has(pluginId)) {
+          if (!state.config.features) {
+            state.config.features = {};
+          }
+          state.config.features[pluginId] = body.enabled;
         }
-      }
-      plugin.configured = true;
 
-      // Save config even when only config values changed (no enable toggle)
-      if (body.enabled === undefined) {
-        try {
-          saveElizaConfig(state.config);
-        } catch (err) {
-          logger.warn(
-            `[eliza-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-      }
-    }
-
-    // Refresh validation
-    const refreshParamInfos: PluginParamInfo[] = plugin.parameters.map((p) => ({
-      key: p.key,
-      required: p.required,
-      sensitive: p.sensitive,
-      type: p.type,
-      description: p.description,
-      default: p.default,
-    }));
-    const updated = validatePluginConfig(
-      pluginId,
-      plugin.category,
-      plugin.envKey,
-      plugin.configKeys,
-      undefined,
-      refreshParamInfos,
-    );
-    plugin.validationErrors = updated.errors;
-    plugin.validationWarnings = updated.warnings;
-
-    // Update config.plugins.entries so the runtime loads/skips this plugin
-    if (body.enabled !== undefined) {
-      const packageName = `@elizaos/plugin-${pluginId}`;
-
-      if (!state.config.plugins) {
-        state.config.plugins = {};
-      }
-      if (!state.config.plugins.entries) {
-        (state.config.plugins as Record<string, unknown>).entries = {};
+        // Save updated config
+        if (!(await persistSettings())) return true;
       }
 
-      const entries = (state.config.plugins as Record<string, unknown>)
-        .entries as Record<string, Record<string, unknown>>;
-      entries[pluginId] = { enabled: body.enabled };
-      logger.info(
-        `[eliza-api] ${body.enabled ? "Enabled" : "Disabled"} plugin: ${packageName}`,
-      );
+      const runtimeApply = await applyPluginRuntimeMutation({
+        runtime: state.runtime,
+        previousConfig,
+        nextConfig: state.config,
+        previousResolvedPlugins,
+        changedPluginId: pluginId,
+        changedPluginPackage: plugin.npmName,
+        config: body.config,
+        expectRuntimeGraphChange: body.enabled !== undefined,
+        reason:
+          body.enabled !== undefined
+            ? `Plugin toggle: ${pluginId}`
+            : `Plugin config updated: ${pluginId}`,
+        restartRuntime,
+      });
 
-      // Persist capability toggle state in config.features so the runtime
-      // can gate related behaviour (e.g. disabling image description when
-      // vision is toggled off).
-      const CAPABILITY_FEATURE_IDS = new Set([
-        "vision",
-        "browser",
-        "computeruse",
-        "coding-agent",
-      ]);
-      if (CAPABILITY_FEATURE_IDS.has(pluginId)) {
-        if (!state.config.features) {
-          state.config.features = {};
-        }
-        state.config.features[pluginId] = body.enabled;
+      if (runtimeApply.requiresRestart) {
+        scheduleRuntimeRestart(runtimeApply.reason);
       }
 
-      // Save updated config
-      try {
-        saveElizaConfig(state.config);
-      } catch (err) {
-        logger.warn(
-          `[eliza-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
+      if (isMiladySettingsDebugEnabled()) {
+        const cloud = (state.config as Record<string, unknown>).cloud as
+          | Record<string, unknown>
+          | undefined;
+        logger.debug(
+          `[milady][settings][api] PUT /api/plugins/${pluginId} → done configured=${plugin.configured} enabled=${plugin.enabled} cloud=${JSON.stringify(settingsDebugCloudSummary(cloud))}`,
         );
       }
-    }
 
-    const runtimeApply = await applyPluginRuntimeMutation({
-      runtime: state.runtime,
-      previousConfig,
-      nextConfig: state.config,
-      previousResolvedPlugins,
-      changedPluginId: pluginId,
-      changedPluginPackage: plugin.npmName,
-      config: body.config,
-      expectRuntimeGraphChange: body.enabled !== undefined,
-      reason:
-        body.enabled !== undefined
-          ? `Plugin toggle: ${pluginId}`
-          : `Plugin config updated: ${pluginId}`,
-      restartRuntime,
+      json(res, {
+        ok: true,
+        plugin,
+        applied: runtimeApply.mode,
+        requiresRestart: runtimeApply.requiresRestart,
+        restartedRuntime: runtimeApply.restartedRuntime,
+        loadedPackages: runtimeApply.loadedPackages,
+        unloadedPackages: runtimeApply.unloadedPackages,
+        reloadedPackages: runtimeApply.reloadedPackages,
+      });
+      return true;
     });
-
-    if (runtimeApply.requiresRestart) {
-      scheduleRuntimeRestart(runtimeApply.reason);
-    }
-
-    if (isMiladySettingsDebugEnabled()) {
-      const cloud = (state.config as Record<string, unknown>).cloud as
-        | Record<string, unknown>
-        | undefined;
-      logger.debug(
-        `[milady][settings][api] PUT /api/plugins/${pluginId} → done configured=${plugin.configured} enabled=${plugin.enabled} cloud=${JSON.stringify(settingsDebugCloudSummary(cloud))}`,
-      );
-    }
-
-    json(res, {
-      ok: true,
-      plugin,
-      applied: runtimeApply.mode,
-      requiresRestart: runtimeApply.requiresRestart,
-      restartedRuntime: runtimeApply.restartedRuntime,
-      loadedPackages: runtimeApply.loadedPackages,
-      unloadedPackages: runtimeApply.unloadedPackages,
-      reloadedPackages: runtimeApply.reloadedPackages,
-    });
-    return true;
   }
 
   // ── GET /api/secrets ─────────────────────────────────────────────────

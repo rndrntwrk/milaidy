@@ -194,6 +194,12 @@ test("keeps signed deployment-manifest v1 and v2 readback compatible", async () 
 });
 
 test("builds strict private state and connector effective configs", () => {
+  assert.throws(
+    () => buildAliceStatePlaneEffectiveConfig({
+      databaseId: ALICE_CLOUDFLARE_TARGET.runtimeSqlDatabaseId,
+    }),
+    /ALICE_STATE_PLANE_EFFECTIVE_CONFIG_INVALID/,
+  );
   assert.equal(ALICE_CLOUDFLARE_TARGET.statePlaneWorker, "alice-state-plane");
   assert.equal(
     ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
@@ -228,6 +234,10 @@ test("builds strict private state and connector effective configs", () => {
           databaseName: "alice-production-state",
           databaseId: stateDatabaseId,
           migrationsDir: "migrations",
+        }, {
+          binding: "ALICE_RUNTIME_SQL_DB",
+          databaseName: "alice-production-runtime-sql",
+          databaseId: "eae7dcce-6f4e-45f2-8460-c57c4d71a380",
         }],
         vectorize: [{
           binding: "ALICE_MEMORY_INDEX",
@@ -406,6 +416,9 @@ test("materializes exact private state and inert connector bindings without prov
   assert.deepEqual(state.routes, []);
   assert.equal(state.d1_databases[0].database_id, stateDatabaseId);
   assert.equal(state.d1_databases[0].database_name, "alice-production-state");
+  assert.equal(state.d1_databases[1].binding, "ALICE_RUNTIME_SQL_DB");
+  assert.equal(state.d1_databases[1].database_id, "eae7dcce-6f4e-45f2-8460-c57c4d71a380");
+  assert.equal("migrations_dir" in state.d1_databases[1], false);
   assert.equal(state.vectorize[0].index_name, "alice-memory-v1");
   assert.equal(state.vars.ALICE_VECTOR_METRIC, "cosine");
   assert.equal(state.r2_buckets[0].bucket_name, "alice-production-state-objects");

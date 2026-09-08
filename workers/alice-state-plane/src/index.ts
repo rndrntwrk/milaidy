@@ -81,6 +81,7 @@ export default {
       objectStore,
       coordination,
       elizaDatabase,
+      runtimeSql: env.ALICE_RUNTIME_SQL_DB,
       token: env.ALICE_STATE_PLANE_SERVICE_TOKEN,
     }).fetch(request);
   },

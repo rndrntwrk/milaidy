@@ -122,7 +122,7 @@ export async function checkForUpdate(options?: {
   const updateAvailable = cmp !== null && cmp < 0;
 
   try {
-    saveElizaConfig({
+    await saveElizaConfig({
       ...config,
       update: {
         ...config.update,

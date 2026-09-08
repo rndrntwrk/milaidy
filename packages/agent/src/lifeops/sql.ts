@@ -6,12 +6,18 @@ export type RawSqlQuery = {
 
 export type RuntimeDb = {
   execute: (query: RawSqlQuery) => Promise<unknown>;
+  dialect?: "postgres" | "sqlite";
+  batch?: (queries: RawSqlQuery[]) => Promise<unknown[]>;
 };
 
 type RuntimeDbAdapterLike = {
   db?: RuntimeDb;
   getRawConnection?: () => unknown;
 };
+
+export function getRuntimeDbDialect(runtime: IAgentRuntime): "postgres" | "sqlite" {
+  return getRuntimeDb(runtime).dialect ?? "postgres";
+}
 
 let cachedSqlRaw: ((query: string) => RawSqlQuery) | null = null;
 
@@ -230,6 +236,13 @@ export async function listTableColumns(
   runtime: IAgentRuntime,
   tableName: string,
 ): Promise<string[]> {
+  if (getRuntimeDbDialect(runtime) === "sqlite") {
+    if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+      throw new Error(`invalid table name for PRAGMA: ${tableName}`);
+    }
+    const rows = await executeRawSql(runtime, `PRAGMA table_info(${tableName})`);
+    return rows.map((row) => toText(row.name)).filter((name) => name.length > 0);
+  }
   try {
     const rows = await executeRawSql(
       runtime,
@@ -293,4 +306,19 @@ export function sqlBoolean(value: boolean): string {
 
 export function sqlJson(value: unknown): string {
   return sqlQuote(JSON.stringify(value ?? null));
+}
+
+export function sqlJsonMergeTopLevel(
+  column: string,
+  value: Record<string, unknown>,
+  dialect: "postgres" | "sqlite",
+): string {
+  const json = sqlJson(value);
+  if (dialect === "postgres") return `${column}::jsonb || ${json}::jsonb`;
+  let expression = `COALESCE(${column}, '{}')`;
+  for (const [key, item] of Object.entries(JSON.parse(JSON.stringify(value)))) {
+    const path = `$.${JSON.stringify(key)}`;
+    expression = `json_set(${expression}, ${sqlQuote(path)}, json(${sqlJson(item)}))`;
+  }
+  return expression;
 }

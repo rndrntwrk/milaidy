@@ -72,6 +72,7 @@ test("the exact-image model sentinel accepts only the full-gated Stage 1 tool", 
     elizaCommitRequests: 0,
     companionGetRequests: 0,
     companionPutRequests: 0,
+    runtimeSqlRequests: 0,
   });
 });
 
@@ -197,6 +198,51 @@ test("the exact-image smoke dependency server preserves D1 and Companion state",
     recordId: "companion-stage-v1",
     ownerId: "alice-owner-production",
   });
+
+  assert.deepEqual(
+    await invoke("/v1/runtime-sql", {
+      operation: "sql.batch",
+      ownerId: "alice-owner-production",
+      statements: [
+        { sql: "CREATE TABLE smoke_runtime_sql (id INTEGER PRIMARY KEY, value TEXT)", params: [] },
+        { sql: "INSERT INTO smoke_runtime_sql (id, value) VALUES (?, ?)", params: [1, "persisted"] },
+        { sql: "SELECT id, value FROM smoke_runtime_sql", params: [] },
+      ],
+    }),
+    {
+      ok: true,
+      results: [
+        { rows: [] },
+        { rows: [] },
+        { rows: [{ id: 1, value: "persisted" }] },
+      ],
+    },
+  );
+  const rolledBack = await fetch(`${base}/v1/runtime-sql`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      operation: "sql.batch",
+      ownerId: "alice-owner-production",
+      statements: [
+        { sql: "INSERT INTO smoke_runtime_sql (id, value) VALUES (?, ?)", params: [2, "rolled-back"] },
+        { sql: "INSERT INTO missing_smoke_runtime_sql VALUES (1)", params: [] },
+      ],
+    }),
+  });
+  assert.equal(rolledBack.status, 400);
+  assert.deepEqual(await rolledBack.json(), {
+    ok: false,
+    code: "STATE_SQL_EXECUTION_FAILED",
+  });
+  assert.deepEqual(
+    await invoke("/v1/runtime-sql", {
+      operation: "sql.batch",
+      ownerId: "alice-owner-production",
+      statements: [{ sql: "SELECT id, value FROM smoke_runtime_sql ORDER BY id", params: [] }],
+    }),
+    { ok: true, results: [{ rows: [{ id: 1, value: "persisted" }] }] },
+  );
   await reject("/v1/companion-state", {
     operation: "record.get",
     kind: "configVersion",
@@ -216,5 +262,6 @@ test("the exact-image smoke dependency server preserves D1 and Companion state",
     elizaCommitRequests: 1,
     companionGetRequests: 1,
     companionPutRequests: 1,
+    runtimeSqlRequests: 3,
   });
 });

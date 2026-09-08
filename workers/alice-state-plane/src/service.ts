@@ -10,6 +10,7 @@ import {
   validateElizaDatabaseOperation,
   type ElizaDatabaseAdapter,
 } from "./eliza-database";
+import { executeRuntimeSql, validateRuntimeSqlOperation } from "./runtime-sql";
 
 type PortableAdapter = Pick<
   D1AliceStateAdapter,
@@ -25,6 +26,7 @@ type CoordinationService = {
 
 const MAX_OPERATION_BYTES = 65_536;
 const MAX_ELIZA_OPERATION_BYTES = 100_100_000;
+const MAX_SQL_OPERATION_BYTES = 1_000_000;
 const CONTAINER_SCOPE_HEADER = "x-alice-container-state-scope";
 const CONTAINER_OWNER_HEADER = "x-alice-state-owner";
 
@@ -185,12 +187,13 @@ export function createAliceStateService(input: {
   objectStore?: Pick<AliceObjectStore, "put">;
   coordination?: CoordinationService;
   elizaDatabase?: ElizaDatabaseAdapter;
+  runtimeSql?: Pick<D1Database, "prepare" | "batch">;
   token: string;
 }) {
   return {
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
-      if (url.pathname !== "/v1/state" && url.pathname !== "/v1/eliza-database") {
+      if (url.pathname !== "/v1/state" && url.pathname !== "/v1/eliza-database" && url.pathname !== "/v1/runtime-sql") {
         return response({ ok: false, code: "STATE_ROUTE_NOT_FOUND" }, 404);
       }
       if (request.method !== "POST") return response({ ok: false, code: "STATE_METHOD_INVALID" }, 405);
@@ -203,8 +206,21 @@ export function createAliceStateService(input: {
           request,
           url.pathname === "/v1/eliza-database"
             ? MAX_ELIZA_OPERATION_BYTES
-            : MAX_OPERATION_BYTES,
+            : url.pathname === "/v1/runtime-sql"
+              ? MAX_SQL_OPERATION_BYTES
+              : MAX_OPERATION_BYTES,
         );
+        if (url.pathname === "/v1/runtime-sql") {
+          // Service-token authentication above is mandatory. These headers
+          // are overwritten by the private Container outbound proxy.
+          if (request.headers.get(CONTAINER_SCOPE_HEADER) !== "runtime-sql" ||
+            request.headers.get(CONTAINER_OWNER_HEADER) !== "alice-owner-production") {
+            return response({ ok: false, code: "STATE_CONTAINER_SCOPE_INVALID" }, 403);
+          }
+          const operation = validateRuntimeSqlOperation(body);
+          if (!input.runtimeSql) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
+          return response({ ok: true, results: await executeRuntimeSql(input.runtimeSql, operation) }, 200);
+        }
         if (url.pathname === "/v1/eliza-database") {
           if (!input.elizaDatabase) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
           const operation = validateElizaDatabaseOperation(body);
@@ -277,7 +293,10 @@ export function createAliceStateService(input: {
           ? error.message
           : "STATE_OPERATION_FAILED";
         const elizaRoute = url.pathname === "/v1/eliza-database";
-        const status = code === "STATE_OPERATION_TOO_LARGE" || code === "ELIZA_VALUE_TOO_LARGE"
+        const status = code === "STATE_SQL_EXECUTION_FAILED" ||
+          (url.pathname === "/v1/runtime-sql" && code === "STATE_DEPENDENCY_UNAVAILABLE")
+          ? 503
+          : code === "STATE_OPERATION_TOO_LARGE" || code === "ELIZA_VALUE_TOO_LARGE"
           ? 413
           : !elizaRoute
             ? 400
