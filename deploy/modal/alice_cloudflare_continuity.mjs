@@ -250,10 +250,9 @@ function normalizeAliceQueueEventSubscriptions(eventSubscriptions, queueIds) {
 export function buildAliceCandidateCloudflareContinuityReadback(readback) {
   try {
     buildAliceCloudflareContinuityConfig(readback);
-    if (
-      readback.queue?.settings?.delivery_paused !== true ||
-      readback.deadLetterQueue?.settings?.delivery_paused !== true
-    ) {
+    // Materialization also starts from an already-serving release. Promotion
+    // independently verifies the paused state at its journaled mutation boundary.
+    if (readback.deadLetterQueue?.settings?.delivery_paused !== true) {
       invalid();
     }
     const candidate = JSON.parse(JSON.stringify(readback));

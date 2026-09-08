@@ -13,6 +13,8 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/alice_cloudflare_bootstrap.test.mjs',
   'deploy/modal/alice_cloudflare_config.mjs',
   'deploy/modal/alice_cloudflare_config.test.mjs',
+  'deploy/modal/alice_cloudflare_continuity.mjs',
+  'deploy/modal/alice_cloudflare_continuity.test.mjs',
   'deploy/modal/alice_cloudflare_live_readback.mjs',
   'deploy/modal/alice_cloudflare_live_readback.test.mjs',
   'deploy/modal/alice_workflow_binding_canary.mjs',
