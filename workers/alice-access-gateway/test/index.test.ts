@@ -619,6 +619,19 @@ describe("Alice Access gateway", () => {
       ["GET", "/api/auth/status"],
       ["GET", "/api/config"],
       ["GET", "/api/config/schema"],
+      ["GET", "/api/alice-production/capabilities"],
+      ["GET", "/api/knowledge"],
+      ["GET", "/api/knowledge/stats"],
+      ["GET", "/api/knowledge/documents"],
+      ["GET", "/api/knowledge/documents/document-1"],
+      ["GET", "/api/knowledge/fragments/document-1"],
+      ["GET", "/api/knowledge/search"],
+      ["POST", "/api/knowledge/documents"],
+      ["POST", "/api/knowledge/documents/bulk"],
+      [
+        "DELETE",
+        "/api/knowledge/documents/00000000-0000-4000-8000-000000000001",
+      ],
       ["GET", "/api/plugins"],
       ["GET", "/api/connectors"],
       ["PUT", "/api/config"],
@@ -681,6 +694,15 @@ describe("Alice Access gateway", () => {
       ["GET", "/api/sandbox/browser"],
       ["GET", "/api/unreviewed/read"],
       ["POST", "/api/unreviewed/execute"],
+      ["POST", "/api/knowledge/documents/url"],
+      ["POST", "/api/knowledge/documents/bulk/nearby"],
+      ["DELETE", "/api/knowledge/documents/document-1"],
+      ["DELETE", "/api/knowledge/documents"],
+      [
+        "DELETE",
+        "/api/knowledge/documents/00000000-0000-4000-8000-000000000001/nearby",
+      ],
+      ["PUT", "/api/knowledge"],
       ["POST", "/api/lifeops/goals"],
       ["POST", "/api/workbench/tasks"],
     ]) {
@@ -800,18 +822,26 @@ describe("Alice Access gateway", () => {
 
   test("requires a verified JWT for the exact owner before any upstream request", async () => {
     const env = await environment();
-    let calls = 0;
-    const response = await invokeGateway(
-      new Request("https://alice.rndrntwrk.com/api/health"),
-      env,
-      async () => {
-        calls += 1;
-        return Response.json({ unreachable: true });
-      },
-      now,
-    );
-    expect(response.status).toBe(401);
-    expect(calls).toBe(0);
+    for (const [method, pathname] of [
+      ["GET", "/api/health"],
+      [
+        "DELETE",
+        "/api/knowledge/documents/00000000-0000-4000-8000-000000000001",
+      ],
+    ]) {
+      let calls = 0;
+      const response = await invokeGateway(
+        new Request(`https://alice.rndrntwrk.com${pathname}`, { method }),
+        env,
+        async () => {
+          calls += 1;
+          return Response.json({ unreachable: true });
+        },
+        now,
+      );
+      expect(response.status).toBe(401);
+      expect(calls).toBe(0);
+    }
   });
 
   test("rejects a one-field effective Container Access configuration substitution before ingress", async () => {

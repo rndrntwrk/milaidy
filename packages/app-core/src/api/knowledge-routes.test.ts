@@ -31,35 +31,40 @@ function buildMemory(overrides: Partial<Memory> = {}): Memory {
 
 describe("knowledge routes", () => {
   let runtime: AgentRuntime | null;
-  let addKnowledgeMock: ReturnType<typeof vi.fn>;
-  let getMemoriesMock: ReturnType<typeof vi.fn>;
-  let deleteMemoryMock: ReturnType<typeof vi.fn>;
+  let addDocumentMock: ReturnType<typeof vi.fn>;
+  let listDocumentsMock: ReturnType<typeof vi.fn>;
+  let fragmentsMock: ReturnType<typeof vi.fn>;
+  let deleteDocumentMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.restoreAllMocks();
     __setPinnedFetchImplForTests(({ url, init }) => {
       return fetch(url.toString(), init);
     });
-    addKnowledgeMock = vi.fn(async () => ({
+    addDocumentMock = vi.fn(async () => ({
       clientDocumentId: uuid(1111),
       storedDocumentMemoryId: uuid(1112),
       fragmentCount: 0,
     }));
-    getMemoriesMock = vi.fn(async () => []);
-    deleteMemoryMock = vi.fn(async () => undefined);
+    listDocumentsMock = vi.fn(async () => []);
+    deleteDocumentMock = vi.fn(async () => undefined);
+    fragmentsMock = vi.fn(async () => []);
 
     const knowledgeService = {
-      addKnowledge: addKnowledgeMock,
-      getKnowledge: vi.fn(async () => []),
-      getMemories: getMemoriesMock,
-      countMemories: vi.fn(async () => 0),
-      deleteMemory: deleteMemoryMock,
+      addDocument: addDocumentMock,
+      searchDocuments: vi.fn(async () => []),
+      listAllDocumentsWithAccessContext: listDocumentsMock,
+      getDocumentByIdWithAccessContext: async (id: UUID) =>
+        (await listDocumentsMock()).find((doc: Memory) => doc.id === id) ??
+        null,
+      listDocumentFragmentsWithAccessContext: fragmentsMock,
+      deleteDocumentWithAccessContext: deleteDocumentMock,
     };
 
     runtime = {
       agentId: AGENT_ID,
       getService: (name: string) =>
-        name === "knowledge" ? knowledgeService : null,
+        name === "documents" ? knowledgeService : null,
       getServiceLoadPromise: async () => undefined,
     } as unknown as AgentRuntime;
   });
@@ -82,6 +87,7 @@ describe("knowledge routes", () => {
           pathname: ctx.pathname,
           url: new URL(ctx.req.url ?? ctx.pathname, "http://localhost:2138"),
           runtime: ctx.runtime,
+          requester: { requesterEntityId: AGENT_ID, role: "OWNER" },
           readJsonBody: async () => ctx.readJsonBody(),
           json: (res, data, status) => ctx.json(res, data, status),
           error: (res, message, status) => ctx.error(res, message, status),
@@ -95,331 +101,114 @@ describe("knowledge routes", () => {
     { runtimeProvider: () => runtime },
   );
 
-  test("passes offset=1 through documents endpoint without off-by-one", async () => {
-    getMemoriesMock.mockResolvedValueOnce([]);
-
+  test("paginates visible documents and preserves native fragment counts", async () => {
+    listDocumentsMock.mockResolvedValue([
+      buildMemory({ id: uuid(1), content: { text: "first" } }),
+      buildMemory({
+        id: uuid(2),
+        metadata: {
+          filename: "second.md",
+          contentType: "text/markdown",
+          fileSize: "2048",
+        },
+      }),
+    ]);
+    fragmentsMock.mockResolvedValue([buildMemory(), buildMemory()]);
     const result = await invoke({
       method: "GET",
       pathname: "/api/knowledge/documents",
-      url: "/api/knowledge/documents?limit=10&offset=1",
+      url: "/api/knowledge/documents?limit=1&offset=1",
     });
-
     expect(result.status).toBe(200);
-    expect(getMemoriesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tableName: "documents",
-        roomId: AGENT_ID,
-        count: 10,
-        offset: 1,
-      }),
-    );
+    expect(result.payload).toMatchObject({
+      documents: [
+        {
+          id: uuid(2),
+          filename: "second.md",
+          contentType: "text/markdown",
+          fileSize: 2048,
+          fragmentCount: 2,
+        },
+      ],
+      limit: 1,
+      offset: 1,
+    });
+    expect(listDocumentsMock).toHaveBeenCalledWith({
+      requesterEntityId: AGENT_ID,
+      role: "OWNER",
+    });
   });
 
-  test("treats offset=0 as no skip for documents endpoint", async () => {
-    getMemoriesMock.mockResolvedValueOnce([]);
-
-    const result = await invoke({
-      method: "GET",
-      pathname: "/api/knowledge/documents",
-      url: "/api/knowledge/documents?limit=10&offset=0",
-    });
-
-    expect(result.status).toBe(200);
-    expect(getMemoriesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tableName: "documents",
-        roomId: AGENT_ID,
-        count: 10,
-        offset: undefined,
-      }),
-    );
-  });
-
-  test("enriches documents list with fragment counts and metadata defaults", async () => {
-    const firstDocumentId = uuid(2001);
-    const secondDocumentId = uuid(2002);
-    const thirdDocumentId = uuid(2003);
-    getMemoriesMock.mockImplementation(async ({ tableName }) => {
-      if (tableName === "documents") {
-        return [
-          buildMemory({
-            id: firstDocumentId,
-            metadata: {
-              filename: "project-notes.md",
-              fileType: "text/markdown",
-              fileSize: "2048",
-            },
-            createdAt: 111,
-          }),
-          buildMemory({
-            id: secondDocumentId,
-            metadata: {
-              title: "missing-metadata",
-              source: "url",
-            },
-            createdAt: undefined,
-          }),
-          buildMemory({
-            id: thirdDocumentId,
-            metadata: {
-              filename: "no-fragments.pdf",
-            },
-            createdAt: 333,
-            content: { text: "third-doc" },
-          }),
-        ];
-      }
-      return [
-        buildMemory({
-          id: uuid(2010),
-          metadata: { documentId: firstDocumentId },
-        }),
-        buildMemory({
-          id: uuid(2011),
-          metadata: { documentId: firstDocumentId },
-        }),
-        buildMemory({
-          id: uuid(2012),
-          metadata: { documentId: secondDocumentId },
-        }),
-        buildMemory({
-          id: undefined,
-          metadata: { documentId: thirdDocumentId },
-        }),
-      ];
-    });
-
-    const result = await invoke({
-      method: "GET",
-      pathname: "/api/knowledge/documents",
-      url: "/api/knowledge/documents?limit=10&offset=1",
-    });
-
-    expect(result.status).toBe(200);
-    expect(
-      (
-        result.payload as {
-          documents: Array<{ id: string; fragmentCount: number }>;
-        }
-      ).documents.map((doc) => doc.fragmentCount),
-    ).toEqual([2, 1, 1]);
-    expect(
-      (
-        result.payload as {
-          documents: Array<{
-            id: string;
-            createdAt: number;
-            fileSize: number;
-            contentType: string;
-            filename: string;
-          }>;
-        }
-      ).documents,
-    ).toMatchObject([
-      {
-        id: firstDocumentId,
-        filename: "project-notes.md",
-        contentType: "text/markdown",
-        fileSize: 2048,
-        createdAt: 111,
-      },
-      {
-        id: secondDocumentId,
-        filename: "missing-metadata",
-        contentType: "unknown",
-        fileSize: 0,
-        createdAt: 0,
-      },
-      {
-        id: thirdDocumentId,
-        filename: "no-fragments.pdf",
-        contentType: "unknown",
-        fileSize: 0,
-        createdAt: 333,
-      },
-    ]);
-  });
-
-  test("returns document detail with single fragmentCount and defaulted metadata", async () => {
-    const documentId = uuid(2100);
-    getMemoriesMock.mockImplementation(async ({ tableName }) => {
-      if (tableName === "documents") {
-        return [
-          buildMemory({
-            id: documentId,
-            metadata: {
-              title: "detail.md",
-              fileType: "text/markdown",
-            },
-            createdAt: undefined,
-            content: { text: "document body" },
-          }),
-        ];
-      }
-      return [
-        buildMemory({ id: uuid(2101), metadata: { documentId } }),
-        buildMemory({ id: uuid(2102), metadata: { documentId } }),
-      ];
-    });
-
-    const result = await invoke({
-      method: "GET",
-      pathname: `/api/knowledge/documents/${documentId}`,
-    });
-
-    expect(result.status).toBe(200);
-    expect(
-      (result.payload as { document: Record<string, unknown> }).document,
-    ).toEqual({
-      id: documentId,
-      filename: "detail.md",
-      contentType: "text/markdown",
-      fileSize: 0,
-      createdAt: 0,
-      fragmentCount: 2,
-      source: "upload",
-      url: undefined,
-      content: { text: "document body" },
-    });
-    expect(
-      Object.keys(
-        (result.payload as { document: Record<string, unknown> }).document,
-      ).filter((key) => key === "fragmentCount"),
-    ).toHaveLength(1);
-  });
-
-  test("filters fragments without id/createdAt and paginates batches", async () => {
-    const documentId = uuid(1200);
-    const firstBatch = [
+  test("returns visible document detail and denies a missing document", async () => {
+    listDocumentsMock.mockResolvedValue([
       buildMemory({
-        id: undefined,
-        createdAt: 10,
-        metadata: { documentId, position: 2 },
-        content: { text: "missing-id" },
-      }),
-      buildMemory({
-        id: uuid(1201),
-        createdAt: undefined,
-        metadata: { documentId, position: 1 },
-        content: { text: "missing-created-at" },
-      }),
-      buildMemory({
-        id: uuid(1202),
-        createdAt: 20,
-        metadata: { documentId, position: 5 },
-        content: { text: "valid-first-batch" },
-      }),
-      ...Array.from({ length: 497 }, (_, i) =>
-        buildMemory({
-          id: uuid(2000 + i),
-          metadata: { documentId: uuid(9999), position: i + 10 },
-          createdAt: i + 100,
-          content: { text: "other-doc" },
-        }),
-      ),
-    ];
-
-    const secondBatch = [
-      buildMemory({
-        id: uuid(1300),
-        createdAt: 30,
-        metadata: { documentId, position: 0 },
-        content: { text: "valid-second-batch" },
-      }),
-      buildMemory({
-        id: uuid(1301),
-        createdAt: 40,
-        metadata: { documentId: uuid(8888), position: 9 },
-        content: { text: "other-doc-2" },
-      }),
-    ];
-
-    getMemoriesMock.mockImplementation(async ({ tableName, offset }) => {
-      if (tableName !== "knowledge") return [];
-      if (offset === 0) return firstBatch;
-      if (offset === 500) return secondBatch;
-      return [];
-    });
-
-    const result = await invoke({
-      method: "GET",
-      pathname: `/api/knowledge/fragments/${documentId}`,
-    });
-
-    expect(result.status).toBe(200);
-    expect(getMemoriesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tableName: "knowledge",
-        roomId: AGENT_ID,
-        count: 500,
-        offset: 0,
-      }),
-    );
-    expect(getMemoriesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tableName: "knowledge",
-        roomId: AGENT_ID,
-        count: 500,
-        offset: 500,
-      }),
-    );
-
-    const fragments = (
-      result.payload as {
-        fragments: Array<{
-          id: UUID;
-          text: string;
-          position: unknown;
-          createdAt: number;
-        }>;
-      }
-    ).fragments;
-
-    expect(fragments).toEqual([
-      {
-        id: uuid(1300),
-        text: "valid-second-batch",
-        position: 0,
-        createdAt: 30,
-      },
-      {
-        id: uuid(1202),
-        text: "valid-first-batch",
-        position: 5,
-        createdAt: 20,
-      },
-    ]);
-  });
-
-  test("delete document only deletes fragment memories with defined ids", async () => {
-    const documentId = uuid(1400);
-    const validFragmentId = uuid(1401);
-
-    getMemoriesMock.mockResolvedValueOnce([
-      buildMemory({
-        id: undefined,
-        metadata: { documentId },
-      }),
-      buildMemory({
-        id: validFragmentId,
-        metadata: { documentId },
+        id: uuid(2),
+        content: { text: "document body" },
+        metadata: { filename: "notes.md" },
       }),
     ]);
+    fragmentsMock.mockResolvedValue([buildMemory()]);
+    const found = await invoke({
+      method: "GET",
+      pathname: "/api/knowledge/documents/" + uuid(2),
+    });
+    expect(found.status).toBe(200);
+    expect(found.payload).toMatchObject({
+      document: {
+        filename: "notes.md",
+        content: { text: "document body" },
+        fragmentCount: 1,
+      },
+    });
+    const missing = await invoke({
+      method: "GET",
+      pathname: "/api/knowledge/documents/" + uuid(3),
+    });
+    expect(missing.status).toBe(404);
+  });
 
+  test("orders authorized fragments and omits malformed fragment records", async () => {
+    fragmentsMock.mockResolvedValue([
+      buildMemory({ id: undefined }),
+      buildMemory({ id: uuid(1), createdAt: undefined }),
+      buildMemory({
+        id: uuid(2),
+        metadata: { position: 2 },
+        content: { text: "second" },
+      }),
+      buildMemory({
+        id: uuid(3),
+        metadata: { position: 1 },
+        content: { text: "first" },
+      }),
+    ]);
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/knowledge/fragments/" + uuid(4),
+    });
+    expect(result.status).toBe(200);
+    expect(result.payload).toMatchObject({
+      count: 2,
+      fragments: [{ text: "first" }, { text: "second" }],
+    });
+  });
+
+  test("deletes through the native authorized document operation", async () => {
+    fragmentsMock.mockResolvedValue([buildMemory()]);
     const result = await invoke({
       method: "DELETE",
-      pathname: `/api/knowledge/documents/${documentId}`,
+      pathname: "/api/knowledge/documents/" + uuid(4),
     });
-
     expect(result.status).toBe(200);
-    expect(deleteMemoryMock).toHaveBeenCalledTimes(2);
-    expect(deleteMemoryMock).toHaveBeenNthCalledWith(1, validFragmentId);
-    expect(deleteMemoryMock).toHaveBeenNthCalledWith(2, documentId);
+    expect(deleteDocumentMock).toHaveBeenCalledWith(uuid(4), {
+      requesterEntityId: AGENT_ID,
+      role: "OWNER",
+    });
     expect(result.payload).toMatchObject({ ok: true, deletedFragments: 1 });
   });
 
   test("bulk document upload ingests valid documents and reports validation errors", async () => {
-    addKnowledgeMock
+    addDocumentMock
       .mockResolvedValueOnce({
         clientDocumentId: uuid(3001),
         storedDocumentMemoryId: uuid(3101),
@@ -455,15 +244,15 @@ describe("knowledge routes", () => {
     });
 
     expect(result.status).toBe(200);
-    expect(addKnowledgeMock).toHaveBeenCalledTimes(2);
-    expect(addKnowledgeMock).toHaveBeenNthCalledWith(
+    expect(addDocumentMock).toHaveBeenCalledTimes(2);
+    expect(addDocumentMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         originalFilename: "docs/alpha.md",
         content: "alpha",
       }),
     );
-    expect(addKnowledgeMock).toHaveBeenNthCalledWith(
+    expect(addDocumentMock).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         originalFilename: "docs/beta.txt",
@@ -499,7 +288,7 @@ describe("knowledge routes", () => {
   });
 
   test("bulk document upload continues when one document fails", async () => {
-    addKnowledgeMock
+    addDocumentMock
       .mockResolvedValueOnce({
         clientDocumentId: uuid(3201),
         storedDocumentMemoryId: uuid(3301),
@@ -527,7 +316,7 @@ describe("knowledge routes", () => {
     });
 
     expect(result.status).toBe(200);
-    expect(addKnowledgeMock).toHaveBeenCalledTimes(2);
+    expect(addDocumentMock).toHaveBeenCalledTimes(2);
     expect(result.payload).toMatchObject({
       ok: false,
       total: 2,
@@ -569,7 +358,7 @@ describe("knowledge routes", () => {
     expect((result.payload as { error?: string }).error).toContain(
       "exceeds limit",
     );
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("blocks URL import to loopback hosts", async () => {
@@ -584,7 +373,7 @@ describe("knowledge routes", () => {
     expect(result.status).toBe(400);
     expect((result.payload as { error?: string }).error).toContain("blocked");
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("blocks URL import to IPv6 link-local hosts outside fe80::/16", async () => {
@@ -599,7 +388,7 @@ describe("knowledge routes", () => {
     expect(result.status).toBe(400);
     expect((result.payload as { error?: string }).error).toContain("blocked");
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("blocks URL import when DNS resolves to link-local/metadata IP", async () => {
@@ -617,7 +406,7 @@ describe("knowledge routes", () => {
     expect(result.status).toBe(400);
     expect((result.payload as { error?: string }).error).toContain("blocked");
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("pins URL import connection to the validated DNS address", async () => {
@@ -648,7 +437,7 @@ describe("knowledge routes", () => {
         }),
       }),
     );
-    expect(addKnowledgeMock).toHaveBeenCalledTimes(1);
+    expect(addDocumentMock).toHaveBeenCalledTimes(1);
   });
 
   test("allows URL import for public hosts", async () => {
@@ -676,7 +465,7 @@ describe("knowledge routes", () => {
       filename: "doc.txt",
       isYouTubeTranscript: false,
     });
-    expect(addKnowledgeMock).toHaveBeenCalledTimes(1);
+    expect(addDocumentMock).toHaveBeenCalledTimes(1);
   });
 
   test("blocks URL import when fetch responds with redirect", async () => {
@@ -705,7 +494,7 @@ describe("knowledge routes", () => {
       "https://example.com/redirect",
       expect.objectContaining({ redirect: "manual" }),
     );
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("rejects URL import when declared content-length exceeds max size", async () => {
@@ -739,7 +528,7 @@ describe("knowledge routes", () => {
       "maximum size",
     );
     expect(fetchSpy).toHaveBeenCalled();
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("rejects URL import when streamed body exceeds max size", async () => {
@@ -779,7 +568,7 @@ describe("knowledge routes", () => {
     expect((result.payload as { error?: string }).error).toContain(
       "maximum size",
     );
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("rejects YouTube import when watch page exceeds max size", async () => {
@@ -814,7 +603,7 @@ describe("knowledge routes", () => {
       "maximum size",
     );
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("rejects YouTube import when transcript exceeds max size", async () => {
@@ -870,7 +659,7 @@ describe("knowledge routes", () => {
       "maximum size",
     );
     expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 
   test("rejects URL import when upstream fetch aborts", async () => {
@@ -891,6 +680,6 @@ describe("knowledge routes", () => {
     expect(result.status).toBe(400);
     expect((result.payload as { error?: string }).error).toContain("timed out");
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(addKnowledgeMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 });

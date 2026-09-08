@@ -33,6 +33,7 @@ const SAFE_READ_PATHS = [
 const SAFE_WRITE_PATHS = [/^\/v1\/chat\/completions$/];
 
 const FULL_PROFILE_ALLOWED_READ_PATHS = [
+  /^\/api\/knowledge(?:\/(?:stats|search|documents(?:\/[^/]+)?|fragments\/[^/]+))?$/,
   /^\/$/,
   /^\/companion$/,
   /^\/broadcast\/[a-zA-Z0-9-]+$/,
@@ -61,6 +62,7 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
 ];
 
 const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
+  /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
   /^\/api\/companion\/stage$/,
@@ -71,6 +73,7 @@ const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
 ];
 
 const FULL_PROFILE_ALLOWED_DELETE_PATHS = [
+  /^\/api\/knowledge\/documents\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
   /^\/api\/subscription\/openai-codex$/,
   /^\/api\/connectors\/[a-zA-Z0-9_-]+$/,
 ];

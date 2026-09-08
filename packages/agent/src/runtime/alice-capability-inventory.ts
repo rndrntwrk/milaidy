@@ -200,11 +200,16 @@ export function buildAliceRuntimeCapabilityState(
   const entries = bom.entries.map((entry) => {
     counts[entry.classification] += 1;
     const loaded =
-      (entry.surface === "module" || entry.id.startsWith("internal:")) &&
-      entry.runtimeNames.length === 0
-        ? entry.installed && entry.implementationCallable
-        : entry.runtimeNames.some((name) => loadedNames.has(name));
-    if (entry.classification === "core" && (!loaded || !entry.implementationCallable)) {
+      entry.id === "internal:alice-knowledge-runtime"
+        ? loadedNames.has("documents")
+        : (entry.surface === "module" || entry.id.startsWith("internal:")) &&
+            entry.runtimeNames.length === 0
+          ? entry.installed && entry.implementationCallable
+          : entry.runtimeNames.some((name) => loadedNames.has(name));
+    if (
+      entry.classification === "core" &&
+      (!loaded || !entry.implementationCallable)
+    ) {
       throw new Error("ALICE_CAPABILITY_RUNTIME_STATE_MISMATCH");
     }
     if (entry.classification === "policy-disabled" && loaded) {

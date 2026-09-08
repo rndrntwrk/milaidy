@@ -179,7 +179,17 @@ function encodeValue(
   for (const key of Object.keys(value).sort()) {
     const child = value[key];
     if (child === undefined) continue;
-    if (isSecretField(key)) {
+    // Source IDs can be filenames containing "secrets" or "token". Preserve
+    // only SHA-256 provenance values in the exact native document metadata map.
+    const isSourceDigest =
+      options.collection === "memoriesById" &&
+      path.length === 2 &&
+      path[0] === "metadata" &&
+      path[1] === "source_sha256" &&
+      /^[A-Z][A-Z0-9_-]{1,31}:[^\0\r\n]{1,512}$/.test(key) &&
+      typeof child === "string" &&
+      /^[a-f0-9]{64}$/.test(child);
+    if (isSecretField(key) && !isSourceDigest) {
       // Character/plugin secrets are supplied again by the Worker boundary on
       // every boot. They must never enter D1, logs, or a rollback artifact.
       continue;
@@ -281,8 +291,18 @@ function captureState(
         : (value as unknown[]).map((child) => [arrayRecordKey(child), child]);
     for (const [key, rawValue] of entries) {
       validateKey(key);
-      const sanitized =
-        spec.name === "agents" ? sanitizeAgentValue(rawValue) : rawValue;
+      // Keep the legacy room-array shape readable by the rollback image, but
+      // do not duplicate large embeddings already held by per-id records.
+      const sanitized = spec.name === "memoriesByRoom"
+        ? (rawValue as Array<Record<string, unknown>>).map((memory) => {
+            if (typeof memory.id !== "string") {
+              throw new Error("ALICE_D1_MEMORY_INDEX_INVALID");
+            }
+            const indexEntry = { ...memory };
+            delete indexEntry.embedding;
+            return indexEntry;
+          })
+        : spec.name === "agents" ? sanitizeAgentValue(rawValue) : rawValue;
       const record: AliceElizaStateRecord = {
         collection: spec.name,
         key,
@@ -327,7 +347,12 @@ function restoreState(
       internals[spec.name] = new Map(
         records.map((record) => [
           record.key,
-          decodeValue(record.value as TaggedValue),
+          spec.name === "memoriesByRoom"
+            ? restoreMemoryIndex(
+                record.value,
+                internals.memoriesById as Map<string, unknown>,
+              )
+            : decodeValue(record.value as TaggedValue),
         ]),
       );
     } else {
@@ -336,6 +361,23 @@ function restoreState(
       );
     }
   }
+}
+
+function restoreMemoryIndex(
+  value: unknown,
+  memories: Map<string, unknown>,
+): unknown {
+  const decoded = decodeValue(value as TaggedValue);
+  // Both legacy full arrays and arrays without duplicated embeddings resolve
+  // through canonical records, preserving vectors and the latest update values.
+  if (!Array.isArray(decoded)) throw new Error("ALICE_D1_MEMORY_INDEX_INVALID");
+  return decoded.map((memory: unknown) => {
+    const id = isPlainObject(memory) ? memory.id : undefined;
+    if (typeof id !== "string" || !memories.has(id)) {
+      throw new Error("ALICE_D1_MEMORY_INDEX_INVALID");
+    }
+    return memories.get(id);
+  });
 }
 
 function diffState(
@@ -421,6 +463,19 @@ export function createAliceD1DatabaseAdapter(input: {
 }): IDatabaseAdapter<Record<string, never>> {
   if (!OWNER.test(input.ownerId)) throw new Error("ALICE_D1_OWNER_INVALID");
   const target = new InMemoryDatabaseAdapter();
+  // Native document queries require creation times. SQL adapters supply this
+  // default on insert; the pinned in-memory implementation does not.
+  const createMemories = target.createMemories.bind(target);
+  target.createMemories = (records) =>
+    createMemories(
+      records.map((record) => ({
+        ...record,
+        memory: {
+          ...record.memory,
+          createdAt: record.memory.createdAt ?? Date.now(),
+        },
+      })),
+    );
   let revision = 0;
   let initialized = false;
   let tail = Promise.resolve<unknown>(undefined);

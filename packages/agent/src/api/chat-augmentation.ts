@@ -331,15 +331,13 @@ export async function maybeAugmentChatMessageWithKnowledge(
       ...message,
       id: crypto.randomUUID() as UUID,
       agentId: runtime.agentId,
-      entityId: runtime.agentId,
-      roomId: runtime.agentId,
       content: { text: userPrompt },
       createdAt: Date.now(),
     } as ReturnType<typeof createMessageMemory>;
 
     const snippets = (
       await getChatKnowledgeMatchesWithTimeout(
-        knowledge.service.getKnowledge(searchMessage, {
+        knowledge.service.searchDocuments(searchMessage, {
           roomId: runtime.agentId,
         }),
       )

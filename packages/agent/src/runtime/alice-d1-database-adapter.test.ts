@@ -251,6 +251,88 @@ describe("Alice D1-backed Eliza database adapter", () => {
     );
   });
 
+  test("restores legacy memory indexes using canonical values through update and delete", async () => {
+    const transport = new MemoryTransport();
+    const create = () =>
+      createAliceD1DatabaseAdapter({ ownerId: OWNER_ID, transport });
+    const first = create();
+    await first.initialize();
+    await first.createMemories([{ memory: memory(), tableName: "messages" }]);
+    const index = [...transport.records.values()].find(
+      (record) => record.collection === "memoriesByRoom",
+    )!;
+    expect(index.value).toEqual([{ ...memory(), unique: true }]);
+    // Simulate the previous on-disk representation; canonical records remain.
+    transport.records.set(`memoriesByRoom\0${index.key}`, {
+      ...index,
+      value: [memory()],
+    });
+    const restored = create();
+    await restored.initialize();
+    await restored.updateMemories([
+      { id: MEMORY_ID, content: { text: "Updated canonical text" } },
+    ]);
+    const afterUpdate = create();
+    await afterUpdate.initialize();
+    expect(
+      (
+        await afterUpdate.getMemories({
+          tableName: "messages",
+          roomId: ROOM_ID,
+        })
+      )[0]?.content.text,
+    ).toBe("Updated canonical text");
+    await afterUpdate.deleteMemories([MEMORY_ID]);
+    const afterDelete = create();
+    await afterDelete.initialize();
+    expect(await afterDelete.getMemoriesByIds([MEMORY_ID])).toEqual([]);
+    expect(
+      await afterDelete.getMemories({ tableName: "messages", roomId: ROOM_ID }),
+    ).toEqual([]);
+  });
+
+  test("preserves source digests with sensitive filenames without admitting credentials", async () => {
+    const transport = new MemoryTransport();
+    const first = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+    });
+    await first.initialize();
+    await first.createMemories([
+      {
+        memory: {
+          ...memory(),
+          createdAt: undefined,
+          metadata: {
+            source_sha256: {
+              "MAY:operations/SECRETS_AND_CONFIGURATION.md": "a".repeat(64),
+              apiToken: "b".repeat(64),
+              secretKey: "must-not-persist",
+            },
+            apiToken: "b".repeat(64),
+          },
+        } as Memory,
+        tableName: "documents",
+      },
+    ]);
+    const restored = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+    });
+    await restored.initialize();
+    const result = (await restored.getMemoriesByIds([MEMORY_ID]))[0];
+    expect(result.createdAt).toBeGreaterThan(0);
+    expect((result.metadata as Record<string, unknown>)?.source_sha256).toEqual(
+      { "MAY:operations/SECRETS_AND_CONFIGURATION.md": "a".repeat(64) },
+    );
+    expect(
+      (result.metadata as Record<string, unknown>)?.apiToken,
+    ).toBeUndefined();
+    expect(JSON.stringify([...transport.records.values()])).not.toContain(
+      "must-not-persist",
+    );
+  });
+
   test("round-trips user objects whose $aliceType key collides with codec tags", async () => {
     const transport = new MemoryTransport();
     const first = createAliceD1DatabaseAdapter({

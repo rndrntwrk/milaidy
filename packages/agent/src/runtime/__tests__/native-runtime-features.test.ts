@@ -12,7 +12,7 @@ describe("native runtime feature probes", () => {
         knowledge: false,
         trajectories: true,
       },
-      isKnowledgeEnabled() {
+      isDocumentsEnabled() {
         return this.nativeFeatureStates.knowledge;
       },
       isTrajectoriesEnabled() {

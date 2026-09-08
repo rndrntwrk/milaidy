@@ -3,8 +3,12 @@ import { describe, expect, test, vi } from "vitest";
 vi.mock("../../src/api/knowledge-service-loader", () => ({
   getKnowledgeService: vi.fn(async () => ({
     service: {
-      countMemories: vi.fn(async ({ tableName }: { tableName: string }) =>
-        tableName === "documents" ? 2 : 5,
+      listAllDocumentsWithAccessContext: vi.fn(async () => [
+        { id: "first" },
+        { id: "second" },
+      ]),
+      listDocumentFragmentsWithAccessContext: vi.fn(async (id: string) =>
+        Array.from({ length: id === "first" ? 2 : 3 }, () => ({})),
       ),
     },
     reason: null,
@@ -35,7 +39,13 @@ function buildCtx(overrides: Partial<KnowledgeRouteContext> = {}): KnowledgeRout
       r.end(JSON.stringify({ error: msg }));
     }),
     readJsonBody: vi.fn(async () => ({})),
-    runtime: { agentId: "00000000-0000-0000-0000-000000000001" } as KnowledgeRouteContext["runtime"],
+    requester: {
+      requesterEntityId: "00000000-0000-0000-0000-000000000001",
+      role: "OWNER",
+    },
+    runtime: {
+      agentId: "00000000-0000-0000-0000-000000000001",
+    } as KnowledgeRouteContext["runtime"],
     ...overrides,
   } as KnowledgeRouteContext;
 }

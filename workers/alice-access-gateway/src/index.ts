@@ -1147,6 +1147,8 @@ const SAFE_RUNTIME_READS = [
 ];
 
 const FULL_RUNTIME_API_READS = [
+  /^\/api\/alice-production\/capabilities$/,
+  /^\/api\/knowledge(?:\/(?:stats|search|documents(?:\/[^/]+)?|fragments\/[^/]+))?$/,
   /^\/api\/(?:auth\/status|status|agent\/status|onboarding\/status|config|emotes)$/,
   /^\/api\/config\/schema$/,
   /^\/api\/(?:connectors|plugins)$/,
@@ -1166,6 +1168,7 @@ const FULL_RUNTIME_API_READS = [
 ];
 
 const FULL_RUNTIME_WRITES = [
+  /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
   /^\/api\/companion\/stage$/,
@@ -1174,7 +1177,10 @@ const FULL_RUNTIME_WRITES = [
   /^\/api\/agent\/restart$/,
 ];
 
-const FULL_RUNTIME_DELETES = [/^\/api\/subscription\/openai-codex$/];
+const FULL_RUNTIME_DELETES = [
+  /^\/api\/knowledge\/documents\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
+  /^\/api\/subscription\/openai-codex$/,
+];
 
 function isFullRuntimeUiPath(pathname: string): boolean {
   if (
