@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import test from "node:test";
 
 import {
@@ -222,6 +223,69 @@ test("fetches and sanitizes the exact live Access, OTP, posture, AI, and route s
   }
 });
 
+test("reports safe request failures without retrying or exposing forged errors", async () => {
+  const secret = "DO-NOT-LOG-token-body-header-cause";
+  const expectedPathHash = `sha256:${crypto.createHash("sha256")
+    .update(`/zones/${zoneId}/access/apps`).digest("hex")}`;
+  for (const [reply, expected] of [
+    [() => new Response(secret, { status: 503 }), { category: "http", status: 503, cfErrorCodes: [] }],
+    [() => Response.json({ success: false, errors:
+      [10000, 10000, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, secret, Number.MAX_SAFE_INTEGER + 1]
+        .map((code) => ({ code, message: secret })) },
+      { status: 503, headers: { "x-provider-secret": secret } }),
+      { category: "http", status: 503, cfErrorCodes: [10000, 0, 1, 2, 3, 4, 5, 6] }],
+    [() => new Response(secret), { category: "json", status: 200, cfErrorCodes: [] }],
+    [() => json({ success: false, errors: [{ code: 10000, message: secret }] }), { category: "envelope", status: 200, cfErrorCodes: [10000] }],
+    [() => { throw new Error(`ALICE_CLOUDFLARE_LIVE_READBACK_INVALID ${secret}`); }, { category: "transport" }],
+  ]) {
+    let requests = 0;
+    await assert.rejects(() => fetchAliceCloudflareProviderState({
+      apiToken: secret, baseUrl,
+      fetchImpl: async () => { requests++; return reply(); },
+    }), (error) => {
+      assert.equal(error.message.includes(secret), false);
+      assert.equal(error.message.includes("\n"), false);
+      assert.deepEqual(JSON.parse(error.message.replace("ALICE_CLOUDFLARE_LIVE_READBACK_INVALID ", "")),
+        { stage: "api_get", pathSha256: expectedPathHash, ...expected });
+      return true;
+    });
+    assert.equal(requests, 1);
+  }
+  await assert.rejects(() => fetchAliceCloudflareProviderState({
+    apiToken: secret, baseUrl, fetchImpl: providerApi([]),
+    now: () => { throw new Error(`ALICE_CLOUDFLARE_LIVE_READBACK_INVALID ${secret}`); },
+  }), { message: 'ALICE_CLOUDFLARE_LIVE_READBACK_INVALID {"stage":"provider_state","category":"validation"}' });
+});
+
+test("identifies Access, AI Gateway, and continuity configuration rejection stages", async () => {
+  for (const [stage, target] of [
+    ["provider_state", `/zones/${zoneId}/access/apps`],
+    ["access_configuration", `/zones/${zoneId}/access/apps/${fixtures.accessPolicyReadback.application.id}`],
+    ["ai_gateway_configuration", `/accounts/${accountId}/ai-gateway/gateways/alice-production`],
+  ]) {
+    const baseFetch = providerApi([]);
+    await assert.rejects(() => fetchAliceCloudflareProviderState({
+      ...fixtures.accessPolicyReadback, apiToken: "read-only-token", baseUrl,
+      now: () => Date.parse(fixtures.accessPolicyReadback.observedAt),
+      fetchImpl: async (url, options) => {
+        const response = await baseFetch(url, options);
+        if (new URL(url).pathname.replace("/client/v4", "") !== target) return response;
+        const body = await response.json();
+        if (stage === "provider_state") body.result = [];
+        else if (stage === "access_configuration") body.result.aud = "wrong-audience";
+        else body.result.cache_ttl = 1;
+        return json(body);
+      },
+    }), { message: `ALICE_CLOUDFLARE_LIVE_READBACK_INVALID {"stage":"${stage}","category":"validation"}` });
+  }
+  const continuity = structuredClone(continuityFixture);
+  continuity.queueConsumers = [];
+  await assert.rejects(() => fetchAliceCloudflareContinuityState({
+    apiToken: "read-only-token", baseUrl, fetchImpl: continuityApi([], continuity),
+    expectedDurableObjectNamespaceIds: continuity.durableObjectNamespaceIds,
+  }), { message: 'ALICE_CLOUDFLARE_LIVE_READBACK_INVALID {"stage":"continuity_configuration","category":"validation"}' });
+});
+
 test("fails closed on absent, mismatched, or expanded live Vectorize state", async () => {
   for (const vectorizeResult of [
     { name: "alice-memory-v1", config: { metric: "cosine" } },
@@ -261,7 +325,7 @@ test("fails closed on absent, mismatched, or expanded live Vectorize state", asy
         baseUrl,
         now: () => Date.parse(fixtures.accessPolicyReadback.observedAt),
       }),
-      /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
+      { message: 'ALICE_CLOUDFLARE_LIVE_READBACK_INVALID {"stage":"vectorize_configuration","category":"validation"}' },
     );
     assert.equal(calls.every((call) => call.options.method === "GET"), true);
   }
@@ -461,7 +525,7 @@ test("rejects inconsistent pagination totals before claiming an exhaustive read"
       zoneId,
       baseUrl,
     }),
-    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID .*"stage":"pagination".*"category":"metadata"/,
   );
 });
 
