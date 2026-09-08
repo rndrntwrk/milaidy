@@ -33,6 +33,8 @@ test('recovery and acceptance corrections can reuse an unchanged runtime build',
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_production_acceptance.test.ts'), 'test("acceptance", () => {});\n');
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_cloudflare_continuity.mjs'), 'export const candidate = "serving";\n');
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_cloudflare_continuity.test.mjs'), 'test("continuity", () => {});\n');
+  fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_cloudflare_worker_rollback.mjs'), 'export const captureStage = "worker-version";\n');
+  fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_cloudflare_worker_rollback.test.mjs'), 'test("readback", () => {});\n');
   f.git('add', '.'); f.git('commit', '-m', 'Renew recovery');
   const controller = f.git('rev-parse', 'HEAD');
   const result = f.run(controller);
