@@ -20,6 +20,7 @@ import {
 } from "./alice_deployment_manifest.mjs";
 import {
   readAliceWorkerMainModule,
+  normalizeAliceContainerInstanceReadback,
   verifyAliceContainerApplicationReadback,
   verifyAliceProviderControlFingerprints,
   verifyAliceWorkerProviderBindingSnapshot,
@@ -550,6 +551,7 @@ test("normalizes the pre-mutation runtimeHost application against its current im
     verifyAliceContainerApplicationReadback({
       application,
       applicationInstances: [],
+      applicationDurableObjects: [{ name: application.name }],
       expectedApplicationImage: image,
       materializedWranglerConfig: config,
       expectedNamespaceId: namespaceId,
@@ -592,6 +594,7 @@ test("normalizes the pre-mutation runtimeHost application against its current im
       () => verifyAliceContainerApplicationReadback({
         application: substituted,
         applicationInstances: [],
+        applicationDurableObjects: [{ name: application.name }],
         expectedApplicationImage: image,
         materializedWranglerConfig: config,
         expectedNamespaceId: namespaceId,
@@ -603,12 +606,42 @@ test("normalizes the pre-mutation runtimeHost application against its current im
     () => verifyAliceContainerApplicationReadback({
       application,
       applicationInstances: [{ id: "unexpected-running-instance" }],
+      applicationDurableObjects: [{ name: application.name }],
       expectedApplicationImage: image,
       materializedWranglerConfig: config,
       expectedNamespaceId: namespaceId,
     }),
     /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/,
   );
+  const binding = { name: application.name, id: "6".repeat(64),
+    deployment_id: "d03d1077-90f0-40b2-860f-52dacb027850",
+    placement_id: "fadd992a-6c3f-40c5-bbc1-84a83805fc6e" };
+  const instance = { id: binding.deployment_id, app_version: application.version, image,
+    current_placement: { id: binding.placement_id, deployment_id: binding.deployment_id,
+      deployment_version: application.version, durable_object_actor_id: binding.id,
+      terminate: false, last_update: "2026-09-08T13:42:35Z", events: [{ name: "VMStopped" }],
+      status: { health: "running", container_status: "running", durable_object: "connected",
+        durable_object_id: binding.id, runtime_reason: "received-signal" } } };
+  const boundInput = { application, applicationInstances: [instance],
+    applicationDurableObjects: [binding], expectedApplicationImage: image,
+    materializedWranglerConfig: config, expectedNamespaceId: namespaceId };
+  assert.equal(verifyAliceContainerApplicationReadback(boundInput).image, image);
+  const refreshed = structuredClone(boundInput);
+  refreshed.applicationInstances[0].current_placement.events.push({ name: "DurableObjectConnected" });
+  refreshed.applicationInstances[0].current_placement.last_update = "2026-09-08T13:43:00Z";
+  assert.deepEqual(normalizeAliceContainerInstanceReadback(refreshed), normalizeAliceContainerInstanceReadback(boundInput));
+  for (const tamper of [
+    (value) => { value.applicationInstances.push(structuredClone(instance)); },
+    (value) => { value.applicationDurableObjects[0].deployment_id = binding.placement_id; },
+    (value) => { value.applicationDurableObjects[0].placement_id = binding.deployment_id; },
+    (value) => { value.applicationInstances[0].current_placement.status.durable_object_id = "7".repeat(64); },
+    (value) => { value.applicationInstances[0].app_version += 1; },
+    (value) => { value.applicationInstances[0].image = candidateImage; },
+    (value) => { value.applicationInstances[0].current_placement.terminate = true; },
+  ]) {
+    const invalid = structuredClone(boundInput); tamper(invalid);
+    assert.throws(() => verifyAliceContainerApplicationReadback(invalid), /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/);
+  }
 });
 
 test("matches explicit Cloudflare logging defaults without admitting enabled tracing", async () => {

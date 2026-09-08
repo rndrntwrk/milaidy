@@ -785,6 +785,21 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     script: queueConsumerScript,
   };
   let includeRuntimeHostInstance = false;
+  let includeBoundRuntimeHostInstance = false;
+  let instanceTelemetryTick = 0;
+  const boundRuntimeInstance = {
+    id: "d03d1077-90f0-40b2-860f-52dacb027850",
+    app_version: runtimeHostApplication.version,
+    image: runtimeHostApplication.configuration.image,
+    current_placement: {
+      id: "fadd992a-6c3f-40c5-bbc1-84a83805fc6e",
+      deployment_id: "d03d1077-90f0-40b2-860f-52dacb027850",
+      deployment_version: runtimeHostApplication.version,
+      durable_object_actor_id: "6".repeat(64), terminate: false,
+      status: { health: "running", container_status: "running",
+        durable_object: "connected", durable_object_id: "6".repeat(64) },
+    },
+  };
   let runtimeHostDurableObjectName = "alice-production-runtime";
   let runtimeHostDetailDrift = false;
   let runtimeHostDetailReads = 0;
@@ -910,9 +925,16 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
             assigned_at: "2026-09-04T10:28:14Z",
             id: "6".repeat(64),
             name: runtimeHostDurableObjectName,
+            ...(includeBoundRuntimeHostInstance ? {
+              deployment_id: boundRuntimeInstance.id,
+              placement_id: boundRuntimeInstance.current_placement.id,
+            } : {}),
           }],
           instances: includeRuntimeHostInstance
             ? [{ id: "unexpected-runtime-instance" }]
+            : includeBoundRuntimeHostInstance ? [{ ...boundRuntimeInstance,
+                current_placement: { ...boundRuntimeInstance.current_placement,
+                  last_update: String(++instanceTelemetryTick), events: [{ tick: instanceTelemetryTick }] } }]
             : [],
         },
         result_info: { per_page: 100 },
@@ -1135,10 +1157,12 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       assert.equal(input.deployedMainModule.byteLength > 0, true);
       if (input.role === "runtimeHost") {
         assert.deepEqual(input.containerApplication, runtimeHostApplication);
-        assert.deepEqual(input.containerApplicationInstances, []);
+        assert.deepEqual(input.containerApplicationInstances, includeBoundRuntimeHostInstance ? [boundRuntimeInstance] : []);
+        assert.equal(input.containerApplicationDurableObjects.length, 1);
       } else {
         assert.equal(input.containerApplication, undefined);
         assert.equal(input.containerApplicationInstances, undefined);
+        assert.equal(input.containerApplicationDurableObjects, undefined);
       }
       assert.deepEqual(
         input.expectedDurableObjectNamespaceIds,
@@ -1177,6 +1201,11 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       2,
     );
   }
+
+  includeBoundRuntimeHostInstance = true;
+  await fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput);
+  assert.equal(instanceTelemetryTick, 2);
+  includeBoundRuntimeHostInstance = false;
 
   ownerPolicyStableThrough = ownerPolicyReads + 1;
   await assert.rejects(
