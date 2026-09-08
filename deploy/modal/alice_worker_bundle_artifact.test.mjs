@@ -224,7 +224,7 @@ test("binds artifact source, six bundle bytes, and migration set to the signed m
       expectedSourceCommit: "1".repeat(40),
     });
     const manifest = {
-      source: { sourceCommit: "1".repeat(40) },
+      source: { sourceCommit: "2".repeat(40), deploymentControllerCommit: "1".repeat(40) },
       cloudflare: {
         accessWorkerBundleSha256: artifact.bundles.access.sha256,
         runtimeHostWorkerBundleSha256: artifact.bundles.runtimeHost.sha256,
@@ -245,6 +245,27 @@ test("binds artifact source, six bundle bytes, and migration set to the signed m
       }),
       artifact,
     );
+    const legacyManifest = { ...manifest, source: {
+      sourceCommit: artifact.sourceCommit, deploymentControllerCommit: "2".repeat(40),
+    } };
+    for (const phase of [undefined, "capture", "prepare", "promote", "verify"]) {
+      assert.throws(() => assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
+        serializedArtifact: serialized, artifactRoot: root, manifest: legacyManifest, phase,
+      }), /ALICE_WORKER_BUNDLE_MANIFEST_MISMATCH/);
+    }
+    assert.deepEqual(assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
+      serializedArtifact: serialized, artifactRoot: root, manifest: legacyManifest, phase: "rollback",
+    }), artifact);
+    assert.throws(() => assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
+      serializedArtifact: serialized, artifactRoot: root, phase: "rollback",
+      manifest: { ...manifest, source: { sourceCommit: "3".repeat(40), deploymentControllerCommit: "4".repeat(40) } },
+    }), /ALICE_WORKER_BUNDLE_MANIFEST_MISMATCH/);
+    for (const phase of ["promote", "rollback"]) {
+      assert.throws(() => assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
+        serializedArtifact: serialized, artifactRoot: root, phase,
+        manifest: { ...manifest, cloudflare: { ...manifest.cloudflare, stateMigrationSetSha256: `sha256:${"f".repeat(64)}` } },
+      }), /ALICE_WORKER_BUNDLE_MANIFEST_MISMATCH/);
+    }
     assert.throws(
       () =>
         assertAliceWorkerBundleArtifactMatchesDeploymentManifest({

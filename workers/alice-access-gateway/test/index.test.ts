@@ -55,7 +55,7 @@ const testDeploymentManifest = await buildAliceDeploymentManifest({
   ...providerReadbacks,
   cloudflareContinuityReadback: aliceTestCloudflareContinuityReadback(),
   workerBundleArtifact: aliceTestVerifiedWorkerBundleArtifact({
-    sourceCommit: releaseSource.sourceCommit,
+    sourceCommit: releaseSource.deploymentControllerCommit,
   }),
   accessEffectiveConfig: buildAliceContainerAccessEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",

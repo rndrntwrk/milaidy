@@ -49,6 +49,19 @@ test('runtime changes require a new build even when recovery also changes', t =>
   assert.match(result.stderr, /ALICE_RELEASE_SOURCE_REBUILD_REQUIRED/);
 });
 
+test('host-only changes can reuse the image but dependency changes cannot', t => {
+  const f = fixture(t);
+  const hostDirectory = path.join(f.root, 'workers/alice-access-gateway/src');
+  fs.mkdirSync(hostDirectory, {recursive: true});
+  fs.writeFileSync(path.join(hostDirectory, 'alice-runtime-container.ts'), 'export const interceptHttps = true;\n');
+  f.git('add', '.'); f.git('commit', '-m', 'Host HTTPS correction');
+  const host = f.run(f.git('rev-parse', 'HEAD'));
+  assert.equal(host.status, 0, host.stderr);
+  fs.writeFileSync(path.join(f.root, 'workers/alice-access-gateway/package.json'), '{"dependencies":{"@cloudflare/containers":"0.4.0"}}\n');
+  f.git('add', '.'); f.git('commit', '-m', 'Unqualified SDK change');
+  assert.match(f.run(f.git('rev-parse', 'HEAD')).stderr, /ALICE_RELEASE_SOURCE_REBUILD_REQUIRED/);
+});
+
 test('an unrelated source cannot be admitted as a reused build', t => {
   const f = fixture(t);
   f.git('checkout', '--orphan', 'unrelated-controller');

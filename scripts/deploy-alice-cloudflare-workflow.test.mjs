@@ -85,7 +85,7 @@ test("protected deployment consumes one exact successful build and immutable art
   );
   assert.match(
     workflow,
-    /actions\/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53[\s\S]*?run-id: \$\{\{ inputs\.build_run_id \}\}[\s\S]*?name: \$\{\{ inputs\.worker_artifact_name \}\}/,
+    /Download exact controller host Worker artifact[\s\S]*?run-id: \$\{\{ inputs\.preimport_run_id \}\}[\s\S]*?artifact-ids: \$\{\{ env\.ALICE_HOST_WORKER_ARTIFACT_ID \}\}/,
   );
   assert.match(
     workflow,
@@ -345,6 +345,8 @@ test("deployment attests every module in the six-role Worker artifact", () => {
   const attest = workflow.match(
     /- name: Verify immutable Worker attestations before unrouted fail-closed bootstrap[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
+  assert.match(attest, /--signer-workflow rndrntwrk\/milaidy\/\.github\/workflows\/alice-cloudflare-container-bringup\.yml/);
+  assert.match(attest, /--source-digest "\$CONTROLLER_SHA"/);
   for (const worker of [
     "alice-access-gateway",
     "alice-production-control",
@@ -370,6 +372,28 @@ test("deployment attests every module in the six-role Worker artifact", () => {
       `missing immutable attestation verification for ${migration}`,
     );
   }
+});
+
+test("preimport verifies the original build then attests host bytes before bootstrap", () => {
+  const preimport = fs.readFileSync(path.join(repoRoot, '.github/workflows/alice-cloudflare-container-bringup.yml'), 'utf8');
+  const ordered = [
+    'Verify imported image evidence and immutable Worker identities',
+    'Build exact host Workers while preserving the qualified runtime image',
+    'Attest exact controller host Worker artifact',
+    'Upload immutable controller host Worker artifact',
+    'Preprovision exact missing fail-closed continuity identities',
+    'Materialize fresh signed-input manifest and provider readback',
+  ].map(name => preimport.indexOf(`- name: ${name}`));
+  assert.ok(ordered.every((index, i) => index > 0 && (i === 0 || index > ordered[i - 1])));
+  const original = namedWorkflowSteps(preimport).find(step => step.name === 'Verify imported image evidence and immutable Worker identities').block;
+  assert.match(original, /build-cloud-agent\.yml/);
+  assert.match(original, /--source-digest "\$SOURCE_SHA"/);
+  const build = namedWorkflowSteps(preimport).find(step => step.name === 'Build exact host Workers while preserving the qualified runtime image').block;
+  assert.match(build, /ALICE_DEPLOYMENT_CONTROLLER_COMMIT:/);
+  assert.doesNotMatch(build, /docker|push_image/);
+  const identity = namedWorkflowSteps(workflow).find(step => step.name === 'Enforce protected source and build identity').block;
+  assert.match(identity, /host_artifact_record[\s\S]*?\.workflow_run\.id[\s\S]*?\.workflow_run\.head_sha/);
+  assert.match(identity, /test "\$\(printf '%s' "\$host_artifact_record" \| cut -f5\)" = "\$CONTROLLER_SHA"/);
 });
 
 test("the signed state migrations are remotely applied and verified before state mutation", () => {

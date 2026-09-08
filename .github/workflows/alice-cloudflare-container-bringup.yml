@@ -404,6 +404,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: alice-production
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+      packages: read
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
       CONTROLLER_SHA: ${{ github.sha }}
@@ -661,10 +667,40 @@ jobs:
           tool_root="${RUNNER_TEMP}/alice-preimport-materialize/tools"
           mkdir -p "$tool_root"
           npm install --prefix "$tool_root" --ignore-scripts --no-audit --no-fund \
-            wrangler@4.122.0
+            wrangler@4.122.0 @cloudflare/containers@0.3.7
           test -x "$tool_root/node_modules/.bin/wrangler"
+          mkdir -p workers/alice-access-gateway/node_modules/@cloudflare
+          ln -s "$tool_root/node_modules/@cloudflare/containers" \
+            workers/alice-access-gateway/node_modules/@cloudflare/containers
           echo "ALICE_PREIMPORT_BOOTSTRAP_WRANGLER=$tool_root/node_modules/.bin/wrangler" >> \
             "$GITHUB_ENV"
+
+      - name: Build exact host Workers while preserving the qualified runtime image
+        env:
+          ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
+          ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.CONTROLLER_SHA }}
+          ALICE_BASE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-preimport-materialize/worker-bundles
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-preimport-materialize/host-worker-bundles
+          ALICE_WRANGLER_BIN: ${{ env.ALICE_PREIMPORT_BOOTSTRAP_WRANGLER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build-alice-host-worker-artifact.mjs
+
+      - name: Attest exact controller host Worker artifact
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ runner.temp }}/alice-preimport-materialize/host-worker-bundles/**/*
+
+      - name: Upload immutable controller host Worker artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alice-host-worker-bundles-${{ env.CONTROLLER_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/alice-preimport-materialize/host-worker-bundles
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+          include-hidden-files: false
 
       - name: Preprovision exact missing fail-closed continuity identities
         env:
@@ -676,8 +712,8 @@ jobs:
           ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.CONTROLLER_SHA }}
           ALICE_RELEASE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           ALICE_WRANGLER_BIN: ${{ env.ALICE_PREIMPORT_BOOTSTRAP_WRANGLER }}
-          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-preimport-materialize/worker-bundles
-          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-preimport-materialize/worker-bundles/alice-worker-bundles.json
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-preimport-materialize/host-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-preimport-materialize/host-worker-bundles/alice-worker-bundles.json
           ALICE_BOOTSTRAP_OUTPUT_DIR: ${{ runner.temp }}/alice-preimport-materialize/bootstrap
           ALICE_BOOTSTRAP_VERSION_BOUNDARY_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-version-boundary.json
           ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/bootstrap-durable-object-namespace-ids.json
@@ -770,8 +806,8 @@ jobs:
           ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
           ALICE_MODEL_DAILY_BUDGET_UNITS: "10000"
           ALICE_STATE_DATABASE_ID: ${{ vars.ALICE_STATE_DATABASE_ID }}
-          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-preimport-materialize/worker-bundles
-          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-preimport-materialize/worker-bundles/alice-worker-bundles.json
+          ALICE_WORKER_BUNDLE_ROOT: ${{ runner.temp }}/alice-preimport-materialize/host-worker-bundles
+          ALICE_WORKER_BUNDLE_ARTIFACT_PATH: ${{ runner.temp }}/alice-preimport-materialize/host-worker-bundles/alice-worker-bundles.json
           ALICE_DEPLOYMENT_MANIFEST_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/alice-deployment-manifest.json
           ALICE_CLOUDFLARE_PROVIDER_READBACK_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/provider-readback.json
           ALICE_EXPECTED_DO_NAMESPACE_IDS_PATH: ${{ runner.temp }}/alice-preimport-materialize/release/durable-object-namespace-ids.json

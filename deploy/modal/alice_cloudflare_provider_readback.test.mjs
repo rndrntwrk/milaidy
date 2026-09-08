@@ -59,7 +59,7 @@ const workerModules = {
     "export default { fetch() { return new Response('connector'); } };\n",
 };
 const workerBundleArtifact = aliceTestVerifiedWorkerBundleArtifact({
-  sourceCommit: "1".repeat(40),
+  sourceCommit: "2".repeat(40),
   workerModules,
 });
 const cloudflareContinuityReadback = aliceTestCloudflareContinuityReadback();

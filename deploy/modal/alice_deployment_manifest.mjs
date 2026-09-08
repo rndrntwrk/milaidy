@@ -191,7 +191,7 @@ async function validInputs(value) {
   try {
     const bundleDigests = aliceWorkerBundleDigests(value.workerBundleArtifact);
     workerBundleArtifactValid =
-      value.workerBundleArtifact.sourceCommit === value.sourceCommit &&
+      value.workerBundleArtifact.sourceCommit === value.deploymentControllerCommit &&
       [
         "access",
         "runtimeHost",
@@ -542,7 +542,7 @@ if (invokedPath === import.meta.url) {
       fs.readFileSync(workerBundleArtifactPath, "utf8"),
       {
         root: path.dirname(workerBundleArtifactPath),
-        expectedSourceCommit: process.env.ALICE_SOURCE_COMMIT,
+        expectedSourceCommit: process.env.ALICE_DEPLOYMENT_CONTROLLER_COMMIT,
       },
     );
     const candidateContinuityReadback =

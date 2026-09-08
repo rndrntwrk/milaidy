@@ -69,7 +69,7 @@ const connectorPlaneEffectiveConfig = buildAliceConnectorPlaneEffectiveConfig({
   providerActivation: "disabled",
 });
 const workerBundleArtifact = aliceTestVerifiedWorkerBundleArtifact({
-  sourceCommit: "1".repeat(40),
+  sourceCommit: "2".repeat(40),
 });
 const cloudflareContinuityReadback = aliceTestCloudflareContinuityReadback();
 const containerAccessEffectiveConfig = buildAliceContainerAccessEffectiveConfig({
@@ -105,6 +105,17 @@ const valid = {
   cloudflareContinuityReadback,
   workerBundleArtifact,
 };
+
+test("new manifests require controller Worker provenance while retaining the original image source", async () => {
+  await assert.rejects(buildAliceDeploymentManifest({
+    ...valid,
+    workerBundleArtifact: aliceTestVerifiedWorkerBundleArtifact({ sourceCommit: valid.sourceCommit }),
+  }), /ALICE_DEPLOYMENT_MANIFEST_INPUT_INVALID/);
+  const manifest = await buildAliceDeploymentManifest(valid);
+  assert.equal(manifest.source.sourceCommit, valid.sourceCommit);
+  assert.equal(manifest.source.deploymentControllerCommit, valid.deploymentControllerCommit);
+  assert.equal(manifest.source.runtimeImage, valid.runtimeImage);
+});
 
 test("builds one non-self-referential production deployment manifest from canonical effective configs", async () => {
   const manifest = await buildAliceDeploymentManifest(valid);
