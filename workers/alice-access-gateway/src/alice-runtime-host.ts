@@ -65,6 +65,8 @@ export function buildAliceRuntimeContainerEnv(
     ELIZA_API_BIND: "0.0.0.0",
     ELIZA_AUTH_DISABLED: "0",
     MILADY_CLOUD_PROVISIONED: "1",
+    MILADY_CONFIG_PATH: "/app/deploy/modal/alice-runtime-defaults.json",
+    MILADY_PERSIST_CONFIG_PATH: "/tmp/alice-runtime/config/milady.json",
     MILADY_TRUST_CLOUDFLARE_ACCESS: "1",
     MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: env.ALICE_ACCESS_PROXY_SECRET,
     MILADY_API_TOKEN: env.ALICE_RUNTIME_API_TOKEN,

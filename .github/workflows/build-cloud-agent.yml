@@ -211,6 +211,7 @@ jobs:
             deploy/modal/alice_production_acceptance.test.ts \
             deploy/modal/verify_alice_program_admission.test.ts \
             workers/alice-access-gateway/test/index.test.ts \
+            workers/alice-access-gateway/test/runtime-container.test.ts \
             workers/alice-production-control/test/*.test.ts \
             workers/alice-state-plane/test/*.test.ts \
             workers/alice-connector-plane/test/*.test.ts
@@ -825,6 +826,8 @@ jobs:
             --env ELIZA_AUTH_DISABLED=0 \
             --env MILADY_API_TOKEN=alice-cloud-smoke-runtime-token \
             --env MILADY_CLOUD_PROVISIONED=1 \
+            --env MILADY_CONFIG_PATH=/app/deploy/modal/alice-runtime-defaults.json \
+            --env MILADY_PERSIST_CONFIG_PATH=/tmp/alice-runtime/config/milady.json \
             --env MILADY_TRUST_CLOUDFLARE_ACCESS=1 \
             --env MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET=alice-cloud-smoke-access-proxy-secret \
             --env ALICE_RUNTIME_AUTHORITY_MODE=proposer-only \
@@ -921,6 +924,21 @@ jobs:
                   console.error(JSON.stringify({ status: response.status, agentState: health.agentState,
                     ready: health.ready, runtime: health.runtime, database: health.database,
                     startupPhase: health.startup?.phase }));
+                  process.exit(2);
+                }
+                const identityResponse = await fetch(`${base}/api/status`, { headers: authHeaders });
+                const identity = await identityResponse.json();
+                const configResponse = await fetch(`${base}/api/config`, { headers: authHeaders });
+                const config = await configResponse.json();
+                if (
+                  identityResponse.status !== 200 || identity.agentName !== "Alice" ||
+                  configResponse.status !== 200 || config.ui?.assistant?.name !== "Alice" ||
+                  config.ui?.presetId !== "alice" || config.ui?.avatarIndex !== 9
+                ) {
+                  console.error(JSON.stringify({ identityStatus: identityResponse.status,
+                    agentName: identity.agentName, configStatus: configResponse.status,
+                    assistantName: config.ui?.assistant?.name, presetId: config.ui?.presetId,
+                    avatarIndex: config.ui?.avatarIndex }));
                   process.exit(2);
                 }
                 const capabilitiesResponse = await fetch(`${base}/api/alice-production/capabilities`, { headers: authHeaders });

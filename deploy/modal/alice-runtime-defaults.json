@@ -1,0 +1,10 @@
+{
+  "agents": {
+    "list": [{ "id": "main", "name": "Alice" }]
+  },
+  "ui": {
+    "assistant": { "name": "Alice" },
+    "presetId": "alice",
+    "avatarIndex": 9
+  }
+}
