@@ -279,12 +279,29 @@ test("promotes and restores one exact captured Container application target", as
     kind: "full_auto",
   });
 
+  // Host-supplied startup settings can change while the image stays pinned.
+  const beforeRestart = current;
+  const unchanged = await transitionAliceContainerApplication({
+    expectedCurrent: current, target: current.target, operations,
+  });
+  assert.equal(unchanged.changed, false);
+  for (const direction of ["forward", "rollback"]) {
+    const restarted = await transitionAliceContainerApplication({
+      expectedCurrent: current, target: current.target, restart: true, operations,
+    });
+    assert.equal(restarted.changed, true, `${direction} must reload host startup settings`);
+    assert.equal(restarted.current.target.configuration.image, previousImage);
+  }
+  assert.equal(current.applicationVersion, beforeRestart.applicationVersion + 2);
+  assert.equal(rolloutBodies.length, 4);
+
   current = { ...previous, applicationVersion: 99 };
   let mutated = false;
   await assert.rejects(
     () => transitionAliceContainerApplication({
       expectedCurrent: previous,
       target: candidateTarget,
+      restart: true,
       operations: {
         ...operations,
         createRollout: async () => {
@@ -362,34 +379,62 @@ test("promotes and restores one exact captured Container application target", as
     applicationRollout: pending,
   }), /ALICE_CONTAINER_APPLICATION_INVALID/);
   const requests = [];
+  let activeRollout = pending;
+  let restoredVersion = rawVersion;
   const fetchImpl = async (url, init) => {
     const pathname = new URL(url).pathname;
     let result;
     if (init.method === "POST") {
       requests.push({ pathname, body: JSON.parse(init.body) });
-      assert.ok(pathname.endsWith(`/rollouts/${pending.id}`));
-      pending.status = "reverted";
-      result = { rollout: pending };
+      if (pathname.endsWith(`/rollouts/${pending.id}`)) {
+        pending.status = "reverted";
+        result = { rollout: pending };
+      } else {
+        assert.ok(pathname.endsWith("/rollouts"));
+        const configuration = JSON.parse(init.body).target_configuration;
+        activeRollout = {
+          id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          current_version: application.version, target_version: application.version + 1,
+          current_configuration: application.configuration,
+          target_configuration: configuration, status: "completed",
+        };
+        application.version += 1;
+        application.configuration = configuration;
+        application.active_rollout_id = activeRollout.id;
+        restoredVersion = { ...rawVersion, version: application.version, configuration };
+        result = activeRollout;
+      }
     } else if (pathname.endsWith("/applications")) result = [application];
-    else if (pathname.endsWith("/versions")) result = [rawVersion];
+    else if (pathname.endsWith("/versions")) result = [restoredVersion];
     else if (pathname.endsWith("/instances")) result = { instances: [] };
-    else if (pathname.includes("/rollouts/")) result = pending;
+    else if (pathname.includes("/rollouts/")) result = activeRollout;
     else result = application;
     return Response.json({ success: true, result });
   };
   const recovered = await restoreAliceContainerApplication({
     expected: previous, apiToken: "a".repeat(32), fetchImpl,
   });
-  assert.equal(requests.length, 1);
+  assert.equal(requests.length, 2);
   assert.deepEqual(requests[0].body, { action: "revert" });
-  assert.equal(recovered.changed, false);
-  assert.deepEqual(recovered.current, previous);
+  assert.deepEqual(requests[1].body.target_configuration, previous.target.configuration);
+  assert.equal(recovered.changed, true);
+  assert.deepEqual(recovered.current, { ...previous, applicationVersion: 2 });
+  // Even an already-selected rollback target may still have a stale process.
+  const interruptedRecovery = await restoreAliceContainerApplication({
+    expected: previous, apiToken: "a".repeat(32), fetchImpl,
+  });
+  assert.equal(interruptedRecovery.current.applicationVersion, 3);
+  assert.deepEqual(interruptedRecovery.current.target, previous.target);
+  assert.equal(requests.length, 3);
+  Object.assign(application, rawApplication, { active_rollout_id: pending.id });
+  restoredVersion = rawVersion;
+  activeRollout = pending;
   pending.status = "progressing";
   pending.current_configuration = candidateTarget.configuration;
   await assert.rejects(() => restoreAliceContainerApplication({
     expected: previous, apiToken: "a".repeat(32), fetchImpl,
   }), /ALICE_CONTAINER_APPLICATION_DRIFTED/);
-  assert.equal(requests.length, 1, "recovery cannot revert a rollout from a different source image");
+  assert.equal(requests.length, 3, "recovery cannot revert a rollout from a different source image");
 });
 
 test("materializes Container runtime secrets only for the separate runtime host", () => {
