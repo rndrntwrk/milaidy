@@ -1,4 +1,5 @@
 import http from "node:http";
+import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -79,6 +80,25 @@ function validD1Mutation(value) {
   );
 }
 
+function validRuntimeSqlBatch(value) {
+  return (
+    exactKeys(value, ["operation", "ownerId", "statements"]) &&
+    value.operation === "sql.batch" &&
+    value.ownerId === STATE_OWNER_ID &&
+    Array.isArray(value.statements) &&
+    value.statements.length > 0 &&
+    value.statements.length <= 100 &&
+    value.statements.every(
+      (statement) =>
+        exactKeys(statement, ["sql", "params"]) &&
+        typeof statement.sql === "string" &&
+        statement.sql.length > 0 &&
+        statement.sql.length <= MAX_BODY_BYTES &&
+        Array.isArray(statement.params),
+    )
+  );
+}
+
 async function readJson(request) {
   const chunks = [];
   let length = 0;
@@ -101,6 +121,7 @@ function sendJson(response, status, body) {
 }
 
 export function createAliceSmokeModelServer() {
+  const sqlDb = new DatabaseSync(":memory:");
   const state = {
     chatRequests: 0,
     embeddingRequests: 0,
@@ -109,12 +130,13 @@ export function createAliceSmokeModelServer() {
     elizaCommitRequests: 0,
     companionGetRequests: 0,
     companionPutRequests: 0,
+    runtimeSqlRequests: 0,
   };
   let elizaRevision = 0;
   const elizaRecords = new Map();
   let companionRecord = null;
 
-  return http.createServer(async (request, response) => {
+  const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://alice-smoke.invalid");
       if (request.method === "GET" && url.pathname === "/__smoke/state") {
@@ -189,6 +211,39 @@ export function createAliceSmokeModelServer() {
           ok: false,
           code: "STATE_OPERATION_INVALID",
         });
+        return;
+      }
+
+      if (url.pathname === "/v1/runtime-sql") {
+        if (!validRuntimeSqlBatch(body)) {
+          sendJson(response, 400, { ok: false, code: "STATE_OPERATION_INVALID" });
+          return;
+        }
+        state.runtimeSqlRequests += 1;
+        try {
+          sqlDb.exec("BEGIN");
+          const results = body.statements.map(({ sql, params }) => {
+            const statement = sqlDb.prepare(sql);
+            return statement.columns().length > 0
+              ? { rows: statement.all(...params) }
+              : (statement.run(...params), { rows: [] });
+          });
+          sqlDb.exec("COMMIT");
+          sendJson(response, 200, { ok: true, results });
+        } catch (error) {
+          try {
+            sqlDb.exec("ROLLBACK");
+          } catch {
+            // Preserve the original operation failure.
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          sendJson(response, 400, {
+            ok: false,
+            code: /duplicate column name/i.test(message)
+              ? "STATE_SQL_DUPLICATE_COLUMN"
+              : "STATE_SQL_EXECUTION_FAILED",
+          });
+        }
         return;
       }
 
@@ -334,6 +389,8 @@ export function createAliceSmokeModelServer() {
       sendJson(response, 400, { error: "invalid_request" });
     }
   });
+  server.on("close", () => sqlDb.close());
+  return server;
 }
 
 const invokedPath = process.argv[1]

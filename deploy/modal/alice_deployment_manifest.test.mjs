@@ -124,6 +124,8 @@ test("builds one non-self-referential production deployment manifest from canoni
     evidenceDlq: "alice-production-evidence-dlq-v1",
     planWorkflow: "alice-production-plans",
     stateDatabase: "alice-production-state",
+    runtimeSqlDatabase: "alice-production-runtime-sql",
+    runtimeSqlDatabaseId: "eae7dcce-6f4e-45f2-8460-c57c4d71a380",
     stateObjectsBucket: "alice-production-state-objects",
     memoryIndex: "alice-memory-v1",
     workQueue: "alice-production-work-v1",

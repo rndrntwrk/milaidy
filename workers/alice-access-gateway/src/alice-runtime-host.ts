@@ -193,6 +193,7 @@ export function forwardToAliceStatePlane(
     !isFetchBinding(env.ALICE_STATE_PLANE) ||
     request.method !== "POST" ||
     (pathname !== "/v1/eliza-database" &&
+      pathname !== "/v1/runtime-sql" &&
       pathname !== "/v1/companion-state" &&
       pathname !== "/v1/openai-codex-credentials")
   ) {
@@ -209,13 +210,15 @@ export function forwardToAliceStatePlane(
     "x-alice-container-state-scope",
     pathname === "/v1/eliza-database"
       ? "eliza-database"
+      : pathname === "/v1/runtime-sql"
+        ? "runtime-sql"
       : pathname === "/v1/companion-state"
         ? "companion-stage"
         : "openai-codex-credentials",
   );
   headers.set("x-alice-state-owner", ALICE_RUNTIME_STATE_OWNER_ID);
   const upstreamUrl = new URL(request.url);
-  if (pathname !== "/v1/eliza-database") upstreamUrl.pathname = "/v1/state";
+  if (pathname !== "/v1/eliza-database" && pathname !== "/v1/runtime-sql") upstreamUrl.pathname = "/v1/state";
   return env.ALICE_STATE_PLANE.fetch(
     new Request(new Request(upstreamUrl, request), { headers }),
   );

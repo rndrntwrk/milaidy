@@ -1,4 +1,5 @@
 import { type IDatabaseAdapter, InMemoryDatabaseAdapter } from "@elizaos/core";
+import { createAliceRuntimeSql } from "./alice-runtime-sql";
 
 export type AliceElizaStateRecord = Readonly<{
   collection: string;
@@ -408,6 +409,7 @@ export function createAliceFullRuntimeDatabaseAdapter(input: {
   return createAliceD1DatabaseAdapter({
     ownerId,
     transport: input.transport ?? httpTransport,
+    sql: createAliceRuntimeSql({ ownerId, ...(input.fetch ? { fetch: input.fetch } : {}) }),
   });
 }
 
@@ -415,6 +417,7 @@ export function createAliceD1DatabaseAdapter(input: {
   ownerId: string;
   transport: AliceElizaStateTransport;
   operationId?: () => string;
+  sql?: ReturnType<typeof createAliceRuntimeSql>;
 }): IDatabaseAdapter<Record<string, never>> {
   if (!OWNER.test(input.ownerId)) throw new Error("ALICE_D1_OWNER_INVALID");
   const target = new InMemoryDatabaseAdapter();
@@ -466,11 +469,15 @@ export function createAliceD1DatabaseAdapter(input: {
 
   proxy = new Proxy(target, {
     get(current, property, receiver) {
+      if (property === "db" && input.sql) return input.sql;
       if (property === "initialize" || property === "init") {
         return async () =>
           serialized(async () => {
             if (initialized) return;
             await current.initialize();
+            if (input.sql && !(await input.sql.isReady())) {
+              throw new Error("ALICE_SQL_NOT_READY");
+            }
             const loaded = await input.transport.load(input.ownerId);
             if (!Number.isSafeInteger(loaded.revision) || loaded.revision < 0) {
               throw new Error("ALICE_D1_LOAD_REVISION_INVALID");
@@ -482,7 +489,8 @@ export function createAliceD1DatabaseAdapter(input: {
           });
       }
       if (property === "isReady") {
-        return async () => initialized && (await current.isReady());
+        return async () => initialized && (await current.isReady()) &&
+          (!input.sql || await input.sql.isReady());
       }
       if (property === "transaction") {
         return <T>(

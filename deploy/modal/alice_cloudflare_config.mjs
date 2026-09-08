@@ -215,7 +215,7 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
     if (role === "statePlane" && config.main === canonicalArtifactMain(role)) {
       if (
         !Array.isArray(identityConfig.d1_databases) ||
-        identityConfig.d1_databases.length !== 1 ||
+        identityConfig.d1_databases.length !== 2 ||
         identityConfig.d1_databases[0]?.migrations_dir !==
           canonicalArtifactMigrationDir()
       ) {
@@ -368,7 +368,9 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
           binding: database.binding,
           databaseName: database.database_name,
           databaseId: database.database_id,
-          migrationsDir: database.migrations_dir,
+          ...(database.migrations_dir === undefined
+            ? {}
+            : { migrationsDir: database.migrations_dir }),
         })),
         vectorize: (identityConfig.vectorize ?? []).map((index) => ({
           binding: index.binding,
@@ -459,7 +461,9 @@ export function resolveAliceWranglerDeploymentEntrypoint(
     const databases = config.d1_databases;
     if (
       !Array.isArray(databases) ||
-      databases.length !== 1 ||
+      databases.length !== 2 ||
+      databases[0]?.binding !== "ALICE_STATE_DB" ||
+      databases[1]?.binding !== "ALICE_RUNTIME_SQL_DB" ||
       typeof databases[0]?.migrations_dir !== "string" ||
       databases[0].migrations_dir.length === 0 ||
       path.isAbsolute(databases[0].migrations_dir)
@@ -561,7 +565,9 @@ export function bindAliceWranglerDeploymentEntrypoint(
   if (role === "statePlane") {
     if (
       !Array.isArray(rendered.d1_databases) ||
-      rendered.d1_databases.length !== 1
+      rendered.d1_databases.length !== 2 ||
+      rendered.d1_databases[0]?.binding !== "ALICE_STATE_DB" ||
+      rendered.d1_databases[1]?.binding !== "ALICE_RUNTIME_SQL_DB"
     ) {
       throw new Error("ALICE_WRANGLER_DEPLOYMENT_ENTRYPOINT_INVALID");
     }
@@ -646,7 +652,12 @@ export function materializeAliceWranglerConfig(role, sourceConfig, values) {
     });
   } else if (role === "statePlane") {
     buildAliceStatePlaneEffectiveConfig({ databaseId: values.stateDatabaseId });
-    if (!Array.isArray(config.d1_databases) || config.d1_databases.length !== 1) {
+    if (
+      !Array.isArray(config.d1_databases) ||
+      config.d1_databases.length !== 2 ||
+      config.d1_databases[0]?.binding !== "ALICE_STATE_DB" ||
+      config.d1_databases[1]?.binding !== "ALICE_RUNTIME_SQL_DB"
+    ) {
       throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
     }
     config.d1_databases[0].database_id = values.stateDatabaseId;

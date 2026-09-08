@@ -21,6 +21,8 @@ export const ALICE_CLOUDFLARE_TARGET = Object.freeze({
   evidenceDlq: "alice-production-evidence-dlq-v1",
   planWorkflow: "alice-production-plans",
   stateDatabase: "alice-production-state",
+  runtimeSqlDatabase: "alice-production-runtime-sql",
+  runtimeSqlDatabaseId: "eae7dcce-6f4e-45f2-8460-c57c4d71a380",
   stateObjectsBucket: "alice-production-state-objects",
   memoryIndex: "alice-memory-v1",
   workQueue: "alice-production-work-v1",
@@ -580,7 +582,8 @@ function alicePrivatePlaneWorker(name) {
 export function buildAliceStatePlaneEffectiveConfig(inputs) {
   if (
     !exactKeys(inputs, ["databaseId"]) ||
-    !D1_DATABASE_ID.test(inputs.databaseId)
+    !D1_DATABASE_ID.test(inputs.databaseId) ||
+    inputs.databaseId === ALICE_CLOUDFLARE_TARGET.runtimeSqlDatabaseId
   ) {
     throw new Error("ALICE_STATE_PLANE_EFFECTIVE_CONFIG_INVALID");
   }
@@ -593,6 +596,10 @@ export function buildAliceStatePlaneEffectiveConfig(inputs) {
         databaseName: ALICE_CLOUDFLARE_TARGET.stateDatabase,
         databaseId: inputs.databaseId,
         migrationsDir: "migrations",
+      }, {
+        binding: "ALICE_RUNTIME_SQL_DB",
+        databaseName: ALICE_CLOUDFLARE_TARGET.runtimeSqlDatabase,
+        databaseId: ALICE_CLOUDFLARE_TARGET.runtimeSqlDatabaseId,
       }],
       vectorize: [{
         binding: "ALICE_MEMORY_INDEX",

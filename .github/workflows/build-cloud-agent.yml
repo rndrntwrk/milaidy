@@ -205,6 +205,8 @@ jobs:
             packages/agent/src/api/alice-production-proof.test.ts \
             packages/agent/src/api/alice-release-metadata.test.ts \
             packages/agent/src/runtime/alice-capability-inventory.test.ts \
+            packages/agent/src/runtime/alice-d1-database-adapter.test.ts \
+            packages/agent/src/lifeops/sql.sqlite.test.ts \
             packages/agent/src/runtime/alice-production-plugin-policy.test.ts \
             packages/agent/src/runtime/alice-production-runtime-plugin.test.ts \
             packages/agent/src/runtime/alice-production-startup-guard.test.ts \
@@ -1173,6 +1175,7 @@ jobs:
                 if (
                   statePlaneStateResponse.status !== 200 ||
                   statePlaneState.elizaLoadRequests < 1 ||
+                  statePlaneState.runtimeSqlRequests < 1 ||
                   statePlaneState.elizaCommitRequests < 1 ||
                   statePlaneState.companionGetRequests !== 3 ||
                   statePlaneState.companionPutRequests !== 1
