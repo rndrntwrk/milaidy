@@ -27,7 +27,10 @@ import type {
 } from "@miladyai/shared/contracts/lifeops";
 import {
   executeRawSql,
+  getRuntimeDb,
   getRuntimeDbCacheKey,
+  getRuntimeDbDialect,
+  getSqlRaw,
   isRetryableLifeOpsStorageError,
   listTableColumns,
   parseJsonArray,
@@ -35,11 +38,13 @@ import {
   sqlBoolean,
   sqlInteger,
   sqlJson,
+  sqlJsonMergeTopLevel,
   sqlQuote,
   sqlText,
   toBoolean,
   toNumber,
   toText,
+  type RawSqlQuery,
 } from "./sql.js";
 
 type BrowserCompanionCredential = {
@@ -54,6 +59,13 @@ const LIFEOPS_SCHEMA_RETRY_DELAY_MS = 150;
 
 async function hasLifeOpsSchema(runtime: IAgentRuntime): Promise<boolean> {
   try {
+    if (getRuntimeDbDialect(runtime) === "sqlite") {
+      const rows = await executeRawSql(
+        runtime,
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'life_task_definitions' LIMIT 1",
+      );
+      return rows.length > 0;
+    }
     const rows = await executeRawSql(
       runtime,
       `SELECT 1
@@ -89,8 +101,18 @@ export interface LifeOpsWebsiteAccessGrant {
 async function runMigrationWithSavepoint(
   runtime: IAgentRuntime,
   name: string,
-  migration: () => Promise<void>,
+  migration: (execute: (sqlText: string) => Promise<void>) => Promise<void>,
 ): Promise<void> {
+  const db = getRuntimeDb(runtime);
+  if (getRuntimeDbDialect(runtime) === "sqlite" && typeof db.batch === "function") {
+    const raw = await getSqlRaw();
+    const queries: RawSqlQuery[] = [];
+    await migration(async (sqlText) => {
+      queries.push(raw(sqlText));
+    });
+    await db.batch(queries);
+    return;
+  }
   const safeName = name.replace(/[^a-zA-Z0-9_]/g, "_");
   // Postgres / PGlite: SAVEPOINT only works inside a transaction. Each raw
   // execute is typically autocommit, so open an explicit outer transaction.
@@ -99,7 +121,9 @@ async function runMigrationWithSavepoint(
   try {
     await executeRawSql(runtime, `SAVEPOINT ${safeName}`);
     try {
-      await migration();
+      await migration(async (sqlText) => {
+        await executeRawSql(runtime, sqlText);
+      });
       await executeRawSql(runtime, `RELEASE SAVEPOINT ${safeName}`);
     } catch (error) {
       await executeRawSql(runtime, `ROLLBACK TO SAVEPOINT ${safeName}`).catch(
@@ -1520,13 +1544,11 @@ async function runLifeOpsSchemaSetup(
     await runMigrationWithSavepoint(
       runtime,
       "migrate_connector_grants",
-      async () => {
-        await executeRawSql(
-          runtime,
+      async (execute) => {
+        await execute(
           `DROP TABLE IF EXISTS life_connector_grants_next`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `CREATE TABLE life_connector_grants_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
@@ -1548,8 +1570,7 @@ async function runLifeOpsSchemaSetup(
         UNIQUE(agent_id, provider, side, mode)
       )`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `INSERT INTO life_connector_grants_next (
         id, agent_id, provider, side, identity_json, granted_scopes_json,
         capabilities_json, token_ref, mode, execution_target, source_of_truth,
@@ -1576,9 +1597,8 @@ async function runLifeOpsSchemaSetup(
         updated_at
       FROM life_connector_grants`,
         );
-        await executeRawSql(runtime, `DROP TABLE life_connector_grants`);
-        await executeRawSql(
-          runtime,
+        await execute(`DROP TABLE life_connector_grants`);
+        await execute(
           `ALTER TABLE life_connector_grants_next RENAME TO life_connector_grants`,
         );
       },
@@ -1629,13 +1649,11 @@ async function runLifeOpsSchemaSetup(
     await runMigrationWithSavepoint(
       runtime,
       "migrate_calendar_events",
-      async () => {
-        await executeRawSql(
-          runtime,
+      async (execute) => {
+        await execute(
           `DROP TABLE IF EXISTS life_calendar_events_next`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `CREATE TABLE life_calendar_events_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
@@ -1661,8 +1679,7 @@ async function runLifeOpsSchemaSetup(
         UNIQUE(agent_id, provider, side, calendar_id, external_event_id)
       )`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `INSERT INTO life_calendar_events_next (
         id, agent_id, provider, side, calendar_id, external_event_id, title,
         description, location, status, start_at, end_at, is_all_day, timezone,
@@ -1676,9 +1693,8 @@ async function runLifeOpsSchemaSetup(
         COALESCE(metadata_json, '{}'), synced_at, updated_at
       FROM life_calendar_events`,
         );
-        await executeRawSql(runtime, `DROP TABLE life_calendar_events`);
-        await executeRawSql(
-          runtime,
+        await execute(`DROP TABLE life_calendar_events`);
+        await execute(
           `ALTER TABLE life_calendar_events_next RENAME TO life_calendar_events`,
         );
       },
@@ -1695,13 +1711,11 @@ async function runLifeOpsSchemaSetup(
     await runMigrationWithSavepoint(
       runtime,
       "migrate_calendar_sync_states",
-      async () => {
-        await executeRawSql(
-          runtime,
+      async (execute) => {
+        await execute(
           `DROP TABLE IF EXISTS life_calendar_sync_states_next`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `CREATE TABLE life_calendar_sync_states_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
@@ -1715,8 +1729,7 @@ async function runLifeOpsSchemaSetup(
         UNIQUE(agent_id, provider, side, calendar_id)
       )`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `INSERT INTO life_calendar_sync_states_next (
         id, agent_id, provider, side, calendar_id, window_start_at,
         window_end_at, synced_at, updated_at
@@ -1726,9 +1739,8 @@ async function runLifeOpsSchemaSetup(
         window_end_at, synced_at, updated_at
       FROM life_calendar_sync_states`,
         );
-        await executeRawSql(runtime, `DROP TABLE life_calendar_sync_states`);
-        await executeRawSql(
-          runtime,
+        await execute(`DROP TABLE life_calendar_sync_states`);
+        await execute(
           `ALTER TABLE life_calendar_sync_states_next RENAME TO life_calendar_sync_states`,
         );
       },
@@ -1745,13 +1757,11 @@ async function runLifeOpsSchemaSetup(
     await runMigrationWithSavepoint(
       runtime,
       "migrate_gmail_messages",
-      async () => {
-        await executeRawSql(
-          runtime,
+      async (execute) => {
+        await execute(
           `DROP TABLE IF EXISTS life_gmail_messages_next`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `CREATE TABLE life_gmail_messages_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
@@ -1780,8 +1790,7 @@ async function runLifeOpsSchemaSetup(
         UNIQUE(agent_id, provider, side, external_message_id)
       )`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `INSERT INTO life_gmail_messages_next (
         id, agent_id, provider, side, external_message_id, thread_id, subject,
         from_display, from_email, reply_to, to_json, cc_json, snippet,
@@ -1797,9 +1806,8 @@ async function runLifeOpsSchemaSetup(
         COALESCE(metadata_json, '{}'), synced_at, updated_at
       FROM life_gmail_messages`,
         );
-        await executeRawSql(runtime, `DROP TABLE life_gmail_messages`);
-        await executeRawSql(
-          runtime,
+        await execute(`DROP TABLE life_gmail_messages`);
+        await execute(
           `ALTER TABLE life_gmail_messages_next RENAME TO life_gmail_messages`,
         );
       },
@@ -1816,13 +1824,11 @@ async function runLifeOpsSchemaSetup(
     await runMigrationWithSavepoint(
       runtime,
       "migrate_gmail_sync_states",
-      async () => {
-        await executeRawSql(
-          runtime,
+      async (execute) => {
+        await execute(
           `DROP TABLE IF EXISTS life_gmail_sync_states_next`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `CREATE TABLE life_gmail_sync_states_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
@@ -1835,8 +1841,7 @@ async function runLifeOpsSchemaSetup(
         UNIQUE(agent_id, provider, side, mailbox)
       )`,
         );
-        await executeRawSql(
-          runtime,
+        await execute(
           `INSERT INTO life_gmail_sync_states_next (
         id, agent_id, provider, side, mailbox, max_results, synced_at, updated_at
       )
@@ -1845,9 +1850,8 @@ async function runLifeOpsSchemaSetup(
         updated_at
       FROM life_gmail_sync_states`,
         );
-        await executeRawSql(runtime, `DROP TABLE life_gmail_sync_states`);
-        await executeRawSql(
-          runtime,
+        await execute(`DROP TABLE life_gmail_sync_states`);
+        await execute(
           `ALTER TABLE life_gmail_sync_states_next RENAME TO life_gmail_sync_states`,
         );
       },
@@ -3534,7 +3538,7 @@ export class LifeOpsRepository {
         this.runtime,
         `UPDATE life_reminder_attempts
             SET outcome = ${sqlQuote(outcome)},
-                delivery_metadata_json = delivery_metadata_json::jsonb || ${sqlJson(metadata)}::jsonb
+                delivery_metadata_json = ${sqlJsonMergeTopLevel("delivery_metadata_json", metadata, getRuntimeDbDialect(this.runtime))}
           WHERE id = ${sqlQuote(id)}`,
       );
     } else {
