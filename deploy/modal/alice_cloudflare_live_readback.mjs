@@ -41,8 +41,14 @@ const RUNTIME_HOST_WORKER = ALICE_CLOUDFLARE_TARGET.runtimeHostWorker;
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
-function readbackInvalid() {
-  throw new Error("ALICE_CLOUDFLARE_LIVE_READBACK_INVALID");
+const safeReadbackErrors = new WeakSet();
+
+function readbackInvalid(context) {
+  const error = new Error(`ALICE_CLOUDFLARE_LIVE_READBACK_INVALID${
+    context ? ` ${JSON.stringify(context)}` : ""
+  }`);
+  safeReadbackErrors.add(error);
+  throw error;
 }
 
 function validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl }) {
@@ -63,35 +69,55 @@ function validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl }) {
 }
 
 async function apiGetJson({ fetchImpl, apiToken, baseUrl }, pathname, search = {}) {
+  const context = { stage: "api_get", pathSha256:
+    `sha256:${crypto.createHash("sha256").update(pathname).digest("hex")}` };
   const url = new URL(`${baseUrl}${pathname}`);
   for (const [key, value] of Object.entries(search)) {
     url.searchParams.set(key, String(value));
   }
-  const response = await fetchImpl(url, {
-    method: "GET",
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      accept: "application/json",
-      "cache-control": "no-cache",
-    },
-  });
-  if (!(response instanceof Response) || !response.ok) readbackInvalid();
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        accept: "application/json",
+        "cache-control": "no-cache",
+      },
+    });
+  } catch {
+    readbackInvalid({ ...context, category: "transport" });
+  }
+  if (!(response instanceof Response)) {
+    readbackInvalid({ ...context, category: "response_type" });
+  }
   let body;
   try {
     body = await response.json();
   } catch {
-    readbackInvalid();
+    readbackInvalid({ ...context, category: response.ok ? "json" : "http",
+      status: response.status, cfErrorCodes: [] });
   }
-  if (body?.success !== true) readbackInvalid();
+  const cfErrorCodes = [...new Set((Array.isArray(body?.errors) ? body.errors : [])
+    .map((error) => error?.code)
+    .filter((code) => Number.isSafeInteger(code) && code >= 0))].slice(0, 8);
+  if (!response.ok || body?.success !== true) {
+    readbackInvalid({ ...context, category: response.ok ? "envelope" : "http",
+      status: response.status, cfErrorCodes });
+  }
   return body;
 }
 
 function result(body) {
-  if (!("result" in (body ?? {}))) readbackInvalid();
+  if (!body || typeof body !== "object" || !("result" in body)) {
+    readbackInvalid({ stage: "result", category: "envelope" });
+  }
   return body.result;
 }
 
 async function apiGetAllResults(client, pathname, search = {}) {
+  const context = { stage: "pagination", pathSha256:
+    `sha256:${crypto.createHash("sha256").update(pathname).digest("hex")}` };
   const values = [];
   let expectedTotalPages;
   let expectedTotalCount;
@@ -102,11 +128,11 @@ async function apiGetAllResults(client, pathname, search = {}) {
       per_page: 100,
     });
     const pageValues = result(body);
-    if (!Array.isArray(pageValues)) readbackInvalid();
+    if (!Array.isArray(pageValues)) readbackInvalid({ ...context, category: "result_array" });
     values.push(...pageValues);
 
     if (body.result_info === undefined) {
-      if (pageValues.length >= 100) readbackInvalid();
+      if (pageValues.length >= 100) readbackInvalid({ ...context, category: "metadata_missing" });
       return values;
     }
     const info = body.result_info;
@@ -146,7 +172,7 @@ async function apiGetAllResults(client, pathname, search = {}) {
       (expectedTotalCount !== undefined &&
         info.total_count !== expectedTotalCount)
     ) {
-      readbackInvalid();
+      readbackInvalid({ ...context, category: "metadata" });
     }
     if (empty) return values;
     const expectedPageCount = page < totalPages
@@ -157,14 +183,14 @@ async function apiGetAllResults(client, pathname, search = {}) {
       info.count !== expectedPageCount ||
       expectedPageCount <= 0
     ) {
-      readbackInvalid();
+      readbackInvalid({ ...context, category: "metadata" });
     }
     expectedTotalPages = totalPages;
     expectedTotalCount = info.total_count;
     if (page === expectedTotalPages) return values;
-    if (page > expectedTotalPages) readbackInvalid();
+    if (page > expectedTotalPages) readbackInvalid({ ...context, category: "metadata" });
   }
-  readbackInvalid();
+  readbackInvalid({ ...context, category: "metadata" });
 }
 
 function exactOne(values, predicate) {
@@ -280,12 +306,7 @@ export async function fetchAliceRuntimeHostContainerState({
     if (!canonicalEqual(detailed, terminalDetail)) readbackInvalid();
     return { application: terminalDetail, ...instanceState };
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "ALICE_CLOUDFLARE_LIVE_READBACK_INVALID"
-    ) {
-      throw error;
-    }
+    if (safeReadbackErrors.has(error)) throw error;
     readbackInvalid();
   }
 }
@@ -348,6 +369,7 @@ export async function fetchAliceCloudflareProviderState({
   if (!validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl })) {
     readbackInvalid();
   }
+  let stage = "provider_state";
   try {
     const client = { fetchImpl, apiToken, baseUrl };
     const observedAtMs = now();
@@ -464,10 +486,13 @@ export async function fetchAliceCloudflareProviderState({
       ...gateway,
       dynamic_routes: dynamicRoutes,
     };
+    stage = "access_configuration";
     const accessPolicyConfig =
       await buildAliceAccessPolicyProviderConfig(accessPolicyReadback);
+    stage = "ai_gateway_configuration";
     const aiGatewayProviderConfig =
       buildAliceAiGatewayProviderConfig(aiGatewayProviderReadback);
+    stage = "vectorize_configuration";
     const vectorizeProviderConfig =
       buildAliceVectorizeProviderConfig(vectorizeProviderReadback);
     return {
@@ -481,13 +506,8 @@ export async function fetchAliceCloudflareProviderState({
       },
     };
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "ALICE_CLOUDFLARE_LIVE_READBACK_INVALID"
-    ) {
-      throw error;
-    }
-    readbackInvalid();
+    if (safeReadbackErrors.has(error) && error.message !== "ALICE_CLOUDFLARE_LIVE_READBACK_INVALID") throw error;
+    readbackInvalid({ stage, category: "validation" });
   }
 }
 
@@ -505,6 +525,7 @@ export async function fetchAliceCloudflareContinuityState({
   ) {
     readbackInvalid();
   }
+  let stage = "continuity_state";
   try {
     const client = { fetchImpl, apiToken, baseUrl };
     const queues = await apiGetAllResults(
@@ -588,18 +609,14 @@ export async function fetchAliceCloudflareContinuityState({
       },
       durableObjectNamespaceIds: expectedDurableObjectNamespaceIds,
     };
+    stage = "continuity_configuration";
     return {
       readback,
       sanitized: buildAliceCloudflareContinuityConfig(readback),
     };
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "ALICE_CLOUDFLARE_LIVE_READBACK_INVALID"
-    ) {
-      throw error;
-    }
-    readbackInvalid();
+    if (safeReadbackErrors.has(error) && error.message !== "ALICE_CLOUDFLARE_LIVE_READBACK_INVALID") throw error;
+    readbackInvalid({ stage, category: "validation" });
   }
 }
 
@@ -743,27 +760,39 @@ export async function fetchAliceCloudflareWorkflowVersionState({
       expectedWorkflowId,
     );
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "ALICE_CLOUDFLARE_LIVE_READBACK_INVALID"
-    ) {
-      throw error;
-    }
+    if (safeReadbackErrors.has(error)) throw error;
     readbackInvalid();
   }
 }
 
 async function apiGetResponse({ fetchImpl, apiToken, baseUrl }, pathname) {
+  const context = { stage: "api_get", pathSha256:
+    `sha256:${crypto.createHash("sha256").update(pathname).digest("hex")}` };
   const url = new URL(`${baseUrl}${pathname}`);
-  const response = await fetchImpl(url, {
-    method: "GET",
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      accept: "*/*",
-      "cache-control": "no-cache",
-    },
-  });
-  if (!(response instanceof Response) || !response.ok) readbackInvalid();
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        accept: "*/*",
+        "cache-control": "no-cache",
+      },
+    });
+  } catch {
+    readbackInvalid({ ...context, category: "transport" });
+  }
+  if (!(response instanceof Response)) {
+    readbackInvalid({ ...context, category: "response_type" });
+  }
+  if (!response.ok) {
+    let body;
+    try { body = await response.json(); } catch { /* No arbitrary body in errors. */ }
+    const cfErrorCodes = [...new Set((Array.isArray(body?.errors) ? body.errors : [])
+      .map((error) => error?.code)
+      .filter((code) => Number.isSafeInteger(code) && code >= 0))].slice(0, 8);
+    readbackInvalid({ ...context, category: "http", status: response.status, cfErrorCodes });
+  }
   return response;
 }
 
@@ -1126,12 +1155,7 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       workers,
     };
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "ALICE_CLOUDFLARE_LIVE_READBACK_INVALID"
-    ) {
-      throw error;
-    }
+    if (safeReadbackErrors.has(error)) throw error;
     readbackInvalid();
   }
 }

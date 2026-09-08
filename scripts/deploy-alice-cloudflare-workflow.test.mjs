@@ -376,6 +376,15 @@ test("deployment attests every module in the six-role Worker artifact", () => {
 
 test("preimport verifies the original build then attests host bytes before bootstrap", () => {
   const preimport = fs.readFileSync(path.join(repoRoot, '.github/workflows/alice-cloudflare-container-bringup.yml'), 'utf8');
+  const providerPreflight = namedWorkflowSteps(preimport).find(step => step.name === 'Verify Access AI and memory provider state read-only');
+  assert.ok(providerPreflight, 'provider compatibility must be checked before image import');
+  assert.ok(preimport.indexOf(providerPreflight.block) < preimport.indexOf('\n  import_runtime:'));
+  assert.match(providerPreflight.block, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_READ_TOKEN \}\}/);
+  assert.match(providerPreflight.run, /await fetchAliceCloudflareProviderState\(/);
+  for (const input of ['ownerEmailSha256', 'accessAudience', 'releaseAccessAudience', 'releaseServiceTokenIdSha256']) {
+    assert.match(providerPreflight.run, new RegExp(`${input}: process\\.env\\.ALICE_`));
+  }
+  assert.doesNotMatch(providerPreflight.run, /console\.log\((provider|response|process\.env)/);
   const ordered = [
     'Verify imported image evidence and immutable Worker identities',
     'Build exact host Workers while preserving the qualified runtime image',

@@ -92,6 +92,27 @@ jobs:
             --jq .object.sha)"
           test "$protected_sha" = "$CONTROLLER_SHA"
 
+      - name: Verify Access AI and memory provider state read-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
+          ALICE_OWNER_EMAIL_SHA256: ${{ secrets.ALICE_OWNER_EMAIL_SHA256 }}
+          ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { fetchAliceCloudflareProviderState } from "./deploy/modal/alice_cloudflare_live_readback.mjs";
+          await fetchAliceCloudflareProviderState({
+            apiToken: process.env.CLOUDFLARE_API_TOKEN,
+            ownerEmailSha256: process.env.ALICE_OWNER_EMAIL_SHA256,
+            accessAudience: process.env.ALICE_ACCESS_AUDIENCE,
+            releaseAccessAudience: process.env.ALICE_RELEASE_ACCESS_AUDIENCE,
+            releaseServiceTokenIdSha256: process.env.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256,
+          });
+          console.log("ALICE_PROVIDER_PREFLIGHT_OK");
+          NODE
+
       - name: Prove exact continuity prestate twice read-only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
