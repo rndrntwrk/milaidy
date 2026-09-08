@@ -68,6 +68,8 @@ fs.writeFileSync(path.join(out, emitted), content);
   }
   assert.deepEqual(result.migrations, base.migrations);
   const wranglerSource = fs.readFileSync(wranglerBin, 'utf8');
+  fs.writeFileSync(wranglerBin, wranglerSource.replace("fs.writeFileSync(path.join(out, emitted), content);", "if (worker !== 'alice-ai-gateway') fs.writeFileSync(path.join(out, emitted), content);"));
+  assert.throws(() => buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'missing-emission-rejected')}), /ENOENT/);
   fs.writeFileSync(wranglerBin, wranglerSource.replace("unchanged ? 'original '", "unchanged ? 'changed '"));
   assert.throws(() => buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'peer-drift-rejected')}), /ALICE_HOST_WORKER_BASE_DRIFT/);
   fs.writeFileSync(wranglerBin, wranglerSource);

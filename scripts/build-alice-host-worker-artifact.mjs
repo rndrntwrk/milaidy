@@ -33,7 +33,7 @@ export function buildAliceHostWorkerArtifact({
   const version = execFileSync(wranglerBin, ['--version'], { cwd: sourceRoot, encoding: 'utf8' });
   if (!/^4\.122\.0$/m.test(version.trim())) throw new Error('ALICE_HOST_WORKER_TOOL_INVALID');
   fs.mkdirSync(outputRoot, { recursive: false });
-  for (const member of [...Object.values(base.bundles), ...base.migrations]) {
+  for (const member of base.migrations) {
     const destination = path.join(outputRoot, member.path);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(path.join(baseRoot, member.path), destination, fs.constants.COPYFILE_EXCL);
@@ -43,6 +43,7 @@ export function buildAliceHostWorkerArtifact({
     const sourceMap = path.join(baseRoot, relative);
     if (!fs.existsSync(sourceMap)) continue;
     if (!fs.lstatSync(sourceMap).isFile()) throw new Error('ALICE_HOST_WORKER_SOURCE_MAP_INVALID');
+    fs.mkdirSync(path.dirname(path.join(outputRoot, relative)), { recursive: true });
     fs.copyFileSync(sourceMap, path.join(outputRoot, relative), fs.constants.COPYFILE_EXCL);
   }
   for (const [role, configName, emittedName] of [
@@ -54,6 +55,7 @@ export function buildAliceHostWorkerArtifact({
     ['connectorPlane', 'alice-connector-plane/wrangler.jsonc', 'index.js'],
   ]) {
     const destination = path.join(outputRoot, base.bundles[role].path);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
     execFileSync(wranglerBin, [
       'deploy', '--dry-run', '--outdir', path.dirname(destination),
       '--config', path.join(sourceRoot, 'workers', configName),
