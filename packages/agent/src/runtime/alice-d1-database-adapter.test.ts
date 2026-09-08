@@ -1,6 +1,9 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { Agent, Memory, Room, Task, UUID, World } from "@elizaos/core";
+import { factsProvider, RelationshipsService } from "@elizaos/core";
+import { sql } from "drizzle-orm";
 
 import {
   type AliceElizaStateCommit,
@@ -9,6 +12,7 @@ import {
   createAliceD1DatabaseAdapter,
   createAliceFullRuntimeDatabaseAdapter,
 } from "./alice-d1-database-adapter";
+import { createAliceRuntimeSql } from "./alice-runtime-sql";
 
 const OWNER_ID = "alice-owner-production";
 const AGENT_ID = "00000000-0000-4000-8000-000000000001" as UUID;
@@ -449,5 +453,89 @@ describe("Alice D1-backed Eliza database adapter", () => {
     const serialized = JSON.stringify([...transport.records.values()]);
     expect(serialized).not.toContain("must-not-leave-the-container");
     expect(serialized).not.toContain("DISCORD_API_TOKEN");
+  });
+
+  test("keeps FACTS identity lookup off the dedicated runtime SQL database", async () => {
+    const sqlite = new Database(":memory:");
+    const transport = new MemoryTransport();
+    const runtimeSql = createAliceRuntimeSql({
+      ownerId: OWNER_ID,
+      fetch: async (request) => {
+        const body = (await request.json()) as {
+          statements: { sql: string; params: (string | number | null)[] }[];
+        };
+        const results = sqlite.transaction(() =>
+          body.statements.map((statement) => ({
+            rows: sqlite.query(statement.sql).all(...statement.params),
+          })),
+        )();
+        return Response.json({ ok: true, results });
+      },
+    });
+    const adapter = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+      sql: runtimeSql,
+      operationId: () => "facts-identity-link",
+    });
+    await adapter.initialize();
+    const otherEntityId = "00000000-0000-4000-8000-000000000007" as UUID;
+    await adapter.createEntities([
+      { id: ENTITY_ID, agentId: AGENT_ID, names: ["Owner"], metadata: {} },
+      { id: otherEntityId, agentId: AGENT_ID, names: ["Alias"], metadata: {} },
+    ]);
+    await adapter.createRelationships([
+      {
+        id: "00000000-0000-4000-8000-000000000008" as UUID,
+        sourceEntityId: ENTITY_ID,
+        targetEntityId: otherEntityId,
+        agentId: AGENT_ID,
+        tags: ["identity_link"],
+        metadata: { status: "confirmed" },
+      },
+    ]);
+    await adapter.createMemories([{ memory: memory(), tableName: "messages" }]);
+    await adapter.createMemories([
+      {
+        memory: {
+          ...memory(),
+          id: "00000000-0000-4000-8000-000000000009" as UUID,
+          content: { text: "Durable fact from Alice" },
+        },
+        tableName: "facts",
+      },
+    ]);
+
+    const runtime = {
+      agentId: AGENT_ID,
+      character: { name: "Alice" },
+      adapter,
+      getService: (name: string) =>
+        name === "relationships" ? relationships : null,
+      getRelationships: (params: { entityIds?: UUID[] }) =>
+        adapter.getRelationships(params),
+      getMemories: (params: Parameters<typeof adapter.getMemories>[0]) =>
+        adapter.getMemories(params),
+    } as unknown as Parameters<typeof factsProvider.get>[0];
+    const relationships = new RelationshipsService(runtime);
+    expect(await relationships.getMemberEntityIds(ENTITY_ID)).toEqual(
+      expect.arrayContaining([ENTITY_ID, otherEntityId]),
+    );
+    expect(
+      (adapter as unknown as { db?: { execute?: unknown } }).db?.execute,
+    ).toBeUndefined();
+    const exposedRuntimeSql = (
+      adapter as unknown as {
+        runtimeSql: typeof runtimeSql;
+      }
+    ).runtimeSql;
+    await expect(
+      exposedRuntimeSql.execute(sql`SELECT ${1} AS ready`),
+    ).resolves.toEqual({
+      rows: [{ ready: 1 }],
+    });
+    const result = await factsProvider.get(runtime, memory(), {} as never);
+    expect(result.text).toContain("Durable fact from Alice");
+    sqlite.close();
   });
 });

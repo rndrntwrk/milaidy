@@ -159,6 +159,7 @@ jobs:
           test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
           echo "sha=$eliza_sha" >> "$GITHUB_OUTPUT"
           test "$(git config -f .gitmodules --get submodule.eliza.branch)" = "alice/runtime-stable-2026-08-22"
+          git -C eliza apply ../deploy/patches/alice-runtime-sql.patch
           # Apply cloud runtime patches to eliza submodule
           if [ -f cloud/patches/cloud-runtime-patches.patch ]; then
             echo "Applying cloud runtime patches to eliza submodule..."
@@ -740,6 +741,11 @@ jobs:
           set -euo pipefail
 
           cleanup() {
+            smoke_exit=$?
+            if [ "$smoke_exit" -ne 0 ]; then
+              docker logs --tail 160 "$SMOKE_CONTAINER" >&2 || true
+              docker logs --tail 80 "$SMOKE_STATE_CONTAINER" >&2 || true
+            fi
             docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
             docker rm -f "$SMOKE_STATE_CONTAINER" >/dev/null 2>&1 || true
             docker network rm "$SMOKE_NETWORK" >/dev/null 2>&1 || true
