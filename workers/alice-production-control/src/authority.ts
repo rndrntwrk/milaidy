@@ -312,8 +312,7 @@ function validState(value: unknown): value is AuthorityLedgerState {
           Number.isSafeInteger(Number(epoch)) &&
           Number(epoch) <= state.highestReleaseEpoch &&
           validReleaseHistoryRecord(record) &&
-          record.deploymentManifestSha256 !== ZERO_DIGEST &&
-          record.policyHash === state.binding.policyHash,
+          record.deploymentManifestSha256 !== ZERO_DIGEST,
       ) &&
       Math.max(...releaseEpochs) === state.highestReleaseEpoch &&
       Boolean(

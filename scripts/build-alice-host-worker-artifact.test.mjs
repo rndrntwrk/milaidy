@@ -7,7 +7,7 @@ import test from 'node:test';
 import { buildAliceHostWorkerArtifact } from './build-alice-host-worker-artifact.mjs';
 import { buildAliceWorkerBundleArtifact, serializeAliceWorkerBundleArtifact } from '../deploy/modal/alice_worker_bundle_artifact.mjs';
 
-test('rebuilds the two host modules and retains verified four-Worker and migration bytes', t => {
+test('rebuilds Control and both hosts while proving the other three Workers and migrations unchanged', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alice-host-build-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   const sourceRoot = path.join(root, 'source');
@@ -51,19 +51,27 @@ if (process.argv[2] === 'versions' && process.argv[3] === 'upload') {
   process.exit(0);
 }
 if (process.argv[2] !== 'deploy') process.exit(9);
-fs.writeFileSync(path.join(out, config.endsWith('wrangler.runtime-host.jsonc') ? 'runtime-host.js' : 'worker.js'), 'rebuilt reviewed host ' + path.basename(config));
+const worker = path.basename(path.dirname(config));
+const unchanged = ['alice-ai-gateway', 'alice-state-plane', 'alice-connector-plane'].includes(worker);
+const emitted = worker === 'alice-access-gateway' ? (config.endsWith('wrangler.runtime-host.jsonc') ? 'runtime-host.js' : 'worker.js') : 'index.js';
+const content = unchanged ? 'original ' + worker + '\\n//# sourceMappingURL=index.js.map\\n' : 'rebuilt reviewed ' + worker + path.basename(config);
+fs.writeFileSync(path.join(out, emitted), content);
 `, {mode: 0o700});
   const options = {sourceRoot, sourceCommit, deploymentControllerCommit, baseRoot, wranglerBin};
   const result = buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'output')});
   assert.equal(result.sourceCommit, deploymentControllerCommit);
-  for (const role of ['access', 'runtimeHost']) assert.notEqual(result.bundles[role].sha256, base.bundles[role].sha256);
-  for (const role of ['control', 'aiGateway', 'statePlane', 'connectorPlane']) {
+  for (const role of ['control', 'access', 'runtimeHost']) assert.notEqual(result.bundles[role].sha256, base.bundles[role].sha256);
+  for (const role of ['aiGateway', 'statePlane', 'connectorPlane']) {
     assert.deepEqual(result.bundles[role], base.bundles[role]);
     const relative = `${base.bundles[role].path}.map`;
     assert.deepEqual(fs.readFileSync(path.join(root, 'output', relative)), fs.readFileSync(path.join(baseRoot, relative)));
   }
   assert.deepEqual(result.migrations, base.migrations);
-  const controlMap = path.join(baseRoot, `${base.bundles.control.path}.map`);
+  const wranglerSource = fs.readFileSync(wranglerBin, 'utf8');
+  fs.writeFileSync(wranglerBin, wranglerSource.replace("unchanged ? 'original '", "unchanged ? 'changed '"));
+  assert.throws(() => buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'peer-drift-rejected')}), /ALICE_HOST_WORKER_BASE_DRIFT/);
+  fs.writeFileSync(wranglerBin, wranglerSource);
+  const controlMap = path.join(baseRoot, `${base.bundles.aiGateway.path}.map`);
   const mapBytes = fs.readFileSync(controlMap);
   fs.unlinkSync(controlMap);
   assert.throws(() => buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'missing-map-rejected')}));

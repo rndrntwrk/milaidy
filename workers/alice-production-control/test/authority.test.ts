@@ -43,6 +43,43 @@ function researchIntent(nonce: string) {
 }
 
 describe("Alice durable authority ledger", () => {
+  test("restores mixed-policy release history and retains it across authorized rollback", () => {
+    const now = Date.UTC(2026, 8, 8, 22);
+    const original = {
+      binding, releaseEpoch: 9, programIssuedAt: now - 1_000,
+      deploymentManifestSha256: baseDeploymentManifestSha256,
+      rollbackBoundary: "container:alice-runtime:v55",
+    };
+    const ledger = AuthorityLedger.create(binding, 10_000, original.rollbackBoundary,
+      original.releaseEpoch, original.programIssuedAt, original.deploymentManifestSha256);
+    ledger.reserveModel({ ...binding, requestId: "existing-corpus-spend",
+      model: "@cf/baai/bge-m3", estimatedUnits: 9_860 }, now);
+    const candidate = {
+      binding: { ...binding, programDigest: `sha256:${"6".repeat(64)}`,
+        releaseDigest: `sha256:${"7".repeat(64)}`, policyHash: `sha256:${"8".repeat(64)}` },
+      deploymentManifestSha256: promotedDeploymentManifestSha256,
+      releaseEpoch: 10, programIssuedAt: now, rollbackBoundary: "container:alice-runtime:v56",
+    };
+    expect(ledger.activateRelease(candidate, 10_000, now)).toEqual({ ok: true, code: "RELEASE_ACTIVATED" });
+    const restored = AuthorityLedger.restoreGlobal(ledger.exportState(), 10_000);
+    expect(restored.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    expect(restored.activateRelease(original, 10_000, now + 1)).toEqual({ ok: false, code: "RELEASE_ROLLBACK_AUTH_REQUIRED" });
+    expect(restored.activateRelease(original, 10_000, now + 1,
+      recoveryAuthorization(restored, `sha256:${"a".repeat(64)}`)))
+      .toEqual({ ok: true, code: "RELEASE_ROLLED_BACK" });
+    const state = restored.exportState();
+    expect(state.releaseHistory["9"].policyHash).toBe(binding.policyHash);
+    expect(state.releaseHistory["10"].policyHash).toBe(candidate.binding.policyHash);
+    expect(AuthorityLedger.restoreGlobal(state, 10_000).snapshot().budget)
+      .toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    const invalidActive = structuredClone(state);
+    invalidActive.releaseHistory["9"].policyHash = candidate.binding.policyHash;
+    expect(() => AuthorityLedger.restoreGlobal(invalidActive, 10_000)).toThrow("AUTHORITY_STATE_INVALID");
+    const invalidHistory = structuredClone(state);
+    invalidHistory.releaseHistory["10"].policyHash = "invalid";
+    expect(() => AuthorityLedger.restoreGlobal(invalidHistory, 10_000)).toThrow("AUTHORITY_STATE_INVALID");
+  });
+
   test("persists a first-release PAUSE_ALL generation transition", () => {
     const zero = `sha256:${"0".repeat(64)}`;
     const zeroBinding = {
