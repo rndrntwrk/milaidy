@@ -68,6 +68,42 @@ describe("Alice authenticated owner capability readback", () => {
     expect(JSON.stringify(response)).not.toContain("packageSha256");
   });
 
+  it("requires the actual native documents plugin and service for knowledge proof", () => {
+    const input = {
+      bom: {
+        ...bom,
+        entries: [
+          {
+            ...bom.entries[0],
+            id: "internal:alice-knowledge-runtime",
+            runtimeNames: [],
+          },
+        ],
+      },
+      bomSha256: digest,
+      environment,
+      runtimePlugins: [{ name: "documents" }],
+    };
+    expect(() => buildAliceProductionCapabilities(input)).toThrow(
+      "ALICE_CAPABILITY_RUNTIME_STATE_MISMATCH",
+    );
+    const documentsService = {
+      addDocument: async () => ({}),
+      searchDocuments: async () => [],
+    };
+    expect(() =>
+      buildAliceProductionCapabilities({
+        ...input,
+        documentsService,
+        runtimePlugins: [],
+      }),
+    ).toThrow("ALICE_CAPABILITY_RUNTIME_STATE_MISMATCH");
+    expect(
+      buildAliceProductionCapabilities({ ...input, documentsService })
+        .entries[0],
+    ).toMatchObject({ loaded: true, callable: true });
+  });
+
   it("fails closed on BOM digest or runtime state mismatch", () => {
     expect(() =>
       buildAliceProductionCapabilities({

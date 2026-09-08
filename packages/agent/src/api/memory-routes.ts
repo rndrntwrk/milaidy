@@ -161,7 +161,7 @@ async function searchKnowledge(
     createdAt: Date.now(),
   };
 
-  const matches = await knowledgeService.getKnowledge(searchMessage, {
+  const matches = await knowledgeService.searchDocuments(searchMessage, {
     roomId: agentId,
   });
 

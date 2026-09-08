@@ -1,7 +1,13 @@
-import type { AgentRuntime, Memory, Service, UUID } from "@elizaos/core";
+import type {
+  AccessContext,
+  AgentRuntime,
+  Memory,
+  Service,
+  UUID,
+} from "@elizaos/core";
 
 export interface KnowledgeServiceLike {
-  addKnowledge(options: {
+  addDocument(options: {
     agentId?: UUID;
     worldId: UUID;
     roomId: UUID;
@@ -11,14 +17,20 @@ export interface KnowledgeServiceLike {
     originalFilename: string;
     content: string;
     metadata?: Record<string, unknown>;
+    scope?: "owner-private";
+    addedBy?: UUID;
+    addedByRole?: "OWNER";
+    addedFrom?: "upload" | "url";
   }): Promise<{
     clientDocumentId: string;
     storedDocumentMemoryId: UUID;
     fragmentCount: number;
   }>;
-  getKnowledge(
+  searchDocuments(
     message: Memory,
     scope?: { roomId?: UUID; worldId?: UUID; entityId?: UUID },
+    searchMode?: "hybrid" | "vector" | "keyword",
+    accessContext?: AccessContext,
   ): Promise<
     Array<{
       id: UUID;
@@ -27,19 +39,19 @@ export interface KnowledgeServiceLike {
       metadata?: Record<string, unknown>;
     }>
   >;
-  getMemories(params: {
-    tableName: string;
-    roomId?: UUID;
-    count?: number;
-    offset?: number;
-    end?: number;
-  }): Promise<Memory[]>;
-  countMemories(params: {
-    tableName: string;
-    roomId?: UUID;
-    unique?: boolean;
-  }): Promise<number>;
-  deleteMemory(memoryId: UUID): Promise<void>;
+  listAllDocumentsWithAccessContext(context: AccessContext): Promise<Memory[]>;
+  getDocumentByIdWithAccessContext(
+    id: UUID,
+    context: AccessContext,
+  ): Promise<Memory | null>;
+  listDocumentFragmentsWithAccessContext(
+    id: UUID,
+    context: AccessContext,
+  ): Promise<Memory[]>;
+  deleteDocumentWithAccessContext(
+    id: UUID,
+    context: AccessContext,
+  ): Promise<void>;
 }
 
 export type KnowledgeLoadFailReason =
@@ -70,23 +82,26 @@ export async function getKnowledgeService(
     return { service: null, reason: "runtime_unavailable" };
   }
 
-  let service = runtime.getService<Service & KnowledgeServiceLike>("knowledge");
+  let service = runtime.getService<Service & KnowledgeServiceLike>("documents");
   if (service) return { service };
 
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const servicePromise = runtime.getServiceLoadPromise("knowledge");
+    const servicePromise = runtime.getServiceLoadPromise("documents");
     const timeoutMs = getKnowledgeTimeoutMs();
     const timeout = new Promise<never>((_resolve, reject) => {
-      setTimeout(
+      timer = setTimeout(
         () => reject(new Error("knowledge service timeout")),
         timeoutMs,
       );
     });
     await Promise.race([servicePromise, timeout]);
-    service = runtime.getService<Service & KnowledgeServiceLike>("knowledge");
+    service = runtime.getService<Service & KnowledgeServiceLike>("documents");
     if (service) return { service };
     return { service: null, reason: "not_registered" };
   } catch {
     return { service: null, reason: "timeout" };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }

@@ -219,7 +219,7 @@ describe("native feature bootstrap wiring", () => {
     expect(trajectoryProbe).toContain(
       "runtimeWithFlags.isTrajectoriesEnabled()",
     );
-    expect(knowledgeProbe).toContain("runtimeWithFlags.isKnowledgeEnabled()");
+    expect(knowledgeProbe).toContain("runtimeWithFlags.isDocumentsEnabled()");
     expect(trajectoryProbe).not.toContain("const fn =");
     expect(knowledgeProbe).not.toContain("const fn =");
   });

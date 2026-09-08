@@ -1293,7 +1293,7 @@ describe("API Server E2E (no runtime)", () => {
     it("POST /api/conversations/:id/messages injects uploaded knowledge snippets into generation", async () => {
       let handledMessageText = "";
       const knowledgeService = {
-        getKnowledge: async () => [
+        searchDocuments: async () => [
           {
             id: crypto.randomUUID() as UUID,
             content: {
@@ -1306,7 +1306,7 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "knowledge" ? knowledgeService : null,
+          serviceType === "documents" ? knowledgeService : null,
         handleMessage: async (_runtime, message, onResponse) => {
           handledMessageText = String(
             (
@@ -1353,9 +1353,9 @@ describe("API Server E2E (no runtime)", () => {
       let knowledgeLookups = 0;
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "knowledge"
+          serviceType === "documents"
             ? {
-                getKnowledge: async () => {
+                searchDocuments: async () => {
                   knowledgeLookups += 1;
                   return [];
                 },
@@ -1397,9 +1397,9 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "knowledge"
+          serviceType === "documents"
             ? {
-                getKnowledge: async () =>
+                searchDocuments: async () =>
                   await new Promise<never>(() => {
                     // Intentionally unresolved to verify timeout fallback.
                   }),

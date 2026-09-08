@@ -265,9 +265,14 @@ describe("Alice final-image capability runtime inventory", () => {
           entrypointSha256: null,
         };
       });
-    const runtimePlugins = coreEntries.flatMap((entry) =>
-      entry.surface === "plugin" ? entry.runtimeNames.map((name) => ({ name })) : [],
-    );
+    const runtimePlugins = [
+      { name: "documents" },
+      ...coreEntries.flatMap((entry) =>
+        entry.surface === "plugin"
+          ? entry.runtimeNames.map((name) => ({ name }))
+          : [],
+      ),
+    ];
     expect(
       buildAliceRuntimeCapabilityState(
         { schemaVersion: "alice.capability-bom.v1", entries: coreEntries },

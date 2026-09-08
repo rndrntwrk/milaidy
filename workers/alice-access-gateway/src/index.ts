@@ -1147,6 +1147,8 @@ const SAFE_RUNTIME_READS = [
 ];
 
 const FULL_RUNTIME_API_READS = [
+  /^\/api\/alice-production\/capabilities$/,
+  /^\/api\/knowledge(?:\/(?:stats|search|documents(?:\/[^/]+)?|fragments\/[^/]+))?$/,
   /^\/api\/(?:auth\/status|status|agent\/status|onboarding\/status|config|emotes)$/,
   /^\/api\/config\/schema$/,
   /^\/api\/(?:connectors|plugins)$/,
@@ -1166,6 +1168,7 @@ const FULL_RUNTIME_API_READS = [
 ];
 
 const FULL_RUNTIME_WRITES = [
+  /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
   /^\/api\/companion\/stage$/,

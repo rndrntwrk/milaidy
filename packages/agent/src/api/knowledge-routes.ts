@@ -9,6 +9,7 @@ import net from "node:net";
 import os from "node:os";
 import { Readable } from "node:stream";
 import {
+  type AccessContext,
   type AgentRuntime,
   logger,
   type Memory,
@@ -33,9 +34,10 @@ export type KnowledgeRouteHelpers = RouteHelpers;
 export interface KnowledgeRouteContext extends RouteRequestContext {
   url: URL;
   runtime: AgentRuntime | null;
+  /** Established by the authenticated owner API, never from request JSON. */
+  requester: AccessContext;
 }
 
-const FRAGMENT_COUNT_BATCH_SIZE = 500;
 const KNOWLEDGE_UPLOAD_MAX_BODY_BYTES = 32 * 1_048_576; // 32 MB
 const MAX_BULK_DOCUMENTS = 100;
 const MAX_URL_IMPORT_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -68,119 +70,20 @@ function hasUuidIdAndCreatedAt(
   return hasUuidId(memory) && typeof memory.createdAt === "number";
 }
 
-async function countKnowledgeFragmentsForDocument(
-  knowledgeService: KnowledgeServiceLike,
-  roomId: UUID,
-  documentId: UUID,
-): Promise<number> {
-  let offset = 0;
-  let fragmentCount = 0;
-
-  while (true) {
-    const knowledgeBatch = await knowledgeService.getMemories({
-      tableName: "knowledge",
-      roomId,
-      count: FRAGMENT_COUNT_BATCH_SIZE,
-      offset,
-    });
-
-    if (knowledgeBatch.length === 0) {
-      break;
-    }
-
-    fragmentCount += knowledgeBatch.filter((memory) => {
-      const metadata = memory.metadata as Record<string, unknown> | undefined;
-      return metadata?.documentId === documentId;
-    }).length;
-
-    if (knowledgeBatch.length < FRAGMENT_COUNT_BATCH_SIZE) {
-      break;
-    }
-
-    offset += FRAGMENT_COUNT_BATCH_SIZE;
-  }
-
-  return fragmentCount;
-}
-
 async function mapKnowledgeFragmentsByDocumentId(
-  knowledgeService: KnowledgeServiceLike,
-  roomId: UUID,
+  service: KnowledgeServiceLike,
+  requester: AccessContext,
   documentIds: readonly UUID[],
 ): Promise<Map<UUID, number>> {
-  const fragmentCounts = new Map<UUID, number>();
-  const trackedDocumentIds = new Set(documentIds);
-  for (const documentId of trackedDocumentIds) {
-    fragmentCounts.set(documentId, 0);
+  const counts = new Map<UUID, number>();
+  for (const id of documentIds) {
+    const fragments = await service.listDocumentFragmentsWithAccessContext(
+      id,
+      requester,
+    );
+    counts.set(id, fragments.length);
   }
-
-  if (trackedDocumentIds.size === 0) return fragmentCounts;
-
-  let offset = 0;
-  while (true) {
-    const knowledgeBatch = await knowledgeService.getMemories({
-      tableName: "knowledge",
-      roomId,
-      count: FRAGMENT_COUNT_BATCH_SIZE,
-      offset,
-    });
-
-    if (knowledgeBatch.length === 0) {
-      break;
-    }
-
-    for (const memory of knowledgeBatch) {
-      const metadata = memory.metadata as Record<string, unknown> | undefined;
-      const documentId = metadata?.documentId;
-      if (
-        typeof documentId === "string" &&
-        trackedDocumentIds.has(documentId as UUID)
-      ) {
-        const currentCount = fragmentCounts.get(documentId as UUID) ?? 0;
-        fragmentCounts.set(documentId as UUID, currentCount + 1);
-      }
-    }
-
-    if (knowledgeBatch.length < FRAGMENT_COUNT_BATCH_SIZE) {
-      break;
-    }
-    offset += FRAGMENT_COUNT_BATCH_SIZE;
-  }
-
-  return fragmentCounts;
-}
-
-async function listKnowledgeFragmentsForDocument(
-  knowledgeService: KnowledgeServiceLike,
-  roomId: UUID,
-  documentId: UUID,
-): Promise<UUID[]> {
-  let offset = 0;
-  const fragmentIds: UUID[] = [];
-
-  while (true) {
-    const knowledgeBatch = await knowledgeService.getMemories({
-      tableName: "knowledge",
-      roomId,
-      count: FRAGMENT_COUNT_BATCH_SIZE,
-      offset,
-    });
-
-    for (const memory of knowledgeBatch) {
-      const metadata = memory.metadata as Record<string, unknown> | undefined;
-      if (metadata?.documentId === documentId && hasUuidId(memory)) {
-        fragmentIds.push(memory.id);
-      }
-    }
-
-    if (knowledgeBatch.length < FRAGMENT_COUNT_BATCH_SIZE) {
-      break;
-    }
-
-    offset += FRAGMENT_COUNT_BATCH_SIZE;
-  }
-
-  return fragmentIds;
+  return counts;
 }
 
 function isBlockedIp(ip: string): boolean {
@@ -710,20 +613,26 @@ export async function handleKnowledgeRoutes(
     return true;
   }
   const agentId = runtime.agentId as UUID;
+  const requester = ctx.requester;
+  if (!requester?.requesterEntityId || requester.role !== "OWNER") {
+    error(res, "Knowledge management requires the authenticated owner", 403);
+    return true;
+  }
 
   // ── GET /api/knowledge ──────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/knowledge") {
-    const documentCount = await knowledgeService.countMemories({
-      tableName: "documents",
-      roomId: agentId,
-      unique: false,
-    });
-
-    const fragmentCount = await knowledgeService.countMemories({
-      tableName: "knowledge",
-      roomId: agentId,
-      unique: false,
-    });
+    const documents =
+      await knowledgeService.listAllDocumentsWithAccessContext(requester);
+    const documentCount = documents.length;
+    const counts = await mapKnowledgeFragmentsByDocumentId(
+      knowledgeService,
+      requester,
+      documents.filter(hasUuidId).map((doc) => doc.id),
+    );
+    const fragmentCount = [...counts.values()].reduce(
+      (sum, count) => sum + count,
+      0,
+    );
 
     json(res, {
       ok: true,
@@ -737,17 +646,18 @@ export async function handleKnowledgeRoutes(
 
   // ── GET /api/knowledge/stats ────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/knowledge/stats") {
-    const documentCount = await knowledgeService.countMemories({
-      tableName: "documents",
-      roomId: agentId,
-      unique: false,
-    });
-
-    const fragmentCount = await knowledgeService.countMemories({
-      tableName: "knowledge",
-      roomId: agentId,
-      unique: false,
-    });
+    const documents =
+      await knowledgeService.listAllDocumentsWithAccessContext(requester);
+    const documentCount = documents.length;
+    const counts = await mapKnowledgeFragmentsByDocumentId(
+      knowledgeService,
+      requester,
+      documents.filter(hasUuidId).map((doc) => doc.id),
+    );
+    const fragmentCount = [...counts.values()].reduce(
+      (sum, count) => sum + count,
+      0,
+    );
 
     json(res, {
       documentCount,
@@ -762,17 +672,14 @@ export async function handleKnowledgeRoutes(
     const limit = parsePositiveInteger(url.searchParams.get("limit"), 100);
     const offset = parsePositiveInteger(url.searchParams.get("offset"), 0);
 
-    const documents = await knowledgeService.getMemories({
-      tableName: "documents",
-      roomId: agentId,
-      count: limit,
-      offset: offset > 0 ? offset : undefined,
-    });
+    const visibleDocuments =
+      await knowledgeService.listAllDocumentsWithAccessContext(requester);
+    const documents = visibleDocuments.slice(offset, offset + limit);
 
     const documentIds = documents.filter(hasUuidId).map((doc) => doc.id);
     const fragmentCounts = await mapKnowledgeFragmentsByDocumentId(
       knowledgeService,
-      agentId,
+      requester,
       documentIds,
     );
 
@@ -809,24 +716,22 @@ export async function handleKnowledgeRoutes(
   if (method === "GET" && docIdMatch) {
     const documentId = decodeURIComponent(docIdMatch[1]) as UUID;
 
-    const documents = await knowledgeService.getMemories({
-      tableName: "documents",
-      roomId: agentId,
-      count: 10000,
-    });
-
-    const document = documents.find((d) => d.id === documentId);
+    const document = await knowledgeService.getDocumentByIdWithAccessContext(
+      documentId,
+      requester,
+    );
     if (!document) {
       error(res, "Document not found", 404);
       return true;
     }
 
     // Get fragment count for this document
-    const fragmentCount = await countKnowledgeFragmentsForDocument(
-      knowledgeService,
-      agentId,
-      documentId,
-    );
+    const fragmentCount = (
+      await knowledgeService.listDocumentFragmentsWithAccessContext(
+        documentId,
+        requester,
+      )
+    ).length;
 
     const metadata = document.metadata as Record<string, unknown> | undefined;
 
@@ -841,6 +746,7 @@ export async function handleKnowledgeRoutes(
         source: metadata?.source || "upload",
         url: metadata?.url,
         content: document.content,
+        metadata,
       },
     });
     return true;
@@ -850,18 +756,15 @@ export async function handleKnowledgeRoutes(
   if (method === "DELETE" && docIdMatch) {
     const documentId = decodeURIComponent(docIdMatch[1]) as UUID;
 
-    const fragmentIds = await listKnowledgeFragmentsForDocument(
-      knowledgeService,
-      agentId,
+    const fragmentIds =
+      await knowledgeService.listDocumentFragmentsWithAccessContext(
+        documentId,
+        requester,
+      );
+    await knowledgeService.deleteDocumentWithAccessContext(
       documentId,
+      requester,
     );
-
-    for (const fragmentId of fragmentIds) {
-      await knowledgeService.deleteMemory(fragmentId);
-    }
-
-    // Then delete the document itself
-    await knowledgeService.deleteMemory(documentId);
 
     json(res, {
       ok: true,
@@ -940,11 +843,15 @@ export async function handleKnowledgeRoutes(
     }
 
     const addKnowledgeStart = Date.now();
-    const result = await service.addKnowledge({
+    const result = await service.addDocument({
       agentId,
       worldId: agentId,
       roomId: agentId,
-      entityId: agentId,
+      entityId: requester.requesterEntityId,
+      scope: "owner-private",
+      addedBy: requester.requesterEntityId,
+      addedByRole: "OWNER",
+      addedFrom: "upload",
       clientDocumentId: "" as UUID, // Will be generated
       contentType,
       originalFilename: document.filename,
@@ -980,7 +887,12 @@ export async function handleKnowledgeRoutes(
     });
     if (!body) return true;
 
-    if (!body.content || !body.filename) {
+    if (
+      typeof body.content !== "string" ||
+      !body.content.trim() ||
+      typeof body.filename !== "string" ||
+      !body.filename.trim()
+    ) {
       error(res, "content and filename are required");
       return true;
     }
@@ -1386,11 +1298,15 @@ export async function handleKnowledgeRoutes(
 
     const { content, contentType, filename } = fetchedContent;
 
-    const result = await knowledgeService.addKnowledge({
+    const result = await knowledgeService.addDocument({
       agentId,
       worldId: agentId,
       roomId: agentId,
-      entityId: agentId,
+      entityId: requester.requesterEntityId,
+      scope: "owner-private",
+      addedBy: requester.requesterEntityId,
+      addedByRole: "OWNER",
+      addedFrom: "url",
       clientDocumentId: "" as UUID,
       contentType,
       originalFilename: filename,
@@ -1431,16 +1347,19 @@ export async function handleKnowledgeRoutes(
     // Create a mock message for the search
     const searchMessage: Memory = {
       id: crypto.randomUUID() as UUID,
-      entityId: agentId,
+      entityId: requester.requesterEntityId,
       agentId,
       roomId: agentId,
       content: { text: query.trim() },
       createdAt: Date.now(),
     };
 
-    const results = await knowledgeService.getKnowledge(searchMessage, {
-      roomId: agentId,
-    });
+    const results = await knowledgeService.searchDocuments(
+      searchMessage,
+      { roomId: agentId },
+      undefined,
+      requester,
+    );
 
     // Filter by threshold and limit
     const filteredResults = results
@@ -1480,44 +1399,20 @@ export async function handleKnowledgeRoutes(
       position: unknown;
       createdAt: number;
     }> = [];
-    let fragmentOffset = 0;
-
-    while (true) {
-      const fragmentBatch = await knowledgeService.getMemories({
-        tableName: "knowledge",
-        roomId: agentId,
-        count: FRAGMENT_COUNT_BATCH_SIZE,
-        offset: fragmentOffset,
+    const fragments =
+      await knowledgeService.listDocumentFragmentsWithAccessContext(
+        documentId,
+        requester,
+      );
+    for (const fragment of fragments) {
+      if (!hasUuidIdAndCreatedAt(fragment)) continue;
+      const meta = fragment.metadata as Record<string, unknown> | undefined;
+      allFragments.push({
+        id: fragment.id,
+        text: fragment.content.text || "",
+        position: meta?.position,
+        createdAt: fragment.createdAt,
       });
-
-      if (fragmentBatch.length === 0) {
-        break;
-      }
-
-      const matchingFragments = fragmentBatch.filter((fragment) => {
-        const metadata = fragment.metadata as
-          | Record<string, unknown>
-          | undefined;
-        return metadata?.documentId === documentId;
-      });
-
-      for (const fragment of matchingFragments) {
-        if (!hasUuidIdAndCreatedAt(fragment)) {
-          continue;
-        }
-        const meta = fragment.metadata as Record<string, unknown> | undefined;
-        allFragments.push({
-          id: fragment.id,
-          text: (fragment.content as { text?: string })?.text || "",
-          position: meta?.position,
-          createdAt: fragment.createdAt,
-        });
-      }
-
-      if (fragmentBatch.length < FRAGMENT_COUNT_BATCH_SIZE) {
-        break;
-      }
-      fragmentOffset += FRAGMENT_COUNT_BATCH_SIZE;
     }
 
     const documentFragments = allFragments

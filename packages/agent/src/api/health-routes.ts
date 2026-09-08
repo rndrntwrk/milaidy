@@ -547,6 +547,7 @@ export async function handleHealthRoutes(
           bomSha256,
           environment: process.env,
           runtimePlugins: state.runtime.plugins,
+          documentsService: state.runtime.getService("documents"),
         }),
       );
     } catch {
