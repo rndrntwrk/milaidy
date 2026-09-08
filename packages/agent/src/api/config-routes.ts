@@ -12,10 +12,141 @@ import {
   normalizeLinkedAccountsConfig,
   normalizeServiceRoutingConfig,
 } from "../contracts/service-routing.js";
-import {
-  applyCanonicalOnboardingConfig,
-} from "./provider-switch-config.js";
+import { runSerializedConfigMutation } from "./config-mutation.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
+import { applyCanonicalOnboardingConfig } from "./provider-switch-config.js";
+
+const ALICE_CONFIG_TOP_KEYS = new Set([
+  "ui",
+  "agents",
+  "messages",
+  "media",
+  "connectors",
+  "env",
+  "linkedAccounts",
+  "serviceRouting",
+]);
+const ALICE_ENV_NAME = /^(?:DISCORD_|TELEGRAM_)/;
+const ALICE_ENV_EXACT_NAMES = new Set([
+  "CODEX_CLI_SMALL_MODEL",
+  "CODEX_CLI_LARGE_MODEL",
+  "CODEX_REASONING_EFFORT",
+]);
+const ALICE_AGENT_ENTRY_KEYS = new Set([
+  "id",
+  "default",
+  "name",
+  "username",
+  "bio",
+  "system",
+  "adjectives",
+  "topics",
+  "style",
+  "messageExamples",
+  "postExamples",
+]);
+function aliceConfigPayloadRejection(
+  body: Record<string, unknown>,
+): string | null {
+  if (
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE !== "proposer-only" ||
+    process.env.ALICE_RUNTIME_PROFILE !== "full-gated"
+  ) {
+    return null;
+  }
+  for (const key of Object.keys(body)) {
+    if (!ALICE_CONFIG_TOP_KEYS.has(key)) {
+      return `Unsupported Alice setting: ${key}`;
+    }
+  }
+  const env = body.env;
+  if (
+    env !== undefined &&
+    env !== null &&
+    (typeof env !== "object" || Array.isArray(env))
+  ) {
+    return "Alice env setting must be an object";
+  }
+  if (
+    env !== undefined &&
+    env !== null &&
+    typeof env === "object" &&
+    !Array.isArray(env)
+  ) {
+    for (const key of Object.keys(env as Record<string, unknown>)) {
+      if (key === "shellEnv") return "Unsupported Alice setting: env.shellEnv";
+      if (
+        key !== "vars" &&
+        !ALICE_ENV_NAME.test(key) &&
+        !ALICE_ENV_EXACT_NAMES.has(key)
+      ) {
+        return `Unsupported Alice environment setting: ${key}`;
+      }
+    }
+    const vars = (env as Record<string, unknown>).vars;
+    if (
+      vars !== undefined &&
+      vars !== null &&
+      typeof vars === "object" &&
+      !Array.isArray(vars)
+    ) {
+      for (const key of Object.keys(vars as Record<string, unknown>)) {
+        if (!ALICE_ENV_NAME.test(key) && !ALICE_ENV_EXACT_NAMES.has(key)) {
+          return `Unsupported Alice environment setting: env.vars.${key}`;
+        }
+      }
+    }
+  }
+  const agents = body.agents;
+  if (
+    agents !== undefined &&
+    agents !== null &&
+    (typeof agents !== "object" || Array.isArray(agents))
+  ) {
+    return "Alice agents setting must be an object";
+  }
+  if (
+    agents !== undefined &&
+    agents !== null &&
+    typeof agents === "object" &&
+    !Array.isArray(agents)
+  ) {
+    const agentConfig = agents as Record<string, unknown>;
+    for (const key of Object.keys(agentConfig)) {
+      if (key !== "list" && key !== "defaults")
+        return `Unsupported Alice agent setting: agents.${key}`;
+    }
+    const list = agentConfig.list;
+    if (list !== undefined) {
+      if (!Array.isArray(list)) return "Alice agents.list must be an array";
+      for (const [index, entry] of list.entries()) {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+          return `Alice agents.list[${index}] must be an object`;
+        }
+        for (const key of Object.keys(entry as Record<string, unknown>)) {
+          if (!ALICE_AGENT_ENTRY_KEYS.has(key))
+            return `Unsupported Alice agent setting: agents.list[].${key}`;
+        }
+      }
+    }
+    const defaults = agentConfig.defaults;
+    if (defaults !== undefined) {
+      if (
+        !defaults ||
+        typeof defaults !== "object" ||
+        Array.isArray(defaults)
+      ) {
+        return "Alice agents.defaults must be an object";
+      }
+      for (const key of Object.keys(defaults as Record<string, unknown>)) {
+        if (key !== "model" && key !== "subscriptionProvider") {
+          return `Unsupported Alice agent setting: agents.defaults.${key}`;
+        }
+      }
+    }
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,12 +168,15 @@ export interface ConfigRouteContext {
     options?: ReadJsonBodyOptions,
   ) => Promise<T | null>;
   // Server.ts internal helpers passed through
-  redactConfigSecrets: (config: Record<string, unknown>) => Record<string, unknown>;
+  redactConfigSecrets: (
+    config: Record<string, unknown>,
+  ) => Record<string, unknown>;
   isBlockedObjectKey: (key: string) => boolean;
   stripRedactedPlaceholderValuesDeep: (value: unknown) => void;
   patchTouchesProviderSelection: (filtered: Record<string, unknown>) => boolean;
   BLOCKED_ENV_KEYS: Set<string>;
   CONFIG_WRITE_ALLOWED_TOP_KEYS: Set<string>;
+  saveElizaConfig?: (config: ElizaConfig) => void | Promise<void>;
   resolveMcpServersRejection: (
     servers: Record<string, unknown>,
   ) => Promise<string | null>;
@@ -76,9 +210,9 @@ export async function handleConfigRoutes(
     redactConfigSecrets,
     isBlockedObjectKey,
     stripRedactedPlaceholderValuesDeep,
-    patchTouchesProviderSelection,
     BLOCKED_ENV_KEYS,
     CONFIG_WRITE_ALLOWED_TOP_KEYS,
+    saveElizaConfig: saveConfig = saveElizaConfig,
     resolveMcpServersRejection,
     resolveMcpTerminalAuthorizationRejection,
   } = ctx;
@@ -100,7 +234,10 @@ export async function handleConfigRoutes(
         `[milady][settings][api] GET /api/config → respond (redacted) topKeys=${Object.keys(cfg).sort().join(",")} cloud=${JSON.stringify(settingsDebugCloudSummary(cloud))}`,
       );
     }
-    json(res, redactConfigSecrets(config as unknown as Record<string, unknown>));
+    json(
+      res,
+      redactConfigSecrets(config as unknown as Record<string, unknown>),
+    );
     return true;
   }
 
@@ -108,6 +245,13 @@ export async function handleConfigRoutes(
   if (method === "PUT" && pathname === "/api/config") {
     const body = await readJsonBody(req, res);
     if (!body) return true;
+    const alicePayloadRejection = aliceConfigPayloadRejection(
+      body as Record<string, unknown>,
+    );
+    if (alicePayloadRejection) {
+      error(res, alicePayloadRejection, 400);
+      return true;
+    }
 
     if (isMiladySettingsDebugEnabled()) {
       const b = body as Record<string, unknown>;
@@ -310,44 +454,18 @@ export async function handleConfigRoutes(
       );
     }
 
-    safeMerge(config as Record<string, unknown>, filtered);
+    const originalConfigSnapshot = JSON.stringify(config);
+    const candidateConfig = structuredClone(config);
+    safeMerge(candidateConfig as Record<string, unknown>, filtered);
 
-    // If the client updated env vars, synchronise them into process.env so
-    // subsequent hot-restarts see the latest values (loadElizaConfig()
-    // only fills missing env vars and does not override existing ones).
     if (
       filtered.env &&
       typeof filtered.env === "object" &&
       !Array.isArray(filtered.env)
     ) {
-      const envPatch = filtered.env as Record<string, unknown>;
-
-      // 1) env.vars.* (preferred)
-      const vars = envPatch.vars;
-      if (vars && typeof vars === "object" && !Array.isArray(vars)) {
-        for (const [k, v] of Object.entries(vars as Record<string, unknown>)) {
-          if (BLOCKED_ENV_KEYS.has(k.toUpperCase())) continue;
-          const str = typeof v === "string" ? v : "";
-          if (str.trim()) {
-            process.env[k] = str;
-          } else {
-            delete process.env[k];
-          }
-        }
-      }
-
-      // 2) Direct env.* string keys (legacy)
-      for (const [k, v] of Object.entries(envPatch)) {
-        if (k === "vars" || k === "shellEnv") continue;
-        if (BLOCKED_ENV_KEYS.has(k.toUpperCase())) continue;
-        if (typeof v !== "string") continue;
-        if (v.trim()) process.env[k] = v;
-        else delete process.env[k];
-      }
-
       // Keep config clean: drop empty env.vars entries so we don't persist
       // null/empty-string tombstones forever.
-      const cfgEnv = (config as Record<string, unknown>).env;
+      const cfgEnv = (candidateConfig as Record<string, unknown>).env;
       if (cfgEnv && typeof cfgEnv === "object" && !Array.isArray(cfgEnv)) {
         const cfgVars = (cfgEnv as Record<string, unknown>).vars;
         if (cfgVars && typeof cfgVars === "object" && !Array.isArray(cfgVars)) {
@@ -367,7 +485,7 @@ export async function handleConfigRoutes(
       canonicalLinkedAccountsRequested ||
       canonicalServiceRoutingRequested
     ) {
-      applyCanonicalOnboardingConfig(config, {
+      applyCanonicalOnboardingConfig(candidateConfig, {
         deploymentTarget: normalizedDeploymentTarget,
         linkedAccounts: normalizedLinkedAccounts,
         serviceRouting: normalizedServiceRouting,
@@ -375,7 +493,43 @@ export async function handleConfigRoutes(
     }
 
     try {
-      saveElizaConfig(config);
+      await runSerializedConfigMutation(config as object, async () => {
+        if (JSON.stringify(config) !== originalConfigSnapshot) {
+          throw new Error("concurrent config update");
+        }
+        await saveConfig(candidateConfig);
+        for (const key of Object.keys(config as Record<string, unknown>)) {
+          if (!Object.hasOwn(candidateConfig, key)) {
+            delete (config as Record<string, unknown>)[key];
+          }
+        }
+        Object.assign(config, candidateConfig);
+        if (
+          filtered.env &&
+          typeof filtered.env === "object" &&
+          !Array.isArray(filtered.env)
+        ) {
+          const envPatch = filtered.env as Record<string, unknown>;
+          const vars = envPatch.vars;
+          if (vars && typeof vars === "object" && !Array.isArray(vars)) {
+            for (const [k, v] of Object.entries(
+              vars as Record<string, unknown>,
+            )) {
+              if (BLOCKED_ENV_KEYS.has(k.toUpperCase())) continue;
+              const str = typeof v === "string" ? v : "";
+              if (str.trim()) process.env[k] = str;
+              else delete process.env[k];
+            }
+          }
+          for (const [k, v] of Object.entries(envPatch)) {
+            if (k === "vars" || k === "shellEnv") continue;
+            if (BLOCKED_ENV_KEYS.has(k.toUpperCase())) continue;
+            if (typeof v !== "string") continue;
+            if (v.trim()) process.env[k] = v;
+            else delete process.env[k];
+          }
+        }
+      });
       if (isMiladySettingsDebugEnabled()) {
         const cfg = config as Record<string, unknown>;
         const cloud = cfg.cloud as Record<string, unknown> | undefined;
@@ -387,8 +541,13 @@ export async function handleConfigRoutes(
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
       );
+      error(res, "Config save failed", 503);
+      return true;
     }
-    json(res, redactConfigSecrets(config as unknown as Record<string, unknown>));
+    json(
+      res,
+      redactConfigSecrets(config as unknown as Record<string, unknown>),
+    );
     return true;
   }
 

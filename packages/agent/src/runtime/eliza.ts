@@ -3418,6 +3418,8 @@ export async function startEliza(
 ): Promise<AgentRuntime | undefined> {
   const aliceFullProfile = isAliceFullRuntimeProfile(process.env);
   const aliceResponseOnly = isAliceResponseOnlyRuntime(process.env);
+  const { initializeAliceConfigPersistence } = await import("../config/config.js");
+  await initializeAliceConfigPersistence();
   // Start buffering logs early so startup messages appear in the UI log viewer
   const { captureEarlyLogs } = await import("../api/early-logs.js");
   captureEarlyLogs();

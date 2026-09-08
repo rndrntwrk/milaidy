@@ -72,8 +72,8 @@ test("exact-image qualification reserves the bounded smoke window", () => {
   );
   assert.match(
     workflow,
-    /- name: Smoke exact candidate image[\s\S]*?timeout-minutes: 10/,
-    "candidate runtime smoke must keep its independent ten-minute ceiling",
+    /- name: Smoke exact candidate image[\s\S]*?timeout-minutes: 15/,
+    "candidate smoke must bound both initial startup and container replacement",
   );
 });
 
@@ -415,7 +415,7 @@ test("cloud builds qualify and emit the complete six-role Alice Worker graph", (
 
   assert.match(
     workflow,
-    /bun test[\s\S]*?workers\/alice-state-plane\/test\/\*\.test\.ts[\s\S]*?workers\/alice-connector-plane\/test\/\*\.test\.ts/,
+    /bun --conditions=eliza-source test[\s\S]*?workers\/alice-state-plane\/test\/\*\.test\.ts[\s\S]*?workers\/alice-connector-plane\/test\/\*\.test\.ts/,
     "the cloud release must qualify both new private Workers",
   );
   assert.match(

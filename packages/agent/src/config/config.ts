@@ -7,13 +7,36 @@ import {
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
 import JSON5 from "json5";
+import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
+import { createAliceRuntimeSql } from "../runtime/alice-runtime-sql.js";
 import { syncSolanaPublicKeyEnv } from "../api/wallet.js";
+import { createAliceConfigStore } from "./alice-config-store.js";
 import { collectConfigEnvVars, collectConnectorEnvVars } from "./env-vars.js";
 import { resolveConfigIncludes } from "./includes.js";
 import { resolveConfigPath, resolveStateDir, resolveUserPath } from "./paths.js";
 import type { ElizaConfig } from "./types.js";
 
 export * from "./types.js";
+
+let aliceStore: ReturnType<typeof createAliceConfigStore> | undefined;
+let aliceConfig: ElizaConfig | null = null;
+let aliceConfigLoaded = false;
+let aliceInitialization: Promise<void> | undefined;
+let aliceWriteTail = Promise.resolve();
+
+/** Hydrate before either the API server or runtime reads startup settings. */
+export async function initializeAliceConfigPersistence(): Promise<void> {
+  if (!isAliceFullRuntimeProfile()) return;
+  aliceInitialization ??= (async () => {
+    aliceStore = createAliceConfigStore({
+      db: createAliceRuntimeSql({ ownerId: process.env.ALICE_STATE_OWNER_ID ?? "" }),
+      passphrase: process.env.ELIZA_VAULT_PASSPHRASE ?? "",
+    });
+    aliceConfig = await aliceStore.read() as ElizaConfig | null;
+    aliceConfigLoaded = true;
+  })();
+  await aliceInitialization;
+}
 
 function resolveConfigWritePath(env: NodeJS.ProcessEnv = process.env): string {
   const persistPath =
@@ -92,12 +115,15 @@ function readConfigFile(configPath: string): ElizaConfig | null {
 }
 
 export function loadElizaConfig(): ElizaConfig {
+  const alice = isAliceFullRuntimeProfile();
+  if (alice && !aliceConfigLoaded) throw new Error("ALICE_CONFIG_NOT_INITIALIZED");
   const configPath = resolveConfigPath();
   const persistPath = resolveConfigWritePath();
 
   const baseConfig = readConfigFile(configPath);
   const persistedConfig =
-    persistPath !== configPath ? readConfigFile(persistPath) : null;
+    alice ? structuredClone(aliceConfig) :
+      persistPath !== configPath ? readConfigFile(persistPath) : null;
   const resolved = (
     baseConfig || persistedConfig
       ? mergeConfigRecords(baseConfig ?? {}, persistedConfig ?? {})
@@ -254,7 +280,20 @@ function stripWalletPrivateKeysFromConfig(config: ElizaConfig): void {
   }
 }
 
-export function saveElizaConfig(config: ElizaConfig): void {
+export function saveElizaConfig(config: ElizaConfig): void | Promise<void> {
+  if (isAliceFullRuntimeProfile()) {
+    if (!aliceStore || !aliceConfigLoaded) throw new Error("ALICE_CONFIG_NOT_INITIALIZED");
+    const snapshot = stripIncludeDirectives(structuredClone(config)) as ElizaConfig;
+    migrateLegacyRuntimeConfig(snapshot as Record<string, unknown>);
+    if (isWalletOsStoreEnabledInConfig(snapshot)) stripWalletPrivateKeysFromConfig(snapshot);
+    const store = aliceStore;
+    const saved = aliceWriteTail.then(async () => {
+      await store.write(snapshot as Record<string, unknown>);
+      aliceConfig = snapshot;
+    });
+    aliceWriteTail = saved.catch(() => undefined);
+    return saved;
+  }
   const configPath = resolveConfigWritePath();
   const dir = path.dirname(configPath);
 

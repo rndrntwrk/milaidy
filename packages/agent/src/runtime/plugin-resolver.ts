@@ -1183,7 +1183,7 @@ export async function resolvePlugins(
   // to import from stale install directories.
   if (repairedInstallRecords.size > 0) {
     try {
-      saveElizaConfig(config);
+      await saveElizaConfig(config);
       logger.info(
         `[eliza] Repaired ${repairedInstallRecords.size} plugin install record(s): ${Array.from(repairedInstallRecords).join(", ")}`,
       );

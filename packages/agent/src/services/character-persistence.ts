@@ -185,7 +185,7 @@ export class MiladyCharacterPersistenceService extends Service {
     try {
       const config = loadElizaConfig();
       const nextAgent = syncCharacterIntoConfig(config, runtimeCharacter);
-      saveElizaConfig(config);
+      await saveElizaConfig(config);
 
       const persistedCharacter = buildPersistedCharacterData(runtimeCharacter);
       const runtimeMetadata =

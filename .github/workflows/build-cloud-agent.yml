@@ -196,7 +196,9 @@ jobs:
           ALICE_WORKER_CONTRACT_REPLAY: "1"
           ALICE_REPLAY_SOURCE_COMMIT: ${{ steps.source_revision.outputs.sha }}
         run: |
-          bun test \
+          node eliza/packages/shared/scripts/generate-keywords.mjs
+          bun --conditions=eliza-source test packages/agent/src/config/config.alice.test.ts
+          bun --conditions=eliza-source test \
             packages/app-core/src/api/server.health-probes.test.ts \
             packages/agent/src/api/alice-production-auth-boundary.test.ts \
             packages/agent/src/api/alice-production-capabilities.test.ts \
@@ -206,6 +208,7 @@ jobs:
             packages/agent/src/api/alice-release-metadata.test.ts \
             packages/agent/src/runtime/alice-capability-inventory.test.ts \
             packages/agent/src/runtime/alice-d1-database-adapter.test.ts \
+            packages/agent/src/config/alice-config-store.test.ts \
             packages/agent/src/lifeops/sql.sqlite.test.ts \
             packages/agent/src/runtime/alice-production-plugin-policy.test.ts \
             packages/agent/src/runtime/alice-production-runtime-plugin.test.ts \
@@ -724,7 +727,7 @@ jobs:
 
       - name: Smoke exact candidate image
         if: success() && (steps.version.outputs.build_environment == 'staging' || (github.event_name == 'workflow_dispatch' && inputs.skip_rollout == true)) && (github.event_name == 'push' || inputs.push_image != false)
-        timeout-minutes: 10
+        timeout-minutes: 15
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.cloud-image.outputs.digest }}
           EXPECTED_IMAGE_DIGEST: ${{ steps.cloud-image.outputs.digest }}
@@ -819,6 +822,7 @@ jobs:
             if (response.status !== 200) process.exit(1);
           '
 
+          start_smoke_runtime() {
           docker run -d \
             --platform linux/amd64 \
             --name "$SMOKE_CONTAINER" \
@@ -857,7 +861,9 @@ jobs:
             --env ALICE_ELIZA_COMMIT="$EXPECTED_ELIZA_REVISION" \
             --env ALICE_MODAL_REVISION=49 \
             "$IMAGE"
+          }
 
+          wait_for_smoke_runtime() {
           smoke_healthy=0
           for attempt in $(seq 1 72); do
             health="$(docker inspect "$SMOKE_CONTAINER" --format '{{ if .State.Health }}{{ .State.Health.Status }}{{ else }}missing{{ end }}')"
@@ -881,6 +887,9 @@ jobs:
             echo "Candidate image did not become healthy before the smoke deadline" >&2
             exit 1
           fi
+          }
+          start_smoke_runtime
+          wait_for_smoke_runtime
 
           docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/steward-fi'
           docker exec "$SMOKE_CONTAINER" sh -lc 'test ! -e /app/test/contracts'
@@ -942,6 +951,22 @@ jobs:
                     assistantName: config.ui?.assistant?.name, presetId: config.ui?.presetId,
                     avatarIndex: config.ui?.avatarIndex }));
                   process.exit(2);
+                }
+                for (const pathname of ["/api/lifeops/overview", "/api/workbench/overview", "/api/workbench/tasks", "/api/connectors", "/api/plugins"]) {
+                  const panel = await fetch(`${base}${pathname}`, { headers: authHeaders });
+                  if (panel.status !== 200) {
+                    console.error(JSON.stringify({ pathname, panelStatus: panel.status }));
+                    process.exit(19);
+                  }
+                }
+                const settingsWrite = await fetch(`${base}/api/config`, {
+                  method: "PUT",
+                  headers: { ...authHeaders, "content-type": "application/json" },
+                  body: JSON.stringify({ ui: { theme: "light" } }),
+                });
+                if (settingsWrite.status !== 200 || (await settingsWrite.json()).ui?.theme !== "light") {
+                  console.error(JSON.stringify({ settingsWriteStatus: settingsWrite.status }));
+                  process.exit(20);
                 }
                 const capabilitiesResponse = await fetch(`${base}/api/alice-production/capabilities`, { headers: authHeaders });
                 const capabilities = await capabilitiesResponse.json();
@@ -1197,6 +1222,21 @@ jobs:
                 }
                 process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, capabilityBomSha256: capabilities.capabilityBomSha256, capabilityCount: capabilities.entries.length, emoteStatus: emoteResponse.status, companionReadStatus: initialCompanionResponse.status, companionWriteStatus: companionUpdateResponse.status, companionPersistedStatus: persistedCompanionResponse.status, statePlaneElizaLoadRequests: statePlaneState.elizaLoadRequests, statePlaneElizaCommitRequests: statePlaneState.elizaCommitRequests, statePlaneCompanionGetRequests: statePlaneState.companionGetRequests, statePlaneCompanionPutRequests: statePlaneState.companionPutRequests, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatProfile: "full-gated", modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
               ')"
+          # Replace the application container while retaining only the private
+          # state dependency. No application files or writable layers survive.
+          docker rm -f "$SMOKE_CONTAINER" >/dev/null
+          start_smoke_runtime
+          wait_for_smoke_runtime
+          docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
+            const port = process.env.PORT ?? process.env.APP_PORT ?? "2138";
+            const headers = { authorization: `Bearer ${process.env.MILADY_API_TOKEN}` };
+            const response = await fetch(`http://127.0.0.1:${port}/api/config`, { headers });
+            const config = await response.json();
+            if (response.status !== 200 || config.ui?.theme !== "light" || config.ui?.assistant?.name !== "Alice") {
+              console.error(JSON.stringify({ replacementConfigStatus: response.status }));
+              process.exit(21);
+            }
+          '
           runtime_snapshot="$(docker exec "$SMOKE_CONTAINER" node --input-type=module -e '
                   const port = process.env.PORT ?? process.env.APP_PORT ?? process.env.ELIZA_PORT ?? "2138";
                   const response = await fetch(`http://127.0.0.1:${port}/api/alice-production/proof`, { headers: { authorization: `Bearer ${process.env.MILADY_API_TOKEN}` } });

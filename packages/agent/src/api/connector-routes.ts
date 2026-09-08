@@ -2,6 +2,7 @@ import type http from "node:http";
 import { logger } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config.js";
 import type { ConnectorConfig } from "../config/types.eliza.js";
+import { runSerializedConfigMutation } from "./config-mutation.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
 
 // ---------------------------------------------------------------------------
@@ -23,8 +24,10 @@ export interface ConnectorRouteContext {
     res: http.ServerResponse,
     options?: ReadJsonBodyOptions,
   ) => Promise<T | null>;
-  saveElizaConfig: (config: ElizaConfig) => void;
-  redactConfigSecrets: (config: Record<string, unknown>) => Record<string, unknown>;
+  saveElizaConfig: (config: ElizaConfig) => void | Promise<void>;
+  redactConfigSecrets: (
+    config: Record<string, unknown>,
+  ) => Record<string, unknown>;
   isBlockedObjectKey: (key: string) => boolean;
   cloneWithoutBlockedObjectKeys: <T>(value: T) => T;
 }
@@ -86,14 +89,32 @@ export async function handleConnectorRoutes(
       error(res, "Missing connector config", 400);
       return true;
     }
-    if (!state.config.connectors) state.config.connectors = {};
-    state.config.connectors[connectorName] = cloneWithoutBlockedObjectKeys(
+    const originalConfigSnapshot = JSON.stringify(state.config);
+    const candidateConfig = structuredClone(state.config);
+    if (!candidateConfig.connectors) candidateConfig.connectors = {};
+    candidateConfig.connectors[connectorName] = cloneWithoutBlockedObjectKeys(
       config,
     ) as ConnectorConfig;
     try {
-      saveElizaConfig(state.config);
-    } catch {
-      /* test envs */
+      await runSerializedConfigMutation(state.config as object, async () => {
+        if (JSON.stringify(state.config) !== originalConfigSnapshot) {
+          throw new Error("concurrent connector update");
+        }
+        await saveElizaConfig(candidateConfig);
+        for (const key of Object.keys(
+          state.config as Record<string, unknown>,
+        )) {
+          if (!Object.hasOwn(candidateConfig, key))
+            delete (state.config as Record<string, unknown>)[key];
+        }
+        Object.assign(state.config, candidateConfig);
+      });
+    } catch (err) {
+      logger.warn(
+        `[api] Connector save failed: ${err instanceof Error ? err.message : err}`,
+      );
+      error(res, "Connector save failed", 503);
+      return true;
     }
     json(res, {
       connectors: redactConfigSecrets(
@@ -110,13 +131,15 @@ export async function handleConnectorRoutes(
       error(res, "Missing or invalid connector name", 400);
       return true;
     }
+    const originalConfigSnapshot = JSON.stringify(state.config);
+    const candidateConfig = structuredClone(state.config);
     if (
-      state.config.connectors &&
-      Object.hasOwn(state.config.connectors, name)
+      candidateConfig.connectors &&
+      Object.hasOwn(candidateConfig.connectors, name)
     ) {
-      delete state.config.connectors[name];
+      delete candidateConfig.connectors[name];
     }
-    const stateConfigRecord = state.config as Record<string, unknown>;
+    const stateConfigRecord = candidateConfig as Record<string, unknown>;
     if (
       stateConfigRecord.channels &&
       typeof stateConfigRecord.channels === "object" &&
@@ -126,9 +149,25 @@ export async function handleConnectorRoutes(
     }
 
     try {
-      saveElizaConfig(state.config);
-    } catch {
-      /* test envs */
+      await runSerializedConfigMutation(state.config as object, async () => {
+        if (JSON.stringify(state.config) !== originalConfigSnapshot) {
+          throw new Error("concurrent connector update");
+        }
+        await saveElizaConfig(candidateConfig);
+        for (const key of Object.keys(
+          state.config as Record<string, unknown>,
+        )) {
+          if (!Object.hasOwn(candidateConfig, key))
+            delete (state.config as Record<string, unknown>)[key];
+        }
+        Object.assign(state.config, candidateConfig);
+      });
+    } catch (err) {
+      logger.warn(
+        `[api] Connector save failed: ${err instanceof Error ? err.message : err}`,
+      );
+      error(res, "Connector save failed", 503);
+      return true;
     }
     json(res, {
       connectors: redactConfigSecrets(

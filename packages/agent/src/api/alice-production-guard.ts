@@ -43,11 +43,19 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/api\/alice-production\/proof$/,
   /^\/api\/alice-production\/capabilities$/,
   /^\/api\/(?:auth\/status|status|agent\/status|onboarding\/status|config|emotes)$/,
+  /^\/api\/config\/schema$/,
+  /^\/api\/(?:connectors|plugins)$/,
+  /^\/api\/character(?:\/random-name)?$/,
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/companion\/stage$/,
   /^\/api\/broadcast\/[a-zA-Z0-9-]+\/(?:stage|scene|vrm|background)$/,
   /^\/api\/conversations(?:\/[^/]+\/messages)?$/,
   /^\/api\/memories\/feed$/,
+  /^\/api\/lifeops\/overview$/,
+  /^\/api\/lifeops\/activity-signals$/,
+  /^\/api\/lifeops\/connectors\/google\/status$/,
+  /^\/api\/workbench\/overview$/,
+  /^\/api\/workbench\/tasks(?:\/[^/]+)?$/,
   /^\/api\/subscription\/status$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
@@ -59,10 +67,12 @@ const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/subscription\/openai\/(?:start|exchange)$/,
   /^\/api\/agent\/restart$/,
+  /^\/api\/connectors$/,
 ];
 
 const FULL_PROFILE_ALLOWED_DELETE_PATHS = [
   /^\/api\/subscription\/openai-codex$/,
+  /^\/api\/connectors\/[a-zA-Z0-9_-]+$/,
 ];
 
 function matches(pathname: string, patterns: RegExp[]): boolean {
@@ -94,11 +104,10 @@ export function isAliceProductionChatIngressAuthenticated(
 
 /**
  * Alice's production Milady process is a proposer, not an authority plane.
- * Keep the first release surface deliberately narrow: static application
- * assets, bounded read APIs, and chat/conversation writes only. Every other
- * API mutation (plugins, configuration, custody, streaming, coding, shell,
- * cloud, connectors, or administration) fails closed inside the runtime even
- * after ingress authentication succeeds.
+ * The full profile admits owner settings and existing Telegram/Discord setup
+ * alongside chat. Configuration payloads retain their own bounded policy.
+ * Custody, streaming, execution, installation and administration routes remain
+ * denied here even after ingress authentication succeeds.
  */
 export function evaluateAliceProductionRequest(
   method: string,
@@ -111,6 +120,10 @@ export function evaluateAliceProductionRequest(
   if (normalizedMethod === "OPTIONS") return { allowed: true };
 
   if (isAliceFullRuntimeProfile(env)) {
+    if (normalizedMethod === "PUT" &&
+      (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname))) {
+      return { allowed: true };
+    }
     if (normalizedMethod === "GET" || normalizedMethod === "HEAD") {
       return matches(pathname, FULL_PROFILE_ALLOWED_READ_PATHS)
         ? { allowed: true }

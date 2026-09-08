@@ -4,6 +4,7 @@ import type { CodexFlow } from "../auth/openai-codex.js";
 import type { OAuthCredentials } from "../auth/types.js";
 import type { ElizaConfig } from "../config/types.eliza.js";
 import type { RouteRequestContext } from "./route-helpers.js";
+import { runSerializedConfigMutation } from "./config-mutation.js";
 
 type AuthModule = typeof import("../auth/index");
 
@@ -28,7 +29,7 @@ export interface SubscriptionRouteState {
 
 export interface SubscriptionRouteContext extends RouteRequestContext {
   state: SubscriptionRouteState;
-  saveConfig: (config: ElizaConfig) => void;
+  saveConfig: (config: ElizaConfig) => void | Promise<void>;
   loadSubscriptionAuth: () => Promise<SubscriptionAuthApi>;
 }
 
@@ -130,7 +131,7 @@ export async function handleSubscriptionRoutes(
       if (!state.config.env) state.config.env = {};
       (state.config.env as Record<string, unknown>).__anthropicSubscriptionToken =
         trimmedToken;
-      ctx.saveConfig(state.config);
+      await ctx.saveConfig(state.config);
       logger.info(
         "[api] Saved Anthropic setup token for task agents (not applied to runtime — TOS restriction)",
       );
@@ -237,14 +238,18 @@ export async function handleSubscriptionRoutes(
       }
       saveCredentials("openai-codex", credentials);
       await persistOpenAiCodexCredentials(credentials);
-      state.config.agents ??= {};
-      state.config.agents.defaults ??= {};
-      state.config.agents.defaults.subscriptionProvider = "openai-codex";
-      state.config.agents.defaults.model = {
-        ...state.config.agents.defaults.model,
-        primary: "codex-cli",
-      };
-      ctx.saveConfig(state.config);
+      await runSerializedConfigMutation(state.config, async () => {
+        const candidate = structuredClone(state.config);
+        candidate.agents ??= {};
+        candidate.agents.defaults ??= {};
+        candidate.agents.defaults.subscriptionProvider = "openai-codex";
+        candidate.agents.defaults.model = {
+          ...candidate.agents.defaults.model,
+          primary: "codex-cli",
+        };
+        await ctx.saveConfig(candidate);
+        Object.assign(state.config, candidate);
+      });
       await applySubscriptionCredentials(state.config);
       flow.close();
       delete state._codexFlow;
@@ -297,7 +302,7 @@ export async function handleSubscriptionRoutes(
             delete state.config.serviceRouting;
           }
         }
-        ctx.saveConfig(state.config);
+        await ctx.saveConfig(state.config);
         json(res, { success: true });
       } catch (err) {
         logger.error(

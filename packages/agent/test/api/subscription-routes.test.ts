@@ -1,5 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
-import type { SubscriptionRouteContext } from "../../src/api/subscription-routes";
+import type {
+  SubscriptionRouteContext,
+  SubscriptionRouteState,
+} from "../../src/api/subscription-routes";
 import { handleSubscriptionRoutes } from "../../src/api/subscription-routes";
 import {
   createMockHttpResponse,
@@ -249,5 +252,46 @@ describe("handleSubscriptionRoutes", () => {
       },
     });
     expect(saveConfig).toHaveBeenCalledWith(ctx.state.config);
+  });
+
+  test("POST /api/subscription/openai/exchange preserves selection when config save rejects", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const applySubscriptionCredentials = vi.fn();
+    const saveConfig = vi.fn(async () => {
+      throw new Error("durable config unavailable");
+    });
+    const originalConfig = { env: { EXISTING: "yes" } };
+    const flow = {
+      submitCode: vi.fn(),
+      credentials: Promise.resolve({ access: "token", refresh: "refresh", expires: 1 }),
+      close: vi.fn(),
+    };
+    const ctx = buildCtx({
+      method: "POST",
+      pathname: "/api/subscription/openai/exchange",
+      res,
+      saveConfig,
+      readJsonBody: vi.fn(async () => ({ code: "oauth-code" })),
+      state: {
+        config: originalConfig,
+        _codexFlow: flow as unknown as NonNullable<SubscriptionRouteState["_codexFlow"]>,
+      },
+      loadSubscriptionAuth: vi.fn(async () => ({
+        getSubscriptionStatus: vi.fn(),
+        startAnthropicLogin: vi.fn(),
+        startCodexLogin: vi.fn(),
+        saveCredentials: vi.fn(),
+        persistOpenAiCodexCredentials: vi.fn(),
+        applySubscriptionCredentials,
+        deleteCredentials: vi.fn(),
+        deleteOpenAiCodexCredentials: vi.fn(),
+      })),
+    });
+
+    expect(await handleSubscriptionRoutes(ctx)).toBe(true);
+    expect(getStatus()).toBe(500);
+    expect(getJson()).toEqual({ error: "OpenAI exchange failed" });
+    expect(ctx.state.config).toEqual(originalConfig);
+    expect(applySubscriptionCredentials).not.toHaveBeenCalled();
   });
 });

@@ -1148,11 +1148,19 @@ const SAFE_RUNTIME_READS = [
 
 const FULL_RUNTIME_API_READS = [
   /^\/api\/(?:auth\/status|status|agent\/status|onboarding\/status|config|emotes)$/,
+  /^\/api\/config\/schema$/,
+  /^\/api\/(?:connectors|plugins)$/,
+  /^\/api\/character(?:\/random-name)?$/,
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/companion\/stage$/,
   /^\/api\/broadcast\/[a-zA-Z0-9-]+\/(?:stage|scene|vrm|background)$/,
   /^\/api\/conversations(?:\/[^/]+\/messages)?$/,
   /^\/api\/memories\/feed$/,
+  /^\/api\/lifeops\/overview$/,
+  /^\/api\/lifeops\/activity-signals$/,
+  /^\/api\/lifeops\/connectors\/google\/status$/,
+  /^\/api\/workbench\/overview$/,
+  /^\/api\/workbench\/tasks(?:\/[^/]+)?$/,
   /^\/api\/subscription\/status$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
@@ -1198,6 +1206,10 @@ function isFullRuntimeProof(proof: unknown): boolean {
 
 function isFullRuntimeRequest(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
+  if (normalized === "PUT" &&
+    (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname))) return true;
+  if (normalized === "POST" && pathname === "/api/connectors") return true;
+  if (normalized === "DELETE" && /^\/api\/connectors\/[a-zA-Z0-9_-]+$/.test(pathname)) return true;
   if (normalized === "GET" || normalized === "HEAD") {
     return (
       isFullRuntimeUiPath(pathname) ||
