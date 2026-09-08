@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyAliceReleaseSource } from './verify-alice-release-source.mjs';
+import { verifyAliceWorkerDryRunDirectory } from '../deploy/modal/alice_cloudflare_release.mjs';
 import {
   buildAliceWorkerBundleArtifact,
   serializeAliceWorkerBundleArtifact,
@@ -36,6 +38,13 @@ export function buildAliceHostWorkerArtifact({
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(path.join(baseRoot, member.path), destination, fs.constants.COPYFILE_EXCL);
   }
+  for (const role of ['control', 'aiGateway', 'statePlane', 'connectorPlane']) {
+    const relative = `${base.bundles[role].path}.map`;
+    const sourceMap = path.join(baseRoot, relative);
+    if (!fs.existsSync(sourceMap)) continue;
+    if (!fs.lstatSync(sourceMap).isFile()) throw new Error('ALICE_HOST_WORKER_SOURCE_MAP_INVALID');
+    fs.copyFileSync(sourceMap, path.join(outputRoot, relative), fs.constants.COPYFILE_EXCL);
+  }
   for (const [role, configName, emittedName] of [
     ['access', 'wrangler.jsonc', 'worker.js'],
     ['runtimeHost', 'wrangler.runtime-host.jsonc', 'runtime-host.js'],
@@ -54,6 +63,31 @@ export function buildAliceHostWorkerArtifact({
     artifact.bundles[role].sha256 !== base.bundles[role].sha256) ||
     JSON.stringify(artifact.migrations) !== JSON.stringify(base.migrations)) {
     throw new Error('ALICE_HOST_WORKER_BASE_DRIFT');
+  }
+  // Exercise the same no-bundle upload path before attestation or provider writes.
+  // Source maps remain sidecars; executable bytes must still match exactly.
+  const dryRunRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alice-host-upload-check-'));
+  try {
+    for (const [role, config] of [
+      ['control', 'alice-production-control/wrangler.jsonc'],
+      ['aiGateway', 'alice-ai-gateway/wrangler.jsonc'],
+      ['statePlane', 'alice-state-plane/wrangler.jsonc'],
+      ['connectorPlane', 'alice-connector-plane/wrangler.jsonc'],
+      ['runtimeHost', 'alice-access-gateway/wrangler.runtime-host.jsonc'],
+      ['access', 'alice-access-gateway/wrangler.jsonc'],
+    ]) {
+      const signedBundlePath = path.join(outputRoot, artifact.bundles[role].path);
+      const outdir = path.join(dryRunRoot, role);
+      execFileSync(wranglerBin, [
+        'versions', 'upload', signedBundlePath,
+        '--config', path.join(sourceRoot, 'workers', config),
+        '--no-bundle', '--dry-run', '--outdir', outdir,
+      ], { cwd: sourceRoot, stdio: 'inherit' });
+      verifyAliceWorkerDryRunDirectory({ signedBundlePath, outdir,
+        expectedSha256: artifact.bundles[role].sha256 });
+    }
+  } finally {
+    fs.rmSync(dryRunRoot, { recursive: true, force: true });
   }
   fs.writeFileSync(path.join(outputRoot, 'alice-worker-bundles.json'),
     serializeAliceWorkerBundleArtifact(artifact), { flag: 'wx', mode: 0o444 });
