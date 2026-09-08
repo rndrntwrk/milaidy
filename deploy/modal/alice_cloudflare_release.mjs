@@ -1814,30 +1814,42 @@ async function readSignedContinuity({
   expectedDurableObjectNamespaceIds,
   expectedDigest,
   expectedQueueDeliveryPaused,
+  waitForQueueUpdate = false,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }) {
-  const state = await fetchAliceCloudflareContinuityState({
-    fetchImpl,
-    apiToken,
-    expectedDurableObjectNamespaceIds,
-  });
-  if (
-    typeof expectedQueueDeliveryPaused !== "boolean" ||
-    state.readback.queue?.settings?.delivery_paused !==
-      expectedQueueDeliveryPaused ||
-    state.readback.deadLetterQueue?.settings?.delivery_paused !== true
-  ) {
-    releaseInvalid("ALICE_CONTINUITY_CHANGED_DURING_PROMOTION");
+  const attempts = waitForQueueUpdate ? 6 : 1;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const state = await fetchAliceCloudflareContinuityState({
+      fetchImpl,
+      apiToken,
+      expectedDurableObjectNamespaceIds,
+    });
+    if (
+      typeof expectedQueueDeliveryPaused !== "boolean" ||
+      state.readback.deadLetterQueue?.settings?.delivery_paused !== true
+    ) {
+      releaseInvalid("ALICE_CONTINUITY_CHANGED_DURING_PROMOTION");
+    }
+    const candidateConfig = buildAliceCloudflareContinuityConfig(
+      buildAliceCandidateCloudflareContinuityReadback(state.readback),
+    );
+    // Only the queue pause flag may still reflect the preceding successful PUT.
+    // Every read must match the rest of the signed configuration immediately.
+    if (digestAliceCloudflareContinuityConfig(candidateConfig) !== expectedDigest) {
+      releaseInvalid("ALICE_CONTINUITY_CHANGED_DURING_PROMOTION");
+    }
+    if (
+      state.readback.queue.settings.delivery_paused === expectedQueueDeliveryPaused
+    ) {
+      return { ...state, candidateConfig };
+    }
+    if (attempt + 1 === attempts) {
+      releaseInvalid(
+        `ALICE_CONTINUITY_CHANGED_DURING_PROMOTION: evidence queue expected=${expectedQueueDeliveryPaused} observed=${state.readback.queue.settings.delivery_paused}`,
+      );
+    }
+    await sleep(1_000);
   }
-  const candidateReadback = expectedQueueDeliveryPaused
-    ? buildAliceCandidateCloudflareContinuityReadback(state.readback)
-    : state.readback;
-  const candidateConfig = buildAliceCloudflareContinuityConfig(
-    candidateReadback,
-  );
-  if (digestAliceCloudflareContinuityConfig(candidateConfig) !== expectedDigest) {
-    releaseInvalid("ALICE_CONTINUITY_CHANGED_DURING_PROMOTION");
-  }
-  return { ...state, candidateConfig };
 }
 
 async function putCloudflareJson({
@@ -1877,6 +1889,7 @@ export async function setAliceEvidenceQueueDeliveryPaused({
   expectedDurableObjectNamespaceIds,
   expectedContinuityDigest,
   deliveryPaused,
+  sleep,
 }) {
   const before = await fetchAliceCloudflareContinuityState({
     fetchImpl,
@@ -1901,6 +1914,8 @@ export async function setAliceEvidenceQueueDeliveryPaused({
     expectedDurableObjectNamespaceIds,
     expectedDigest: expectedContinuityDigest,
     expectedQueueDeliveryPaused: deliveryPaused,
+    waitForQueueUpdate: mutated,
+    sleep,
   });
   return { before: before.readback, after: after.readback, mutated };
 }
