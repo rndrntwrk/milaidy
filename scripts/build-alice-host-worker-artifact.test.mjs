@@ -27,7 +27,8 @@ test('rebuilds the two host modules and retains verified four-Worker and migrati
   const baseRoot = path.join(root, 'base'); fs.mkdirSync(baseRoot);
   for (const worker of ['alice-access-gateway', 'alice-runtime-container-host', 'alice-production-control', 'alice-ai-gateway', 'alice-state-plane', 'alice-connector-plane']) {
     fs.mkdirSync(path.join(baseRoot, worker));
-    fs.writeFileSync(path.join(baseRoot, worker, 'index.js'), `original ${worker}\n`);
+    fs.writeFileSync(path.join(baseRoot, worker, 'index.js'), `original ${worker}\n//# sourceMappingURL=index.js.map\n`);
+    fs.writeFileSync(path.join(baseRoot, worker, 'index.js.map'), JSON.stringify({version: 3, sources: [`${worker}.ts`], mappings: ''}));
   }
   const migrations = path.join(baseRoot, 'alice-state-plane/migrations'); fs.mkdirSync(migrations);
   for (const name of ['0001_alice_state.sql', '0002_execution_records.sql', '0003_eliza_database.sql']) fs.writeFileSync(path.join(migrations, name), `-- ${name}\n`);
@@ -37,17 +38,37 @@ test('rebuilds the two host modules and retains verified four-Worker and migrati
   fs.writeFileSync(wranglerBin, `#!${process.execPath}
 const fs = require('node:fs'); const path = require('node:path');
 if (process.argv[2] === '--version') { console.log('4.122.0'); process.exit(0); }
-if (process.argv[2] !== 'deploy' || !process.argv.includes('--dry-run')) process.exit(9);
+if (!process.argv.includes('--dry-run')) process.exit(9);
 const out = process.argv[process.argv.indexOf('--outdir') + 1];
 const config = process.argv[process.argv.indexOf('--config') + 1];
+if (process.argv[2] === 'versions' && process.argv[3] === 'upload') {
+  if (!process.argv.includes('--no-bundle')) process.exit(10);
+  const source = process.argv[4];
+  const content = fs.readFileSync(source, 'utf8');
+  if (content.includes('sourceMappingURL=index.js.map') && !fs.existsSync(source + '.map')) process.exit(11);
+  fs.mkdirSync(out, {recursive: true});
+  fs.copyFileSync(source, path.join(out, 'index.js'));
+  process.exit(0);
+}
+if (process.argv[2] !== 'deploy') process.exit(9);
 fs.writeFileSync(path.join(out, config.endsWith('wrangler.runtime-host.jsonc') ? 'runtime-host.js' : 'worker.js'), 'rebuilt reviewed host ' + path.basename(config));
 `, {mode: 0o700});
   const options = {sourceRoot, sourceCommit, deploymentControllerCommit, baseRoot, wranglerBin};
   const result = buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'output')});
   assert.equal(result.sourceCommit, deploymentControllerCommit);
   for (const role of ['access', 'runtimeHost']) assert.notEqual(result.bundles[role].sha256, base.bundles[role].sha256);
-  for (const role of ['control', 'aiGateway', 'statePlane', 'connectorPlane']) assert.deepEqual(result.bundles[role], base.bundles[role]);
+  for (const role of ['control', 'aiGateway', 'statePlane', 'connectorPlane']) {
+    assert.deepEqual(result.bundles[role], base.bundles[role]);
+    const relative = `${base.bundles[role].path}.map`;
+    assert.deepEqual(fs.readFileSync(path.join(root, 'output', relative)), fs.readFileSync(path.join(baseRoot, relative)));
+  }
   assert.deepEqual(result.migrations, base.migrations);
+  const controlMap = path.join(baseRoot, `${base.bundles.control.path}.map`);
+  const mapBytes = fs.readFileSync(controlMap);
+  fs.unlinkSync(controlMap);
+  assert.throws(() => buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'missing-map-rejected')}));
+  assert.equal(fs.existsSync(path.join(root, 'missing-map-rejected/alice-worker-bundles.json')), false);
+  fs.writeFileSync(controlMap, mapBytes);
   const hostSource = path.join(hostDirectory, 'alice-runtime-container.ts');
   fs.appendFileSync(hostSource, 'uncommitted source');
   assert.throws(() => buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'dirty-rejected')}), /ALICE_HOST_WORKER_BUILD_INPUT_INVALID/);
