@@ -206,8 +206,15 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
     console.log("ALICE_REACCEPT_READ_ONLY_PREFLIGHT_VERIFIED");
     return;
   }
-  for (const role of restoreRoles) {
-    if (role === "access") await restoreAliceContainerApplication({ apiToken, expected: { ...anchor.previous.containerApplication, target } });
+  for (const role of roles) {
+    if (role === "access") {
+      const host = candidate.workers.runtimeHost;
+      const deployments = await api(`/accounts/${account}/workers/scripts/${host.worker}/deployments`);
+      if (!equal(deployments.deployments?.[0]?.versions, [{ version_id: host.versionId, percentage: 100 }])) fail("RUNTIME_HOST_NOT_SELECTED");
+      // Reaccept also repairs a retained candidate whose process never restarted.
+      await restoreAliceContainerApplication({ apiToken, expected: { ...anchor.previous.containerApplication, target } });
+    }
+    if (!restoreRoles.includes(role)) continue;
     const worker = candidate.workers[role];
     await api(`/accounts/${account}/workers/scripts/${worker.worker}/deployments`, {
       strategy: "percentage", versions: [{ version_id: worker.versionId, percentage: 100 }],

@@ -355,6 +355,7 @@ function verifyContainerApplicationRollout({ rollout, current, target }) {
 export async function transitionAliceContainerApplication({
   expectedCurrent,
   target,
+  restart = false,
   apiToken,
   fetchImpl = globalThis.fetch,
   operations,
@@ -365,6 +366,7 @@ export async function transitionAliceContainerApplication({
     fetchImpl,
   });
   if (
+    typeof restart !== "boolean" ||
     typeof resolvedOperations?.fetchApplication !== "function" ||
     typeof resolvedOperations?.createRollout !== "function" ||
     typeof resolvedOperations?.fetchRollout !== "function" ||
@@ -378,7 +380,7 @@ export async function transitionAliceContainerApplication({
     releaseInvalid("ALICE_CONTAINER_APPLICATION_DRIFTED");
   }
   normalizedContainerConfiguration(target?.configuration);
-  if (canonicalAliceJson(current.target) === canonicalAliceJson(target)) {
+  if (!restart && canonicalAliceJson(current.target) === canonicalAliceJson(target)) {
     return { changed: false, current, rollout: null };
   }
   const rollout = verifyContainerApplicationRollout({
@@ -555,6 +557,9 @@ export async function restoreAliceContainerApplication({
   verifyContainerApplicationIdentity(current, expected);
   return transitionAliceContainerApplication({
     apiToken, fetchImpl, expectedCurrent: current, target: expected.target,
+    // A restored Worker may already be selected after an interrupted recovery,
+    // while its container still has the other release's startup environment.
+    restart: true,
   });
 }
 
@@ -2578,6 +2583,7 @@ async function main() {
       apiToken,
       expectedCurrent: anchor.previous.containerApplication,
       target: candidateContainerTarget,
+      restart: true,
     });
     promoteWorkers(
       ["access"],
@@ -2634,6 +2640,7 @@ async function main() {
         apiToken,
         expectedCurrent: rollbackEvidence.containerApplication,
         target: candidateContainerTarget,
+        restart: true,
       });
       promoteWorkers(
         ["access"],
