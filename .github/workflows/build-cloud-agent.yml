@@ -199,6 +199,7 @@ jobs:
         run: |
           node eliza/packages/shared/scripts/generate-keywords.mjs
           bun --conditions=eliza-source test packages/agent/src/config/config.alice.test.ts
+          bun --conditions=eliza-source test packages/agent/src/auth/alice-openai-codex-store.test.ts
           bun --conditions=eliza-source test \
             packages/app-core/src/api/server.health-probes.test.ts \
             packages/agent/src/api/alice-production-auth-boundary.test.ts \
