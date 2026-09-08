@@ -1287,7 +1287,7 @@ jobs:
           MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: ${{ secrets.ALICE_ACCESS_PROXY_SECRET }}
         run: |
           set -euo pipefail
-          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs mutation)"
+          phase_seconds="$(node deploy/modal/alice_release_deadline.mjs cloudflare-promotion)"
           timeout --signal=TERM --kill-after=30s "${phase_seconds}s" \
             node deploy/modal/alice_cloudflare_release.mjs
 

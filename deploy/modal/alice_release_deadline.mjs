@@ -30,13 +30,14 @@ export function aliceReleasePhaseBudget({
   recoveryDeadlineEpoch,
 }) {
   if (
-    !["mutation", "modal-recovery", "cloudflare-recovery"].includes(phase) ||
+    !["mutation", "cloudflare-promotion", "modal-recovery", "cloudflare-recovery"].includes(phase) ||
     ![nowSeconds, mutationCutoffEpoch, recoveryDeadlineEpoch].every(epoch) ||
     recoveryDeadlineEpoch - mutationCutoffEpoch !== RECOVERY_RESERVE_SECONDS
   ) {
     invalid();
   }
-  const deadline = phase === "mutation"
+  const mutation = phase === "mutation" || phase === "cloudflare-promotion";
+  const deadline = mutation
     ? mutationCutoffEpoch
     : phase === "modal-recovery"
       ? mutationCutoffEpoch + COMPONENT_RECOVERY_SECONDS
@@ -47,7 +48,10 @@ export function aliceReleasePhaseBudget({
   }
   return Math.min(
     remaining,
-    phase === "mutation" ? MAXIMUM_PHASE_SECONDS : COMPONENT_RECOVERY_SECONDS,
+    // Promotion includes candidate, rollback and forward restoration. All three
+    // transitions share the original cutoff and cannot consume its recovery reserve.
+    phase === "cloudflare-promotion" ? MUTATION_WINDOW_SECONDS
+      : phase === "mutation" ? MAXIMUM_PHASE_SECONDS : COMPONENT_RECOVERY_SECONDS,
   );
 }
 

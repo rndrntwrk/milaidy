@@ -37,6 +37,17 @@ test("bounds every normal mutation by the shared cutoff", () => {
   }), /ALICE_RELEASE_DEADLINE_EXHAUSTED/);
 });
 
+test("budgets all three promotion transitions inside the existing mutation cutoff", () => {
+  const deadlines = initializeAliceReleaseDeadlines(1_800_000_000);
+  assert.equal(aliceReleasePhaseBudget({ phase: "cloudflare-promotion",
+    nowSeconds: 1_800_000_600, ...deadlines }), 3_900);
+  assert.equal(aliceReleasePhaseBudget({ phase: "cloudflare-promotion",
+    nowSeconds: deadlines.mutationCutoffEpoch - 61, ...deadlines }), 61);
+  assert.throws(() => aliceReleasePhaseBudget({ phase: "cloudflare-promotion",
+    nowSeconds: deadlines.mutationCutoffEpoch - 59, ...deadlines }),
+  /ALICE_RELEASE_DEADLINE_EXHAUSTED/);
+});
+
 test("partitions rollback into independent Modal and Cloudflare windows", () => {
   const deadlines = initializeAliceReleaseDeadlines(1_800_000_000);
   assert.equal(aliceReleasePhaseBudget({

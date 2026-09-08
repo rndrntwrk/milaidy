@@ -30,6 +30,8 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/alice_reaccept_qualified_candidate.ts',
   'deploy/modal/alice_reaccept_qualified_candidate.test.ts',
   'deploy/modal/alice_release_pause.mjs',
+  'deploy/modal/alice_release_deadline.mjs',
+  'deploy/modal/alice_release_deadline.test.mjs',
   'scripts/deploy-alice-cloudflare-workflow.test.mjs',
   'scripts/verify-alice-release-source.mjs',
   'scripts/verify-alice-release-source.test.mjs',

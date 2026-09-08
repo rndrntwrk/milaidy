@@ -570,7 +570,9 @@ test("every provider mutation remains bounded by the shared recovery reserve", (
     const step = workflow.match(
       new RegExp(`- name: ${name}[\\s\\S]*?(?=\\n      - name:)`),
     )?.[0] ?? "";
-    assert.match(step, /alice_release_deadline\.mjs mutation/);
+    assert.match(step, name === "Promote only attested immutable Worker bytes"
+      ? /alice_release_deadline\.mjs cloudflare-promotion/
+      : /alice_release_deadline\.mjs mutation/);
     assert.match(step, /timeout --signal=TERM --kill-after=30s/);
   }
   assert.match(
