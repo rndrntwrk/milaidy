@@ -2317,6 +2317,7 @@ async function main() {
       return verifyAliceContainerApplicationReadback({
         application: containerState.application,
         applicationInstances: containerState.applicationInstances,
+        applicationCanonicalInstances: containerState.applicationCanonicalInstances,
         applicationDurableObjects: containerState.applicationDurableObjects,
         expectedApplicationImage,
         materializedWranglerConfig: runtimeHostBootstrapConfig,
