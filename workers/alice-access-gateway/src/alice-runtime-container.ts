@@ -28,6 +28,8 @@ export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {
   requiredPorts = [ALICE_RUNTIME_CONTAINER_PORT];
   sleepAfter = "10m";
   enableInternet = false;
+  // HTTPS must reach ContainerProxy for the host allowlist to apply.
+  interceptHttps = true;
   allowedHosts = ALICE_RUNTIME_ALLOWED_HOSTS;
   pingEndpoint = "/health/live";
   constructor(
