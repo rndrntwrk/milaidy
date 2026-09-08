@@ -73,6 +73,7 @@ const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
 ];
 
 const FULL_PROFILE_ALLOWED_DELETE_PATHS = [
+  /^\/api\/knowledge\/documents\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
   /^\/api\/subscription\/openai-codex$/,
   /^\/api\/connectors\/[a-zA-Z0-9_-]+$/,
 ];

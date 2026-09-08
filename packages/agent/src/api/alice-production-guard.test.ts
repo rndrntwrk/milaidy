@@ -59,6 +59,10 @@ describe("Alice production runtime guard", () => {
       ["GET", "/api/knowledge/search"],
       ["POST", "/api/knowledge/documents"],
       ["POST", "/api/knowledge/documents/bulk"],
+      [
+        "DELETE",
+        "/api/knowledge/documents/00000000-0000-4000-8000-000000000001",
+      ],
       ["GET", "/api/plugins"],
       ["GET", "/api/connectors"],
       ["PUT", "/api/config"],
@@ -113,6 +117,11 @@ describe("Alice production runtime guard", () => {
       ["POST", "/api/knowledge/documents/url"],
       ["POST", "/api/knowledge/documents/bulk/nearby"],
       ["DELETE", "/api/knowledge/documents/document-1"],
+      ["DELETE", "/api/knowledge/documents"],
+      [
+        "DELETE",
+        "/api/knowledge/documents/00000000-0000-4000-8000-000000000001/nearby",
+      ],
       ["PUT", "/api/knowledge"],
       ["PUT", "/api/plugins/shell"],
       ["GET", "/api/secrets"],
@@ -174,6 +183,10 @@ describe("Alice production runtime guard", () => {
       ["POST", "/v1/messages"],
       ["PATCH", "/api/conversations/7"],
       ["DELETE", "/api/conversations/7"],
+      [
+        "DELETE",
+        "/api/knowledge/documents/00000000-0000-4000-8000-000000000001",
+      ],
       ["GET", "/api/wallet/keys"],
       ["GET", "/api/runtime"],
       ["GET", "/api/secrets"],

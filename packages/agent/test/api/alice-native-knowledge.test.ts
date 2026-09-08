@@ -370,7 +370,7 @@ describe("Alice knowledge through the pinned native documents service", () => {
     }
   }, 60_000);
 
-  test("native update and delete persist content and fragment integrity across replacement", async () => {
+  test("native update and owner API delete persist exact document and fragment integrity", async () => {
     const transport = new PersistedTransport();
     const first = await runtimeFor(transport);
     let restored: AgentRuntime | undefined;
@@ -419,9 +419,72 @@ describe("Alice knowledge through the pinned native documents service", () => {
       expect(
         hits.some((hit) => hit.content.text?.includes(replacementText)),
       ).toBe(true);
-      await service.deleteDocumentWithAccessContext(id, owner);
+      const successorText = "Current canon: orbital lanterns.";
+      const successorMetadata = {
+        source_sha256: { "TEST:revision-2": "b".repeat(64) },
+      };
+      const successor = await invoke(
+        restored,
+        "POST",
+        "/api/knowledge/documents",
+        {
+          filename: "change.md",
+          contentType: "text/markdown",
+          content: successorText,
+          metadata: successorMetadata,
+        },
+      );
+      expect(successor.status).toBe(200);
+      const successorId = successor.data.documentId;
+      expect(successorId).not.toBe(id);
+      const successorDetail = await invoke(
+        restored,
+        "GET",
+        `/api/knowledge/documents/${successorId}`,
+      );
+      expect(successorDetail.data.document.content.text).toBe(successorText);
+      expect(successorDetail.data.document.metadata).toMatchObject(
+        successorMetadata,
+      );
+      const successorFragments =
+        await service.listDocumentFragmentsWithAccessContext(
+          successorId,
+          owner,
+        );
+      const path = `/api/knowledge/documents/${id}`;
+      const denied = await invoke(restored, "DELETE", path, undefined, {
+        requesterEntityId: GUEST,
+        role: "USER",
+      });
+      expect(denied.status).toBe(403);
+      expect(
+        await restored.getMemoriesByIds([
+          id,
+          ...fragments.map((fragment) => fragment.id!),
+        ]),
+      ).toHaveLength(2);
+      const removed = await invoke(restored, "DELETE", path);
+      expect(removed.status).toBe(200);
+      expect(removed.data).toEqual({
+        ok: true,
+        deletedFragments: fragments.length,
+      });
       final = await runtimeFor(transport);
       const deleted = final.getService<DocumentService>("documents")!;
+      expect(
+        (await deleted.getDocumentByIdWithAccessContext(successorId, owner))
+          ?.content.text,
+      ).toBe(successorText);
+      expect(
+        await deleted.listDocumentFragmentsWithAccessContext(
+          successorId,
+          owner,
+        ),
+      ).toEqual(successorFragments);
+      expect(
+        (await deleted.getDocumentByIdWithAccessContext(successorId, owner))
+          ?.metadata,
+      ).toMatchObject(successorMetadata);
       expect(
         await deleted.getDocumentByIdWithAccessContext(id, owner),
       ).toBeNull();
