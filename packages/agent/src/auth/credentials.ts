@@ -106,9 +106,11 @@ function writeCodexAuthCache(credentials: OAuthCredentials): void {
 export async function persistOpenAiCodexCredentials(
   credentials: OAuthCredentials,
 ): Promise<void> {
-  await createAliceOpenAiCodexCredentialStoreFromEnvironment()?.write(
-    credentials,
-  );
+  await createAliceOpenAiCodexCredentialStoreFromEnvironment()?.write({
+    access: credentials.access,
+    refresh: credentials.refresh,
+    expires: credentials.expires,
+  });
 }
 
 export async function deletePersistentOpenAiCodexCredentials(): Promise<void> {
