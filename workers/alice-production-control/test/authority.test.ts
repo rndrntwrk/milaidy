@@ -43,6 +43,37 @@ function researchIntent(nonce: string) {
 }
 
 describe("Alice durable authority ledger", () => {
+  test("raises a signed new-release budget without resetting today's spend", () => {
+    const now = Date.UTC(2026, 8, 8, 22);
+    const ledger = AuthorityLedger.create(binding, 10_000, "container:alice-runtime:v55", 9, now - 1_000);
+    ledger.reserveModel({ ...binding, requestId: "existing-corpus-spend",
+      model: "@cf/baai/bge-m3", estimatedUnits: 9_860 }, now);
+    const candidate = {
+      binding: { ...binding, programDigest: `sha256:${"6".repeat(64)}`,
+        releaseDigest: `sha256:${"7".repeat(64)}`, policyHash: `sha256:${"8".repeat(64)}` },
+      deploymentManifestSha256: promotedDeploymentManifestSha256,
+      releaseEpoch: 10, programIssuedAt: now, rollbackBoundary: "container:alice-runtime:v56",
+    };
+    ledger.reconcileBudgetLimit(100_000, now);
+    expect(ledger.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    ledger.pause("release", now, "owner-subject", "pause-budget-review");
+    expect(ledger.activateRelease(candidate, 100_000, now)).toEqual({ ok: false, code: "RELEASE_PAUSED" });
+    expect(ledger.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    ledger.resume("release", now + 1, "owner-subject", "pause-budget-review",
+      recoveryAuthorization(ledger, `sha256:${"a".repeat(64)}`));
+    expect(ledger.activateRelease(candidate, 100_000, now + 2)).toEqual({ ok: true, code: "RELEASE_ACTIVATED" });
+    expect(ledger.snapshot().budget).toMatchObject({ windowId: "2026-09-08", usedUnits: 9_860, maxUnits: 100_000 });
+    const restored = AuthorityLedger.restoreGlobal(ledger.exportState(), 100_000);
+    restored.reconcileBudgetLimit(100_000, now + 3);
+    expect(restored.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 100_000 });
+    restored.reconcileBudgetLimit(10_000, now + 4);
+    expect(restored.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    expect(restored.activateRelease({ ...candidate, binding: { ...candidate.binding,
+      programDigest: `sha256:${"b".repeat(64)}` }, programIssuedAt: now + 5 }, 100_000, now + 5))
+      .toEqual({ ok: true, code: "PROGRAM_RENEWED" });
+    expect(restored.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+  });
+
   test("restores mixed-policy release history and retains it across authorized rollback", () => {
     const now = Date.UTC(2026, 8, 8, 22);
     const original = {

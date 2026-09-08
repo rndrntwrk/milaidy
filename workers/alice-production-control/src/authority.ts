@@ -703,10 +703,12 @@ export class AuthorityLedger {
     } else {
       this.state.budget.reservations = {};
     }
-    this.state.budget.maxUnits = Math.min(
-      this.state.budget.maxUnits,
-      configuredMaxUnits,
-    );
+    // The caller has verified this release's signed effective configuration.
+    // Only a new forward release may raise the ceiling; reloads, renewals and
+    // historical transitions retain their existing downward-only behavior.
+    this.state.budget.maxUnits = candidate.releaseEpoch > this.state.highestReleaseEpoch
+      ? configuredMaxUnits
+      : Math.min(this.state.budget.maxUnits, configuredMaxUnits);
     if (!history) {
       this.state.releaseHistory[historyKey] = {
         releaseDigest: candidate.binding.releaseDigest,

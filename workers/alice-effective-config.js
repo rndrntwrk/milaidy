@@ -373,7 +373,7 @@ export function buildAliceControlEffectiveConfig(inputs) {
     ]) ||
     !Number.isSafeInteger(inputs.modelDailyBudgetUnits) ||
     inputs.modelDailyBudgetUnits <= 0 ||
-    inputs.modelDailyBudgetUnits > 10_000 ||
+    inputs.modelDailyBudgetUnits > 100_000 ||
     !Number.isSafeInteger(inputs.modalRevision) ||
     inputs.modalRevision < 49 ||
     !ACCESS_AUDIENCE.test(inputs.releaseAccessAudience) ||

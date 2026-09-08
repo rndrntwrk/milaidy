@@ -49,7 +49,13 @@ const CONTROLLER_PATHS = new Set([
   'workers/alice-ai-gateway/src/index.test.mjs',
   'workers/alice-production-control/test/runtime-config.test.ts',
   'workers/alice-production-control/src/authority.ts',
+  'workers/alice-production-control/src/durable.ts',
+  'workers/alice-production-control/src/runtime-config.ts',
+  'workers/alice-production-control/manifests/policy.v1.json',
+  'workers/alice-production-control/wrangler.jsonc',
   'workers/alice-production-control/test/authority.test.ts',
+  'workers/alice-production-control/test/policy-contract.test.ts',
+  'workers/alice-effective-config.js',
 ]);
 
 export function verifyAliceReleaseSource({sourceRoot, sourceCommit, deploymentControllerCommit}) {

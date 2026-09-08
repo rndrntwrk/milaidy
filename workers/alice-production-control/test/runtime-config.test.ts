@@ -31,7 +31,7 @@ function base64Url(value: string | ArrayBuffer): string {
   return Buffer.from(typeof value === "string" ? value : new Uint8Array(value)).toString("base64url");
 }
 
-async function fixture() {
+async function fixture(modelDailyBudgetUnits = 10_000) {
   const ownerEmailSha256 = base64Url(
     await crypto.subtle.digest(
       "SHA-256",
@@ -74,7 +74,7 @@ async function fixture() {
       accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
       accessAudience: "access-audience",
       ownerEmailSha256,
-      modelDailyBudgetUnits: 10_000,
+      modelDailyBudgetUnits,
       modalRevision: 49,
       releaseAccessAudience: "alice-release-controller-audience",
       releaseServiceTokenIdSha256: "R".repeat(43),
@@ -167,7 +167,7 @@ async function fixture() {
       ALICE_OWNER_EMAIL_SHA256: ownerEmailSha256,
       ALICE_RELEASE_ACCESS_AUDIENCE: "alice-release-controller-audience",
       ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: "R".repeat(43),
-      ALICE_MODEL_DAILY_BUDGET_UNITS: "10000",
+      ALICE_MODEL_DAILY_BUDGET_UNITS: String(modelDailyBudgetUnits),
       ALICE_PROGRAM_ENVELOPE_B64: base64Url(JSON.stringify(envelope)),
       ALICE_PROGRAM_SIGNATURE_B64: signature,
       ALICE_PROGRAM_PUBLIC_JWK_B64: base64Url(JSON.stringify(publicJwk)),
@@ -234,6 +234,16 @@ describe("Alice runtime configuration", () => {
       } as unknown as typeof config),
     ).toEqual({ runtimeRevision: 50 });
     expect(config.deploymentManifestSha256).toBe(envelope.release.deploymentManifestSha256);
+  });
+
+  test("binds the corpus budget to the signed configuration and enforces its ceiling", async () => {
+    const { env, trustPins } = await fixture(100_000);
+    const now = Date.parse("2026-08-22T18:00:00.000Z");
+    expect((await loadRuntimeConfig(env, now, trustPins)).modelDailyBudgetUnits).toBe(100_000);
+    expect(() => loadAuthoritySafetyConfig({ ...env, ALICE_MODEL_DAILY_BUDGET_UNITS: "100001" }))
+      .toThrow("ALICE_AUTHORITY_SAFETY_CONFIG_INVALID");
+    await expect(loadRuntimeConfig({ ...env, ALICE_MODEL_DAILY_BUDGET_UNITS: "99999" }, now, trustPins))
+      .rejects.toThrow();
   });
 
   test("rejects an expired program or a malformed operational boundary", async () => {

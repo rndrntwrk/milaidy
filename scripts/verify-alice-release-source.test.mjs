@@ -37,8 +37,17 @@ test('recovery and acceptance corrections can reuse an unchanged runtime build',
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_cloudflare_worker_rollback.test.mjs'), 'test("readback", () => {});\n');
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_release_deadline.mjs'), 'export const phase = "cloudflare-promotion";\n');
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_release_deadline.test.mjs'), 'test("deadline", () => {});\n');
-  fs.mkdirSync(path.join(f.root, 'workers/alice-production-control/src'), {recursive: true});
-  fs.writeFileSync(path.join(f.root, 'workers/alice-production-control/src/authority.ts'), 'export const mixedPolicyHistory = true;\n');
+  for (const [file, contents] of [
+    ['workers/alice-production-control/src/authority.ts', 'export const activationBudget = 100000;\n'],
+    ['workers/alice-production-control/src/durable.ts', 'export const budgetEvidence = true;\n'],
+    ['workers/alice-production-control/src/runtime-config.ts', 'export const ceiling = 100000;\n'],
+    ['workers/alice-production-control/manifests/policy.v1.json', '{"ceiling":100000}\n'],
+    ['workers/alice-production-control/wrangler.jsonc', '{"budget":100000}\n'],
+    ['workers/alice-effective-config.js', 'export const budgetCeiling = 100000;\n'],
+  ]) {
+    fs.mkdirSync(path.dirname(path.join(f.root, file)), {recursive: true});
+    fs.writeFileSync(path.join(f.root, file), contents);
+  }
   f.git('add', '.'); f.git('commit', '-m', 'Renew recovery');
   const controller = f.git('rev-parse', 'HEAD');
   const result = f.run(controller);
