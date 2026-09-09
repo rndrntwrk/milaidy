@@ -239,7 +239,7 @@ export const ONBOARDING_PROVIDER_CATALOG = [
     id: "openai-subscription",
     name: "ChatGPT Subscription",
     envKey: null,
-    pluginName: "@elizaos/plugin-openai",
+    pluginName: "@elizaos/plugin-codex-cli",
     keyPrefix: null,
     description: "Use your ChatGPT Plus or Pro subscription via OAuth.",
     family: "openai",
@@ -590,6 +590,7 @@ export interface SubscriptionStatusResponse {
 }
 
 const ONBOARDING_PROVIDER_ALIASES: Record<string, OnboardingProviderId> = {
+  "codex-cli": "openai-subscription",
   "openai-codex": "openai-subscription",
   "openai-subscription": "openai-subscription",
   "anthropic-subscription": "anthropic-subscription",
