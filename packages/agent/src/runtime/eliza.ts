@@ -3227,11 +3227,16 @@ export function resolvePreferredProviderId(
 /** @internal Exported for testing. */
 export function resolvePreferredProviderPluginName(
   config: ElizaConfig,
+  resolvedPlugins?: readonly ResolvedPlugin[],
 ): string | undefined {
   const providerId = resolvePreferredProviderId(config);
-  return providerId
+  const packageName = providerId
     ? getOnboardingProviderOption(providerId)?.pluginName
     : undefined;
+  // Core model handlers register under plugin.name, not the package name.
+  return resolvedPlugins
+    ? resolvedPlugins.find((plugin) => plugin.name === packageName)?.plugin.name
+    : packageName;
 }
 
 /**
@@ -3848,6 +3853,10 @@ export async function startEliza(
   // provider's plugin so its handlers are selected over registration order.
   const pluginsForRuntime = otherPlugins.map((p) => p.plugin);
   const visionModeSetting = resolveVisionModeSetting(config);
+  const preferredTextProvider = resolvePreferredProviderPluginName(
+    config,
+    resolvedPlugins,
+  );
   if (preferredProviderPluginName) {
     for (const plugin of pluginsForRuntime) {
       if (plugin.name === preferredProviderPluginName) {
@@ -3959,6 +3968,7 @@ export async function startEliza(
           ENABLE_AUTONOMY: "false",
           DISABLE_EMOTES: "true",
           ...(preferredProviderId ? { MODEL_PROVIDER: preferredProviderId } : {}),
+          ...(preferredTextProvider ? { ELIZA_BRAIN_PROVIDER: preferredTextProvider } : {}),
         }
       : {
       VALIDATION_LEVEL: "fast",
@@ -3982,6 +3992,7 @@ export async function startEliza(
       ...collectConnectorEnvVars(config),
       // Forward Eliza config env vars as runtime settings
       ...(preferredProviderId ? { MODEL_PROVIDER: preferredProviderId } : {}),
+      ...(preferredTextProvider ? { ELIZA_BRAIN_PROVIDER: preferredTextProvider } : {}),
       ...(visionModeSetting ? { VISION_MODE: visionModeSetting } : {}),
       ...resolveWalletRuntimeSettings(config),
       ...(typeof config.agents?.defaults?.adminEntityId === "string" &&
@@ -4499,6 +4510,10 @@ export async function startEliza(
             );
             const freshVisionModeSetting =
               resolveVisionModeSetting(freshConfig);
+            const freshPreferredTextProvider = resolvePreferredProviderPluginName(
+              freshConfig,
+              resolvedPlugins,
+            );
             if (freshPreferredProviderPluginName) {
               for (const plugin of freshPluginsForRuntime) {
                 if (plugin.name === freshPreferredProviderPluginName) {
@@ -4520,6 +4535,9 @@ export async function startEliza(
               settings: {
                 ...(freshPreferredProviderId
                   ? { MODEL_PROVIDER: freshPreferredProviderId }
+                  : {}),
+                ...(freshPreferredTextProvider
+                  ? { ELIZA_BRAIN_PROVIDER: freshPreferredTextProvider }
                   : {}),
                 ...(freshVisionModeSetting
                   ? { VISION_MODE: freshVisionModeSetting }
