@@ -1,0 +1,51 @@
+name: Alice Corpus Diagnostic Beacon
+
+on:
+  push:
+    branches:
+      - feat/alice-corpus-runtime-binding-2026-08-22
+    paths:
+      - ".github/workflows/alice-corpus-diagnostic-beacon.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Report latest exact-workspace diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json=$(gh api \
+            repos/${{ github.repository }}/actions/workflows/alice-corpus-exact-workspace-diagnostic.yml/runs \
+            -f branch=feat/alice-corpus-runtime-binding-2026-08-22 \
+            -f per_page=1)
+          run_id=$(jq -r '.workflow_runs[0].id // empty' <<<"$run_json")
+          status=$(jq -r '.workflow_runs[0].status // "missing"' <<<"$run_json")
+          conclusion=$(jq -r '.workflow_runs[0].conclusion // "pending"' <<<"$run_json")
+          head_sha=$(jq -r '.workflow_runs[0].head_sha // "unknown"' <<<"$run_json")
+          if [ -z "$run_id" ]; then
+            echo "No diagnostic run found"
+            exit 1
+          fi
+          body=$(cat <<EOF
+          Exact workspace diagnostic located.
+
+          - run: https://github.com/${{ github.repository }}/actions/runs/$run_id
+          - status: \\`$status\`
+          - conclusion: \\`$conclusion\`
+          - head: \\`$head_sha\`
+          EOF
+          )
+          gh api \
+            --method POST \
+            repos/${{ github.repository }}/issues/212/comments \
+            -f body="$body"
