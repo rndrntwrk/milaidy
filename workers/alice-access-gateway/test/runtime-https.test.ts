@@ -17,6 +17,16 @@ const { AliceRuntimeContainer } = await import(
   "../src/alice-runtime-container"
 );
 
+test("idle expiry does not stop native bot connections when the owner UI closes", async () => {
+  const container = Object.create(AliceRuntimeContainer.prototype);
+  container.container = { running: true };
+  container.stop = mock(async () => {});
+
+  await container.onActivityExpired();
+
+  expect(container.stop).not.toHaveBeenCalled();
+});
+
 test("allowed HTTPS and Discord gateway upgrades reach the proxy while other hosts stay denied", async () => {
   const env = Object.fromEntries([
     ...[

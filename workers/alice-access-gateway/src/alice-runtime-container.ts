@@ -38,6 +38,11 @@ export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {
   interceptHttps = true;
   allowedHosts = ALICE_RUNTIME_ALLOWED_HOSTS;
   pingEndpoint = "/health/live";
+
+  override async onActivityExpired(): Promise<void> {
+    // Native bot connections must remain available when the owner UI is closed.
+  }
+
   constructor(
     ctx: DurableObjectState<Record<string, never>>,
     env: AliceRuntimeContainerEnv,
