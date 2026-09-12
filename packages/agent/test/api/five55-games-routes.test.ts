@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RouteRequestContext } from "../../src/api/route-helpers";
 import {
   __resetFive55GamesRouteStateForTests,
@@ -47,6 +47,77 @@ describe("five55-games-routes", () => {
     process.env = { ...originalEnv };
     process.env.STREAM555_BASE_URL = "https://stream555.example";
     process.env.STREAM555_AGENT_TOKEN = "static-token";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.env = { ...originalEnv };
+  });
+
+  describe("Alice connection reads", () => {
+    beforeEach(() => {
+      process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+      process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+      process.env.STREAM555_DEFAULT_SESSION_ID = "alice-session";
+      process.env.FIVE55_HTTP_RETRIES = "0";
+    });
+
+    it("reads the catalog from the configured session without a bootstrap request", async () => {
+      const catalog = { sessionId: "alice-session", games: [{ id: "ninja" }] };
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify(catalog)),
+      );
+      const { ctx, getStatus, getJson } = buildCtx(
+        "POST", "/api/agent/v1/sessions/browser-local/games/catalog",
+        { readJsonBody: vi.fn(async () => ({ includeBeta: true })) },
+      );
+      await handleFive55GamesRoutes(ctx);
+      expect(getStatus()).toBe(200);
+      expect(getJson()).toEqual(catalog);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://stream555.example/api/agent/v1/sessions/alice-session/games/catalog");
+      expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
+      expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ includeBeta: true });
+    });
+
+    it("does not request a catalog without the configured session", async () => {
+      delete process.env.STREAM555_DEFAULT_SESSION_ID;
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ sessionId: "browser-local", games: [] })),
+      );
+      const { ctx, getStatus } = buildCtx("POST", "/api/agent/v1/sessions/browser-local/games/catalog");
+      await handleFive55GamesRoutes(ctx);
+      expect(getStatus()).toBe(503);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { sessionId: "unrelated-session", games: [] },
+      { sessionId: "alice-session", games: null },
+    ])("rejects an unverified catalog response: %j", async (catalog) => {
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify(catalog)),
+      );
+      const { ctx, getStatus } = buildCtx("POST", "/api/agent/v1/sessions/browser-local/games/catalog");
+      await handleFive55GamesRoutes(ctx);
+      expect(getStatus()).toBe(502);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not request gameplay state before a game runtime is registered", async () => {
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ sessionId: "alice-session", live: false })),
+      );
+      const { ctx, getStatus, getJson } = buildCtx(
+        "GET", "/api/agent/v1/sessions/browser-local/games/state",
+      );
+      await handleFive55GamesRoutes(ctx);
+      expect(getStatus()).toBe(503);
+      expect(getJson()).toEqual({
+        error: "Arcade gameplay state requires a registered game runtime",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   it("returns false for unrelated paths", async () => {

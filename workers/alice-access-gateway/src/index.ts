@@ -1164,10 +1164,16 @@ const FULL_RUNTIME_API_READS = [
   /^\/api\/workbench\/overview$/,
   /^\/api\/workbench\/tasks(?:\/[^/]+)?$/,
   /^\/api\/subscription\/status$/,
+  /^\/api\/stream\/status$/,
+  /^\/api\/coding-agents\/coordinator\/status$/,
+  /^\/music-player\/status$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/state$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
 const FULL_RUNTIME_WRITES = [
+  /^\/api\/emote$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/catalog$/,
   /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
@@ -1192,7 +1198,7 @@ function isFullRuntimeUiPath(pathname: string): boolean {
   }
   if (pathname.includes("%") || pathname.split("/").includes("..")) return false;
   return (
-    /^\/(?:assets|vrms|models|fonts|icons|images|sounds|audio)\/[a-zA-Z0-9._/-]+$/.test(
+    /^\/(?:assets|animations|vrms|models|fonts|icons|images|sounds|audio)\/[a-zA-Z0-9._/-]+$/.test(
       pathname,
     ) || /^\/(?:favicon\.ico|manifest\.webmanifest)$/.test(pathname)
   );

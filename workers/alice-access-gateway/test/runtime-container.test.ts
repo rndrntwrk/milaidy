@@ -140,7 +140,7 @@ test("routes the only allowed model host through ContainerProxy to the authentic
     "allowedHosts = ALICE_RUNTIME_ALLOWED_HOSTS",
   );
   expect(containerSource).toContain("enableInternet = false");
-  for (const host of ["auth.openai.com", "chatgpt.com"]) {
+  for (const host of ["auth.openai.com", "chatgpt.com", "stream.rndrntwrk.com"]) {
     expect(containerSource).toContain(`"${host}"`);
   }
   expect(workerSource).toContain(

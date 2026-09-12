@@ -205,6 +205,7 @@ import { handleDiagnosticsRoutes } from "./diagnostics-routes.js";
 import { handleDiscordLocalRoute } from "./discord-local-routes.js";
 import { handleDropRoutes } from "./drop-routes.js";
 import { DropService } from "./drop-service.js";
+import { handleFive55GamesRoutes } from "./five55-games-routes.js";
 import { handleHealthRoutes } from "./health-routes.js";
 import {
   readJsonBody as parseJsonBody,
@@ -6408,6 +6409,20 @@ async function handleRequest(
     if (handled) return;
   }
 
+  // Alice's polling surfaces read existing services without starting PTYs.
+  if (isAliceFullRuntimeProfile()) {
+    if (tryHandleMusicPlayerStatusFallback({ pathname, method, runtime: state.runtime, res })) {
+      return;
+    }
+    if (
+      state.runtime && method === "GET" &&
+      pathname === "/api/coding-agents/coordinator/status" &&
+      await handleCodingAgentsFallback(state.runtime, pathname, method, req, res)
+    ) {
+      return;
+    }
+  }
+
   // ── Coding Agent API (/api/coding-agents/*, /api/workspace/*, /api/issues/*) ──
   // Return graceful empty responses for read-only polling endpoints even
   // before the runtime is available — the frontend polls these on startup
@@ -7620,6 +7635,18 @@ export async function startApiServer(opts?: {
         };
         state.connectorRouteHandlers.push((req, res, pathname, method) =>
           handleStreamRoute(req, res, pathname, method, streamState),
+        );
+        state.connectorRouteHandlers.push((req, res, pathname, method) =>
+          handleFive55GamesRoutes({
+            req,
+            res,
+            pathname,
+            method,
+            readJsonBody,
+            json,
+            error,
+            streamState,
+          }),
         );
 
         const destNames = Array.from(destinations.values())

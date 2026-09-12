@@ -25,6 +25,6 @@ describe("Alice source-owned production policy contract", () => {
     expect(policy.disabledActions).toEqual([...ALICE_DISABLED_ACTIONS]);
     expect(policy.pauseScopes).toEqual([...ALICE_PAUSE_SCOPES]);
     expect(policy.modelRouting.models).toEqual([...ALICE_ALLOWED_MODELS]);
-    expect(policy.modelRouting.dailySynchronousUnitCeiling).toBe(10_000);
+    expect(policy.modelRouting.dailySynchronousUnitCeiling).toBe(100_000);
   });
 });

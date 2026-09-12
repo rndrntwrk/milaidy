@@ -41,6 +41,39 @@ function context(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Alice emote routes", () => {
+  it("keeps Alice full-gated Companion emotes on the local websocket", async () => {
+    const previousMode = process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+    const previousProfile = process.env.ALICE_RUNTIME_PROFILE;
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+    try {
+      const fixture = context();
+      expect(await handleAliceEmoteRoutes(fixture.value as never)).toBe(true);
+      expect(fixture.broadcasts).toEqual([
+        {
+          type: "emote",
+          emoteId: "dance-happy",
+          path: "/animations/emotes/dance-happy.glb.gz",
+          duration: 4,
+          loop: false,
+        },
+      ]);
+      expect(fixture.streamEvents).toEqual([]);
+      expect(fixture.responses[0]?.data).toEqual({
+        ok: true,
+        broadcast: {
+          sent: false,
+          reason: "Alice Companion emotes are local-only",
+        },
+      });
+    } finally {
+      if (previousMode === undefined) delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+      else process.env.ALICE_RUNTIME_AUTHORITY_MODE = previousMode;
+      if (previousProfile === undefined) delete process.env.ALICE_RUNTIME_PROFILE;
+      else process.env.ALICE_RUNTIME_PROFILE = previousProfile;
+    }
+  });
+
   it("relays a catalog emote to both the VRM websocket and Stream", async () => {
     const fixture = context();
 

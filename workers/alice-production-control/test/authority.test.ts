@@ -43,12 +43,43 @@ function researchIntent(nonce: string) {
 }
 
 describe("Alice durable authority ledger", () => {
-  test("restores mixed-policy release history and retains it across authorized rollback", () => {
+  test("raises a signed new-release budget without resetting today's spend", () => {
+    const now = Date.UTC(2026, 8, 8, 22);
+    const ledger = AuthorityLedger.create(binding, 10_000, "container:alice-runtime:v55", 9, now - 1_000);
+    ledger.reserveModel({ ...binding, requestId: "existing-corpus-spend",
+      model: "@cf/baai/bge-m3", estimatedUnits: 9_860 }, now);
+    const candidate = {
+      binding: { ...binding, programDigest: `sha256:${"6".repeat(64)}`,
+        releaseDigest: `sha256:${"7".repeat(64)}`, policyHash: `sha256:${"8".repeat(64)}` },
+      deploymentManifestSha256: promotedDeploymentManifestSha256,
+      releaseEpoch: 10, programIssuedAt: now, rollbackBoundary: "container:alice-runtime:v56",
+    };
+    ledger.reconcileBudgetLimit(100_000, now);
+    expect(ledger.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    ledger.pause("release", now, "owner-subject", "pause-budget-review");
+    expect(ledger.activateRelease(candidate, 100_000, now)).toEqual({ ok: false, code: "RELEASE_PAUSED" });
+    expect(ledger.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    ledger.resume("release", now + 1, "owner-subject", "pause-budget-review",
+      recoveryAuthorization(ledger, `sha256:${"a".repeat(64)}`));
+    expect(ledger.activateRelease(candidate, 100_000, now + 2)).toEqual({ ok: true, code: "RELEASE_ACTIVATED" });
+    expect(ledger.snapshot().budget).toMatchObject({ windowId: "2026-09-08", usedUnits: 9_860, maxUnits: 100_000 });
+    const restored = AuthorityLedger.restoreGlobal(ledger.exportState(), 100_000);
+    restored.reconcileBudgetLimit(100_000, now + 3);
+    expect(restored.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 100_000 });
+    restored.reconcileBudgetLimit(10_000, now + 4);
+    expect(restored.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    expect(restored.activateRelease({ ...candidate, binding: { ...candidate.binding,
+      programDigest: `sha256:${"b".repeat(64)}` }, programIssuedAt: now + 5 }, 100_000, now + 5))
+      .toEqual({ ok: true, code: "PROGRAM_RENEWED" });
+    expect(restored.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+  });
+
+  test("restores the signed higher-release budget through an authorized rollback cycle", () => {
     const now = Date.UTC(2026, 8, 8, 22);
     const original = {
-      binding, releaseEpoch: 9, programIssuedAt: now - 1_000,
+      binding, releaseEpoch: 11, programIssuedAt: now - 1_000,
       deploymentManifestSha256: baseDeploymentManifestSha256,
-      rollbackBoundary: "container:alice-runtime:v55",
+      rollbackBoundary: "container:alice-runtime:v57",
     };
     const ledger = AuthorityLedger.create(binding, 10_000, original.rollbackBoundary,
       original.releaseEpoch, original.programIssuedAt, original.deploymentManifestSha256);
@@ -58,26 +89,38 @@ describe("Alice durable authority ledger", () => {
       binding: { ...binding, programDigest: `sha256:${"6".repeat(64)}`,
         releaseDigest: `sha256:${"7".repeat(64)}`, policyHash: `sha256:${"8".repeat(64)}` },
       deploymentManifestSha256: promotedDeploymentManifestSha256,
-      releaseEpoch: 10, programIssuedAt: now, rollbackBoundary: "container:alice-runtime:v56",
+      releaseEpoch: 12, programIssuedAt: now, rollbackBoundary: "container:alice-runtime:v58",
     };
-    expect(ledger.activateRelease(candidate, 10_000, now)).toEqual({ ok: true, code: "RELEASE_ACTIVATED" });
+    expect(ledger.activateRelease(candidate, 100_000, now)).toEqual({ ok: true, code: "RELEASE_ACTIVATED" });
+    expect(ledger.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 100_000 });
     const restored = AuthorityLedger.restoreGlobal(ledger.exportState(), 10_000);
+    restored.reconcileBudgetLimit(10_000, now + 1);
     expect(restored.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
     expect(restored.activateRelease(original, 10_000, now + 1)).toEqual({ ok: false, code: "RELEASE_ROLLBACK_AUTH_REQUIRED" });
     expect(restored.activateRelease(original, 10_000, now + 1,
       recoveryAuthorization(restored, `sha256:${"a".repeat(64)}`)))
       .toEqual({ ok: true, code: "RELEASE_ROLLED_BACK" });
     const state = restored.exportState();
-    expect(state.releaseHistory["9"].policyHash).toBe(binding.policyHash);
-    expect(state.releaseHistory["10"].policyHash).toBe(candidate.binding.policyHash);
+    expect(state.releaseHistory["11"].policyHash).toBe(binding.policyHash);
+    expect(state.releaseHistory["12"].policyHash).toBe(candidate.binding.policyHash);
     expect(AuthorityLedger.restoreGlobal(state, 10_000).snapshot().budget)
       .toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
     const invalidActive = structuredClone(state);
-    invalidActive.releaseHistory["9"].policyHash = candidate.binding.policyHash;
+    invalidActive.releaseHistory["11"].policyHash = candidate.binding.policyHash;
     expect(() => AuthorityLedger.restoreGlobal(invalidActive, 10_000)).toThrow("AUTHORITY_STATE_INVALID");
     const invalidHistory = structuredClone(state);
-    invalidHistory.releaseHistory["10"].policyHash = "invalid";
+    invalidHistory.releaseHistory["12"].policyHash = "invalid";
     expect(() => AuthorityLedger.restoreGlobal(invalidHistory, 10_000)).toThrow("AUTHORITY_STATE_INVALID");
+    const returned = AuthorityLedger.restoreGlobal(state, 100_000);
+    returned.reconcileBudgetLimit(100_000, now + 2);
+    expect(returned.activateRelease(candidate, 100_000, now + 2))
+      .toEqual({ ok: false, code: "RELEASE_ROLLBACK_AUTH_REQUIRED" });
+    expect(returned.snapshot().budget).toMatchObject({ usedUnits: 9_860, maxUnits: 10_000 });
+    expect(returned.activateRelease(candidate, 100_000, now + 3,
+      recoveryAuthorization(returned, `sha256:${"b".repeat(64)}`)))
+      .toEqual({ ok: true, code: "RELEASE_ROLLED_BACK" });
+    expect(returned.snapshot()).toMatchObject({ activeReleaseEpoch: 12,
+      budget: { usedUnits: 9_860, maxUnits: 100_000 } });
   });
 
   test("persists a first-release PAUSE_ALL generation transition", () => {

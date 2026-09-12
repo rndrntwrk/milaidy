@@ -1,6 +1,7 @@
 import type http from "node:http";
 import { logger, type AgentRuntime } from "@elizaos/core";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
+import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
 
 interface AliceEmoteRouteContext {
   req: http.IncomingMessage;
@@ -70,6 +71,17 @@ export async function handleAliceEmoteRoutes(
     loop: false,
   };
   broadcastWs?.({ type: "emote", ...emotePayload });
+
+  if (isAliceFullRuntimeProfile()) {
+    json(res, {
+      ok: true,
+      broadcast: {
+        sent: false,
+        reason: "Alice Companion emotes are local-only",
+      },
+    });
+    return true;
+  }
 
   const streamControl =
     (runtime?.getService?.("stream555") as StreamControlService | undefined) ??

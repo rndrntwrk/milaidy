@@ -8,6 +8,11 @@ const serverSource = readFileSync(
 );
 
 describe("cross-channel ingest server wiring", () => {
+  it("dispatches the existing Arcade routes with the same live stream context", () => {
+    expect(serverSource).toMatch(/import\s*\{\s*handleFive55GamesRoutes\s*\}\s*from\s*["']\.\/five55-games-routes\.js["']/);
+    expect(serverSource).toMatch(/state\.connectorRouteHandlers\.push\(\(req, res, pathname, method\)\s*=>\s*handleFive55GamesRoutes\(\{\s*req,\s*res,\s*pathname,\s*method,\s*readJsonBody,\s*json,\s*error,\s*streamState,?\s*\}\)/);
+  });
+
   it("registers Alice corpus and coding policy routes", () => {
     expect(serverSource).toContain("handleAliceCorpusRoutes");
     expect(serverSource).toContain("handleAliceCodingPolicyRoutes");

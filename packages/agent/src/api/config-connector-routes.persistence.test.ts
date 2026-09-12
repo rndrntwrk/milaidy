@@ -20,8 +20,8 @@ const response = () => ({
 });
 
 describe("settings persistence commit ordering", () => {
-  it("leaves config and process.env unchanged when async config save rejects", async () => {
-    const key = "DISCORD_TEST_TOKEN";
+  it("applies Stream credentials only after config persistence succeeds", async () => {
+    const key = "STREAM555_AGENT_API_KEY";
     const originalEnv = process.env[key];
     delete process.env[key];
     const config = {
@@ -32,6 +32,7 @@ describe("settings persistence commit ordering", () => {
     const oldProfile = process.env.ALICE_RUNTIME_PROFILE;
     process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
     process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+    let saveAttempted = false;
     const ctx: ConfigRouteContext = {
       req: {} as http.IncomingMessage,
       res: {} as http.ServerResponse,
@@ -52,14 +53,23 @@ describe("settings persistence commit ordering", () => {
       resolveMcpServersRejection: async () => null,
       resolveMcpTerminalAuthorizationRejection: () => null,
       saveElizaConfig: async () => {
+        saveAttempted = true;
         await Promise.resolve();
         throw new Error("durable write rejected");
       },
     };
 
     await handleConfigRoutes(ctx);
+    expect(saveAttempted).toBe(true);
     expect(config.ui).toEqual({ theme: "light" });
     expect(process.env[key]).toBeUndefined();
+    ctx.saveElizaConfig = async (candidate) => {
+      expect(candidate.env?.vars?.[key]).toBe("new");
+      expect(process.env[key]).toBeUndefined();
+    };
+    await handleConfigRoutes(ctx);
+    expect(config.ui).toEqual({ theme: "dark" });
+    expect(process.env[key]).toBe("new");
     if (originalEnv === undefined) delete process.env[key];
     else process.env[key] = originalEnv;
     if (oldAuthority === undefined)

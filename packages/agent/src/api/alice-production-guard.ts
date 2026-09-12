@@ -37,7 +37,7 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/$/,
   /^\/companion$/,
   /^\/broadcast\/[a-zA-Z0-9-]+$/,
-  /^\/(?:assets|vrms|models|fonts|icons|images|sounds|audio)\/[a-zA-Z0-9._/-]+$/,
+  /^\/(?:assets|animations|vrms|models|fonts|icons|images|sounds|audio)\/[a-zA-Z0-9._/-]+$/,
   /^\/(?:favicon\.ico|manifest\.webmanifest)$/,
   /^\/api\/health$/,
   /^\/health(?:\/(?:live|ready))?$/,
@@ -58,10 +58,16 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/api\/workbench\/overview$/,
   /^\/api\/workbench\/tasks(?:\/[^/]+)?$/,
   /^\/api\/subscription\/status$/,
+  /^\/api\/stream\/status$/,
+  /^\/api\/coding-agents\/coordinator\/status$/,
+  /^\/music-player\/status$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/state$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
 const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
+  /^\/api\/emote$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/catalog$/,
   /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
@@ -109,7 +115,7 @@ export function isAliceProductionChatIngressAuthenticated(
  * Alice's production Milady process is a proposer, not an authority plane.
  * The full profile admits owner settings and existing Telegram/Discord setup
  * alongside chat. Configuration payloads retain their own bounded policy.
- * Custody, streaming, execution, installation and administration routes remain
+ * Custody, stream control, execution, installation and administration routes remain
  * denied here even after ingress authentication succeeds.
  */
 export function evaluateAliceProductionRequest(
