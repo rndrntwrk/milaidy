@@ -129,7 +129,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   SkillScanReportSummary: {},
 }));
 
-import { AppProvider, useApp } from "@miladyai/app-core/state";
+import { AppProvider, useApp, useChatComposer } from "@miladyai/app-core/state";
 import { createDeferred } from "../../../../test/helpers/test-utils";
 
 type ProbeApi = {
@@ -142,6 +142,7 @@ type ProbeApi = {
   handleChatEdit: (messageId: string, text: string) => Promise<boolean>;
   handleNewConversation: () => Promise<void>;
   snapshot: () => {
+    chatInput: string;
     activeConversationId: string | null;
     chatSending: boolean;
     chatFirstTokenReceived: boolean;
@@ -158,6 +159,7 @@ type ProbeApi = {
 function Probe(props: { onReady: (api: ProbeApi) => void }) {
   const { onReady } = props;
   const app = useApp();
+  const composer = useChatComposer();
 
   useEffect(() => {
     onReady({
@@ -168,6 +170,7 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
       handleChatEdit: app.handleChatEdit,
       handleNewConversation: app.handleNewConversation,
       snapshot: () => ({
+        chatInput: composer.chatInput,
         activeConversationId: app.activeConversationId,
         chatSending: app.chatSending,
         chatFirstTokenReceived: app.chatFirstTokenReceived,
@@ -180,7 +183,7 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
         })),
       }),
     });
-  }, [app, onReady]);
+  }, [app, composer, onReady]);
 
   return null;
 }
@@ -355,6 +358,8 @@ describe("chat send locking", () => {
       await api?.handleSelectConversation("conv-1");
       api?.setChatInput("hello");
     });
+
+    expect(api?.snapshot().chatInput).toBe("hello");
 
     await act(async () => {
       void api?.handleChatSend();
