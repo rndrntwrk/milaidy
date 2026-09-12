@@ -28,6 +28,9 @@ const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const NAMESPACE_ID = /^[a-f0-9]{32}$/;
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+// Placement IDs are opaque Cloudflare identifiers, not RFC UUIDs.
+const CONTAINER_PLACEMENT_ID =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const SCRIPT_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const CLOUDFLARE_CONTAINER_IMAGE =
   /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
@@ -379,7 +382,7 @@ export function normalizeAliceContainerInstanceReadback({
   const status = placement?.status;
   if (
     !UUID.test(instance?.id ?? "") ||
-    !UUID.test(placement?.id ?? "") ||
+    !CONTAINER_PLACEMENT_ID.test(placement?.id ?? "") ||
     canonicalInstance?.status?.state !== "running" ||
     binding.deployment_id !== instance.id || placement?.deployment_id !== instance.id ||
     binding.placement_id !== placement?.id ||
