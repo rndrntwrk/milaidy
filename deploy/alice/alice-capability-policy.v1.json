@@ -429,16 +429,18 @@
     },
     {
       "id": "package:@elizaos/plugin-discord",
-      "classification": "policy-disabled",
+      "classification": "core",
       "source": {
         "type": "package",
         "package": "@elizaos/plugin-discord",
         "entrypoint": "."
       },
       "surface": "plugin",
-      "runtimeNames": [],
+      "runtimeNames": [
+        "discord"
+      ],
       "adapter": null,
-      "policyState": "disabled"
+      "policyState": "enabled"
     },
     {
       "id": "package:@elizaos/plugin-discord-local",
@@ -825,16 +827,18 @@
     },
     {
       "id": "package:@elizaos/plugin-telegram",
-      "classification": "policy-disabled",
+      "classification": "core",
       "source": {
         "type": "package",
         "package": "@elizaos/plugin-telegram",
         "entrypoint": "."
       },
       "surface": "plugin",
-      "runtimeNames": [],
+      "runtimeNames": [
+        "telegram"
+      ],
       "adapter": null,
-      "policyState": "disabled"
+      "policyState": "enabled"
     },
     {
       "id": "package:@elizaos/plugin-trust",
