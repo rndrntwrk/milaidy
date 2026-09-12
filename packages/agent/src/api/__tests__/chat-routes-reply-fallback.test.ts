@@ -281,6 +281,7 @@ describe("generateChatResponse fallback recovery", () => {
       "SEARCH_CONVERSATIONS",
       "WEB_SEARCH",
       "PLAY_EMOTE",
+      "PAIR_OWNER_ACCOUNT",
     ];
     expect(ALICE_FULL_GATED_SAFE_ACTION_NAMES).toEqual(safeActionNames);
     const safeHandlers = safeActionNames.map((name) => ({
