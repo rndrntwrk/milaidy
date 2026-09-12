@@ -1,0 +1,67 @@
+name: 555 Campaign Source Recovery
+on:
+  push:
+    branches: [assets/555-campaign-source-recovery-2026-09-12]
+    paths:
+      - .github/workflows/555-campaign-source-recovery.yml
+      - scripts/555-campaign-sources/**
+permissions:
+  contents: read
+concurrency:
+  group: 555-campaign-source-recovery
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/555-campaign-sources
+      - name: Install isolated capture dependencies
+        run: |
+          python -m pip install --disable-pip-version-check requests==2.32.5 pillow==11.3.0
+          mkdir -p /tmp/555-capture
+          npm install --prefix /tmp/555-capture --ignore-scripts playwright@1.55.0 three@0.180.0 @pixiv/three-vrm@3.5.3
+          /tmp/555-capture/node_modules/.bin/playwright install --with-deps chromium
+      - name: Fetch exact originals
+        run: python scripts/555-campaign-sources/recover.py
+      - name: Render original model and capture public websites
+        run: |
+          sed -i "s@8090/'@8090/scripts/555-campaign-sources/avatar.html'@g" scripts/555-campaign-sources/capture.mjs
+          node scripts/555-campaign-sources/capture.mjs
+      - name: Record executed source and verify files
+        if: always()
+        run: |
+          mkdir -p bundle/provenance
+          cp -r scripts/555-campaign-sources bundle/provenance/executed-capture-source
+          cp /tmp/555-capture/package-lock.json bundle/provenance/package-lock.json || true
+          python - <<'PY'
+          from pathlib import Path
+          import json, hashlib
+          from PIL import Image
+          root=Path('bundle')
+          checks={}
+          required=['alice/milady-9.vrm.gz','alice/milady-9-repository-preview.png','alice/milady-9-model-pip.png','fomo/logo-original.png','elizaos/elizaos_logotext.svg','elizaos/elizaos_logotext_black.svg','gameplay/555-drive-current-1920x1080.png']
+          for f in required: checks[f]=(root/f).is_file()
+          p=root/'alice/milady-9-model-pip.png'
+          if p.exists():
+            im=Image.open(p).convert('RGBA'); lo,hi=im.getchannel('A').getextrema()
+            checks['avatar_real_alpha']=lo==0 and hi==255
+          manifest={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file() and p.suffix!='.vrm'}
+          (root/'MANIFEST.sha256.json').write_text(json.dumps(manifest,indent=2))
+          (root/'ACQUISITION_CHECKS.json').write_text(json.dumps(checks,indent=2))
+          print(json.dumps(checks,indent=2))
+          if not all(checks.values()): raise SystemExit('Source acquisition incomplete; inspect artifact report')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: 555-campaign-source-assets-v2
+          path: |
+            bundle/**
+            !bundle/alice/milady-9.vrm
+          retention-days: 30
+          compression-level: 1
+          if-no-files-found: error
