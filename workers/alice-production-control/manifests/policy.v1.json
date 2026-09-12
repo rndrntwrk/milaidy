@@ -60,9 +60,29 @@
     "modal": "zero-idle-bounded-proposer-runtime-only",
     "railway": "not-admitted-for-alice-core-v1",
     "stream": "installed-but-disabled",
-    "social": "installed-but-disabled",
+    "social": "native owner conversations only; connector plane inert",
     "trading": "installed-but-disabled",
     "codingExecution": "installed-but-disabled",
     "signing": "not-present"
+  },
+  "nativeOwnerConversations": {
+    "scope": "owner-directed private conversations",
+    "discord": "disabled pending owner configuration and policy amendment",
+    "operations": [
+      "reply to incoming owner messages",
+      "verify owner self-pairing"
+    ],
+    "controls": [
+      "authenticated owner configuration",
+      "native private chat allowlist before message and command handling",
+      "owner-only pairing issuance and expiring single-use verification",
+      "persistent canonical owner identity"
+    ],
+    "credentials": "encrypted Alice configuration loaded by the native runtime",
+    "activation": "require verified configuration matching this owner, bot and private chat",
+    "autonomousSocialOperations": "disabled",
+    "connectorPlane": "inert",
+    "platform": "telegram",
+    "ownerBindingSha256": "sha256:f8b1566829c84cf5f91109d41177fa87ef28e1ab5b5fa0bf2a5642267fca05d5"
   }
 }
