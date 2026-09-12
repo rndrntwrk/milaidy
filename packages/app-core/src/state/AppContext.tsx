@@ -152,6 +152,7 @@ import {
   computeAgentDeadlineExtensions,
   getAgentReadyTimeoutMs,
 } from "./agent-startup-timing";
+import { ChatComposerCtx } from "./ChatComposerContext";
 import { CompanionSceneConfigCtx } from "./CompanionSceneConfigContext";
 import { completeResetLocalStateAfterServerWipe as runCompleteResetLocalStateAfterServerWipe } from "./complete-reset-local-state-after-wipe";
 import { handleResetAppliedFromMainCore } from "./handle-reset-applied-from-main";
@@ -9304,11 +9305,13 @@ function AppProviderInner({
   return (
     <BrandingContext.Provider value={mergedBranding}>
       <CompanionSceneConfigCtx.Provider value={companionSceneConfig}>
-        <AppContext.Provider value={value}>
-          {children}
-          <ConfirmDialog {...modalProps} />
-          <PromptDialog {...promptModalProps} />
-        </AppContext.Provider>
+        <ChatComposerCtx.Provider value={composerValue}>
+          <AppContext.Provider value={value}>
+            {children}
+            <ConfirmDialog {...modalProps} />
+            <PromptDialog {...promptModalProps} />
+          </AppContext.Provider>
+        </ChatComposerCtx.Provider>
       </CompanionSceneConfigCtx.Provider>
     </BrandingContext.Provider>
   );
