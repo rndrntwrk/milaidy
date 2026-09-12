@@ -235,13 +235,6 @@ interface RuntimeAdapterAutonomyCompat {
   ) => Promise<unknown>;
 }
 
-interface RuntimeModelCompat {
-  useModel?: (
-    type: (typeof ModelType)[keyof typeof ModelType] | string,
-    params: { prompt: string },
-  ) => Promise<unknown>;
-}
-
 function syncBrandEnvAliases(): void {
   syncElizaEnvToMilady();
   syncMiladyEnvToEliza();
@@ -607,13 +600,6 @@ async function repairRuntimeAfterBoot(
     }
   }
 
-  // Ensure Telegram bot is polling. The upstream plugin's bot.launch() is
-  // not awaited and silently fails on bun/Windows. We create a standalone
-  // Telegraf instance with proper lifecycle management.
-  await withStartupPhase("telegram-polling", fields, () =>
-    ensureTelegramBotPolling(runtime),
-  );
-
   return runtime;
 }
 
@@ -657,191 +643,6 @@ async function logStartupCorpusSnapshot(runtime: AgentRuntime): Promise<void> {
       elapsedMs: Date.now() - startedAt,
       error: errorMessage(error),
     });
-  }
-}
-
-// Module-level Telegraf bot reference for lifecycle management across restarts.
-let _miladyTelegramBot: { stop: (reason?: string) => void } | null = null;
-
-async function ensureTelegramBotPolling(runtime: AgentRuntime): Promise<void> {
-  // Stop any previous bot instance
-  if (_miladyTelegramBot) {
-    try {
-      _miladyTelegramBot.stop("restart");
-    } catch {
-      /* ignore */
-    }
-    _miladyTelegramBot = null;
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken) return;
-
-  try {
-    const { Telegraf } = await import("telegraf");
-    const apiRoot = process.env.TELEGRAM_API_ROOT || "https://api.telegram.org";
-    const bot = new Telegraf(botToken, { telegram: { apiRoot } });
-
-    // Build character context for personality
-    const char = runtime.character ?? ({} as Record<string, unknown>);
-    const bioText = Array.isArray(char.bio)
-      ? char.bio.join(" ")
-      : (char.bio ?? "");
-    const loreText = Array.isArray((char as Record<string, unknown>).lore)
-      ? ((char as Record<string, unknown>).lore as string[]).join(" ")
-      : "";
-    const styleText = (() => {
-      const s = (char as Record<string, unknown>).style as
-        | Record<string, string[]>
-        | undefined;
-      if (!s) return "";
-      const parts: string[] = [];
-      if (s.all?.length) parts.push(s.all.join(" "));
-      if (s.chat?.length) parts.push(s.chat.join(" "));
-      return parts.join(" ");
-    })();
-    const systemPrompt = [
-      `You are ${char.name}.`,
-      char.system ?? "",
-      bioText ? `Bio: ${bioText}` : "",
-      loreText ? `Lore: ${loreText}` : "",
-      styleText ? `Style: ${styleText}` : "",
-      "Respond in character. Keep responses concise for chat.",
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    const chatHistories = new Map<
-      number,
-      Array<{ role: string; content: string }>
-    >();
-
-    bot.on(
-      "message",
-      async (ctx: {
-        message: {
-          text?: string;
-          from?: { username?: string; first_name?: string };
-          chat?: { id: number };
-        };
-        reply: (t: string) => Promise<unknown>;
-      }) => {
-        try {
-          const text = ctx.message?.text;
-          if (!text) return;
-          const chatId = ctx.message.chat?.id ?? 0;
-
-          // Check allowed chats (reads live from process.env — no restart needed)
-          const allowedChats = process.env.TELEGRAM_ALLOWED_CHATS;
-          if (
-            allowedChats &&
-            allowedChats.trim() !== "" &&
-            allowedChats.trim() !== "[]"
-          ) {
-            try {
-              if (
-                !(JSON.parse(allowedChats) as string[]).includes(String(chatId))
-              )
-                return;
-            } catch {
-              return;
-            }
-          }
-
-          const username =
-            ctx.message.from?.username ??
-            ctx.message.from?.first_name ??
-            "Unknown";
-          logger.info(
-            `[milady] Telegram message from @${username}: ${text.substring(0, 80)}`,
-          );
-
-          let history = chatHistories.get(chatId);
-          if (!history) {
-            history = [];
-            // Evict least-recently-used chat to prevent unbounded memory growth
-            if (chatHistories.size >= 500) {
-              const oldest = chatHistories.keys().next().value;
-              if (oldest !== undefined) chatHistories.delete(oldest);
-            }
-          } else {
-            // Move to end of Map iteration order (most-recently-used)
-            chatHistories.delete(chatId);
-          }
-          chatHistories.set(chatId, history);
-          history.push({ role: "user", content: `@${username}: ${text}` });
-          if (history.length > 20) history.splice(0, history.length - 20);
-
-          try {
-            const conv = history
-              .map(
-                (m) =>
-                  `${m.role === "user" ? "User" : char.name}: ${m.content}`,
-              )
-              .join("\n");
-            const modelRuntime = runtime as AgentRuntime & RuntimeModelCompat;
-            if (typeof modelRuntime.useModel !== "function") {
-              logger.warn("[milady] Telegram runtime missing useModel");
-              return;
-            }
-            // biome-ignore lint/correctness/useHookAtTopLevel: false positive, hook is at module level
-            const response = await modelRuntime.useModel(ModelType.TEXT_LARGE, {
-              prompt: `${systemPrompt}\n\nConversation:\n${conv}\n\n${char.name}:`,
-            });
-            const responseText =
-              typeof response === "string"
-                ? response
-                : ((response as { text?: string })?.text ?? "");
-            if (responseText) {
-              history.push({ role: "assistant", content: responseText });
-              await ctx.reply(responseText);
-              logger.info(`[milady] Telegram replied to @${username}`);
-            }
-          } catch (err) {
-            logger.warn(
-              `[milady] Telegram response error: ${err instanceof Error ? err.message : String(err)}`,
-            );
-            await ctx
-              .reply("Sorry, I encountered an error processing your message.")
-              .catch(() => {});
-          }
-        } catch (outerErr) {
-          logger.warn(
-            `[milady] Telegram handler error: ${outerErr instanceof Error ? outerErr.message : String(outerErr)}`,
-          );
-        }
-      },
-    );
-
-    bot.catch((err: unknown) =>
-      logger.warn(
-        `[milady] Telegram bot error: ${err instanceof Error ? err.message : String(err)}`,
-      ),
-    );
-
-    // Fire-and-forget — bot.launch() only resolves on stop()
-    bot
-      .launch({
-        dropPendingUpdates: true,
-        allowedUpdates: ["message", "message_reaction"],
-      })
-      .catch((err) =>
-        logger.warn(
-          `[milady] Telegram bot launch error: ${err instanceof Error ? err.message : String(err)}`,
-        ),
-      );
-
-    _miladyTelegramBot = bot;
-    // Telegram bot cleanup is handled by the unified signal handler in
-    // startEliza() via _miladyTelegramBot — no separate registration needed.
-
-    await new Promise((r) => setTimeout(r, 500));
-    logger.info("[milady] Telegram bot polling started");
-  } catch (err) {
-    logger.warn(
-      `[milady] Telegram bot setup failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
   }
 }
 
@@ -1333,13 +1134,6 @@ export async function startEliza(
           process.exit(1);
         }, 10_000);
         forceExitTimer.unref?.();
-        if (_miladyTelegramBot) {
-          try {
-            _miladyTelegramBot.stop("SIGINT");
-          } catch {
-            /* ignore */
-          }
-        }
         await apiServerHandle.close().catch(() => undefined);
         if (currentRuntime) {
           await upstreamShutdownRuntime(currentRuntime, "server-only shutdown");

@@ -2,11 +2,13 @@ import { describe, expect, it } from "bun:test";
 import fs from "node:fs";
 
 import {
+  type AliceCapabilityBomEntry,
   aliceDelegatedCapabilityAdapters,
   assertAliceFullGatedCapabilityEnvironment,
   buildAliceRuntimeCapabilityState,
   enforceAliceFullGatedCapabilityPolicy,
 } from "./alice-capability-inventory";
+import { collectPluginNames } from "./plugin-collector";
 
 const bom = {
   schemaVersion: "alice.capability-bom.v1" as const,
@@ -152,6 +154,69 @@ describe("Alice final-image capability runtime inventory", () => {
       "@fixture/plugin-core",
       "@fixture/plugin-unclassified",
     ]);
+  });
+
+  it("admits configured native Telegram and Discord while retaining other policy denials", () => {
+    const policy = JSON.parse(
+      fs.readFileSync(
+        new URL(
+          "../../../../deploy/alice/alice-capability-policy.v1.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ) as { entries: AliceCapabilityBomEntry[] };
+    const previousMode = process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+    const previousProfile = process.env.ALICE_RUNTIME_PROFILE;
+    let packages: Set<string>;
+    try {
+      process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+      process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+      packages = collectPluginNames({});
+    } finally {
+      if (previousMode === undefined)
+        delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+      else process.env.ALICE_RUNTIME_AUTHORITY_MODE = previousMode;
+      if (previousProfile === undefined)
+        delete process.env.ALICE_RUNTIME_PROFILE;
+      else process.env.ALICE_RUNTIME_PROFILE = previousProfile;
+    }
+    expect(packages.has("@elizaos/plugin-telegram")).toBe(true);
+    expect(packages.has("@elizaos/plugin-discord")).toBe(true);
+    packages = new Set([
+      ...[...packages].filter((name) =>
+        ["@elizaos/plugin-telegram", "@elizaos/plugin-discord"].includes(name),
+      ),
+      "@elizaos/plugin-discord-local",
+    ]);
+    expect(enforceAliceFullGatedCapabilityPolicy(packages, policy)).toEqual([
+      "@elizaos/plugin-discord-local",
+    ]);
+    expect([...packages]).toEqual([
+      "@elizaos/plugin-telegram",
+      "@elizaos/plugin-discord",
+    ]);
+    const nativeBom = {
+      ...bom,
+      entries: policy.entries
+        .filter((entry) => packages.has(entry.id.slice("package:".length)))
+        .map((entry) => ({
+          ...bom.entries[0],
+          ...entry,
+        })),
+    };
+    expect(() => buildAliceRuntimeCapabilityState(nativeBom, [])).toThrow(
+      "ALICE_CAPABILITY_RUNTIME_STATE_MISMATCH",
+    );
+    expect(
+      buildAliceRuntimeCapabilityState(nativeBom, [
+        { name: "telegram" },
+        { name: "discord" },
+      ]).entries.every(
+        (entry) =>
+          entry.loaded && entry.callable && entry.policyState === "enabled",
+      ),
+    ).toBe(true);
   });
 
   it("fails when a core is unloaded or a policy-disabled implementation is registered", () => {

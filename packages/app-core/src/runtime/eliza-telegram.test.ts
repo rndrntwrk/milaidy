@@ -1,34 +1,49 @@
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
+import { expect, test } from "vitest";
 
-const MAX_CHAT_ENTRIES = 500;
-
-function evictOldestIfNeeded(
-  map: Map<number, Array<{ role: string; content: string }>>,
-): void {
-  if (map.size <= MAX_CHAT_ENTRIES) return;
-  const oldest = map.keys().next().value;
-  if (oldest !== undefined) {
-    map.delete(oldest);
-  }
-}
-
-describe("Telegram chat history eviction", () => {
-  it("does nothing when under the limit", () => {
-    const map = new Map<number, Array<{ role: string; content: string }>>();
-    map.set(1, [{ role: "user", content: "hi" }]);
-    evictOldestIfNeeded(map);
-    expect(map.size).toBe(1);
+test("boot repair leaves configured Telegram transport to policy-selected plugin services", async () => {
+  const source = readFileSync(new URL("./eliza.ts", import.meta.url), "utf8");
+  const parsed = ts.createSourceFile(
+    "eliza.ts",
+    source,
+    ts.ScriptTarget.Latest,
+  );
+  const repair = parsed.statements.find(
+    (statement) =>
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === "repairRuntimeAfterBoot",
+  );
+  if (!repair) throw new Error("Runtime boot repair function missing");
+  const executable = ts.transpile(repair.getText(parsed), {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.None,
   });
-
-  it("evicts the oldest entry when over the limit", () => {
-    const map = new Map<number, Array<{ role: string; content: string }>>();
-    for (let i = 0; i <= MAX_CHAT_ENTRIES; i++) {
-      map.set(i, [{ role: "user", content: `msg-${i}` }]);
-    }
-    expect(map.size).toBe(MAX_CHAT_ENTRIES + 1);
-    evictOldestIfNeeded(map);
-    expect(map.size).toBe(MAX_CHAT_ENTRIES);
-    expect(map.has(0)).toBe(false);
-    expect(map.has(1)).toBe(true);
+  const runtime = {
+    plugins: [],
+    getService: () => ({ enableAutonomy: async () => {} }),
+  };
+  let unmanagedPollers = 0;
+  // Execute the real repair body without booting SQL, models, or a transport.
+  // The unselected poller must not be called even with credentials available.
+  const runRepair = runInNewContext(`${executable}\nrepairRuntimeAfterBoot`, {
+    runtimeStartupFields: () => ({}),
+    withStartupPhase: async (
+      _name: string,
+      _fields: object,
+      run: () => unknown,
+    ) => run(),
+    ensureRuntimeSqlCompatibility: async () => {},
+    logStartupCorpusSnapshot: async () => {},
+    ensureMiladyTextToSpeechHandler: async () => {},
+    ensureAutonomyBootstrapContext: async () => {},
+    logger: { info() {}, warn() {} },
+    process: { env: { TELEGRAM_BOT_TOKEN: "test-only-unselected-token" } },
+    ensureTelegramBotPolling: async () => {
+      unmanagedPollers++;
+    },
   });
+  expect(await runRepair(runtime)).toBe(runtime);
+  expect(unmanagedPollers).toBe(0);
 });

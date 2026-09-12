@@ -21,6 +21,7 @@ import {
   migrateLegacyRuntimeConfig,
 } from "@miladyai/shared/contracts/onboarding";
 import type { ElizaConfig } from "../config/config.js";
+import { isAliceFullRuntimeProfile } from "./alice-runtime-profile.js";
 import { CORE_PLUGINS } from "./core-plugins.js";
 
 // ---------------------------------------------------------------------------
@@ -298,6 +299,15 @@ export function collectPluginNames(
     if (reasons && !reasons.has(name)) reasons.set(name, reason);
   };
   for (const core of CORE_PLUGINS) track(core, "CORE_PLUGINS");
+  if (isAliceFullRuntimeProfile()) {
+    for (const name of [
+      "@elizaos/plugin-telegram",
+      "@elizaos/plugin-discord",
+    ]) {
+      pluginsToLoad.add(name);
+      track(name, "Alice full runtime");
+    }
+  }
   if (localEmbeddingsExplicitlyDisabled) {
     pluginsToLoad.delete("@elizaos/plugin-local-embedding");
   }
