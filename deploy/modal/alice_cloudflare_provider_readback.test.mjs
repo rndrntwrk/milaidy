@@ -636,6 +636,16 @@ test("normalizes the pre-mutation runtimeHost application against its current im
     applicationDurableObjects: [binding], expectedApplicationImage: image,
     materializedWranglerConfig: config, expectedNamespaceId: namespaceId };
   assert.equal(verifyAliceContainerApplicationReadback(boundInput).image, image);
+  // Cloudflare placement IDs can have non-RFC UUID version and variant bits.
+  const opaquePlacement = structuredClone(boundInput);
+  const opaquePlacementId = "01234567-89ab-cdef-0123-456789abcdef";
+  opaquePlacement.applicationInstances[0].current_placement.id = opaquePlacementId;
+  opaquePlacement.applicationDurableObjects[0].placement_id = opaquePlacementId;
+  assert.equal(verifyAliceContainerApplicationReadback(opaquePlacement).image, image);
+  opaquePlacement.applicationInstances[0].current_placement.id = "invalid-placement";
+  opaquePlacement.applicationDurableObjects[0].placement_id = "invalid-placement";
+  assert.throws(() => verifyAliceContainerApplicationReadback(opaquePlacement),
+    /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/);
   // Captured after the paused 2026-09-08 rollout: the actor remains assigned,
   // but the inactive container has no live dashboard placement.
   const inactiveInput = { ...boundInput, applicationInstances: [],
