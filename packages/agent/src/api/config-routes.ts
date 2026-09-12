@@ -28,6 +28,10 @@ const ALICE_CONFIG_TOP_KEYS = new Set([
 ]);
 const ALICE_ENV_NAME = /^(?:DISCORD_|TELEGRAM_)/;
 const ALICE_ENV_EXACT_NAMES = new Set([
+  "ELIZA_LIFEOPS_PASSIVE_CONNECTORS",
+  "ELIZA_DISCORD_OWNER_USER_IDS_JSON",
+  "ELIZA_TELEGRAM_STANDALONE_BOT",
+  "CHANNEL_IDS",
   "CODEX_CLI_SMALL_MODEL",
   "CODEX_CLI_LARGE_MODEL",
   "CODEX_REASONING_EFFORT",
@@ -142,7 +146,11 @@ function aliceConfigPayloadRejection(
         return "Alice agents.defaults must be an object";
       }
       for (const key of Object.keys(defaults as Record<string, unknown>)) {
-        if (key !== "model" && key !== "subscriptionProvider") {
+        if (
+          key !== "model" &&
+          key !== "subscriptionProvider" &&
+          key !== "adminEntityId"
+        ) {
           return `Unsupported Alice agent setting: agents.defaults.${key}`;
         }
       }

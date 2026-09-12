@@ -13,6 +13,26 @@ vi.mock("@miladyai/shared", () => ({
   sanitizeForSettingsDebug: (value: unknown) => value,
   settingsDebugCloudSummary: () => ({}),
 }));
+vi.mock("../config/config.js", () => ({
+  saveElizaConfig: () => {
+    throw new Error("test must inject config persistence");
+  },
+}));
+vi.mock("./provider-switch-config.js", () => ({
+  applyCanonicalOnboardingConfig: () => {
+    throw new Error("connector settings must not switch providers");
+  },
+}));
+vi.mock("../contracts/service-routing.js", () => {
+  const rejectRoutingChange = () => {
+    throw new Error("connector settings must not change service routing");
+  };
+  return {
+    normalizeDeploymentTargetConfig: rejectRoutingChange,
+    normalizeLinkedAccountsConfig: rejectRoutingChange,
+    normalizeServiceRoutingConfig: rejectRoutingChange,
+  };
+});
 
 const response = () => ({
   json: (_res: http.ServerResponse, _body: unknown, _status?: number) => {},
@@ -20,13 +40,24 @@ const response = () => ({
 });
 
 describe("settings persistence commit ordering", () => {
-  it("applies Stream credentials only after config persistence succeeds", async () => {
+  it("applies Stream and native owner bot settings only after config persistence succeeds", async () => {
     const key = "STREAM555_AGENT_API_KEY";
-    const originalEnv = process.env[key];
-    delete process.env[key];
+    const envUpdates = {
+      [key]: "new",
+      ELIZA_LIFEOPS_PASSIVE_CONNECTORS: "false",
+      ELIZA_DISCORD_OWNER_USER_IDS_JSON: '["123456789012345678"]',
+      ELIZA_TELEGRAM_STANDALONE_BOT: "false",
+      CHANNEL_IDS: "123456789012345679",
+    };
+    const originalEnv = Object.fromEntries(
+      Object.keys(envUpdates).map((name) => [name, process.env[name]]),
+    );
+    for (const name of Object.keys(envUpdates)) delete process.env[name];
+    const adminEntityId = "11111111-2222-4333-8444-555555555555";
     const config = {
       ui: { theme: "light" },
       env: { vars: {} },
+      agents: { defaults: { model: { primary: "openai-codex/gpt-5.4" } } },
     } as unknown as ElizaConfig;
     const oldAuthority = process.env.ALICE_RUNTIME_AUTHORITY_MODE;
     const oldProfile = process.env.ALICE_RUNTIME_PROFILE;
@@ -43,13 +74,17 @@ describe("settings persistence commit ordering", () => {
       json: response().json,
       error: response().error,
       readJsonBody: async <T extends object>() =>
-        ({ ui: { theme: "dark" }, env: { vars: { [key]: "new" } } }) as T,
+        ({
+          ui: { theme: "dark" },
+          env: { vars: envUpdates },
+          agents: { defaults: { adminEntityId } },
+        }) as T,
       redactConfigSecrets: (value) => value,
       isBlockedObjectKey: () => false,
       stripRedactedPlaceholderValuesDeep: () => {},
       patchTouchesProviderSelection: () => false,
       BLOCKED_ENV_KEYS: new Set(),
-      CONFIG_WRITE_ALLOWED_TOP_KEYS: new Set(["ui", "env"]),
+      CONFIG_WRITE_ALLOWED_TOP_KEYS: new Set(["ui", "env", "agents"]),
       resolveMcpServersRejection: async () => null,
       resolveMcpTerminalAuthorizationRejection: () => null,
       saveElizaConfig: async () => {
@@ -62,16 +97,27 @@ describe("settings persistence commit ordering", () => {
     await handleConfigRoutes(ctx);
     expect(saveAttempted).toBe(true);
     expect(config.ui).toEqual({ theme: "light" });
-    expect(process.env[key]).toBeUndefined();
+    expect(config.agents?.defaults?.adminEntityId).toBeUndefined();
+    for (const name of Object.keys(envUpdates))
+      expect(process.env[name]).toBeUndefined();
     ctx.saveElizaConfig = async (candidate) => {
-      expect(candidate.env?.vars?.[key]).toBe("new");
-      expect(process.env[key]).toBeUndefined();
+      expect(candidate.env?.vars).toEqual(envUpdates);
+      expect(candidate.agents?.defaults).toEqual({
+        model: { primary: "openai-codex/gpt-5.4" },
+        adminEntityId,
+      });
+      for (const name of Object.keys(envUpdates))
+        expect(process.env[name]).toBeUndefined();
     };
     await handleConfigRoutes(ctx);
     expect(config.ui).toEqual({ theme: "dark" });
-    expect(process.env[key]).toBe("new");
-    if (originalEnv === undefined) delete process.env[key];
-    else process.env[key] = originalEnv;
+    expect(config.agents?.defaults?.adminEntityId).toBe(adminEntityId);
+    for (const [name, value] of Object.entries(envUpdates))
+      expect(process.env[name]).toBe(value);
+    for (const [name, value] of Object.entries(originalEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
     if (oldAuthority === undefined)
       delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
     else process.env.ALICE_RUNTIME_AUTHORITY_MODE = oldAuthority;
@@ -118,6 +164,14 @@ describe("settings persistence commit ordering", () => {
         status: 400,
       })),
     );
+    ctx.readJsonBody = async <T extends object>() =>
+      ({ env: { vars: { ELIZA_AUTH_DISABLED: "1" } } }) as T;
+    await handleConfigRoutes(ctx);
+    expect(errors.at(-1)).toEqual({
+      message:
+        "Unsupported Alice environment setting: env.vars.ELIZA_AUTH_DISABLED",
+      status: 400,
+    });
     expect(config).toEqual({});
     if (oldAuthority === undefined)
       delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
