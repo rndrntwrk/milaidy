@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style><script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/","@pixiv/three-vrm":"/node_modules/@pixiv/three-vrm/lib/three-vrm.module.min.js"}}</script></head><body><script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {VRMLoaderPlugin,VRMUtils} from '@pixiv/three-vrm';
+const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);renderer.setSize(innerWidth,innerHeight);renderer.setClearColor(0,0);renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.add(new THREE.HemisphereLight(0xffffff,0x9aa8bd,1.35));
+const light=new THREE.DirectionalLight(0xffffff,1.6);light.position.set(-1,2,3);scene.add(light);
+const loader=new GLTFLoader();loader.register(p=>new VRMLoaderPlugin(p));
+try{
+ const gltf=await loader.loadAsync('/bundle/alice/milady-9.vrm');const vrm=gltf.userData.vrm;
+ if(!vrm)throw new Error('No VRM returned by source loader');VRMUtils.rotateVRM0(vrm);scene.add(vrm.scene);
+ vrm.scene.traverse(o=>{o.frustumCulled=false});vrm.update(0);scene.updateMatrixWorld(true);
+ const box=new THREE.Box3().setFromObject(vrm.scene),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
+ vrm.scene.position.x-=center.x;vrm.scene.position.z-=center.z;vrm.scene.position.y-=box.min.y;vrm.update(0);scene.updateMatrixWorld(true);
+ const height=size.y;
+ window.renderSource=(mode='full')=>{
+  if(mode!=='full'){
+   const left=vrm.humanoid.getNormalizedBoneNode('leftUpperArm'),right=vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+   if(left)left.rotation.z=-1.05;if(right)right.rotation.z=1.05;
+  }
+  vrm.update(0);scene.updateMatrixWorld(true);
+  const vh=height*(mode==='full'?1.10:0.58),aspect=innerWidth/innerHeight;
+  const camera=new THREE.OrthographicCamera(-vh*aspect/2,vh*aspect/2,vh/2,-vh/2,0.01,100);
+  const cy=height*(mode==='full'?0.51:0.76);camera.position.set(0,cy,4*height);camera.lookAt(0,cy,0);
+  renderer.render(scene,camera);window.renderInfo={mode,height,source:'milady-9.vrm',width:innerWidth,heightPx:innerHeight,metaVersion:vrm.meta?.metaVersion,triangles:renderer.info.render.triangles};
+ };
+ window.renderSource('full');window.READY=true;
+}catch(e){window.RENDER_ERROR=String(e);console.error(e)}
+</script></body></html>
