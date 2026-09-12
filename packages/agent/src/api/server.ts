@@ -145,6 +145,7 @@ import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { handleAgentStatusRoutes } from "./agent-status-routes.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
 import { handleAliceCodingPolicyRoutes } from "./alice-coding-policy-routes.js";
+import { handleAliceTaskThreadsRead } from "./alice-task-thread-routes.js";
 import { handleAliceCorpusRoutes } from "./alice-corpus-routes.js";
 import { handleAliceOperatorRoutes } from "./alice-operator-routes.js";
 import {
@@ -6411,6 +6412,13 @@ async function handleRequest(
 
   // Alice's polling surfaces read existing services without starting PTYs.
   if (isAliceFullRuntimeProfile()) {
+    if (
+      await handleAliceTaskThreadsRead({
+        method, pathname, res, url, runtime: state.runtime, json, error,
+      })
+    ) {
+      return;
+    }
     if (tryHandleMusicPlayerStatusFallback({ pathname, method, runtime: state.runtime, res })) {
       return;
     }

@@ -8,6 +8,23 @@ const serverSource = readFileSync(
 );
 
 describe("cross-channel ingest server wiring", () => {
+  it("serves Alice task reads before the coding execution startup path", () => {
+    const polling = serverSource.indexOf("// Alice's polling surfaces");
+    const handler = serverSource.indexOf(
+      "await handleAliceTaskThreadsRead({",
+      polling,
+    );
+    const startup = serverSource.indexOf(
+      'getServiceLoadPromise("PTY_SERVICE")',
+      polling,
+    );
+    expect(serverSource.slice(polling, handler)).toContain(
+      "if (isAliceFullRuntimeProfile())",
+    );
+    expect(handler).toBeGreaterThan(polling);
+    expect(startup).toBeGreaterThan(handler);
+  });
+
   it("dispatches the existing Arcade routes with the same live stream context", () => {
     expect(serverSource).toMatch(/import\s*\{\s*handleFive55GamesRoutes\s*\}\s*from\s*["']\.\/five55-games-routes\.js["']/);
     expect(serverSource).toMatch(/state\.connectorRouteHandlers\.push\(\(req, res, pathname, method\)\s*=>\s*handleFive55GamesRoutes\(\{\s*req,\s*res,\s*pathname,\s*method,\s*readJsonBody,\s*json,\s*error,\s*streamState,?\s*\}\)/);

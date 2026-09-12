@@ -2384,9 +2384,10 @@ export class AppManager {
 
   async listRuns(
     runtime: IAgentRuntime | null = null,
+    options: { refresh?: boolean } = {},
   ): Promise<AppRunSummary[]> {
     const runs = this.listRunsSorted();
-    if (runs.length === 0) {
+    if (options.refresh === false || runs.length === 0) {
       return runs;
     }
 
