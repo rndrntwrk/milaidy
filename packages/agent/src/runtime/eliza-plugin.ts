@@ -16,6 +16,7 @@ import {
 } from "../actions/entity-actions.js";
 import { gmailAction } from "../actions/gmail.js";
 import { lifeAction } from "../actions/life.js";
+import { pairOwnerAccountAction } from "../actions/pair-owner-account.ts";
 import { readChannelAction } from "../actions/read-channel.js";
 import { launchAppAction, stopAppAction } from "../actions/app-control.js";
 import { restartAction } from "../actions/restart.js";
@@ -59,6 +60,7 @@ import { createUserNameProvider } from "../providers/user-name.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
 import { MiladyCharacterPersistenceService } from "../services/character-persistence.js";
+import { OwnerBindingService } from "../services/owner-binding.ts";
 import { inboxAction } from "../actions/inbox.js";
 import { inboxTriageProvider } from "../providers/inbox-triage.js";
 import { createTriggerTaskAction } from "../triggers/action.js";
@@ -111,6 +113,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
     services: [
       AgentEventService as ServiceClass,
       MiladyCharacterPersistenceService as ServiceClass,
+      OwnerBindingService as ServiceClass,
     ],
 
     init: async (_pluginConfig, runtime: IAgentRuntime) => {
@@ -234,6 +237,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
     evaluators: [lateJoinWhitelistEvaluator],
 
     actions: [
+      pairOwnerAccountAction,
       restartAction,
       launchAppAction,
       stopAppAction,

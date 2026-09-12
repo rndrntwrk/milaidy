@@ -17,7 +17,8 @@ type GuardableRuntime = Pick<AgentRuntime, "actions" | "logger"> & {
 /**
  * Task 1 has no independently verified capability-grant verifier at the
  * action-handler boundary. Keep execution fail-closed and admit only these
- * reviewed response, read-only, and presentation actions by exact name.
+ * reviewed response, read-only, presentation, and native owner-checked pairing
+ * actions by exact name.
  */
 export const ALICE_FULL_GATED_SAFE_ACTION_NAMES = Object.freeze([
   "REPLY",
@@ -31,6 +32,8 @@ export const ALICE_FULL_GATED_SAFE_ACTION_NAMES = Object.freeze([
   "SEARCH_CONVERSATIONS",
   "WEB_SEARCH",
   "PLAY_EMOTE",
+  // Native owner-only issuance retains its role gate and handler owner check.
+  "PAIR_OWNER_ACCOUNT",
 ] as const);
 
 const ALICE_FULL_GATED_SAFE_ACTION_SET = new Set<string>(

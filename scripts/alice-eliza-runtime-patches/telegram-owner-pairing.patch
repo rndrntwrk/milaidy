@@ -1,0 +1,247 @@
+diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/src/service.ts
+--- a/plugins/plugin-telegram/src/service.ts
++++ b/plugins/plugin-telegram/src/service.ts
+@@ -7,8 +7,8 @@
+  *
+  * Forum topics become distinct Rooms keyed `<chatId>-<threadId>`. Active pollers
+  * are tracked in the shared process-local poller lock so a token is never
+- * long-polled twice (Telegram 409s on concurrent getUpdates). Must start before
+- * `TelegramOwnerPairingServiceImpl`, which looks up the live bot instance here.
++ * long-polled twice (Telegram 409s on concurrent getUpdates). Authorization and
++ * command handlers are installed before polling starts.
+  */
+ import {
+   ChannelType,
+@@ -62,6 +62,7 @@
+ import { checkTelegramDmAccess, resolveTelegramDmPolicy } from "./dm-policy";
+ import { resolveTelegramRuntimeEntityId } from "./identity";
+ import { MessageManager } from "./messageManager";
++import { handleElizaPairCommand } from "./owner-pairing-service";
+ import {
+   claimTelegramPollerToken,
+   ensureTelegramPollerTokenAvailable,
+@@ -605,8 +606,18 @@
+       return service;
+     }
+ 
++    // The core starts sibling services concurrently; wait for the registered
++    // native verifier before accepting connector commands.
++    if (runtime.hasService("OWNER_BIND_VERIFY")) {
++      await runtime.getServiceLoadPromise("OWNER_BIND_VERIFY");
++    }
++
+     const maxRetries = 5;
+     for (const state of service.accountStates.values()) {
++      // Install once, before any launch/retry: authorization must precede every
++      // command and the catch-all message handler.
++      service.setupMiddlewares(state);
++      service.setupMessageHandlers(state);
+       let retryCount = 0;
+       let lastError: Error | null = null;
+ 
+@@ -622,8 +633,6 @@
+             "Starting Telegram bot",
+           );
+           await service.initializeBot(state);
+-          service.setupMiddlewares(state);
+-          service.setupMessageHandlers(state);
+           await state.bot.telegram.getMe();
+ 
+           logger.success(
+@@ -810,52 +819,6 @@
+           },
+         });
+       }
+-    }
+-
+-    bot.start((ctx) => {
+-      const slashStartPayload = {
+-        ctx,
+-        runtime: this.runtime,
+-        source: "telegram",
+-        accountId,
+-        metadata: { accountId },
+-      };
+-      this.runtime.emitEvent(
+-        TelegramEventTypes.SLASH_START as string,
+-        slashStartPayload,
+-      );
+-    });
+-
+-    // Register universal slash-command handlers BEFORE launch. Telegraf accepts
+-    // command registration any time before launch(), and a matched command
+-    // handler that never calls next() terminates the middleware chain — so the
+-    // catch-all message handler in setupMessageHandlers does not also process
+-    // command messages (no double-processing).
+-    const commandMessageManager =
+-      activeState?.messageManager ?? this.messageManager ?? undefined;
+-    if (commandMessageManager) {
+-      const registered = registerTelegramCommandHandlers(
+-        bot,
+-        this.runtime,
+-        commandMessageManager,
+-        accountId,
+-      );
+-      logger.debug(
+-        {
+-          src: "plugin:telegram",
+-          agentId: this.runtime.agentId,
+-          accountId,
+-          commandCount: registered.length,
+-        },
+-        "Registered universal slash-command handlers",
+-      );
+-      // #8902: the live, edited-in-place orchestrator task board (`/tasks`).
+-      registerTelegramTaskBoardCommand(
+-        bot,
+-        this.runtime,
+-        commandMessageManager,
+-        accountId,
+-      );
+     }
+ 
+     // Telegraf v4's `bot.launch()` resolves only when polling STOPS — it awaits
+@@ -1245,6 +1208,60 @@
+     const bot = state?.bot ?? this.bot;
+     const messageManager = state?.messageManager ?? this.messageManager;
+     const accountId = state?.accountId ?? this.defaultAccountId;
++    if (!bot) return;
++
++    // The native relay verifies the provider's sender ID; it never authorizes
++    // identity binding itself. Keep it ahead of the catch-all message handler.
++    bot.command("eliza_pair", async (ctx) => {
++      await handleElizaPairCommand(ctx, this.runtime);
++    });
++
++    bot.start((ctx) => {
++      const slashStartPayload = {
++        ctx,
++        runtime: this.runtime,
++        source: "telegram",
++        accountId,
++        metadata: { accountId },
++      };
++      this.runtime.emitEvent(
++        TelegramEventTypes.SLASH_START as string,
++        slashStartPayload,
++      );
++    });
++
++    // Register universal slash-command handlers BEFORE launch. Telegraf accepts
++    // command registration any time before launch(), and a matched command
++    // handler that never calls next() terminates the middleware chain — so the
++    // catch-all message handler in setupMessageHandlers does not also process
++    // command messages (no double-processing).
++    const commandMessageManager =
++      state?.messageManager ?? this.messageManager ?? undefined;
++    if (commandMessageManager) {
++      const registered = registerTelegramCommandHandlers(
++        bot,
++        this.runtime,
++        commandMessageManager,
++        accountId,
++      );
++      logger.debug(
++        {
++          src: "plugin:telegram",
++          agentId: this.runtime.agentId,
++          accountId,
++          commandCount: registered.length,
++        },
++        "Registered universal slash-command handlers",
++      );
++      // #8902: the live, edited-in-place orchestrator task board (`/tasks`).
++      registerTelegramTaskBoardCommand(
++        bot,
++        this.runtime,
++        commandMessageManager,
++        accountId,
++      );
++    }
++
+     // Regular message handler
+     bot?.on("message", async (ctx) => {
+       try {
+diff --git a/plugins/plugin-telegram/src/owner-pairing-service.ts b/plugins/plugin-telegram/src/owner-pairing-service.ts
+--- a/plugins/plugin-telegram/src/owner-pairing-service.ts
++++ b/plugins/plugin-telegram/src/owner-pairing-service.ts
+@@ -309,76 +309,13 @@
+     "Handles Telegram-side owner pairing (command code verification) and DM login-link delivery for Eliza remote auth";
+ 
+   static async start(runtime: IAgentRuntime): Promise<Service> {
+-    const service = new TelegramOwnerPairingServiceImpl(runtime);
+-    if (resolveVerifyService(runtime)) {
+-      service.registerPairCommand(runtime);
+-      logger.info(
+-        {
+-          src: "plugin:telegram:owner-pairing",
+-          agentId: runtime.agentId,
+-        },
+-        "TelegramOwnerPairingService started; /eliza_pair command registered",
+-      );
+-    } else {
+-      logger.info(
+-        {
+-          src: "plugin:telegram:owner-pairing",
+-          agentId: runtime.agentId,
+-        },
+-        "TelegramOwnerPairingService started without /eliza_pair because OWNER_BIND_VERIFY is not registered",
+-      );
+-    }
+-    return service;
++    // TelegramService installs the native command behind authorization and
++    // before polling. This service retains owner login DM delivery only.
++    return new TelegramOwnerPairingServiceImpl(runtime);
+   }
+ 
+   async stop(): Promise<void> {
+     pairAttempts.clear();
+-  }
+-
+-  /**
+-   * Registers the /eliza_pair command with the active Telegraf bot instance
+-   * by looking up the TelegramService from the runtime service registry.
+-   * Called during `start`; it is safe to call this before or after the bot
+-   * has finished initialising because Telegraf accepts handler registration
+-   * at any point before `launch()`.
+-   *
+-   * If the TelegramService is unavailable, the command is not registered.
+-   */
+-  private registerPairCommand(runtime: IAgentRuntime): void {
+-    const telegramSvc = runtime.getService(TELEGRAM_SERVICE_NAME) as unknown;
+-    if (!telegramSvc || typeof telegramSvc !== "object") {
+-      logger.warn(
+-        { src: "plugin:telegram:owner-pairing", agentId: runtime.agentId },
+-        "TelegramService unavailable during owner-pairing start; /eliza_pair command not registered",
+-      );
+-      return;
+-    }
+-
+-    const bot =
+-      "bot" in (telegramSvc as Record<string, unknown>)
+-        ? (telegramSvc as { bot: unknown }).bot
+-        : null;
+-
+-    if (
+-      !bot ||
+-      typeof (bot as Record<string, unknown>).command !== "function"
+-    ) {
+-      logger.warn(
+-        { src: "plugin:telegram:owner-pairing", agentId: runtime.agentId },
+-        "Telegraf bot instance not available — /eliza_pair will not be registered",
+-      );
+-      return;
+-    }
+-
+-    const telegrafBot = bot as import("telegraf").Telegraf<Context>;
+-    telegrafBot.command("eliza_pair", async (ctx) => {
+-      await handleElizaPairCommand(ctx, runtime);
+-    });
+-
+-    logger.debug(
+-      { src: "plugin:telegram:owner-pairing", agentId: runtime.agentId },
+-      "/eliza_pair command registered with Telegraf bot",
+-    );
+   }
+ 
+   async sendOwnerLoginDmLink(params: {

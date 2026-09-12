@@ -18,6 +18,8 @@ export const aliceElizaRuntimePatchRelativePath =
   "scripts/alice-eliza-runtime-patches/app-core-server-only-api-bind.patch";
 export const aliceCompanionOperatorPatchRelativePath =
   "scripts/alice-eliza-runtime-patches/alice-companion-operator.patch";
+export const aliceTelegramOwnerPairingPatchRelativePath =
+  "scripts/alice-eliza-runtime-patches/telegram-owner-pairing.patch";
 
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
 const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
@@ -7206,6 +7208,48 @@ export function isAliceCompanionOperatorPatchPatched(elizaRoot) {
   );
 }
 
+// Native Telegram aa5f9c05: authorize/register handlers before polling and
+// await the existing owner verifier instead of racing service registration.
+export function applyAliceTelegramOwnerPairingPatch({
+  rootDir = repoRoot,
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const servicePath = path.join(
+    elizaRoot, "plugins/plugin-telegram/src/service.ts",
+  );
+  const pairingPath = path.join(
+    elizaRoot, "plugins/plugin-telegram/src/owner-pairing-service.ts",
+  );
+  if (!existsSync(servicePath) && !existsSync(pairingPath)) return "skipped";
+  const isApplied = () => {
+    const service = readFileSync(servicePath, "utf8");
+    const pairing = readFileSync(pairingPath, "utf8");
+    const setup = service.indexOf("service.setupMessageHandlers(state);");
+    return (
+      service.includes('await runtime.getServiceLoadPromise("OWNER_BIND_VERIFY");') &&
+      service.includes('await handleElizaPairCommand(ctx, this.runtime);') &&
+      setup >= 0 && setup < service.indexOf("while (retryCount < maxRetries)") &&
+      pairing.includes("return new TelegramOwnerPairingServiceImpl(runtime);") &&
+      !pairing.includes("registerPairCommand")
+    );
+  };
+  if (isApplied()) return "already-applied";
+  applyPatchWithGitFallback({
+    patchPath: path.join(rootDir, aliceTelegramOwnerPairingPatchRelativePath),
+    targetRoot: elizaRoot,
+    driftMessage: "Alice native Telegram owner-pairing patch drifted",
+    log,
+  });
+  if (!isApplied()) {
+    throw new Error("Alice native Telegram owner-pairing contract absent after patch");
+  }
+  log(
+    "[alice-eliza-runtime-patches] applied native Telegram owner-pairing startup correction",
+  );
+  return "applied";
+}
+
 export function applyAliceCompanionOperatorPatch({
   rootDir,
   elizaRoot,
@@ -7360,6 +7404,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceBrowserBridgeWorkspaceStubPatch({ elizaRoot, log }),
     applyAliceAppPluginRegisterExportPatch({ elizaRoot, log }),
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
+    applyAliceTelegramOwnerPairingPatch({ rootDir, elizaRoot, log }),
     applyAliceStream555RuntimePluginAutoloadPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAliceElizacloudReexportPatch({ elizaRoot, log }),
