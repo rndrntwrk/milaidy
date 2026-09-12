@@ -97,7 +97,7 @@ export function releaseRevisionResponseFields(
 export const ALICE_PRODUCTION_TRUST_PINS: AliceTrustPins = Object.freeze({
   programPublicJwkSha256:
     "sha256:b2aa16b88a789d0110f8e02521b15fd72b1d0df8873ffdfc1c7029c213825f5e",
-  policyHash: "sha256:da728a7af66244740ee6563322b708f84eeb734ab4ae3b24b9bd47445f03ea47",
+  policyHash: "sha256:d8e8fdc2f71d5763131cc968b1e0227468ee8c06dbfab8512f9fce443db753e1",
 });
 
 const PINNED_MAX_DAILY_BUDGET_UNITS = 100_000;
