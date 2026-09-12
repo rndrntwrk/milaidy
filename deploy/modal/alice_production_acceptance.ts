@@ -816,7 +816,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     );
     const authority = assertCandidateState(preBudgetState.value, expected, []);
     const maxUnits = authority.budget?.maxUnits;
-    if (!Number.isSafeInteger(maxUnits) || maxUnits < 1 || maxUnits > 10_000) {
+    if (!Number.isSafeInteger(maxUnits) || maxUnits < 1 || maxUnits > 100_000) {
       invalid();
     }
     const budgetRequestId = `acceptance-budget-${randomUuid()}`;

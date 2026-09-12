@@ -21,6 +21,7 @@ const ALICE_RUNTIME_ALLOWED_HOSTS = [
   ...Object.keys(ALICE_RUNTIME_OUTBOUND_BY_HOST),
   "auth.openai.com",
   "chatgpt.com",
+  "stream.rndrntwrk.com",
 ];
 
 export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {

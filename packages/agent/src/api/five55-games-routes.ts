@@ -1,5 +1,6 @@
 import type { RouteRequestContext } from "./route-helpers";
 import type { StreamRouteState } from "./stream-route-state";
+import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
 import {
   createAgentRequestId,
   isAgentAuthConfigured,
@@ -334,6 +335,12 @@ export async function handleFive55GamesRoutes(
       error(res, "Method not allowed", 405);
       return true;
     }
+    if (isAliceFullRuntimeProfile()) {
+      // Upstream state reads can register a game runtime and write Redis.
+      // Connection inspection must not implicitly perform that registration.
+      error(res, "Arcade gameplay state requires a registered game runtime", 503);
+      return true;
+    }
     const upstream = await readUpstreamGameState(
       process.env.STREAM555_BASE_URL?.trim(),
       sessionId,
@@ -358,20 +365,31 @@ export async function handleFive55GamesRoutes(
   }
 
   const requestId = createAgentRequestId(`api-five55-games-${operation}`);
+  const aliceCatalog = operation === "catalog" && isAliceFullRuntimeProfile();
   let ensuredSessionId = sessionId;
-  try {
-    ensuredSessionId = await ensureGamesAgentSessionId(
-      upstreamBase,
-      sessionId,
-      `${requestId}-bootstrap`,
-    );
-  } catch (err) {
-    error(
-      res,
-      err instanceof Error ? err.message : "Session bootstrap failed",
-      502,
-    );
-    return true;
+  if (aliceCatalog) {
+    // The upstream catalog is a read. Never bootstrap or reclaim a session
+    // merely because the owner opened Companion's game picker.
+    ensuredSessionId = process.env.STREAM555_DEFAULT_SESSION_ID?.trim() ?? "";
+    if (!ensuredSessionId) {
+      error(res, "STREAM555_DEFAULT_SESSION_ID is not configured", 503);
+      return true;
+    }
+  } else {
+    try {
+      ensuredSessionId = await ensureGamesAgentSessionId(
+        upstreamBase,
+        sessionId,
+        `${requestId}-bootstrap`,
+      );
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Session bootstrap failed",
+        502,
+      );
+      return true;
+    }
   }
 
   const body = (await readJsonBody<Record<string, unknown>>(req, res)) ?? {};
@@ -391,6 +409,14 @@ export async function handleFive55GamesRoutes(
       `${message} [requestId: ${upstream.requestId}]`,
       upstream.status || 502,
     );
+    return true;
+  }
+
+  if (
+    aliceCatalog &&
+    (upstream.data?.sessionId !== ensuredSessionId || !Array.isArray(upstream.data?.games))
+  ) {
+    error(res, "Alice Arcade catalog is unavailable for the configured session", 502);
     return true;
   }
 

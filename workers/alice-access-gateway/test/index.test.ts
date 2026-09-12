@@ -527,6 +527,9 @@ describe("Alice Access gateway", () => {
       "/companion",
       "/broadcast/alice-cam",
       "/assets/main.js",
+      "/animations/idle.glb.gz",
+      "/animations/emotes/talk.glb.gz",
+      "/animations/greetings/greeting9.fbx.gz",
     ]) {
       const response = await invokeGateway(
         new Request(`https://alice.rndrntwrk.com${pathname}`, {
@@ -573,6 +576,9 @@ describe("Alice Access gateway", () => {
       "/companion",
       "/broadcast/alice-cam",
       "/assets/main.js",
+      "/animations/idle.glb.gz",
+      "/animations/emotes/talk.glb.gz",
+      "/animations/greetings/greeting9.fbx.gz",
     ]);
     for (const request of ownerRequests) {
       expect(request.headers.get("authorization")).toBeNull();
@@ -642,6 +648,12 @@ describe("Alice Access gateway", () => {
       ["GET", "/api/character"],
       ["GET", "/api/character/random-name"],
       ["GET", "/api/subscription/status"],
+      ["GET", "/api/stream/status"],
+      ["GET", "/api/coding-agents/coordinator/status"],
+      ["GET", "/music-player/status"],
+      ["GET", "/api/agent/v1/sessions/companion/games/state"],
+      ["POST", "/api/agent/v1/sessions/companion/games/catalog"],
+      ["POST", "/api/emote"],
       ["GET", "/api/memories/feed?limit=10"],
       ["GET", "/api/lifeops/overview"],
       ["GET", "/api/lifeops/activity-signals"],
@@ -693,6 +705,10 @@ describe("Alice Access gateway", () => {
     for (const [method, pathname] of [
       ["GET", "/api/sandbox/browser"],
       ["GET", "/api/unreviewed/read"],
+      ["POST", "/animations/idle.glb.gz"],
+      ["POST", "/api/stream/start"],
+      ["POST", "/api/agent/v1/sessions/companion/games/play"],
+      ["POST", "/api/agent/v1/sessions/companion/games/stop"],
       ["POST", "/api/unreviewed/execute"],
       ["POST", "/api/knowledge/documents/url"],
       ["POST", "/api/knowledge/documents/bulk/nearby"],

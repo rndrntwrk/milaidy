@@ -11,6 +11,7 @@
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { logger } from "@elizaos/core";
+import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
 import type { StreamConfig } from "../services/stream-manager.js";
 import {
   readRequestBody,
@@ -111,6 +112,7 @@ function formatErrorMessage(err: unknown): string {
 }
 
 interface Stream555StatusLike {
+  sessionId?: string;
   active: boolean;
   cfSessionId?: string;
   cloudflare?: {
@@ -1229,13 +1231,21 @@ export async function handleStreamRoute(
 
   // ── GET /api/stream/status -- local stream health ────────────────────
   if (method === "GET" && pathname === "/api/stream/status") {
+    const alice = isAliceFullRuntimeProfile();
     const stream555 = getStream555Service(state);
     if (stream555) {
       try {
-        const sessionId =
-          getConfiguredStream555SessionId(stream555) ??
-          (await recoverActiveStream555SessionId(stream555));
+        // Alice observes only its explicitly configured session. Status polling
+        // must never reclaim another operator's live session or bind a socket.
+        const sessionId = alice
+          ? stream555.getConfig()?.defaultSessionId?.trim()
+          : getConfiguredStream555SessionId(stream555) ??
+            (await recoverActiveStream555SessionId(stream555));
         if (!sessionId) {
+          if (alice) {
+            error(res, "STREAM555_DEFAULT_SESSION_ID is not configured", 503);
+            return true;
+          }
           json(res, {
             ok: true,
             ...mapStream555StatusToHealth(null),
@@ -1244,12 +1254,21 @@ export async function handleStreamRoute(
           return true;
         }
         const status = await stream555.getStreamStatus(sessionId);
+        if (alice && (typeof status.active !== "boolean" || status.sessionId !== sessionId)) {
+          error(res, "555 Stream status did not match the configured session", 502);
+          return true;
+        }
         json(res, {
           ok: true,
+          ...(alice ? { sessionId } : {}),
           ...mapStream555StatusToHealth(status),
           destination: deriveStream555Destination(status),
         });
       } catch (err) {
+        if (alice) {
+          error(res, "555 Stream status is unavailable", 502);
+          return true;
+        }
         logger.warn(
           `[stream] 555stream status fallbacking to inactive payload: ${formatErrorMessage(
             err,
@@ -1261,6 +1280,11 @@ export async function handleStreamRoute(
           destination: deriveStream555Destination(null),
         });
       }
+      return true;
+    }
+
+    if (alice) {
+      error(res, "555 Stream is not configured on this runtime", 503);
       return true;
     }
 

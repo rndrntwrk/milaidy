@@ -543,6 +543,79 @@ describe("handleStreamRoute", () => {
       Object.assign(process.env, savedEnv);
     });
 
+    describe("Alice connection reads", () => {
+      beforeEach(() => {
+        process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+        process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+      });
+
+      it("requires a configured session without recovering or binding live outputs", async () => {
+        const service = mockStream555Service({
+          getBoundSessionId: vi.fn(() => "unrelated-session"),
+          getPlatformStatusOverview: vi.fn(async () => ({
+            platforms: [{ platformId: "twitch", enabled: true, status: "live" }],
+          })),
+        });
+        const { res, getStatus } = createMockHttpResponse();
+        await handleStreamRoute(
+          createMockIncomingMessage({ method: "GET", url: "/api/stream/status" }),
+          res, "/api/stream/status", "GET",
+          mockState({ runtime: { getService: vi.fn(() => service) } }),
+        );
+        expect(getStatus()).toBe(503);
+        expect(service.getPlatformStatusOverview).not.toHaveBeenCalled();
+        expect(service.createOrResumeSession).not.toHaveBeenCalled();
+        expect(service.bindWebSocket).not.toHaveBeenCalled();
+        expect(service.getStreamStatus).not.toHaveBeenCalled();
+      });
+
+      it("reads the configured session without using a different bound session", async () => {
+        const service = mockStream555Service({
+          getBoundSessionId: vi.fn(() => "unrelated-session"),
+          getConfig: vi.fn(() => ({ defaultSessionId: "alice-session" })),
+        });
+        const { res, getStatus, getJson } = createMockHttpResponse();
+        await handleStreamRoute(
+          createMockIncomingMessage({ method: "GET", url: "/api/stream/status" }),
+          res, "/api/stream/status", "GET",
+          mockState({ runtime: { getService: vi.fn(() => service) } }),
+        );
+        expect(getStatus()).toBe(200);
+        expect(getJson()).toMatchObject({ ok: true, sessionId: "alice-session", running: false });
+        expect(service.getStreamStatus).toHaveBeenCalledWith("alice-session");
+        expect(service.createOrResumeSession).not.toHaveBeenCalled();
+        expect(service.bindWebSocket).not.toHaveBeenCalled();
+      });
+
+      it("surfaces upstream failure instead of reporting an inactive connection", async () => {
+        const service = mockStream555Service({
+          getConfig: vi.fn(() => ({ defaultSessionId: "alice-session" })),
+          getStreamStatus: vi.fn(async () => { throw new Error("upstream unavailable"); }),
+        });
+        const { res, getStatus, getJson } = createMockHttpResponse();
+        await handleStreamRoute(
+          createMockIncomingMessage({ method: "GET", url: "/api/stream/status" }),
+          res, "/api/stream/status", "GET",
+          mockState({ runtime: { getService: vi.fn(() => service) } }),
+        );
+        expect(getStatus()).toBe(502);
+        expect(getJson()).toMatchObject({ error: expect.any(String) });
+        expect(service.createOrResumeSession).not.toHaveBeenCalled();
+        expect(service.bindWebSocket).not.toHaveBeenCalled();
+      });
+
+      it("does not substitute local FFmpeg health for a missing Alice service", async () => {
+        const state = mockState();
+        const { res, getStatus } = createMockHttpResponse();
+        await handleStreamRoute(
+          createMockIncomingMessage({ method: "GET", url: "/api/stream/status" }),
+          res, "/api/stream/status", "GET", state,
+        );
+        expect(getStatus()).toBe(503);
+        expect(state.streamManager.getHealth).not.toHaveBeenCalled();
+      });
+    });
+
     it("returns an inactive 555stream payload without creating a session when no outputs are live", async () => {
       const { res, getStatus, getJson } = createMockHttpResponse();
       const req = createMockIncomingMessage({

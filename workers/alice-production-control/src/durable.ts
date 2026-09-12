@@ -475,6 +475,10 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
                 rollbackBoundary: candidate.rollbackBoundary,
                 runtimeRevision: config.runtimeRevision,
                 rollbackReceiptHash: rollbackAuthorization?.receiptHash ?? null,
+                previousBudgetLimit: before.budget.maxUnits,
+                budgetLimit: ledger.snapshot().budget.maxUnits,
+                previousBudgetUsedUnits: before.budget.usedUnits,
+                budgetUsedUnits: ledger.snapshot().budget.usedUnits,
               },
             }),
         );
