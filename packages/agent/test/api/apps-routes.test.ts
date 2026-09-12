@@ -195,6 +195,40 @@ describe("handleAppsRoutes", () => {
     expect(getJson()).toEqual(runs);
   });
 
+  test("Alice GET /api/apps/runs returns stored runs with refresh disabled", async () => {
+    vi.stubEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    vi.stubEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const runtime = { agentId: "alice" } as IAgentRuntime;
+    const runs = [
+      {
+        runId: "stored-run-1",
+        appName: "@hyperscape/plugin-hyperscape",
+        displayName: "Hyperscape",
+        status: "running",
+        updatedAt: "2026-09-12T00:00:00.000Z",
+      },
+    ];
+    const listRuns = vi.fn(async () => runs);
+    const ctx = buildCtx({
+      method: "GET",
+      pathname: "/api/apps/runs",
+      res,
+      runtime,
+      appManager: buildAppManager({ listRuns }),
+    });
+
+    try {
+      expect(await handleAppsRoutes(ctx)).toBe(true);
+      expect(listRuns).toHaveBeenCalledWith(runtime, { refresh: false });
+      expect(mockImportAppRouteModule).not.toHaveBeenCalled();
+      expect(getStatus()).toBe(200);
+      expect(getJson()).toEqual(runs);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   test("GET /api/apps/runs/:runId returns 404 when missing", async () => {
     const { res, getStatus, getJson } = createMockHttpResponse();
     const ctx = buildCtx({

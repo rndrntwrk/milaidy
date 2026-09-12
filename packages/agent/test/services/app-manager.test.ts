@@ -1896,6 +1896,56 @@ describe("AppManager", () => {
   });
 
   describe("multi-app control plane", () => {
+    it("lists stored runs without loading, refreshing, or persisting when refresh is disabled", async () => {
+      const stateDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "milady-app-manager-snapshot-"),
+      );
+      const storePath = path.join(stateDir, "apps", "runs.v2.json");
+      const storedRuns = ["2026-09-11", "2026-09-12"].map((date, index) => ({
+        runId: `stored-run-${index}`,
+        appName: `@elizaos/app-stored-${index}`,
+        displayName: `Stored app ${index}`,
+        pluginName: `@elizaos/app-stored-${index}`,
+        launchType: "url",
+        status: "running",
+        summary: `Stored run ${index}`,
+        startedAt: "2026-09-10T00:00:00.000Z",
+        updatedAt: `${date}T00:00:00.000Z`,
+        viewerAttachment: "unavailable",
+        health: { state: "healthy", message: `Stored run ${index}` },
+      }));
+      fs.mkdirSync(path.dirname(storePath));
+      const storedBytes = JSON.stringify({
+        version: 2,
+        updatedAt: "2026-09-12T00:00:00.000Z",
+        runs: storedRuns,
+      });
+      fs.writeFileSync(storePath, storedBytes);
+      const manager = new AppManager({ stateDir });
+      const refreshRunSession = vi.fn(async () => null);
+      appPackageModuleMocks.importAppRouteModule.mockResolvedValue({
+        refreshRunSession,
+      });
+      const writeFile = vi.spyOn(fs, "writeFileSync");
+
+      try {
+        const runs = await manager.listRuns(null, { refresh: false });
+
+        expect(runs).toEqual([
+          expect.objectContaining(storedRuns[1]),
+          expect.objectContaining(storedRuns[0]),
+        ]);
+        expect(appPackageModuleMocks.importAppRouteModule).not.toHaveBeenCalled();
+        expect(appPackageModuleMocks.importAppPlugin).not.toHaveBeenCalled();
+        expect(refreshRunSession).not.toHaveBeenCalled();
+        expect(writeFile).not.toHaveBeenCalled();
+        expect(fs.readFileSync(storePath, "utf-8")).toBe(storedBytes);
+      } finally {
+        writeFile.mockRestore();
+        fs.rmSync(stateDir, { force: true, recursive: true });
+      }
+    });
+
     it("refreshes multiple persisted app runs through their route modules when listing runs", async () => {
       process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
       const stateDir = fs.mkdtempSync(

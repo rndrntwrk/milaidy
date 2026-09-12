@@ -79,6 +79,8 @@ describe("Alice production runtime guard", () => {
       ["GET", "/api/subscription/status"],
       ["GET", "/api/stream/status"],
       ["GET", "/api/coding-agents/coordinator/status"],
+      ["GET", "/api/coding-agents/coordinator/threads"],
+      ["GET", "/api/apps/runs"],
       ["GET", "/music-player/status"],
       ["GET", "/api/agent/v1/sessions/companion/games/state"],
       ["POST", "/api/agent/v1/sessions/companion/games/catalog"],
@@ -146,6 +148,10 @@ describe("Alice production runtime guard", () => {
       ["GET", "/api/alice-production/capabilities/nearby"],
       ["POST", "/api/lifeops/goals"],
       ["POST", "/api/workbench/tasks"],
+      ["POST", "/api/coding-agents/coordinator/threads"],
+      ["GET", "/api/coding-agents/coordinator/threads/nearby"],
+      ["POST", "/api/apps/runs"],
+      ["GET", "/api/apps/runs/nearby"],
     ]) {
       expect(
         evaluateAliceProductionRequest(method, pathname, fullAliceEnv),

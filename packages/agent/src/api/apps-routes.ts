@@ -7,6 +7,7 @@ import {
   packageNameToAppDisplayName,
   packageNameToAppRouteSlug,
 } from "../contracts/apps.js";
+import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
 import { importAppRouteModule } from "../services/app-package-modules.js";
 import type {
   InstallProgressLike,
@@ -28,7 +29,10 @@ export interface AppManagerLike {
     limit?: number,
   ) => Promise<unknown>;
   listInstalled: (pluginManager: PluginManagerLike) => Promise<unknown>;
-  listRuns: (runtime?: IAgentRuntime | null) => Promise<unknown>;
+  listRuns: (
+    runtime?: IAgentRuntime | null,
+    options?: { refresh?: boolean },
+  ) => Promise<unknown>;
   getRun: (runId: string, runtime?: IAgentRuntime | null) => Promise<unknown>;
   attachRun: (
     runId: string,
@@ -509,7 +513,11 @@ export async function handleAppsRoutes(
   }
 
   if (method === "GET" && pathname === "/api/apps/runs") {
-    const runs = await appManager.listRuns(runtime as IAgentRuntime | null);
+    const runs = isAliceFullRuntimeProfile()
+      ? await appManager.listRuns(runtime as IAgentRuntime | null, {
+          refresh: false,
+        })
+      : await appManager.listRuns(runtime as IAgentRuntime | null);
     json(res, runs as object);
     return true;
   }

@@ -60,6 +60,8 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/api\/subscription\/status$/,
   /^\/api\/stream\/status$/,
   /^\/api\/coding-agents\/coordinator\/status$/,
+  /^\/api\/coding-agents\/coordinator\/threads$/,
+  /^\/api\/apps\/runs$/,
   /^\/music-player\/status$/,
   /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/state$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
