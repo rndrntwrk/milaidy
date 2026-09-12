@@ -17,7 +17,7 @@ const { AliceRuntimeContainer } = await import(
   "../src/alice-runtime-container"
 );
 
-test("ChatGPT HTTPS reaches the allowlist proxy while other hosts stay denied", async () => {
+test("allowed HTTPS and Discord gateway upgrades reach the proxy while other hosts stay denied", async () => {
   const env = Object.fromEntries([
     ...[
       "ACCESS_PROXY_SECRET",
@@ -69,9 +69,14 @@ test("ChatGPT HTTPS reaches the allowlist proxy while other hosts stay denied", 
   expect(proxy).toBeDefined();
 
   const originalFetch = globalThis.fetch;
-  const destinations: string[] = [];
+  const destinations: Request[] = [];
+  const gatewayUpgrade = new Response(null, {
+    status: 101,
+    headers: { upgrade: "websocket" },
+  });
   globalThis.fetch = (async (request: Request) => {
-    destinations.push(request.url);
+    destinations.push(request);
+    if (request.headers.get("upgrade") === "websocket") return gatewayUpgrade;
     return new Response("reached", { status: 202 });
   }) as typeof fetch;
   try {
@@ -93,10 +98,36 @@ test("ChatGPT HTTPS reaches the allowlist proxy while other hosts stay denied", 
         )
       ).status,
     ).toBe(202);
+    for (const url of [
+      "https://api.telegram.org/bot-test/getUpdates",
+      "https://discord.com/api/v10/gateway/bot",
+    ]) {
+      expect((await proxy.fetch(new Request(url))).status).toBe(202);
+    }
+    // A WSS handshake reaches the HTTPS interceptor as an HTTP Upgrade request.
+    for (const host of [
+      "gateway.discord.gg",
+      "gateway-us-east1-b.discord.gg",
+    ]) {
+      const request = new Request(`https://${host}/?v=10&encoding=json`, {
+        headers: { connection: "Upgrade", upgrade: "websocket" },
+      });
+      expect(await proxy.fetch(request)).toBe(gatewayUpgrade);
+      expect(destinations.at(-1)).toBe(request);
+    }
     expect(
       (await proxy.fetch(new Request("https://example.com/"))).status,
     ).toBe(520);
-    expect(destinations).toHaveLength(2);
+    expect(
+      (
+        await proxy.fetch(
+          new Request("https://gateway.discord.gg.example.com/", {
+            headers: { connection: "Upgrade", upgrade: "websocket" },
+          }),
+        )
+      ).status,
+    ).toBe(520);
+    expect(destinations).toHaveLength(6);
   } finally {
     globalThis.fetch = originalFetch;
   }

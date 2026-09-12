@@ -22,6 +22,11 @@ const ALICE_RUNTIME_ALLOWED_HOSTS = [
   "auth.openai.com",
   "chatgpt.com",
   "stream.rndrntwrk.com",
+  "api.telegram.org",
+  "discord.com",
+  "gateway.discord.gg",
+  // Discord's Ready event supplies a regional gateway for session resumption.
+  "gateway-*.discord.gg",
 ];
 
 export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {
