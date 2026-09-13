@@ -9,6 +9,16 @@ const repoRoot = path.resolve(
   "..",
 );
 
+test("cloud build applies native Telegram pairing before compiling the connector", () => {
+  const workflow = fs.readFileSync(path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"), "utf8");
+  const patchStep = workflow.match(/- name: Apply native Telegram owner pairing[\s\S]*?(?=\n      - name:)/)?.[0] ?? "";
+  assert.match(patchStep, /import \{ applyAliceTelegramOwnerPairingPatch \} from '\.\/scripts\/apply-alice-eliza-runtime-patches\.mjs'/);
+  assert.match(patchStep, /applyAliceTelegramOwnerPairingPatch\(\{ elizaRoot: 'eliza' \}\)/);
+  assert.match(patchStep, /result !== 'applied' && result !== 'already-applied'/);
+  assert.ok(workflow.indexOf(patchStep) > workflow.indexOf('- name: Init submodules'));
+  assert.ok(workflow.indexOf(patchStep) < workflow.indexOf('- name: Build Alice policy workspace packages'));
+});
+
 test("cloud agent image publishes under the repository owner", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),

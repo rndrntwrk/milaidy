@@ -178,6 +178,16 @@ jobs:
           fi
           test -f eliza/package.json
 
+      - name: Apply native Telegram owner pairing
+        run: |
+          node --input-type=module <<'NODE'
+          import { applyAliceTelegramOwnerPairingPatch } from './scripts/apply-alice-eliza-runtime-patches.mjs';
+          const result = applyAliceTelegramOwnerPairingPatch({ elizaRoot: 'eliza' });
+          if (result !== 'applied' && result !== 'already-applied') {
+            throw new Error('Native Telegram owner pairing was not applied');
+          }
+          NODE
+
       # ── 4. Install dependencies ─────────────────────────────────────────────
       - name: Port Alice operator bridge
         run: node scripts/port-alice-operator-bridge.mjs
