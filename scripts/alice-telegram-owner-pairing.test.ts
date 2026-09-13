@@ -22,7 +22,7 @@ const temporaryRoot = mkdtempSync(
 const telegramRoot = path.join(temporaryRoot, "plugins/plugin-telegram/src");
 beforeAll(() => {
   mkdirSync(telegramRoot, { recursive: true });
-  for (const name of ["service.ts", "owner-pairing-service.ts"]) {
+  for (const name of ["service.ts", "owner-pairing-service.ts", "command-registration.ts"]) {
     writeFileSync(
       path.join(telegramRoot, name),
       readFileSync(path.join(sourceRoot, "plugins/plugin-telegram/src", name)),

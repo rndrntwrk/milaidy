@@ -7221,17 +7221,22 @@ export function applyAliceTelegramOwnerPairingPatch({
   const pairingPath = path.join(
     elizaRoot, "plugins/plugin-telegram/src/owner-pairing-service.ts",
   );
-  if (!existsSync(servicePath) && !existsSync(pairingPath)) return "skipped";
+  const commandPath = path.join(
+    elizaRoot, "plugins/plugin-telegram/src/command-registration.ts",
+  );
+  if (!existsSync(servicePath) && !existsSync(pairingPath) && !existsSync(commandPath)) return "skipped";
   const isApplied = () => {
     const service = readFileSync(servicePath, "utf8");
     const pairing = readFileSync(pairingPath, "utf8");
+    const commands = readFileSync(commandPath, "utf8");
     const setup = service.indexOf("service.setupMessageHandlers(state);");
     return (
       service.includes('await runtime.getServiceLoadPromise("OWNER_BIND_VERIFY");') &&
       service.includes('await handleElizaPairCommand(ctx, this.runtime);') &&
       setup >= 0 && setup < service.indexOf("while (retryCount < maxRetries)") &&
       pairing.includes("return new TelegramOwnerPairingServiceImpl(runtime);") &&
-      !pairing.includes("registerPairCommand")
+      !pairing.includes("registerPairCommand") &&
+      commands.split("const entityId = await resolveTelegramRuntimeEntityId(").length === 3
     );
   };
   if (isApplied()) return "already-applied";
