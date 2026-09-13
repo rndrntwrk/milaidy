@@ -23,7 +23,7 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
 @@ -605,8 +606,18 @@
        return service;
      }
-
+ 
 +    // The core starts sibling services concurrently; wait for the registered
 +    // native verifier before accepting connector commands.
 +    if (runtime.hasService("OWNER_BIND_VERIFY")) {
@@ -38,7 +38,7 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
 +      service.setupMessageHandlers(state);
        let retryCount = 0;
        let lastError: Error | null = null;
-
+ 
 @@ -622,8 +633,6 @@
              "Starting Telegram bot",
            );
@@ -46,7 +46,7 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
 -          service.setupMiddlewares(state);
 -          service.setupMessageHandlers(state);
            await state.bot.telegram.getMe();
-
+ 
            logger.success(
 @@ -810,52 +819,6 @@
            },
@@ -99,7 +99,7 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
 -        accountId,
 -      );
      }
-
+ 
      // Telegraf v4's `bot.launch()` resolves only when polling STOPS — it awaits
 @@ -1245,6 +1208,60 @@
      const bot = state?.bot ?? this.bot;
@@ -167,7 +167,7 @@ diff --git a/plugins/plugin-telegram/src/owner-pairing-service.ts b/plugins/plug
 +++ b/plugins/plugin-telegram/src/owner-pairing-service.ts
 @@ -309,76 +309,13 @@
      "Handles Telegram-side owner pairing (command code verification) and DM login-link delivery for Eliza remote auth";
-
+ 
    static async start(runtime: IAgentRuntime): Promise<Service> {
 -    const service = new TelegramOwnerPairingServiceImpl(runtime);
 -    if (resolveVerifyService(runtime)) {
@@ -193,7 +193,7 @@ diff --git a/plugins/plugin-telegram/src/owner-pairing-service.ts b/plugins/plug
 +    // before polling. This service retains owner login DM delivery only.
 +    return new TelegramOwnerPairingServiceImpl(runtime);
    }
-
+ 
    async stop(): Promise<void> {
      pairAttempts.clear();
 -  }
@@ -243,7 +243,7 @@ diff --git a/plugins/plugin-telegram/src/owner-pairing-service.ts b/plugins/plug
 -      "/eliza_pair command registered with Telegraf bot",
 -    );
    }
-
+ 
    async sendOwnerLoginDmLink(params: {
 diff --git a/plugins/plugin-telegram/src/command-registration.ts b/plugins/plugin-telegram/src/command-registration.ts
 --- a/plugins/plugin-telegram/src/command-registration.ts
