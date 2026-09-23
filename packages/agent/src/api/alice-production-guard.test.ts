@@ -140,6 +140,8 @@ describe("Alice production runtime guard", () => {
       ["PUT", "/api/knowledge"],
       ["PUT", "/api/plugins/shell"],
       ["GET", "/api/secrets"],
+      ["GET", "/api/github/token"],
+      ["POST", "/api/github/token"],
       ["GET", "/api/wallet/keys"],
       ["GET", "/api/sandbox/browser"],
       ["GET", "/api/unreviewed/read"],

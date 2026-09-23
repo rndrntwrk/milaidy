@@ -521,6 +521,21 @@
       "policyState": "enabled"
     },
     {
+      "id": "package:@elizaos/plugin-github",
+      "classification": "policy-disabled",
+      "source": {
+        "type": "package",
+        "package": "@elizaos/plugin-github",
+        "entrypoint": "."
+      },
+      "surface": "plugin",
+      "runtimeNames": [
+        "github"
+      ],
+      "adapter": null,
+      "policyState": "policy-disabled"
+    },
+    {
       "id": "package:@elizaos/plugin-google-genai",
       "classification": "policy-disabled",
       "source": {

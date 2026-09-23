@@ -556,6 +556,7 @@ jobs:
           eliza/plugins/plugin-coding-tools|dist/index.js
           eliza/plugins/plugin-computeruse|dist/index.js
           eliza/plugins/plugin-discord|dist/index.js
+          eliza/plugins/plugin-github|dist/index.js
           eliza/plugins/plugin-google-genai|dist/node/index.node.js
           eliza/plugins/plugin-imessage|dist/index.js
           eliza/plugins/plugin-mcp|dist/node/index.js

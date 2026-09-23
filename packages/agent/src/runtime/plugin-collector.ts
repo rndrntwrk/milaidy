@@ -303,6 +303,7 @@ export function collectPluginNames(
     for (const name of [
       "@elizaos/plugin-telegram",
       "@elizaos/plugin-discord",
+      "@elizaos/plugin-github",
     ]) {
       pluginsToLoad.add(name);
       track(name, "Alice full runtime");

@@ -138,6 +138,7 @@
     "@elizaos/plugin-elizacloud": "workspace:*",
     "@elizaos/plugin-experience": "2.0.0-alpha.11",
     "@elizaos/plugin-form": "workspace:*",
+    "@elizaos/plugin-github": "workspace:*",
     "@elizaos/plugin-knowledge": "2.0.0-alpha.9",
     "@elizaos/plugin-local-embedding": "2.0.0-beta.1",
     "@elizaos/plugin-ollama": "2.0.3-beta.7",

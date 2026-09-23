@@ -11,6 +11,7 @@ export type AliceRuntimeContainerEnvironmentSource = {
   ALICE_RUNTIME_API_TOKEN: string;
   ALICE_RUNTIME_RELEASE_TOKEN: string;
   ALICE_RUNTIME_VAULT_PASSPHRASE: string;
+  ALICE_GITHUB_AGENT_PAT?: string;
   ALICE_STATE_PLANE_SERVICE_TOKEN: string;
   ALICE_PROGRAM_DIGEST: string;
   ALICE_RELEASE_DIGEST: string;
@@ -104,6 +105,9 @@ export function buildAliceRuntimeContainerEnv(
       "http://alice-state-plane.internal/v1/openai-codex-credentials",
     ALICE_STATE_OWNER_ID: ALICE_RUNTIME_STATE_OWNER_ID,
     ELIZA_VAULT_PASSPHRASE: env.ALICE_RUNTIME_VAULT_PASSPHRASE,
+    ...(env.ALICE_GITHUB_AGENT_PAT?.trim()
+      ? { GITHUB_AGENT_PAT: env.ALICE_GITHUB_AGENT_PAT.trim() }
+      : {}),
     ALICE_RUNTIME_PROFILE: "full-gated",
     ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
     ENABLE_AUTONOMY: "false",
