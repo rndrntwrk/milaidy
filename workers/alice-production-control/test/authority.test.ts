@@ -1048,7 +1048,7 @@ describe("Alice durable authority ledger", () => {
       scope: "sandbox.execute",
       target: "sandbox:production-canary",
       argumentHash: `sha256:${"8".repeat(64)}`,
-      nonce: "nonce-cap-sandbox-replay",
+      nonce: "nonce-intent-sandbox-replay",
       expiresAt: 1_787_400_120_000,
       rollbackBoundary: "sandbox:production-canary",
       revokedAt: null,

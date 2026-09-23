@@ -55,7 +55,7 @@ describe("Alice WebAuthn authority", () => {
       action: "coding.patch.sandbox",
       target: "rndrntwrk/milaidy",
       argumentHash,
-      nonce: "nonce-intent-milaidy-1",
+      nonce: grant.nonce,
       expiresAt: now + 60_000,
       capabilityId: grant.capabilityId,
       ...binding,
@@ -63,7 +63,11 @@ describe("Alice WebAuthn authority", () => {
     expect(restored.authorize(intent, now + 5, otherOwner).code).toBe("CAPABILITY_MISMATCH");
     expect(restored.authorize({ ...intent, argumentHash: `sha256:${"9".repeat(64)}` },
       now + 5, owner).code).toBe("CAPABILITY_MISMATCH");
+    expect(restored.authorize({ ...intent, nonce: "nonce-intent-mismatch" },
+      now + 5, owner).code).toBe("CAPABILITY_MISMATCH");
     expect(restored.authorize(intent, now + 5, owner).code).toBe("CAPABILITY_AUTHORIZED");
+    expect(restored.authorize({ ...intent, intentId: "intent-milaidy-replay-same-nonce" },
+      now + 6, owner).code).toBe("NONCE_REPLAY");
     expect(restored.authorize({ ...intent, intentId: "intent-milaidy-replay",
       nonce: "nonce-intent-milaidy-replay" }, now + 6, owner).code)
       .toBe("CAPABILITY_CONSUMED");

@@ -165,6 +165,7 @@ export function authorizeIntent(
       capability.scope !== intent.action ||
       capability.target !== intent.target ||
       capability.argumentHash !== intent.argumentHash ||
+      capability.nonce !== intent.nonce ||
       capability.expiresAt < intent.expiresAt ||
       capability.rollbackBoundary.trim().length === 0 ||
       capability.nonce.trim().length === 0
