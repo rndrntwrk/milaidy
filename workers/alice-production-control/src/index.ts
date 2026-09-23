@@ -687,7 +687,7 @@ async function handleOwnerApi(
       },
       authority: value.authority,
       controls: {
-        capabilityGrant: "disabled-pending-device-bound-webauthn",
+        capabilityGrant: "owner-access-plus-device-bound-webauthn-single-use-coding-grant",
         highRiskActions: "disabled",
         pauseScopes: [
           "all",
@@ -766,6 +766,25 @@ async function handleOwnerApi(
     return jsonResponse(value, response.status);
   }
 
+  const webauthnRoutes: Record<string, string> = {
+    "/control/api/v1/webauthn/register/options": "/webauthn/register/options",
+    "/control/api/v1/webauthn/register/verify": "/webauthn/register/verify",
+    "/control/api/v1/webauthn/approve/options": "/webauthn/approve/options",
+    "/control/api/v1/webauthn/approve/verify": "/webauthn/approve/verify",
+  };
+  const webauthnRoute = webauthnRoutes[path];
+  if (webauthnRoute && request.method === "POST") {
+    const body = await readBoundedJson(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return jsonResponse({ ok: false, code: "WEBAUTHN_REQUEST_INVALID" }, 400);
+    }
+    const { response, value } = await callDurable(authority, webauthnRoute, {
+      ...body,
+      actor,
+    });
+    return jsonResponse(value, response.status);
+  }
+
   if (path === "/control/api/v1/capabilities/grant" && request.method === "POST") {
     const config = await runtimeConfig(env);
     const record = evidenceRecord(
@@ -774,11 +793,11 @@ async function handleOwnerApi(
       "capability.grant",
       "CAPABILITY_GRANT_DISABLED",
       "capability:unissued",
-      { allowed: false, reason: "device-bound-webauthn-not-qualified" },
+      { allowed: false, reason: "owner-webauthn-route-required" },
     );
     await queueEvidence(env, record);
     return jsonResponse(
-      { ok: false, code: "CAPABILITY_GRANT_DISABLED", gate: "device-bound-webauthn" },
+      { ok: false, code: "CAPABILITY_GRANT_DISABLED", gate: "owner-webauthn-route" },
       403,
     );
   }

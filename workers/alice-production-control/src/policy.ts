@@ -22,6 +22,7 @@ export type ActionIntent = ReleaseBinding & {
 
 export type CapabilityGrant = ReleaseBinding & {
   capabilityId: string;
+  owner: string;
   scope: string;
   target: string;
   argumentHash: string;
@@ -34,6 +35,7 @@ export type CapabilityGrant = ReleaseBinding & {
 
 export type AuthorizationContext = {
   now: number;
+  actor?: string;
   binding: ReleaseBinding;
   pausedScopes: string[];
   consumedNonces: string[];
@@ -158,6 +160,7 @@ export function authorizeIntent(
     }
     if (
       !bindingsMatch(capability, context.binding) ||
+      capability.owner !== context.actor ||
       capability.capabilityId !== intent.capabilityId ||
       capability.scope !== intent.action ||
       capability.target !== intent.target ||

@@ -15,6 +15,7 @@ const binding = {
 };
 const baseDeploymentManifestSha256 = `sha256:${"4".repeat(64)}`;
 const promotedDeploymentManifestSha256 = `sha256:${"5".repeat(64)}`;
+const owner = `owner:sha256:${"c".repeat(64)}`;
 
 function recoveryAuthorization(
   ledger: AuthorityLedger,
@@ -1013,6 +1014,7 @@ describe("Alice durable authority ledger", () => {
     const base = AuthorityLedger.create(binding, 100).exportState();
     base.capabilities["cap-sandbox-canary"] = {
       capabilityId: "cap-sandbox-canary",
+      owner,
       scope: "sandbox.execute",
       target: "sandbox:production-canary",
       argumentHash: `sha256:${"8".repeat(64)}`,
@@ -1042,6 +1044,7 @@ describe("Alice durable authority ledger", () => {
     const base = AuthorityLedger.create(binding, 100).exportState();
     base.capabilities["cap-sandbox-replay"] = {
       capabilityId: "cap-sandbox-replay",
+      owner,
       scope: "sandbox.execute",
       target: "sandbox:production-canary",
       argumentHash: `sha256:${"8".repeat(64)}`,
@@ -1063,9 +1066,9 @@ describe("Alice durable authority ledger", () => {
       ...binding,
     };
     const ledger = AuthorityLedger.restore(base, binding, 100);
-    expect(ledger.authorize(intent, 1_787_400_000_000).allowed).toBe(true);
+    expect(ledger.authorize(intent, 1_787_400_000_000, owner).allowed).toBe(true);
     expect(ledger.revokeCapability("cap-sandbox-replay", 1_787_400_001_000).ok).toBe(true);
-    expect(ledger.authorize(intent, 1_787_400_002_000)).toEqual({
+    expect(ledger.authorize(intent, 1_787_400_002_000, owner)).toEqual({
       allowed: false,
       code: "CAPABILITY_REVOKED",
       risk: "low",

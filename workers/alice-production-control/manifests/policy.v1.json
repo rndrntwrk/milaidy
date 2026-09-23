@@ -4,7 +4,7 @@
   "authority": {
     "canonicalTaskState": "cloudflare-durable-objects",
     "ownerAuthentication": "cloudflare-access-exact-owner-jwt",
-    "privilegedCapabilityGrant": "disabled-pending-device-bound-webauthn",
+    "privilegedCapabilityGrant": "owner-access-plus-device-bound-webauthn-single-use-coding-grant",
     "economicSigner": "renclave-external-only",
     "runtimeAuthority": "proposer-only"
   },

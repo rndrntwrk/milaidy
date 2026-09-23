@@ -9,5 +9,8 @@
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "dry-run": "wrangler deploy --dry-run",
     "check": "bun run types && bun run test && bun run typecheck && bun run dry-run"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "13.3.0"
   }
 }

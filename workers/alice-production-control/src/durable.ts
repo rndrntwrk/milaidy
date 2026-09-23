@@ -46,6 +46,16 @@ import {
 } from "./recovery";
 import { validatePlan, type AlicePlan } from "./plan";
 import { buildAliceReleaseCheckResponse } from "./release-check";
+import {
+  approvalOptions,
+  registrationOptions,
+  verifyApproval,
+  verifyRegistration,
+} from "./webauthn";
+import type {
+  AuthenticationResponseJSON,
+  RegistrationResponseJSON,
+} from "@simplewebauthn/server";
 
 function validBinding(value: unknown): value is ReleaseBinding {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -518,7 +528,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
         const intent = body.request as ActionIntent;
         const actor = String(body.actor ?? "");
         const committed = await this.commitAdmitted(
-          (ledger) => ledger.authorize(intent, Date.now()),
+          (ledger) => ledger.authorize(intent, Date.now(), actor),
           (result) => result.allowed && result.code !== "INTENT_ALREADY_AUTHORIZED",
           (result, config) =>
             createEvidenceRecord({
@@ -531,6 +541,150 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
             }),
         );
         return jsonResponse({ ok: true, decision: committed.result, evidenceQueued: committed.evidenceQueued });
+      }
+      if (url.pathname.startsWith("/webauthn/")) {
+        const config = await loadRuntimeConfig(this.aliceEnv);
+        if (!this.ledger.releaseIsActive(releaseCandidate(config))) {
+          return jsonResponse({ ok: false, code: "RELEASE_ADMISSION_DENIED" }, 503);
+        }
+      }
+      if (url.pathname === "/webauthn/register/options") {
+        const actor = String(body.actor ?? "");
+        if (this.ledger.webauthnState().credential) {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_ALREADY_REGISTERED" }, 409);
+        }
+        const options = await registrationOptions(actor);
+        const committed = await this.commitAdmitted(
+          (ledger) => ledger.beginWebAuthnRegistration(actor, options.challenge, Date.now()),
+          (result) => result.ok,
+        );
+        return committed.result.ok
+          ? jsonResponse({ ok: true, options })
+          : jsonResponse(committed.result, 403);
+      }
+      if (url.pathname === "/webauthn/register/verify") {
+        const actor = String(body.actor ?? "");
+        const pending = this.ledger.webauthnState().pending;
+        if (pending?.kind !== "register" || pending.owner !== actor) {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_CHALLENGE_INVALID" }, 403);
+        }
+        let credential;
+        try {
+          credential = await verifyRegistration(
+            body.response as RegistrationResponseJSON,
+            pending.challenge,
+          );
+        } catch {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_VERIFICATION_FAILED" }, 403);
+        }
+        if (!credential) {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_DEVICE_NOT_BOUND" }, 403);
+        }
+        const committed = await this.commitAdmitted(
+          (ledger) => ledger.completeWebAuthnRegistration(
+            actor,
+            pending.challenge,
+            credential,
+            Date.now(),
+          ),
+          (result) => result.ok,
+          (result, config) => createEvidenceRecord({
+            kind: "capability.webauthn.register",
+            actor,
+            outcome: result.code,
+            binding: config.binding,
+            subjectId: "owner:webauthn",
+            details: { registered: true },
+          }),
+        );
+        return committed.result.ok
+          ? jsonResponse({ ok: true, code: committed.result.code })
+          : jsonResponse(committed.result, 403);
+      }
+      if (url.pathname === "/webauthn/approve/options") {
+        const actor = String(body.actor ?? "");
+        const credential = this.ledger.webauthnState().credential;
+        if (!credential || credential.owner !== actor) {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_CREDENTIAL_REQUIRED" }, 403);
+        }
+        const options = await approvalOptions(credential);
+        const capabilityId = `cap-${crypto.randomUUID()}`;
+        const nonce = `nonce-${crypto.randomUUID()}`;
+        const committed = await this.commitAdmitted(
+          (ledger) => ledger.beginWebAuthnApproval(
+            actor,
+            options.challenge,
+            String(body.argumentHash ?? ""),
+            capabilityId,
+            nonce,
+            Date.now(),
+          ),
+          (result) => result.ok,
+        );
+        return committed.result.ok
+          ? jsonResponse({
+              ok: true,
+              options,
+              approval: {
+                action: "coding.patch.sandbox",
+                target: "rndrntwrk/milaidy",
+                argumentHash: String(body.argumentHash),
+                expiresAt: Date.now() + 300_000,
+              },
+            })
+          : jsonResponse(committed.result, 403);
+      }
+      if (url.pathname === "/webauthn/approve/verify") {
+        const actor = String(body.actor ?? "");
+        const webauthn = this.ledger.webauthnState();
+        const pending = webauthn.pending;
+        const credential = webauthn.credential;
+        if (
+          pending?.kind !== "approve" ||
+          pending.owner !== actor ||
+          !credential ||
+          credential.owner !== actor
+        ) {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_APPROVAL_INVALID" }, 403);
+        }
+        let counter: number | null;
+        try {
+          counter = await verifyApproval(
+            body.response as AuthenticationResponseJSON,
+            pending.challenge,
+            credential,
+          );
+        } catch {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_VERIFICATION_FAILED" }, 403);
+        }
+        if (counter === null) {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_DEVICE_NOT_BOUND" }, 403);
+        }
+        const committed = await this.commitAdmitted(
+          (ledger) => ledger.completeWebAuthnApproval(
+            actor,
+            pending.challenge,
+            credential.id,
+            counter,
+            Date.now(),
+          ),
+          (result) => result.ok,
+          (result, config) => createEvidenceRecord({
+            kind: "capability.grant",
+            actor,
+            outcome: result.code,
+            binding: config.binding,
+            subjectId: pending.capabilityId!,
+            details: {
+              action: "coding.patch.sandbox",
+              target: "rndrntwrk/milaidy",
+              argumentHash: pending.argumentHash!,
+            },
+          }),
+        );
+        return committed.result.ok
+          ? jsonResponse({ ok: true, code: committed.result.code, grant: committed.result.grant })
+          : jsonResponse(committed.result, 403);
       }
       if (url.pathname === "/budget") {
         const modelRequest = body.request as ModelBudgetRequest;
