@@ -33,6 +33,7 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/alice_release_deadline.mjs',
   'deploy/modal/alice_release_deadline.test.mjs',
   'scripts/deploy-alice-cloudflare-workflow.test.mjs',
+  'scripts/alice-recovery-binding-diagnostic.mjs',
   'scripts/verify-alice-release-source.mjs',
   'scripts/verify-alice-release-source.test.mjs',
   'scripts/build-alice-host-worker-artifact.mjs',
