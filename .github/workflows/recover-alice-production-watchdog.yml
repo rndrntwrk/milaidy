@@ -133,6 +133,13 @@ jobs:
             --slurpfile permissionGroups "$permission_groups_file" \
             '{token: $token[0], permissionGroups: $permissionGroups[0]}' \
             > "$token_policy_file"
+          node --input-type=module - "$token_policy_file" <<'NODE'
+          import fs from 'node:fs';
+          import { selectAliceCloudflareRecoveryPermissionGroups } from './deploy/modal/alice_recovery_credential_binding.mjs';
+          const file = process.argv[2];
+          const readback = JSON.parse(fs.readFileSync(file, 'utf8'));
+          fs.writeFileSync(file, JSON.stringify(selectAliceCloudflareRecoveryPermissionGroups(readback)));
+          NODE
           fetch_json "/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts" \
             "$readback_root/workers.json"
           fetch_json "/accounts/${CLOUDFLARE_ACCOUNT_ID}/queues?page=1&per_page=100" \

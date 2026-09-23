@@ -17,6 +17,7 @@ import {
   encodeAliceRecoveryCredentialPolicy,
   normalizeAliceCloudflareRecoveryTokenPolicy,
   readAliceCloudflareRecoveryPolicyReadback,
+  selectAliceCloudflareRecoveryPermissionGroups,
 } from "./alice_recovery_credential_binding.mjs";
 
 const sourceSha = "a".repeat(40);
@@ -611,4 +612,61 @@ test("reads a live-scale Cloudflare policy catalog within its dedicated bound", 
   } finally {
     fs.rmSync(temporaryRoot, { force: true, recursive: true });
   }
+});
+
+test("selects only referenced groups from an oversized catalog without changing policy identity", () => {
+  const tokenId = "0123456789abcdef0123456789abcdef";
+  const provider = cloudflareProviderFixture({ tokenId });
+  const referenced = provider.policy.permissionGroups.result;
+  const extra = Array.from({ length: 402 }, (_, index) => ({
+    id: index.toString(16).padStart(32, "0"),
+    name: `Unrelated group ${index}`,
+    scopes: ["com.cloudflare.api.account"],
+    description: "x".repeat(256),
+  }));
+  const full = {
+    ...provider.policy,
+    permissionGroups: {
+      ...provider.policy.permissionGroups,
+      result: [...referenced, ...extra],
+    },
+  };
+  assert.ok(Buffer.byteLength(JSON.stringify(full)) >
+    ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES);
+  const selected = selectAliceCloudflareRecoveryPermissionGroups(full);
+  assert.deepEqual(selected.permissionGroups.result, referenced);
+  assert.ok(Buffer.byteLength(JSON.stringify(selected)) <
+    ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES);
+  assert.deepEqual(
+    normalizeAliceCloudflareRecoveryTokenPolicy({
+      tokenId, providerPolicyReadback: selected, observedAtMs,
+    }),
+    normalizeAliceCloudflareRecoveryTokenPolicy({
+      tokenId, providerPolicyReadback: full, observedAtMs,
+    }),
+  );
+  assert.throws(
+    () => selectAliceCloudflareRecoveryPermissionGroups({
+      ...full,
+      permissionGroups: {
+        ...full.permissionGroups,
+        result: full.permissionGroups.result.filter((group) =>
+          group.id !== referenced[0].id),
+      },
+    }),
+    /ALICE_RECOVERY_CREDENTIAL_BINDING_INVALID/,
+  );
+  const duplicate = selectAliceCloudflareRecoveryPermissionGroups({
+    ...full,
+    permissionGroups: {
+      ...full.permissionGroups,
+      result: [...full.permissionGroups.result, referenced[0]],
+    },
+  });
+  assert.throws(
+    () => normalizeAliceCloudflareRecoveryTokenPolicy({
+      tokenId, providerPolicyReadback: duplicate, observedAtMs,
+    }),
+    /ALICE_RECOVERY_CREDENTIAL_BINDING_INVALID/,
+  );
 });

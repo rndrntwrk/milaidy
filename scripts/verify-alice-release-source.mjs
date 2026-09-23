@@ -25,6 +25,8 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/alice_cloudflare_release.test.mjs',
   'deploy/modal/alice_cloudflare_provider_readback.mjs',
   'deploy/modal/alice_cloudflare_provider_readback.test.mjs',
+  'deploy/modal/alice_recovery_credential_binding.mjs',
+  'deploy/modal/alice_recovery_credential_binding.test.mjs',
   'deploy/modal/alice_production_acceptance.ts',
   'deploy/modal/alice_production_acceptance.test.ts',
   'deploy/modal/alice_reaccept_qualified_candidate.ts',

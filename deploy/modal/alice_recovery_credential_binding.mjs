@@ -203,6 +203,29 @@ function exactEnvelopeResult(envelope) {
   return envelope.result;
 }
 
+export function selectAliceCloudflareRecoveryPermissionGroups(readback) {
+  const token = exactEnvelopeResult(readback?.token);
+  const catalog = exactEnvelopeResult(readback?.permissionGroups);
+  if (!Array.isArray(token?.policies) || !Array.isArray(catalog)) invalid();
+  const referencedIds = new Set();
+  for (const policy of token.policies) {
+    if (!Array.isArray(policy?.permission_groups)) invalid();
+    for (const group of policy.permission_groups) {
+      if (!CLOUDFLARE_TOKEN_ID.test(group?.id ?? "")) invalid();
+      referencedIds.add(group.id);
+    }
+  }
+  if (referencedIds.size === 0) invalid();
+  const selected = catalog.filter((group) => referencedIds.has(group?.id));
+  if (new Set(selected.map((group) => group.id)).size !== referencedIds.size) {
+    invalid();
+  }
+  return {
+    ...readback,
+    permissionGroups: { ...readback.permissionGroups, result: selected },
+  };
+}
+
 function exactCloudflareVerifyEnvelope(envelope) {
   const hasCompactShape = exactKeys(envelope, ["result", "success"]);
   const hasStandardShape = exactKeys(envelope, [
