@@ -25,6 +25,25 @@ function context(service: unknown) {
 }
 
 describe("Alice task thread reads", () => {
+  it("reads one persisted thread with progress and artifacts without starting services", async () => {
+    const id = "8d129718-1d37-4bdb-8750-890b480b2ddd";
+    const task = { id, status: "active", events: [{ type: "progress" }], artifacts: [{ title: "PR" }] };
+    const getTask = vi.fn(async () => task);
+    const ctx = context({ getTask });
+    ctx.pathname = `/api/coding-agents/coordinator/threads/${id}`;
+    expect(await handleAliceTaskThreadsRead(ctx)).toBe(true);
+    expect(getTask).toHaveBeenCalledWith(id);
+    expect(ctx.json).toHaveBeenCalledWith(ctx.res, task);
+    expect(ctx.loader).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a missing persisted thread", async () => {
+    const ctx = context({ getTask: vi.fn(async () => null) });
+    ctx.pathname = "/api/coding-agents/coordinator/threads/8d129718-1d37-4bdb-8750-890b480b2ddd";
+    expect(await handleAliceTaskThreadsRead(ctx)).toBe(true);
+    expect(ctx.error).toHaveBeenCalledWith(ctx.res, "Task thread not found", 404);
+  });
+
   it("reads the persisted task service with the sidebar filters without starting services", async () => {
     const tasks = [{ id: "stored-task", title: "Corpus", status: "completed" }];
     const listTasks = vi.fn(async () => tasks);

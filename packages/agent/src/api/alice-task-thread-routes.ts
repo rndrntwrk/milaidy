@@ -10,12 +10,13 @@ type Context = Pick<RouteRequestMeta, "method" | "pathname" | "res"> &
 export async function handleAliceTaskThreadsRead(
   ctx: Context,
 ): Promise<boolean> {
-  if (
-    ctx.method !== "GET" ||
-    ctx.pathname !== "/api/coding-agents/coordinator/threads"
-  ) {
-    return false;
-  }
+  if (ctx.method !== "GET") return false;
+  const isList = ctx.pathname === "/api/coding-agents/coordinator/threads";
+  const detail = ctx.pathname.match(
+    /^\/api\/coding-agents\/coordinator\/threads\/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$/i,
+  );
+  const taskId = detail?.[1];
+  if (!isList && !taskId) return false;
   // The current orchestrator owns persistent threads. Polling must never start
   // its execution services through getServiceLoadPromise or a plugin handler.
   const service = ctx.runtime?.getService("ORCHESTRATOR_TASK_SERVICE") as {
@@ -25,7 +26,25 @@ export async function handleAliceTaskThreadsRead(
       search?: string;
       limit: number;
     }) => Promise<object[]>;
+    getTask?: (taskId: string) => Promise<object | null>;
   } | null;
+  if (taskId) {
+    if (typeof service?.getTask !== "function") {
+      ctx.error(ctx.res, "Task thread reader is not available", 503);
+      return true;
+    }
+    try {
+      const task = await service.getTask(taskId);
+      if (!task) {
+        ctx.error(ctx.res, "Task thread not found", 404);
+      } else {
+        ctx.json(ctx.res, task);
+      }
+    } catch {
+      ctx.error(ctx.res, "Failed to read task thread", 503);
+    }
+    return true;
+  }
   if (typeof service?.listTasks !== "function") {
     ctx.error(ctx.res, "Task thread reader is not available", 503);
     return true;
