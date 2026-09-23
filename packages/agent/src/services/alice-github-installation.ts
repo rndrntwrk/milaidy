@@ -68,6 +68,26 @@ export class AliceGitHubInstallationService extends Service {
   }
 
   async tokenForPullRequestGroundTruth(repo: string): Promise<string> {
+    return this.mintScopedToken(repo, {
+      contents: "read",
+      pull_requests: "read",
+      checks: "read",
+      statuses: "read",
+      metadata: "read",
+    });
+  }
+
+  async tokenForIssues(
+    repo: string,
+    access: "read" | "write",
+  ): Promise<string> {
+    return this.mintScopedToken(repo, { issues: access, metadata: "read" });
+  }
+
+  private async mintScopedToken(
+    repo: string,
+    permissions: Record<string, "read" | "write">,
+  ): Promise<string> {
     if (!this.provider || !signingMaterial) {
       throw new Error("Alice GitHub App is not configured");
     }
@@ -82,13 +102,7 @@ export class AliceGitHubInstallationService extends Service {
       type: "installation",
       installationId: installation.installationId,
       repositoryNames: [name],
-      permissions: {
-        contents: "read",
-        pull_requests: "read",
-        checks: "read",
-        statuses: "read",
-        metadata: "read",
-      },
+      permissions,
     });
     return token;
   }
