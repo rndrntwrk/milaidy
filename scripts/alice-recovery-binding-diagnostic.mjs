@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 
 import {
+  ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES,
   ALICE_CLOUDFLARE_RECOVERY_PERMISSION_GROUPS,
   buildAliceRecoveryCredentialReadiness,
   normalizeAliceCloudflareRecoveryTokenPolicy,
@@ -85,6 +86,8 @@ const report = {
         `com.cloudflare.api.account.zone.${policy.zoneId}`,
       ].sort()),
   policyReadbackBytes: Buffer.byteLength(policyReadbackBytes),
+  policyReadbackWithinBound: Buffer.byteLength(policyReadbackBytes) <=
+    ALICE_CLOUDFLARE_POLICY_READBACK_MAX_BYTES,
 };
 
 try {
@@ -119,6 +122,10 @@ try {
 } catch (error) {
   report.binding = "fail";
   report.bindingFailureLine = callsite(error);
+}
+if (report.binding === "pass" && !report.policyReadbackWithinBound) {
+  report.binding = "fail";
+  report.bindingFailureStage = "policy-readback-file-bound";
 }
 
 process.stdout.write(`${JSON.stringify(report)}\n`);
