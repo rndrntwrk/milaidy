@@ -342,6 +342,12 @@ export function normalizeAliceContainerInstanceReadback({
   applicationCanonicalInstances,
   applicationDurableObjects,
 }) {
+  const noProviderActor = Array.isArray(applicationInstances) &&
+    Array.isArray(applicationCanonicalInstances) &&
+    Array.isArray(applicationDurableObjects) &&
+    applicationInstances.length === 0 &&
+    applicationCanonicalInstances.length === 0 &&
+    applicationDurableObjects.length === 0;
   if (
     application?.name !== "alice-production-runtime" ||
     !UUID.test(application.id ?? "") ||
@@ -350,8 +356,9 @@ export function normalizeAliceContainerInstanceReadback({
     !Array.isArray(applicationInstances) || applicationInstances.length > 1 ||
     !Array.isArray(applicationCanonicalInstances) ||
     applicationCanonicalInstances.length > 1 ||
-    !Array.isArray(applicationDurableObjects) || applicationDurableObjects.length !== 1 ||
-    applicationDurableObjects[0]?.name !== application.name
+    !Array.isArray(applicationDurableObjects) ||
+    (!noProviderActor && (applicationDurableObjects.length !== 1 ||
+      applicationDurableObjects[0]?.name !== application.name))
   ) mismatch();
   const canonicalInstance = applicationCanonicalInstances[0];
   const binding = applicationDurableObjects[0];
@@ -363,6 +370,10 @@ export function normalizeAliceContainerInstanceReadback({
     canonicalInstance.image !== application.configuration.image
   )) mismatch();
   if (applicationInstances.length === 0) {
+    if (noProviderActor) {
+      return { applicationInstances: [], applicationCanonicalInstances: [],
+        applicationDurableObjects: [] };
+    }
     if (canonicalInstance) {
       if (canonicalInstance.status?.state !== "inactive" ||
         Object.hasOwn(binding, "deployment_id") || Object.hasOwn(binding, "placement_id")) mismatch();

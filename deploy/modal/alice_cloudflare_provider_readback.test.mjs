@@ -568,6 +568,19 @@ test("normalizes the pre-mutation runtimeHost application against its current im
       activeInstances: 0,
     },
   );
+  const noProviderActor = {
+    application, applicationInstances: [], applicationCanonicalInstances: [],
+    applicationDurableObjects: [], expectedApplicationImage: image,
+    materializedWranglerConfig: config, expectedNamespaceId: namespaceId,
+  };
+  assert.deepEqual(normalizeAliceContainerInstanceReadback(noProviderActor), {
+    applicationInstances: [], applicationCanonicalInstances: [],
+    applicationDurableObjects: [],
+  });
+  assert.equal(verifyAliceContainerApplicationReadback(noProviderActor).image, image);
+  assert.throws(() => normalizeAliceContainerInstanceReadback({
+    ...noProviderActor, applicationInstances: [{ id: "unexpected-running-instance" }],
+  }), /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/);
 
   const substitutions = [
     { ...application, instances: 0 },
