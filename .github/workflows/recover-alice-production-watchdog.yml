@@ -8,6 +8,11 @@ on:
         description: Exact attested runtime source to recover
         required: true
         type: string
+      diagnostic_only:
+        description: Validate recovery credential without selecting a deployment
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: alice-production-recovery
@@ -51,6 +56,7 @@ jobs:
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Hydrate exact reviewed Eliza PR head
+        if: ${{ !inputs.diagnostic_only }}
         env:
           EXPECTED_ELIZA_SHA: aa5f9c05c585cbc03bb72f9509e504d544531f3a
         run: |
@@ -81,11 +87,13 @@ jobs:
           node-version: "24.19.0"
 
       - name: Setup Bun
+        if: ${{ !inputs.diagnostic_only }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: "1.3.14"
 
       - name: Install exact recovery dependencies
+        if: ${{ !inputs.diagnostic_only }}
         run: bash scripts/alice-frozen-install-retry.sh
 
       - name: Verify Cloudflare recovery credential and provider readback
@@ -136,7 +144,18 @@ jobs:
           fetch_json "/zones/7b24984479ee4cddb6c5d8a9b7a0f2c6/workers/routes?page=1&per_page=100" \
             "$readback_root/routes.json"
 
+      - name: Diagnose exact Cloudflare recovery binding
+        if: ${{ inputs.diagnostic_only }}
+        env:
+          ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          ALICE_RECOVERY_CREDENTIAL_POLICY_B64URL: ${{ vars.ALICE_RECOVERY_CREDENTIAL_POLICY_B64URL }}
+          ALICE_RECOVERY_CREDENTIAL_POLICY_SHA256: ${{ vars.ALICE_RECOVERY_CREDENTIAL_POLICY_SHA256 }}
+          ALICE_RECOVERY_PROVIDER_READBACK_PATH: ${{ runner.temp }}/alice-cloudflare-recovery-verify.json
+          ALICE_RECOVERY_PROVIDER_POLICY_READBACK_PATH: ${{ runner.temp }}/alice-cloudflare-recovery-token-policy.json
+        run: node scripts/alice-recovery-binding-diagnostic.mjs
+
       - name: Select one exact parent deployment
+        if: ${{ !inputs.diagnostic_only }}
         id: parent
         env:
           GH_TOKEN: ${{ github.token }}
@@ -172,6 +191,7 @@ jobs:
           echo "parent_run_id=$parent_run_id" >> "$GITHUB_OUTPUT"
 
       - name: Write exact Cloudflare recovery readiness
+        if: ${{ !inputs.diagnostic_only }}
         env:
           PARENT_RUN_ID: ${{ steps.parent.outputs.parent_run_id }}
           ALICE_RECOVERY_PROVIDER: cloudflare
@@ -192,6 +212,7 @@ jobs:
           node deploy/modal/alice_recovery_credential_binding.mjs
 
       - name: Publish exact Cloudflare recovery readiness
+        if: ${{ !inputs.diagnostic_only }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: alice-watchdog-ready-cloudflare-${{ env.SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.parent.outputs.parent_run_id }}-1
@@ -201,6 +222,7 @@ jobs:
           overwrite: false
 
       - name: Monitor the selected parent deployment
+        if: ${{ !inputs.diagnostic_only }}
         id: monitor
         env:
           GH_TOKEN: ${{ github.token }}
@@ -238,7 +260,7 @@ jobs:
           fi
 
       - name: Consume external journal and recover Cloudflare independently
-        if: ${{ steps.monitor.outputs.recovery_required == 'true' }}
+        if: ${{ !inputs.diagnostic_only && steps.monitor.outputs.recovery_required == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -327,7 +349,7 @@ jobs:
             node deploy/modal/alice_cloudflare_release.mjs
 
       - name: Preserve watchdog Cloudflare evidence
-        if: ${{ always() && steps.monitor.outputs.recovery_required == 'true' }}
+        if: ${{ always() && !inputs.diagnostic_only && steps.monitor.outputs.recovery_required == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: alice-watchdog-cloudflare-${{ env.SOURCE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
