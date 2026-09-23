@@ -30,6 +30,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // ---------------------------------------------------------------------------
 import { runFirstTimeSetup } from "./first-time-setup.js";
 import { resolvePlugins } from "./plugin-resolver.js";
+import {
+  consumeAliceGitHubAgentPat,
+  hasAliceGitHubAgentPat,
+} from "./alice-github-agent-secret.js";
 
 export {
   CHANNEL_PLUGIN_MAP,
@@ -1727,7 +1731,8 @@ export async function autoFetchCloudGithubToken(
   if (
     process.env.GITHUB_TOKEN ||
     process.env.GITHUB_PAT ||
-    (isAliceFullRuntimeProfile() && process.env.GITHUB_AGENT_PAT)
+    (isAliceFullRuntimeProfile() &&
+      (hasAliceGitHubAgentPat() || process.env.GITHUB_AGENT_PAT))
   ) {
     return;
   }
@@ -3128,8 +3133,12 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
   // Alice's selected-repository agent credential is injected by the host as
   // GITHUB_AGENT_PAT. The coding orchestrator reads GITHUB_TOKEN from runtime
   // settings; keep that alias inside this agent only, never in process.env.
-  if (isAliceFullRuntimeProfile() && secrets.GITHUB_AGENT_PAT) {
-    secrets.GITHUB_TOKEN = secrets.GITHUB_AGENT_PAT;
+  if (isAliceFullRuntimeProfile()) {
+    const agentPat = consumeAliceGitHubAgentPat();
+    if (agentPat) {
+      secrets.GITHUB_AGENT_PAT = agentPat;
+      secrets.GITHUB_TOKEN = agentPat;
+    }
   }
 
   // Normalise messageExamples to the {examples: [{name,content}]} shape
