@@ -12,6 +12,8 @@ export type AliceRuntimeContainerEnvironmentSource = {
   ALICE_RUNTIME_RELEASE_TOKEN: string;
   ALICE_RUNTIME_VAULT_PASSPHRASE: string;
   ALICE_GITHUB_AGENT_PAT?: string;
+  ALICE_GITHUB_APP_ID?: string;
+  ALICE_GITHUB_APP_PRIVATE_KEY_B64?: string;
   ALICE_STATE_PLANE_SERVICE_TOKEN: string;
   ALICE_PROGRAM_DIGEST: string;
   ALICE_RELEASE_DIGEST: string;
@@ -30,6 +32,12 @@ export function buildAliceRuntimeContainerEnv(
   env: AliceRuntimeContainerEnvironmentSource,
 ): Record<string, string> {
   const runtimeRevision = Number(env.ALICE_RUNTIME_REVISION);
+  if (
+    Boolean(env.ALICE_GITHUB_APP_ID?.trim()) !==
+    Boolean(env.ALICE_GITHUB_APP_PRIVATE_KEY_B64?.trim())
+  ) {
+    throw new Error("ALICE_GITHUB_APP_CREDENTIAL_INCOMPLETE");
+  }
   if (
     [
       env.ALICE_ACCESS_PROXY_SECRET,
@@ -110,6 +118,14 @@ export function buildAliceRuntimeContainerEnv(
     ELIZA_VAULT_PASSPHRASE: env.ALICE_RUNTIME_VAULT_PASSPHRASE,
     ...(env.ALICE_GITHUB_AGENT_PAT?.trim()
       ? { GITHUB_AGENT_PAT: env.ALICE_GITHUB_AGENT_PAT.trim() }
+      : {}),
+    ...(env.ALICE_GITHUB_APP_ID?.trim() &&
+    env.ALICE_GITHUB_APP_PRIVATE_KEY_B64?.trim()
+      ? {
+          GITHUB_APP_ID: env.ALICE_GITHUB_APP_ID.trim(),
+          GITHUB_APP_PRIVATE_KEY_B64:
+            env.ALICE_GITHUB_APP_PRIVATE_KEY_B64.trim(),
+        }
       : {}),
     ALICE_RUNTIME_PROFILE: "full-gated",
     ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",

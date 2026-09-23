@@ -30,6 +30,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // ---------------------------------------------------------------------------
 import { runFirstTimeSetup } from "./first-time-setup.js";
 import { resolvePlugins } from "./plugin-resolver.js";
+import { captureAliceGitHubAppSigningMaterial } from "../services/alice-github-installation.js";
 import {
   consumeAliceGitHubAgentPat,
   hasAliceGitHubAgentPat,
@@ -3134,6 +3135,7 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
   // GITHUB_AGENT_PAT. The coding orchestrator reads GITHUB_TOKEN from runtime
   // settings; keep that alias inside this agent only, never in process.env.
   if (isAliceFullRuntimeProfile()) {
+    captureAliceGitHubAppSigningMaterial();
     const agentPat = consumeAliceGitHubAgentPat();
     if (agentPat) {
       secrets.GITHUB_AGENT_PAT = agentPat;

@@ -91,6 +91,19 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     build({ ...input, ALICE_GITHUB_AGENT_PAT: "github_pat_example" })
       .GITHUB_AGENT_PAT,
   ).toBe("github_pat_example");
+  expect(() => build({ ...input, ALICE_GITHUB_APP_ID: "5052363" })).toThrow(
+    "ALICE_GITHUB_APP_CREDENTIAL_INCOMPLETE",
+  );
+  expect(
+    build({
+      ...input,
+      ALICE_GITHUB_APP_ID: "5052363",
+      ALICE_GITHUB_APP_PRIVATE_KEY_B64: "encoded-key",
+    }),
+  ).toMatchObject({
+    GITHUB_APP_ID: "5052363",
+    GITHUB_APP_PRIVATE_KEY_B64: "encoded-key",
+  });
   expect("ELIZA_SKIP_PLUGINS" in result).toBe(false);
   expect("NODE_TLS_REJECT_UNAUTHORIZED" in result).toBe(false);
   const defaults = JSON.parse(
