@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "alice.runtime-root-policy.v1",
+  "forbiddenPrefixes": [
+    ".git",
+    ".github"
+  ],
+  "forbiddenBasenames": [
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+    "auth.json",
+    "credentials.json",
+    "id_rsa",
+    "id_ed25519"
+  ],
+  "maxFileBytes": 1073741824,
+  "maxEntryCount": 2000000,
+  "maxTotalFileBytes": 21474836480,
+  "allowDanglingSymlinks": false
+}
