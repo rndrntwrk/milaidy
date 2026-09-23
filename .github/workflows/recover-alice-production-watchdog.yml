@@ -110,14 +110,24 @@ jobs:
             pathname="$1"
             output="$2"
             bearer="${3:-${CLOUDFLARE_API_TOKEN}}"
-            status="$(curl --silent --show-error \
+            stage="${output##*/}"
+            if ! status="$(curl --silent --show-error \
               --output "$output" --write-out '%{http_code}' \
               --header "Authorization: Bearer ${bearer}" \
               --header 'Accept: application/json' \
               --header 'Cache-Control: no-cache' \
-              "https://api.cloudflare.com/client/v4${pathname}")"
-            test "$status" = "200"
-            jq -e '.success == true and has("result")' "$output" >/dev/null
+              "https://api.cloudflare.com/client/v4${pathname}")"; then
+              printf 'ALICE_RECOVERY_READBACK_TRANSPORT stage=%s\n' "$stage" >&2
+              return 1
+            fi
+            if test "$status" != "200"; then
+              printf 'ALICE_RECOVERY_READBACK_HTTP stage=%s status=%s\n' "$stage" "$status" >&2
+              return 1
+            fi
+            if ! jq -e '.success == true and has("result")' "$output" >/dev/null; then
+              printf 'ALICE_RECOVERY_READBACK_ENVELOPE stage=%s\n' "$stage" >&2
+              return 1
+            fi
           }
           fetch_json "/user/tokens/verify" "$verify_file"
           token_id="$(jq -er '.result.id | select(test("^[a-f0-9]{32}$"))' \
