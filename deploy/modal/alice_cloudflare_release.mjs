@@ -2060,7 +2060,9 @@ export function materializeAliceWorkerSecretFiles(
   const paths = {};
   try {
     for (const role of Object.keys(configs)) {
-      const names = configs[role].secrets?.required;
+      const names = role === CODING_ROLE && configs[role].secrets === undefined
+        ? []
+        : configs[role].secrets?.required;
       if (
         !Array.isArray(names) ||
         (names.length === 0 && role !== CODING_ROLE) ||

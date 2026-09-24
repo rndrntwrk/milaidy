@@ -92,6 +92,9 @@ jobs:
             --jq .object.sha)"
           test "$protected_sha" = "$CONTROLLER_SHA"
 
+      - name: Verify candidate Worker secret closure before provider mutation
+        run: node --test --test-name-pattern='materializes Container runtime secrets' deploy/modal/alice_cloudflare_release.test.mjs
+
       - name: Verify Access AI and memory provider state read-only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
