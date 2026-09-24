@@ -436,7 +436,7 @@ export async function transitionAliceContainerApplication({
 }
 
 async function aliceContainerApiJson({
-  fetchImpl,
+  fetchImpl = globalThis.fetch,
   apiToken,
   method = "GET",
   pathname,
@@ -614,7 +614,7 @@ function bundlePath(bundleRoot, role) {
   return path.join(bundleRoot, WORKERS[role], "index.js");
 }
 
-async function readCodingContainerApplication({ apiToken }) {
+export async function readCodingContainerApplication({ apiToken }) {
   const base = `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/containers`;
   const applications = await aliceContainerApiJson({
     apiToken,
