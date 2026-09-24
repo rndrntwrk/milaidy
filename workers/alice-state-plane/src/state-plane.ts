@@ -87,6 +87,8 @@ export type PortableRecord = {
   updatedAt: number;
 };
 
+export type PortableRecordHeader = Omit<PortableRecord, "payload" | "payloadSha256">;
+
 const encoder = new TextEncoder();
 const IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
 const STATE_KIND = new Set<string>(ALICE_STATE_KINDS);
@@ -435,12 +437,15 @@ export class D1AliceStateAdapter {
     return row ? await toRecord(row) : null;
   }
 
-  async listRecords(input: { ownerId: string; sessionId?: string | null; kind?: AliceStateKind; limit: number }): Promise<PortableRecord[]> {
+  async listRecords(input: { ownerId: string; sessionId?: string | null; kind?: AliceStateKind; recordIdPrefix?: string; limit: number; order?: "asc" | "desc"; metadataOnly?: boolean }): Promise<Array<PortableRecord | PortableRecordHeader>> {
     if (!validIdentifier(input.ownerId) || (input.sessionId != null && !validIdentifier(input.sessionId))) {
       throw new Error("STATE_IDENTITY_INVALID");
     }
     if (input.kind !== undefined && !STATE_KIND.has(input.kind)) throw new Error("STATE_KIND_UNSUPPORTED");
     if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 500) throw new Error("STATE_LIMIT_INVALID");
+    if (input.order !== undefined && input.order !== "asc" && input.order !== "desc") throw new Error("STATE_ORDER_INVALID");
+    if (input.metadataOnly !== undefined && typeof input.metadataOnly !== "boolean") throw new Error("STATE_LIST_INVALID");
+    if (input.recordIdPrefix !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{1,63}$/.test(input.recordIdPrefix)) throw new Error("STATE_LIST_INVALID");
     const clauses = ["owner_id = ?"];
     const params: unknown[] = [input.ownerId];
     if (input.sessionId !== undefined) {
@@ -451,11 +456,19 @@ export class D1AliceStateAdapter {
       clauses.push("kind = ?");
       params.push(input.kind);
     }
+    if (input.recordIdPrefix !== undefined) {
+      clauses.push("substr(record_id, 1, ?) = ?");
+      params.push(input.recordIdPrefix.length, input.recordIdPrefix);
+    }
     params.push(input.limit);
-    const rows = await this.db.prepare(`SELECT kind, record_id, owner_id, session_id, payload_json, payload_sha256, revision, updated_at
+    const rows = await this.db.prepare(`SELECT kind, record_id, owner_id, session_id, ${input.metadataOnly ? "" : "payload_json, payload_sha256, "}revision, updated_at
       FROM alice_state_records WHERE ${clauses.join(" AND ")}
-      ORDER BY updated_at ASC, kind ASC, record_id ASC LIMIT ?`).bind(...params).all<StoredRecordRow>();
+      ORDER BY updated_at ${input.order === "desc" ? "DESC" : "ASC"}, kind ASC, record_id ASC LIMIT ?`).bind(...params).all<StoredRecordRow>();
     if (!rows.success) throw new Error("STATE_READ_FAILED");
+    if (input.metadataOnly) return rows.results.map((row) => ({
+      kind: row.kind, recordId: row.record_id, ownerId: row.owner_id,
+      sessionId: row.session_id, revision: row.revision, updatedAt: row.updated_at,
+    }));
     return Promise.all(rows.results.map(toRecord));
   }
 
@@ -774,7 +787,7 @@ export function authorizeStatePlaneRequest(request: Request, expectedToken: stri
 export type StateOperation =
   | { operation: "record.get"; kind: AliceStateKind; recordId: string; ownerId: string }
   | ({ operation: "record.put" } & PortableRecordInput)
-  | { operation: "record.list"; ownerId: string; sessionId?: string | null; kind?: AliceStateKind; limit: number }
+  | { operation: "record.list"; ownerId: string; sessionId?: string | null; kind?: AliceStateKind; recordIdPrefix?: string; limit: number; order?: "asc" | "desc"; metadataOnly?: boolean }
   | { operation: "records.atomic"; operationId: string; records: Array<Omit<PortableRecordInput, "idempotencyKey">> }
   | { operation: "vector.upsert"; recordKind: AliceStateKind; recordId: string; ownerId: string; model: string; dimensions: number; values: number[] }
   | { operation: "vector.query"; ownerId: string; model: string; dimensions: number; values: number[]; topK: number }
@@ -833,10 +846,14 @@ export function validateStateOperation(value: unknown): StateOperation {
   }
   if (record.operation === "record.list") {
     const required = ["operation", "ownerId", "limit"];
-    const allowed = new Set([...required, "sessionId", "kind"]);
+    const allowed = new Set([...required, "sessionId", "kind", "recordIdPrefix", "order", "metadataOnly"]);
     if (!required.every((key) => key in record) || Object.keys(record).some((key) => !allowed.has(key)) ||
       !validIdentifier(record.ownerId) || (record.sessionId !== undefined && record.sessionId !== null && !validIdentifier(record.sessionId)) ||
-      (record.kind !== undefined && !STATE_KIND.has(String(record.kind))) || !Number.isSafeInteger(record.limit) || Number(record.limit) < 1 || Number(record.limit) > 500) {
+      (record.kind !== undefined && !STATE_KIND.has(String(record.kind))) || !Number.isSafeInteger(record.limit) || Number(record.limit) < 1 || Number(record.limit) > 500 ||
+      (record.order !== undefined && record.order !== "asc" && record.order !== "desc") ||
+      (record.recordIdPrefix !== undefined && (typeof record.recordIdPrefix !== "string" ||
+        !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{1,63}$/.test(record.recordIdPrefix))) ||
+      (record.metadataOnly !== undefined && typeof record.metadataOnly !== "boolean")) {
       throw new Error("STATE_OPERATION_INVALID");
     }
     return {
@@ -844,7 +861,10 @@ export function validateStateOperation(value: unknown): StateOperation {
       ownerId: record.ownerId,
       ...(record.sessionId !== undefined ? { sessionId: record.sessionId as string | null } : {}),
       ...(record.kind !== undefined ? { kind: record.kind as AliceStateKind } : {}),
+      ...(record.recordIdPrefix !== undefined ? { recordIdPrefix: record.recordIdPrefix as string } : {}),
       limit: record.limit as number,
+      ...(record.order !== undefined ? { order: record.order as "asc" | "desc" } : {}),
+      ...(record.metadataOnly !== undefined ? { metadataOnly: record.metadataOnly as boolean } : {}),
     };
   }
   if (record.operation === "records.atomic") {

@@ -72,12 +72,22 @@
       "limits": {
         "steps": 16
       }
+    },
+    {
+      "binding": "ALICE_CODING_WORKFLOW",
+      "name": "alice-production-coding",
+      "class_name": "AliceCodingWorkflow",
+      "limits": { "steps": 8 }
     }
   ],
   "services": [
     {
       "binding": "ALICE_STATE_PLANE",
       "service": "alice-state-plane"
+    },
+    {
+      "binding": "ALICE_CODING_SANDBOX",
+      "service": "alice-coding-sandbox"
     }
   ],
   "queues": {

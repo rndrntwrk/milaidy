@@ -651,6 +651,7 @@ describe("Alice Access gateway", () => {
       ["GET", "/api/stream/status"],
       ["GET", "/api/coding-agents/coordinator/status"],
       ["GET", "/api/coding-agents/coordinator/threads?limit=30"],
+      ["GET", "/api/coding-agents/coordinator/threads/8d129718-1d37-4bdb-8750-890b480b2ddd"],
       ["GET", "/api/apps/runs"],
       ["GET", "/music-player/status"],
       ["GET", "/api/agent/v1/sessions/companion/games/state"],

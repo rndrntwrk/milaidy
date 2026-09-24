@@ -99,6 +99,13 @@ const source = {
     ),
   ),
 };
+// This fixture represents the historical v3 release before coding bindings.
+source.control.workflows = source.control.workflows.filter(
+  (workflow) => workflow.binding === "ALICE_PLANS",
+);
+source.control.services = source.control.services.filter(
+  (service) => service.binding === "ALICE_STATE_PLANE",
+);
 const effective = {
   access: buildAliceContainerAccessEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",

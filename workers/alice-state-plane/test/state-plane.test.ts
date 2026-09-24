@@ -161,6 +161,27 @@ describe("portable D1 Alice state contract", () => {
     expect(await first.listRecords({ ownerId: "owner-001", sessionId: "session-001", limit: 50 })).toHaveLength(16);
   });
 
+  test("lists newest owner work headers without loading stored patches", async () => {
+    const state = await import("../src/state-plane");
+    const d1 = new SqliteD1Binding();
+    await state.installAliceStateSchema(d1);
+    const adapter = new state.D1AliceStateAdapter(d1);
+    for (const [ownerId, recordId, updatedAt] of [
+      ["owner-001", "work-cap-old", 1_777_000_000_001],
+      ["owner-001", "work-cap-new", 1_777_000_000_002],
+      ["owner-002", "work-cap-other", 1_777_000_000_003],
+      ["owner-001", "work-plan-newer", 1_777_000_000_004],
+    ] as const) {
+      await adapter.putRecord({ kind: "work", recordId, ownerId,
+        payload: { patch: "x".repeat(128_000) }, updatedAt });
+    }
+    expect(await adapter.listRecords({ ownerId: "owner-001", kind: "work", recordIdPrefix: "work-cap-",
+      limit: 1, order: "desc", metadataOnly: true })).toEqual([{
+      kind: "work", recordId: "work-cap-new", ownerId: "owner-001",
+      sessionId: null, revision: 1, updatedAt: 1_777_000_000_002,
+    }]);
+  });
+
   test("rejects idempotency collisions, unknown kinds and arbitrary SQL or callback transactions", async () => {
     const state = await import("../src/state-plane");
     const d1 = new SqliteD1Binding();

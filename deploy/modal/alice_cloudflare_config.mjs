@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  ALICE_CODING_TARGET,
   ALICE_CLOUDFLARE_TARGET,
   buildAliceContainerAccessEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
@@ -10,7 +11,10 @@ import {
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceRuntimeHostEffectiveConfig,
+  buildAliceCodingRuntimeHostEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
+  buildAliceCodingControlEffectiveConfig,
+  buildAliceCodingSandboxEffectiveConfig,
   canonicalAliceJson,
   encodeAliceDeploymentManifest,
   verifyAliceEffectiveConfigBinding,
@@ -27,6 +31,7 @@ const ROLES = [
   "aiGateway",
   "statePlane",
   "connectorPlane",
+  "codingSandbox",
 ];
 const CANONICAL_MAIN = Object.freeze({
   access: "src/worker.ts",
@@ -35,6 +40,7 @@ const CANONICAL_MAIN = Object.freeze({
   aiGateway: "src/index.mjs",
   statePlane: "src/index.ts",
   connectorPlane: "src/index.ts",
+  codingSandbox: "src/index.ts",
 });
 const WORKER_DIRECTORIES = Object.freeze({
   access: "alice-access-gateway",
@@ -43,6 +49,7 @@ const WORKER_DIRECTORIES = Object.freeze({
   aiGateway: "alice-ai-gateway",
   statePlane: "alice-state-plane",
   connectorPlane: "alice-connector-plane",
+  codingSandbox: "alice-coding-sandbox",
 });
 const SOURCE_WORKER_DIRECTORIES = Object.freeze({
   ...WORKER_DIRECTORIES,
@@ -55,6 +62,7 @@ const SOURCE_MAIN = Object.freeze({
   aiGateway: "src/index.mjs",
   statePlane: "src/index.ts",
   connectorPlane: "src/index.ts",
+  codingSandbox: "src/index.ts",
 });
 
 function canonicalArtifactMain(role) {
@@ -269,7 +277,10 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
   if (role === "runtimeHost") {
     const common = commonBindings(identityConfig);
     return {
-      schemaVersion: "alice.container-runtime-host-effective-config.v1",
+      schemaVersion: common.secretNames.includes("ALICE_GITHUB_APP_ID") &&
+        common.secretNames.includes("ALICE_GITHUB_APP_PRIVATE_KEY_B64")
+        ? "alice.container-runtime-host-effective-config.v2"
+        : "alice.container-runtime-host-effective-config.v1",
       worker: baseWorker(identityConfig),
       bindings: {
         services: common.services,
@@ -302,7 +313,10 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
   if (role === "control") {
     const common = commonBindings(identityConfig);
     return {
-      schemaVersion: "alice.container-control-effective-config.v1",
+      schemaVersion: (identityConfig.workflows ?? []).some(
+        (workflow) => workflow.name === ALICE_CODING_TARGET.codingWorkflow,
+      ) ? "alice.container-control-effective-config.v2" :
+        "alice.container-control-effective-config.v1",
       worker: baseWorker(identityConfig),
       bindings: {
         durableObjects: (identityConfig.durable_objects?.bindings ?? []).map((binding) => ({
@@ -418,6 +432,27 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
       observability: privatePlaneObservabilityFromWrangler(
         identityConfig.observability,
       ),
+    };
+  }
+  if (role === "codingSandbox") {
+    const common = commonBindings(identityConfig);
+    return {
+      schemaVersion: "alice.coding-sandbox-effective-config.v1",
+      worker: privatePlaneWorker(identityConfig),
+      bindings: {
+        containers: (identityConfig.containers ?? []).map((container) => ({
+          className: container.class_name,
+          name: container.name,
+          image: container.image,
+          instanceType: container.instance_type,
+          maxInstances: container.max_instances,
+        })),
+        durableObjects: durableObjectBindings(identityConfig),
+        migrations: durableObjectMigrations(identityConfig),
+        services: common.services,
+        secretNames: common.secretNames,
+      },
+      observability: privatePlaneObservabilityFromWrangler(identityConfig.observability),
     };
   }
   const common = commonBindings(identityConfig);
@@ -740,7 +775,7 @@ if (invokedPath === import.meta.url) {
       throw new Error("ALICE_WRANGLER_PATH_INVALID");
     }
     const serializedManifest = fs.readFileSync(manifestPath, "utf8");
-    verifyAliceDeploymentManifest(serializedManifest);
+    const verifiedManifest = verifyAliceDeploymentManifest(serializedManifest);
     const deploymentManifestSha256 =
       digestAliceDeploymentManifest(serializedManifest);
     const deploymentManifestB64 =
@@ -759,10 +794,14 @@ if (invokedPath === import.meta.url) {
         ownerEmailSha256: commonValues.ownerEmailSha256,
         runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
       }),
-      runtimeHost: buildAliceRuntimeHostEffectiveConfig({
+      runtimeHost: (verifiedManifest.schemaVersion === "alice.deployment-manifest.v4"
+        ? buildAliceCodingRuntimeHostEffectiveConfig
+        : buildAliceRuntimeHostEffectiveConfig)({
         runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
       }),
-      control: buildAliceContainerControlEffectiveConfig({
+      control: (verifiedManifest.schemaVersion === "alice.deployment-manifest.v4"
+        ? buildAliceCodingControlEffectiveConfig
+        : buildAliceContainerControlEffectiveConfig)({
         accessIssuer: commonValues.accessIssuer,
         accessAudience: commonValues.accessAudience,
         ownerEmailSha256: commonValues.ownerEmailSha256,
@@ -774,6 +813,7 @@ if (invokedPath === import.meta.url) {
         releaseServiceTokenIdSha256:
           process.env.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256,
       }),
+      codingSandbox: buildAliceCodingSandboxEffectiveConfig(),
       aiGateway: buildAliceAiGatewayEffectiveConfig(),
       statePlane: buildAliceStatePlaneEffectiveConfig({
         databaseId: process.env.ALICE_STATE_DATABASE_ID,
@@ -803,6 +843,9 @@ if (invokedPath === import.meta.url) {
       ),
       connectorPlane: loadJson(
         path.join(sourceRoot, "workers/alice-connector-plane/wrangler.jsonc"),
+      ),
+      codingSandbox: loadJson(
+        path.join(sourceRoot, "workers/alice-coding-sandbox/wrangler.jsonc"),
       ),
     };
     fs.mkdirSync(outputDir, { recursive: false });

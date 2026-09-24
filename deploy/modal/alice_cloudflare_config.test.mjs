@@ -11,10 +11,13 @@ import {
   ALICE_CLOUDFLARE_TARGET,
   buildAliceContainerAccessEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceCodingControlEffectiveConfig,
+  buildAliceCodingSandboxEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceRuntimeHostEffectiveConfig,
+  buildAliceCodingRuntimeHostEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
 } from "../../workers/alice-effective-config.js";
 import * as aliceEffectiveConfigModule from "../../workers/alice-effective-config.js";
@@ -42,6 +45,7 @@ const releaseRoles = [
   "aiGateway",
   "statePlane",
   "connectorPlane",
+  "codingSandbox",
 ];
 const commonValues = {
   accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
@@ -92,6 +96,12 @@ const source = {
       "utf8",
     ),
   ),
+  codingSandbox: JSON.parse(
+    fs.readFileSync(
+      new URL("../../workers/alice-coding-sandbox/wrangler.jsonc", import.meta.url),
+      "utf8",
+    ),
+  ),
 };
 const expected = {
   access: buildAliceContainerAccessEffectiveConfig({
@@ -100,10 +110,10 @@ const expected = {
     ownerEmailSha256: owner,
     runtimeImage: runtimeContainerImage,
   }),
-  runtimeHost: buildAliceRuntimeHostEffectiveConfig({
+  runtimeHost: buildAliceCodingRuntimeHostEffectiveConfig({
     runtimeImage: runtimeContainerImage,
   }),
-  control: buildAliceContainerControlEffectiveConfig({
+  control: buildAliceCodingControlEffectiveConfig({
     accessIssuer: commonValues.accessIssuer,
     accessAudience: commonValues.accessAudience,
     ownerEmailSha256: owner,
@@ -120,6 +130,7 @@ const expected = {
   connectorPlane: buildAliceConnectorPlaneEffectiveConfig({
     providerActivation: connectorProviderActivation,
   }),
+  codingSandbox: buildAliceCodingSandboxEffectiveConfig(),
 };
 
 test("keeps signed deployment-manifest v1 and v2 readback compatible", async () => {
@@ -703,6 +714,7 @@ test("binds deploy configs to relocatable artifact-relative entrypoints", () => 
     aiGateway: "alice-ai-gateway",
     statePlane: "alice-state-plane",
     connectorPlane: "alice-connector-plane",
+    codingSandbox: "alice-coding-sandbox",
   };
   try {
     const artifactRoot = path.join(runnerA, "alice-worker-bundles");
@@ -882,6 +894,7 @@ test(
         aiGateway: "alice-ai-gateway",
         statePlane: "alice-state-plane",
         connectorPlane: "alice-connector-plane",
+        codingSandbox: "alice-coding-sandbox",
       };
       for (const role of releaseRoles) {
         const entrypoint = path.join(

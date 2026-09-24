@@ -9,7 +9,7 @@ const COMMIT = /^[a-f0-9]{40}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const WRANGLER_VERSION = "4.122.0";
 const verifiedArtifacts = new WeakSet();
-const BUNDLES = Object.freeze({
+const BUNDLES_V3 = Object.freeze({
   access: Object.freeze({
     path: "alice-access-gateway/index.js",
     manifestField: "accessWorkerBundleSha256",
@@ -34,6 +34,17 @@ const BUNDLES = Object.freeze({
     path: "alice-connector-plane/index.js",
     manifestField: "connectorPlaneWorkerBundleSha256",
   }),
+});
+const BUNDLES_V4 = Object.freeze({
+  ...BUNDLES_V3,
+  codingSandbox: Object.freeze({
+    path: "alice-coding-sandbox/index.js",
+    manifestField: "codingSandboxWorkerBundleSha256",
+  }),
+});
+const BUNDLES_BY_SCHEMA = Object.freeze({
+  "alice.worker-bundle-artifact.v3": BUNDLES_V3,
+  "alice.worker-bundle-artifact.v4": BUNDLES_V4,
 });
 const MIGRATIONS = Object.freeze([
   "alice-state-plane/migrations/0001_alice_state.sql",
@@ -103,6 +114,7 @@ function validateMigrationDirectory(root) {
 }
 
 function validArtifactShape(value) {
+  const bundles = BUNDLES_BY_SCHEMA[value?.schemaVersion];
   return (
     exactKeys(value, [
       "schemaVersion",
@@ -111,11 +123,11 @@ function validArtifactShape(value) {
       "bundles",
       "migrations",
     ]) &&
-    value.schemaVersion === "alice.worker-bundle-artifact.v3" &&
+    bundles !== undefined &&
     COMMIT.test(value.sourceCommit ?? "") &&
     value.wranglerVersion === WRANGLER_VERSION &&
-    exactKeys(value.bundles, Object.keys(BUNDLES)) &&
-    Object.entries(BUNDLES).every(([role, expected]) =>
+    exactKeys(value.bundles, Object.keys(bundles)) &&
+    Object.entries(bundles).every(([role, expected]) =>
       exactKeys(value.bundles[role], ["path", "sha256"]) &&
       value.bundles[role].path === expected.path &&
       DIGEST.test(value.bundles[role].sha256 ?? ""),
@@ -135,15 +147,18 @@ export function buildAliceWorkerBundleArtifact({
   root,
   sourceCommit,
   wranglerVersion,
+  schemaVersion = "alice.worker-bundle-artifact.v3",
 }) {
+  const expectedBundles = BUNDLES_BY_SCHEMA[schemaVersion];
   if (
     !COMMIT.test(sourceCommit ?? "") ||
-    wranglerVersion !== WRANGLER_VERSION
+    wranglerVersion !== WRANGLER_VERSION ||
+    !expectedBundles
   ) {
     artifactInvalid();
   }
   const bundles = {};
-  for (const [role, expected] of Object.entries(BUNDLES)) {
+  for (const [role, expected] of Object.entries(expectedBundles)) {
     bundles[role] = {
       path: expected.path,
       sha256: digestFile(bundleFile(root, expected.path)),
@@ -151,7 +166,7 @@ export function buildAliceWorkerBundleArtifact({
   }
   validateMigrationDirectory(root);
   return {
-    schemaVersion: "alice.worker-bundle-artifact.v3",
+    schemaVersion,
     sourceCommit,
     wranglerVersion,
     bundles,
@@ -191,7 +206,7 @@ export function verifyAliceWorkerBundleArtifact(
   ) {
     artifactInvalid();
   }
-  for (const [role, expected] of Object.entries(BUNDLES)) {
+  for (const [role, expected] of Object.entries(BUNDLES_BY_SCHEMA[artifact.schemaVersion])) {
     if (
       digestFile(bundleFile(root, expected.path)) !==
         artifact.bundles[role].sha256
@@ -253,7 +268,11 @@ export function assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
   } catch {
     throw new Error("ALICE_WORKER_BUNDLE_MANIFEST_MISMATCH");
   }
-  for (const [role, expected] of Object.entries(BUNDLES)) {
+  if (manifest?.schemaVersion === "alice.deployment-manifest.v4" !==
+      (artifact.schemaVersion === "alice.worker-bundle-artifact.v4")) {
+    throw new Error("ALICE_WORKER_BUNDLE_MANIFEST_MISMATCH");
+  }
+  for (const [role, expected] of Object.entries(BUNDLES_BY_SCHEMA[artifact.schemaVersion])) {
     if (
       manifest?.cloudflare?.[expected.manifestField] !==
         artifact.bundles[role].sha256
@@ -290,6 +309,8 @@ if (invokedPath === import.meta.url) {
       root,
       sourceCommit: process.env.ALICE_SOURCE_COMMIT,
       wranglerVersion: process.env.ALICE_WRANGLER_VERSION,
+      schemaVersion: process.env.ALICE_WORKER_BUNDLE_SCHEMA_VERSION ??
+        "alice.worker-bundle-artifact.v3",
     });
     fs.writeFileSync(
       outputPath,

@@ -98,6 +98,52 @@ test("creates and verifies one canonical six-Worker artifact with ordered state 
   }
 });
 
+test("v4 requires and binds the exact coding Sandbox bundle", () => {
+  const root = fixtureRoot();
+  try {
+    const sandboxRoot = path.join(root, "alice-coding-sandbox");
+    fs.mkdirSync(sandboxRoot);
+    fs.writeFileSync(path.join(sandboxRoot, "index.js"), "sandbox\n");
+    const artifact = buildAliceWorkerBundleArtifact({
+      root,
+      sourceCommit: "1".repeat(40),
+      wranglerVersion: "4.122.0",
+      schemaVersion: "alice.worker-bundle-artifact.v4",
+    });
+    const serialized = serializeAliceWorkerBundleArtifact(artifact);
+    const verified = verifyAliceWorkerBundleArtifact(serialized, {
+      root, expectedSourceCommit: "1".repeat(40),
+    });
+    assert.equal(artifact.bundles.codingSandbox.path,
+      "alice-coding-sandbox/index.js");
+    const manifest = {
+      schemaVersion: "alice.deployment-manifest.v4",
+      source: { sourceCommit: "1".repeat(40), deploymentControllerCommit: "1".repeat(40) },
+      cloudflare: {
+        ...Object.fromEntries(Object.entries(artifact.bundles).map(([role, bundle]) => [{
+          access: "accessWorkerBundleSha256",
+          runtimeHost: "runtimeHostWorkerBundleSha256",
+          control: "controlWorkerBundleSha256",
+          aiGateway: "aiGatewayWorkerBundleSha256",
+          statePlane: "statePlaneWorkerBundleSha256",
+          connectorPlane: "connectorPlaneWorkerBundleSha256",
+          codingSandbox: "codingSandboxWorkerBundleSha256",
+        }[role], bundle.sha256])),
+        stateMigrationSetSha256: aliceWorkerMigrationSetDigest(verified),
+      },
+    };
+    assert.deepEqual(assertAliceWorkerBundleArtifactMatchesDeploymentManifest({
+      serializedArtifact: serialized, artifactRoot: root, manifest,
+    }), artifact);
+    fs.writeFileSync(path.join(sandboxRoot, "index.js"), "substituted\n");
+    assert.throws(() => verifyAliceWorkerBundleArtifact(serialized, {
+      root, expectedSourceCommit: "1".repeat(40),
+    }), /ALICE_WORKER_BUNDLE_ARTIFACT_INVALID/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("rejects substituted bundle or migration bytes, source identity, or Wrangler identity", () => {
   const root = fixtureRoot();
   try {

@@ -13,7 +13,7 @@ test("builds a fail-closed Container environment for gateway auth, release proof
   const build = (runtimeContainer as any).buildAliceRuntimeContainerEnv as (
     env: Record<string, string>,
   ) => Record<string, string>;
-  const result = build({
+  const input = {
     ALICE_ACCESS_PROXY_SECRET: "access-proxy-secret-with-at-least-32-bytes",
     ALICE_RUNTIME_API_TOKEN: "runtime-api-token-with-at-least-32-bytes",
     ALICE_RUNTIME_RELEASE_TOKEN: "runtime-release-token-with-at-least-32-bytes",
@@ -32,7 +32,8 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     ALICE_DEPLOYMENT_MANIFEST_SHA256: digest("8"),
     ALICE_ELIZA_COMMIT: "9".repeat(40),
     ALICE_RUNTIME_REVISION: "49",
-  });
+  };
+  const result = build(input);
 
   expect(result).toMatchObject({
     NODE_EXTRA_CA_CERTS: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
@@ -58,9 +59,12 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     OPENAI_EMBEDDING_MODEL: "@cf/baai/bge-m3",
     OPENAI_EMBEDDING_DIMENSIONS: "1024",
     CODEX_AUTH_PATH: "/tmp/alice-runtime/codex/auth.json",
-    CODEX_CLI_SMALL_MODEL: "gpt-5.6-luna",
-    CODEX_CLI_LARGE_MODEL: "gpt-5.6-sol",
+    CODEX_CLI_SMALL_MODEL: "gpt-6-luna",
+    CODEX_CLI_LARGE_MODEL: "gpt-6-sol",
     CODEX_REASONING_EFFORT: "max",
+    ELIZA_ACP_DEFAULT_AGENT: "codex",
+    ELIZA_CODEX_MODEL_POWERFUL: "gpt-6-sol",
+    ELIZA_CODEX_MODEL_FAST: "gpt-6-sol",
     MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
     ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
     ALICE_STATE_PLANE_URL:
@@ -81,6 +85,25 @@ test("builds a fail-closed Container environment for gateway auth, release proof
   );
   expect("ALICE_MODAL_REVISION" in result).toBe(false);
   expect("ALICE_STATE_PLANE_SERVICE_TOKEN" in result).toBe(false);
+  expect("GITHUB_AGENT_PAT" in result).toBe(false);
+  expect("ALICE_GITHUB_AGENT_PAT" in result).toBe(false);
+  expect(
+    build({ ...input, ALICE_GITHUB_AGENT_PAT: "github_pat_example" })
+      .GITHUB_AGENT_PAT,
+  ).toBe("github_pat_example");
+  expect(() => build({ ...input, ALICE_GITHUB_APP_ID: "5052363" })).toThrow(
+    "ALICE_GITHUB_APP_CREDENTIAL_INCOMPLETE",
+  );
+  expect(
+    build({
+      ...input,
+      ALICE_GITHUB_APP_ID: "5052363",
+      ALICE_GITHUB_APP_PRIVATE_KEY_B64: "encoded-key",
+    }),
+  ).toMatchObject({
+    GITHUB_APP_ID: "5052363",
+    GITHUB_APP_PRIVATE_KEY_B64: "encoded-key",
+  });
   expect("ELIZA_SKIP_PLUGINS" in result).toBe(false);
   expect("NODE_TLS_REJECT_UNAUTHORIZED" in result).toBe(false);
   const defaults = JSON.parse(
@@ -140,7 +163,13 @@ test("routes the only allowed model host through ContainerProxy to the authentic
     "allowedHosts = ALICE_RUNTIME_ALLOWED_HOSTS",
   );
   expect(containerSource).toContain("enableInternet = false");
-  for (const host of ["auth.openai.com", "chatgpt.com", "stream.rndrntwrk.com"]) {
+  for (const host of [
+    "auth.openai.com",
+    "chatgpt.com",
+    "stream.rndrntwrk.com",
+    "api.github.com",
+    "github.com",
+  ]) {
     expect(containerSource).toContain(`"${host}"`);
   }
   expect(workerSource).toContain(

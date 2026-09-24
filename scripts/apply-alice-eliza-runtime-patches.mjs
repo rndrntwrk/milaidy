@@ -7208,7 +7208,7 @@ export function isAliceCompanionOperatorPatchPatched(elizaRoot) {
   );
 }
 
-// Native Telegram aa5f9c05: authorize/register handlers before polling and
+// Native Telegram owner pairing: authorize/register handlers before polling and
 // await the existing owner verifier instead of racing service registration.
 export function applyAliceTelegramOwnerPairingPatch({
   rootDir = repoRoot,

@@ -97,7 +97,7 @@ export function releaseRevisionResponseFields(
 export const ALICE_PRODUCTION_TRUST_PINS: AliceTrustPins = Object.freeze({
   programPublicJwkSha256:
     "sha256:b2aa16b88a789d0110f8e02521b15fd72b1d0df8873ffdfc1c7029c213825f5e",
-  policyHash: "sha256:d8e8fdc2f71d5763131cc968b1e0227468ee8c06dbfab8512f9fce443db753e1",
+  policyHash: "sha256:50cfd46f52194643ccfa824f65ccb7235b40540288dd381a8ba277188ef33cdf",
 });
 
 const PINNED_MAX_DAILY_BUDGET_UNITS = 100_000;
@@ -273,7 +273,8 @@ export async function loadRuntimeConfig(
   }
   const containerManifest =
     manifest.schemaVersion === "alice.deployment-manifest.v2" ||
-    manifest.schemaVersion === "alice.deployment-manifest.v3";
+    manifest.schemaVersion === "alice.deployment-manifest.v3" ||
+    manifest.schemaVersion === "alice.deployment-manifest.v4";
   if (containerManifest !== containerMode) {
     throw new Error("ALICE_RELEASE_MANIFEST_MISMATCH");
   }

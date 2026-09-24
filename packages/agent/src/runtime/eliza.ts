@@ -30,6 +30,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // ---------------------------------------------------------------------------
 import { runFirstTimeSetup } from "./first-time-setup.js";
 import { resolvePlugins } from "./plugin-resolver.js";
+import { captureAliceGitHubAppSigningMaterial } from "../services/alice-github-installation.js";
+import {
+  consumeAliceGitHubAgentPat,
+  hasAliceGitHubAgentPat,
+} from "./alice-github-agent-secret.js";
 
 export {
   CHANNEL_PLUGIN_MAP,
@@ -1724,7 +1729,14 @@ export async function autoFetchCloudGithubToken(
   agentId?: string,
 ): Promise<void> {
   // Skip if a local token is already configured
-  if (process.env.GITHUB_TOKEN || process.env.GITHUB_PAT) return;
+  if (
+    process.env.GITHUB_TOKEN ||
+    process.env.GITHUB_PAT ||
+    (isAliceFullRuntimeProfile() &&
+      (hasAliceGitHubAgentPat() || process.env.GITHUB_AGENT_PAT))
+  ) {
+    return;
+  }
 
   // Need cloud credentials and an agent ID
   const cloudApiKey = process.env.ELIZAOS_CLOUD_API_KEY?.trim();
@@ -2686,6 +2698,7 @@ export function installRuntimeMethodBindings(
     "GOOGLE_LARGE_MODEL",
     // GitHub
     "GITHUB_TOKEN",
+    "GITHUB_AGENT_PAT",
     "GITHUB_OAUTH_CLIENT_ID",
     // Coding agent model preferences
     "PARALLAX_CLAUDE_MODEL_POWERFUL",
@@ -3106,6 +3119,7 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     "X402_DB_PATH",
     // GitHub access for coding agent plugin
     "GITHUB_TOKEN",
+    "GITHUB_AGENT_PAT",
     "GITHUB_OAUTH_CLIENT_ID",
   ];
 
@@ -3114,6 +3128,18 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     const value = process.env[key];
     if (value?.trim()) {
       secrets[key] = value;
+    }
+  }
+
+  // Alice's selected-repository agent credential is injected by the host as
+  // GITHUB_AGENT_PAT. The coding orchestrator reads GITHUB_TOKEN from runtime
+  // settings; keep that alias inside this agent only, never in process.env.
+  if (isAliceFullRuntimeProfile()) {
+    captureAliceGitHubAppSigningMaterial();
+    const agentPat = consumeAliceGitHubAgentPat();
+    if (agentPat) {
+      secrets.GITHUB_AGENT_PAT = agentPat;
+      secrets.GITHUB_TOKEN = agentPat;
     }
   }
 

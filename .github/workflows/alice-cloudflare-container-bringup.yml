@@ -295,7 +295,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_IMAGE: ${{ inputs.runtime_image }}
-          ELIZA_SHA: aa5f9c05c585cbc03bb72f9509e504d544531f3a
+          ELIZA_SHA: 7cdfca05b33038ec18ae5c8502df39c01d180090
         shell: bash
         run: |
           set -euo pipefail
@@ -643,6 +643,7 @@ jobs:
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-ai-gateway/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-connector-plane/index.js" \
+            "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-coding-sandbox/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/migrations/0001_alice_state.sql" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/migrations/0002_execution_records.sql" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/migrations/0003_eliza_database.sql"
@@ -810,12 +811,13 @@ jobs:
 
       - name: Materialize fresh signed-input manifest and provider readback
         env:
+          ALICE_WORKER_BUNDLE_SCHEMA_VERSION: alice.worker-bundle-artifact.v4
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
           ALICE_SOURCE_ROOT: ${{ github.workspace }}
           ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
           ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.CONTROLLER_SHA }}
-          ALICE_ELIZA_COMMIT: aa5f9c05c585cbc03bb72f9509e504d544531f3a
+          ALICE_ELIZA_COMMIT: 7cdfca05b33038ec18ae5c8502df39c01d180090
           ALICE_RELEASE_EPOCH: ${{ inputs.release_epoch }}
           ALICE_RUNTIME_REVISION: ${{ inputs.runtime_revision }}
           ALICE_POLICY_HASH: ${{ inputs.policy_hash }}

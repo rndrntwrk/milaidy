@@ -9,6 +9,7 @@ const binding = {
 };
 const argumentHash = `sha256:${"a".repeat(64)}`;
 const alternateArgumentHash = `sha256:${"b".repeat(64)}`;
+const owner = `owner:sha256:${"c".repeat(64)}`;
 
 describe("Alice production policy", () => {
   test("denies high-risk actions even when release bindings are exact", () => {
@@ -281,15 +282,17 @@ describe("Alice production policy", () => {
       },
       {
         now,
+        actor: owner,
         binding,
         pausedScopes: [],
         consumedNonces: [],
         capability: {
           capabilityId: "cap-sandbox-1",
+          owner,
           scope: "sandbox.execute",
           target: "sandbox:alice-release-tests",
           argumentHash,
-          nonce: "nonce-cap-sandbox-1",
+          nonce: "nonce-intent-sandbox-1",
           expiresAt: now + 120_000,
           rollbackBoundary: "sandbox:alice-release-tests",
           revokedAt: null,
@@ -320,10 +323,11 @@ describe("Alice production policy", () => {
     };
     const grant = {
       capabilityId: "cap-sandbox-2",
+      owner,
       scope: "sandbox.execute",
       target: intent.target,
       argumentHash: intent.argumentHash,
-      nonce: "nonce-cap-sandbox-2",
+      nonce: "nonce-intent-sandbox-2",
       expiresAt: now + 120_000,
       rollbackBoundary: "sandbox:alice-release-tests",
       revokedAt: null,
@@ -336,17 +340,20 @@ describe("Alice production policy", () => {
       [{ ...grant, scope: "coding.patch.sandbox" }, "CAPABILITY_MISMATCH"],
       [{ ...grant, target: "sandbox:other" }, "CAPABILITY_MISMATCH"],
       [{ ...grant, argumentHash: alternateArgumentHash }, "CAPABILITY_MISMATCH"],
+      [{ ...grant, nonce: "nonce-cap-mismatch" }, "CAPABILITY_MISMATCH"],
       [{ ...grant, releaseDigest: "sha256:other" }, "CAPABILITY_MISMATCH"],
       [{ ...grant, expiresAt: now }, "CAPABILITY_EXPIRED"],
       [{ ...grant, revokedAt: now - 1 }, "CAPABILITY_REVOKED"],
       [{ ...grant, usedAt: now - 1 }, "CAPABILITY_CONSUMED"],
       [{ ...grant, rollbackBoundary: "" }, "CAPABILITY_MISMATCH"],
+      [{ ...grant, owner: `owner:sha256:${"d".repeat(64)}` }, "CAPABILITY_MISMATCH"],
     ] as const;
 
     for (const [capability, code] of scenarios) {
       expect(
         authorizeIntent(intent, {
           now,
+          actor: owner,
           binding,
           pausedScopes: [],
           consumedNonces: [],
@@ -370,11 +377,13 @@ describe("Alice production policy", () => {
     };
     const decision = authorizeIntent(intent, {
       now,
+      actor: owner,
       binding,
       pausedScopes: ["coding"],
       consumedNonces: [],
       capability: {
         capabilityId: "cap-sandbox-paused",
+        owner,
         scope: "sandbox.execute",
         target: intent.target,
         argumentHash: intent.argumentHash,

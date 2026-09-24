@@ -384,6 +384,35 @@ test("captures the production-shaped current response for every Alice Worker", a
   );
 });
 
+test("v4 anchor records the new coding Worker as absent", async () => {
+  const fixtures = sixRoleRollbackReadbacks();
+  const fetchImpl = async (input, init) => {
+    assert.equal(init.method, "GET");
+    const url = new URL(input);
+    if (url.pathname.endsWith("/workers/scripts")) {
+      return Response.json({ success: true, result: Object.values(fixtures)
+        .map(({ worker }) => ({ id: worker })) });
+    }
+    const [, worker, suffix] = url.pathname.match(
+      /\/workers\/scripts\/([^/]+)(.*)$/,
+    ) ?? [];
+    const fixture = Object.values(fixtures).find((item) => item.worker === worker);
+    assert.ok(fixture);
+    const result = suffix === "/deployments" ? fixture.deployment
+      : suffix === "/script-settings" ? fixture.scriptSettings
+      : fixture.version;
+    return Response.json({ success: true, result });
+  };
+  const captured = await captureAliceCloudflareWorkerRollbackState({
+    fetchImpl, apiToken: "test-api-token", includeCodingSandbox: true,
+  });
+  assert.deepEqual(captured.codingSandbox, {
+    worker: "alice-coding-sandbox", absent: true,
+  });
+  assert.deepEqual(rollback.verifyAliceCloudflareWorkerRollbackStateSnapshot(captured),
+    captured);
+});
+
 test("capture API diagnostics expose only safe status and numeric Cloudflare codes", async () => {
   const secret = "must-not-leak-api-token-or-provider-body\n/private/secret/path";
   const fixture = sixRoleRollbackReadbacks().access;
@@ -683,6 +712,35 @@ test("restores persistent settings and proves the prior serving version twice", 
     JSON.stringify(restored).includes("must-not-be-read"),
     false,
   );
+  let codingPresent = true;
+  const codingRequests = [];
+  const codingFetch = async (input, init) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith("/workers/scripts")) {
+      return Response.json({ success: true, result: [
+        ...Object.keys(workers).map((id) => ({ id })),
+        ...(codingPresent ? [{ id: "alice-coding-sandbox" }] : []),
+      ] });
+    }
+    if (url.pathname.endsWith("/workers/scripts/alice-coding-sandbox")) {
+      codingRequests.push({ method: init.method, search: url.search });
+      assert.equal(init.method, "DELETE");
+      codingPresent = false;
+      return new Response(null, { status: 204 });
+    }
+    return fetchImpl(input, init);
+  };
+  const codingExpected = {
+    ...expected,
+    codingSandbox: { worker: "alice-coding-sandbox", absent: true },
+  };
+  const codingRestored = await restoreAliceCloudflareWorkerRollbackState({
+    expected: codingExpected, fetchImpl: codingFetch,
+    apiToken: "test-api-token", baseUrl: "https://api.cloudflare.test/client/v4",
+  });
+  assert.deepEqual(codingRestored.restored.codingSandbox,
+    codingExpected.codingSandbox);
+  assert.deepEqual(codingRequests, [{ method: "DELETE", search: "" }]);
   interleaveAccessDeployment = true;
   for (const worker of Object.keys(deploymentReads)) deploymentReads[worker] = 0;
   await assert.rejects(
