@@ -614,6 +614,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
           (ledger) => ledger.beginWebAuthnApproval(
             actor,
             options.challenge,
+            String(body.target ?? ""),
             String(body.argumentHash ?? ""),
             capabilityId,
             nonce,
@@ -627,7 +628,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
               options,
               approval: {
                 action: "coding.patch.sandbox",
-                target: "rndrntwrk/milaidy",
+                target: String(body.target),
                 argumentHash: String(body.argumentHash),
                 expiresAt: Date.now() + 300_000,
               },
@@ -677,7 +678,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
             subjectId: pending.capabilityId!,
             details: {
               action: "coding.patch.sandbox",
-              target: "rndrntwrk/milaidy",
+              target: pending.target!,
               argumentHash: pending.argumentHash!,
             },
           }),

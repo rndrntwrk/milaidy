@@ -12,6 +12,7 @@ const binding = {
 };
 const challenge = "a".repeat(43);
 const argumentHash = `sha256:${"4".repeat(64)}`;
+const target = "Render-Network-OS/555-bot";
 const credential = {
   id: "credential-id-0001",
   publicKeyB64: "a".repeat(32),
@@ -31,16 +32,19 @@ describe("Alice WebAuthn authority", () => {
     const ledger = registeredLedger();
     expect(ledger.completeWebAuthnRegistration(owner, challenge, credential, now + 2))
       .toMatchObject({ ok: false });
-    expect(ledger.beginWebAuthnApproval(otherOwner, challenge, argumentHash,
+    expect(ledger.beginWebAuthnApproval(otherOwner, challenge, target, argumentHash,
       "cap-milaidy-1", "nonce-milaidy-1", now + 2))
       .toMatchObject({ ok: false, code: "WEBAUTHN_CREDENTIAL_REQUIRED" });
-    expect(ledger.beginWebAuthnApproval(owner, challenge, argumentHash,
+    expect(ledger.beginWebAuthnApproval(owner, challenge, "OtherOrg/private", argumentHash,
+      "cap-invalid-repo", "nonce-invalid-repo", now + 2))
+      .toMatchObject({ ok: false, code: "WEBAUTHN_APPROVAL_INVALID" });
+    expect(ledger.beginWebAuthnApproval(owner, challenge, target, argumentHash,
       "cap-milaidy-1", "nonce-milaidy-1", now + 2).ok).toBe(true);
     expect(ledger.completeWebAuthnApproval(owner, challenge, credential.id, 1, now + 3))
       .toMatchObject({ ok: true, grant: {
         owner,
         scope: "coding.patch.sandbox",
-        target: "rndrntwrk/milaidy",
+        target,
         argumentHash,
         nonce: "nonce-milaidy-1",
         ...binding,
@@ -53,7 +57,7 @@ describe("Alice WebAuthn authority", () => {
     const intent = {
       intentId: "intent-milaidy-1",
       action: "coding.patch.sandbox",
-      target: "rndrntwrk/milaidy",
+      target,
       argumentHash,
       nonce: grant.nonce,
       expiresAt: now + 60_000,
@@ -62,6 +66,8 @@ describe("Alice WebAuthn authority", () => {
     };
     expect(restored.authorize(intent, now + 5, otherOwner).code).toBe("CAPABILITY_MISMATCH");
     expect(restored.authorize({ ...intent, argumentHash: `sha256:${"9".repeat(64)}` },
+      now + 5, owner).code).toBe("CAPABILITY_MISMATCH");
+    expect(restored.authorize({ ...intent, target: "rndrntwrk/milaidy" },
       now + 5, owner).code).toBe("CAPABILITY_MISMATCH");
     expect(restored.authorize({ ...intent, nonce: "nonce-intent-mismatch" },
       now + 5, owner).code).toBe("CAPABILITY_MISMATCH");
@@ -75,18 +81,18 @@ describe("Alice WebAuthn authority", () => {
 
   test("expires an approval challenge and denies a grant after coding pause or release change", () => {
     const ledger = registeredLedger();
-    expect(ledger.beginWebAuthnApproval(owner, challenge, argumentHash,
+    expect(ledger.beginWebAuthnApproval(owner, challenge, "rndrntwrk/milaidy", argumentHash,
       "cap-milaidy-expired", "nonce-milaidy-expired", now + 2).ok).toBe(true);
     expect(ledger.completeWebAuthnApproval(owner, challenge, credential.id, 1,
       now + 300_003).code).toBe("WEBAUTHN_APPROVAL_INVALID");
-    expect(ledger.beginWebAuthnApproval(owner, challenge, argumentHash,
+    expect(ledger.beginWebAuthnApproval(owner, challenge, "rndrntwrk/milaidy", argumentHash,
       "cap-milaidy-paused", "nonce-milaidy-paused", now + 300_004).ok).toBe(true);
     expect(ledger.pause("coding", now + 300_005, owner).ok).toBe(true);
     expect(ledger.completeWebAuthnApproval(owner, challenge, credential.id, 1,
       now + 300_006).code).toBe("WEBAUTHN_PAUSED");
 
     const unpaused = registeredLedger();
-    expect(unpaused.beginWebAuthnApproval(owner, challenge, argumentHash,
+    expect(unpaused.beginWebAuthnApproval(owner, challenge, "rndrntwrk/milaidy", argumentHash,
       "cap-milaidy-release", "nonce-milaidy-release", now + 2).ok).toBe(true);
     const promoted = { ...binding, releaseDigest: `sha256:${"5".repeat(64)}` };
     expect(unpaused.activateRelease({

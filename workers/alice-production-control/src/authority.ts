@@ -80,6 +80,12 @@ export type PendingWebAuthnChallenge = {
   grantExpiresAt?: number;
 };
 
+export function validAliceCodingRepositoryTarget(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 191) return false;
+  const match = /^(rndrntwrk|Render-Network-OS)\/([A-Za-z0-9_.-]+)$/.exec(value);
+  return Boolean(match && match[2] !== "." && match[2] !== "..");
+}
+
 export type ReleaseActivationCandidate = {
   binding: ReleaseBinding;
   deploymentManifestSha256: string;
@@ -308,7 +314,7 @@ function validState(value: unknown): value is AuthorityLedgerState {
     return stored.kind === "approve" &&
       typeof stored.capabilityId === "string" &&
       /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(stored.capabilityId) &&
-      stored.target === "rndrntwrk/milaidy" &&
+      validAliceCodingRepositoryTarget(stored.target) &&
       typeof stored.nonce === "string" &&
       /^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/.test(stored.nonce) &&
       validDigest(stored.argumentHash) &&
@@ -1008,6 +1014,7 @@ export class AuthorityLedger {
   beginWebAuthnApproval(
     owner: string,
     challenge: string,
+    target: string,
     argumentHash: string,
     capabilityId: string,
     nonce: string,
@@ -1020,6 +1027,7 @@ export class AuthorityLedger {
     }
     if (
       !/^[A-Za-z0-9_-]{32,256}$/.test(challenge) ||
+      !validAliceCodingRepositoryTarget(target) ||
       !validDigest(argumentHash) ||
       !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(capabilityId) ||
       !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/.test(nonce) ||
@@ -1035,7 +1043,7 @@ export class AuthorityLedger {
       binding: structuredClone(this.state.binding),
       admissionGeneration: this.state.admissionGeneration,
       capabilityId,
-      target: "rndrntwrk/milaidy",
+      target,
       nonce,
       argumentHash,
       grantExpiresAt: now + 600_000,
@@ -1079,7 +1087,7 @@ export class AuthorityLedger {
       capabilityId: pending.capabilityId,
       owner,
       scope: "coding.patch.sandbox",
-      target: "rndrntwrk/milaidy",
+      target: pending.target!,
       argumentHash: pending.argumentHash,
       nonce: pending.nonce,
       expiresAt: pending.grantExpiresAt,
