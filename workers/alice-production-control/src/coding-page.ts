@@ -7,6 +7,7 @@ const page = `<!doctype html>
   <p><label>Repository <input name="repository" required placeholder="rndrntwrk/repository" autocomplete="off"></label></p>
   <p><label>Base commit SHA <input name="baseCommit" required pattern="[a-f0-9]{40}" autocomplete="off"></label></p>
   <p><label>Task<br><textarea name="prompt" required rows="8" cols="70" maxlength="16384"></textarea></label></p>
+  <p><label><input type="checkbox" name="pullRequest" checked> Open a draft GitHub pull request for review when the task succeeds</label></p>
   <p><button type="button" id="register">Register device passkey</button> <button type="submit">Approve and run</button></p>
 </form>
 <p role="status" id="status">Ready.</p><pre id="result"></pre>
@@ -61,13 +62,31 @@ async function watchTask(taskId) {
       if (!response.ok || current.ok !== true) throw new Error(current.code || 'TASK_STATUS_UNAVAILABLE');
       const work = current.work;
       if (work?.state === 'completed') {
-        status.textContent = 'Patch ready for review: ' + taskId;
-        result.textContent = work.result?.patch || 'No patch was produced.';
+        const pr = work.result?.pullRequestUrl;
+        if (typeof pr === 'string' && /^https:\/\/github\.com\/(?:rndrntwrk|Render-Network-OS)\/[A-Za-z0-9_.-]+\/pull\/[1-9][0-9]*$/.test(pr)) {
+          status.textContent = 'Draft pull request ready for review: ' + taskId;
+          const link = document.createElement('a');
+          link.href = pr;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = pr;
+          result.append(link, document.createTextNode('\n' + (work.result.summary || '')));
+        } else {
+          status.textContent = 'Patch ready for review: ' + taskId;
+          result.textContent = work.result?.patch || 'No patch was produced.';
+        }
         await loadTasks();
         return;
       }
       if (work?.state === 'failed' || work?.state === 'dead-lettered' || current.workflow?.status === 'errored') {
-        throw new Error(work?.code || current.workflow?.error?.message || 'CODING_TASK_FAILED');
+        const guidance = {
+          CODING_RESULT_TOO_LARGE: 'The generated patch exceeded Alice’s durable task limit. Split the request into smaller repository changes and try again.',
+          CODING_CHANGE_SET_TOO_LARGE: 'The generated changes are too large for one draft pull request. Split the task into smaller changes.',
+          CODING_BASE_MOVED: 'The repository moved after this task was approved. Start a new task from its current base commit.',
+          CODING_EMPTY_PATCH: 'The task finished without any file changes, so there is no pull request to open.',
+          CODING_PUBLISH_AUTH_DENIED: 'The exact task approval is no longer valid. Start a new task and approve it again.',
+        };
+        throw new Error(guidance[work?.code] || work?.code || current.workflow?.error?.message || 'CODING_TASK_FAILED');
       }
       status.textContent = 'Task ' + taskId + ' is ' + (work?.state || 'starting') + '…';
       await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -103,7 +122,8 @@ form.addEventListener('submit', async (event) => {
     passkeyApi();
     const data = new FormData(form);
     const request = { repository: String(data.get('repository')).trim(),
-      baseCommit: String(data.get('baseCommit')).trim(), prompt: String(data.get('prompt')) };
+      baseCommit: String(data.get('baseCommit')).trim(), prompt: String(data.get('prompt')),
+      ...(data.get('pullRequest') ? { delivery: 'pull-request' } : {}) };
     status.textContent = 'Approve this exact repository task with your device passkey…';
     const challenge = await post('/control/api/v1/webauthn/approve/options', { request });
     const credential = await navigator.credentials.get({

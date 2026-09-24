@@ -116,6 +116,39 @@ describe("Alice durable work execution", () => {
     expect(JSON.stringify(revoked.writes[0])).toContain('"state":"failed"');
   });
 
+  test("persists a bounded coding result and terminally records an oversized one", async () => {
+    const coding = {
+      repository: "Render-Network-OS/555-bot",
+      baseCommit: "a".repeat(40),
+      prompt: "Fix the Telegram acknowledgement.",
+    };
+    const codingItem: AliceWorkItem = {
+      ...item,
+      coding,
+      intent: {
+        ...item.intent,
+        action: "coding.patch.sandbox",
+        target: coding.repository,
+        argumentHash: await aliceCodingArgumentHash(coding),
+        capabilityId: "cap-00000000-0000-4000-8000-000000000001",
+      },
+    };
+    const envelope = await createAliceWorkQueueEnvelope(codingItem, key);
+    const accepted = dependencies({ async execute() { return { patch: "é".repeat(28_000), summary: "ready" }; } });
+    expect(await processAliceWork(envelope, 1, key, accepted.deps)).toEqual({
+      disposition: "ack", code: "WORK_COMPLETED",
+    });
+    expect(new TextEncoder().encode(JSON.stringify({ operation: "records.atomic", ...accepted.writes[0] })).byteLength)
+      .toBeLessThanOrEqual(65_536);
+
+    const oversized = dependencies({ async execute() { return { patch: "é".repeat(35_000), summary: "ready" }; } });
+    expect(await processAliceWork(envelope, 1, key, oversized.deps)).toEqual({
+      disposition: "ack", code: "CODING_RESULT_TOO_LARGE",
+    });
+    expect(JSON.stringify(oversized.writes[0])).toContain('"code":"CODING_RESULT_TOO_LARGE"');
+    expect(JSON.stringify(oversized.writes[0])).not.toContain('"patch"');
+  });
+
   test("builds one canonical plan, approval, and work record per authorized intent", () => {
     const plan: AlicePlan = {
       schemaVersion: "alice.plan.v1",

@@ -27,7 +27,7 @@ export class AliceCodingWorkflow extends WorkflowEntrypoint<
       const config = await loadRuntimeConfig(this.env);
       const admission = workItem.admission;
       if (
-        workItem.intent.action !== "coding.patch.sandbox" ||
+        !["coding.patch.sandbox", "coding.pr.create"].includes(workItem.intent.action) ||
         workItem.planId !== taskId || workItem.actor !== actor ||
         workItem.sessionId !== sessionId || workItem.enqueuedAt !== requestedAt ||
         config.binding.programDigest !== admission.binding.programDigest ||
@@ -86,7 +86,7 @@ export class AliceCodingWorkflow extends WorkflowEntrypoint<
           {
             kind: "work", recordId: workId, ownerId: actor, sessionId,
             payload: { workId, planId: taskId, approvalId,
-              action: "coding.patch.sandbox", state: "queued",
+              action: workItem.intent.action, state: "queued",
               repository: coding.repository,
               baseCommit: coding.baseCommit },
             updatedAt: requestedAt + 2,

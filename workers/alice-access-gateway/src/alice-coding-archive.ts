@@ -1,6 +1,6 @@
 import { createPrivateKey, sign } from "node:crypto";
 
-type GitHubAppEnvironment = {
+export type GitHubAppEnvironment = {
   ALICE_GITHUB_APP_ID?: string;
   ALICE_GITHUB_APP_PRIVATE_KEY_B64?: string;
 };
@@ -29,7 +29,7 @@ function appJwt(env: GitHubAppEnvironment, now = Date.now()): string {
   return `${input}.${Buffer.from(sign("RSA-SHA256", Buffer.from(input), key)).toString("base64url")}`;
 }
 
-function githubHeaders(token: string): Record<string, string> {
+export function githubHeaders(token: string): Record<string, string> {
   return {
     accept: "application/vnd.github+json",
     authorization: `Bearer ${token}`,
@@ -38,7 +38,7 @@ function githubHeaders(token: string): Record<string, string> {
   };
 }
 
-async function jsonResponse(
+export async function githubJsonResponse(
   response: Response,
 ): Promise<Record<string, unknown>> {
   if (!response.ok) throw new Error("CODING_GITHUB_UNAVAILABLE");
@@ -49,21 +49,20 @@ async function jsonResponse(
   return value as Record<string, unknown>;
 }
 
-/** Trusted host fetches an immutable archive; no App key or token reaches code. */
-export async function fetchAliceCodingArchive(
+export async function codingRepositoryToken(
   repository: string,
-  baseCommit: string,
+  permissions: { contents: "read" | "write"; metadata: "read"; pull_requests?: "write" },
   env: GitHubAppEnvironment,
-  fetcher: typeof fetch = fetch,
-): Promise<Response> {
+  fetcher: typeof fetch,
+): Promise<string> {
   const match = REPOSITORY.exec(repository);
-  if (!match || repository.length > 191 || match[2] === "." || match[2] === ".." || !COMMIT.test(baseCommit)) {
+  if (!match || repository.length > 191 || match[2] === "." || match[2] === "..") {
     throw new Error("CODING_ARCHIVE_TARGET_INVALID");
   }
   const owner = match[1]!;
   const name = match[2]!;
   const jwt = appJwt(env);
-  const installation = await jsonResponse(await fetcher(
+  const installation = await githubJsonResponse(await fetcher(
     `https://api.github.com/repos/${owner}/${name}/installation`,
     { headers: githubHeaders(jwt) },
   ));
@@ -79,23 +78,37 @@ export async function fetchAliceCodingArchive(
   ) {
     throw new Error("CODING_GITHUB_INSTALLATION_INVALID");
   }
-  const scoped = await jsonResponse(await fetcher(
+  const scoped = await githubJsonResponse(await fetcher(
     `https://api.github.com/app/installations/${installation.id}/access_tokens`,
     {
       method: "POST",
       headers: { ...githubHeaders(jwt), "content-type": "application/json" },
       body: JSON.stringify({
         repositories: [name],
-        permissions: { contents: "read", metadata: "read" },
+        permissions,
       }),
     },
   ));
   if (typeof scoped.token !== "string" || scoped.token.length < 20) {
     throw new Error("CODING_GITHUB_TOKEN_INVALID");
   }
+  return scoped.token;
+}
+
+/** Trusted host fetches an immutable archive; no App key or token reaches code. */
+export async function fetchAliceCodingArchive(
+  repository: string,
+  baseCommit: string,
+  env: GitHubAppEnvironment,
+  fetcher: typeof fetch = fetch,
+): Promise<Response> {
+  if (!COMMIT.test(baseCommit)) throw new Error("CODING_ARCHIVE_TARGET_INVALID");
+  const scopedToken = await codingRepositoryToken(repository,
+    { contents: "read", metadata: "read" }, env, fetcher);
+  const [owner, name] = repository.split("/");
   const archive = await fetcher(
     `https://api.github.com/repos/${owner}/${name}/tarball/${baseCommit}`,
-    { headers: githubHeaders(scoped.token), redirect: "manual" },
+    { headers: githubHeaders(scopedToken), redirect: "manual" },
   );
   if (archive.status !== 302) throw new Error("CODING_ARCHIVE_UNAVAILABLE");
   const location = archive.headers.get("location");

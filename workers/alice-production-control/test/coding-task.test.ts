@@ -41,3 +41,26 @@ test("coding request matches one exact WebAuthn grant and yields a stable task",
     aliceCodingArgumentHash({ ...request, repository: "OtherOrg/private" }),
   ).rejects.toThrow("CODING_REQUEST_INVALID");
 });
+
+test("draft PR delivery requires its own exact task grant", async () => {
+  const publishRequest = { ...request, delivery: "pull-request" as const };
+  const grant: CapabilityGrant = {
+    capabilityId: "cap-00000000-0000-4000-8000-000000000002",
+    owner: `owner:${digest("1")}`,
+    scope: "coding.pr.create",
+    target: request.repository,
+    argumentHash: await aliceCodingArgumentHash(publishRequest),
+    nonce: "nonce-00000000-0000-4000-8000-000000000002",
+    expiresAt: Date.now() + 60_000,
+    rollbackBoundary: "release:test",
+    revokedAt: null,
+    usedAt: null,
+    programDigest: digest("2"),
+    releaseDigest: digest("3"),
+    policyHash: digest("4"),
+  };
+  expect((await prepareAliceCodingTask(publishRequest, grant)).intent.action).toBe("coding.pr.create");
+  await expect(prepareAliceCodingTask(request, grant)).rejects.toThrow("CODING_GRANT_MISMATCH");
+  await expect(prepareAliceCodingTask(publishRequest, { ...grant, scope: "coding.patch.sandbox" }))
+    .rejects.toThrow("CODING_GRANT_MISMATCH");
+});

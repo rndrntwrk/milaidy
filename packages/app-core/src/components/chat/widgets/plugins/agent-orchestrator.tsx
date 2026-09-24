@@ -179,6 +179,40 @@ const THREAD_STATUS_BADGE: Record<string, string> = {
   interrupted: "bg-warn/20 text-warn",
 };
 
+type AliceCodingTask = {
+  taskId: string;
+  updatedAt: number;
+  state: string;
+  pullRequestUrl?: string;
+};
+
+async function loadAliceCodingTasks(): Promise<AliceCodingTask[]> {
+  const response = await fetch("/control/api/v1/coding/tasks");
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const list = await response.json() as { ok?: boolean; tasks?: Array<{
+    taskId?: string; updatedAt?: number;
+  }> };
+  if (list.ok !== true || !Array.isArray(list.tasks)) throw new Error("Invalid task list");
+  const recent = list.tasks.filter((task) =>
+    /^task-cap-[a-f0-9-]{36}$/.test(task.taskId ?? "") &&
+    Number.isSafeInteger(task.updatedAt),
+  ).sort((a, b) => b.updatedAt! - a.updatedAt!).slice(0, 6);
+  return Promise.all(recent.map(async (task) => {
+    const detail = await fetch(`/control/api/v1/coding/tasks/${encodeURIComponent(task.taskId!)}`);
+    if (!detail.ok) throw new Error(`HTTP ${detail.status}`);
+    const value = await detail.json() as { ok?: boolean; work?: {
+      state?: string; result?: { pullRequestUrl?: string };
+    }; workflow?: { status?: string } };
+    if (value.ok !== true) throw new Error("Invalid task status");
+    return {
+      taskId: task.taskId!, updatedAt: task.updatedAt!,
+      state: typeof value.work?.state === "string" ? value.work.state :
+        typeof value.workflow?.status === "string" ? value.workflow.status : "starting",
+      pullRequestUrl: value.work?.result?.pullRequestUrl,
+    };
+  }));
+}
+
 function TaskThreadCard({
   thread,
   selected,
@@ -830,6 +864,8 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
 
 function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const { t } = useApp();
+  const isAlice = typeof window !== "undefined" &&
+    window.location.hostname === "alice.rndrntwrk.com";
   const { ptySessions } = usePtySessions();
   const activeSessions = useMemo(
     () =>
@@ -850,11 +886,32 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [aliceCodingTasks, setAliceCodingTasks] = useState<AliceCodingTask[]>([]);
+  const [aliceCodingError, setAliceCodingError] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search.trim());
   const selectedThreadSummary = useMemo(
     () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
     [selectedThreadId, threads],
   );
+
+  useEffect(() => {
+    if (!isAlice) return;
+    let cancelled = false;
+    let pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const tasks = await loadAliceCodingTasks();
+        if (!cancelled) { setAliceCodingTasks(tasks); setAliceCodingError(null); }
+      } catch (error) {
+        if (!cancelled) setAliceCodingError(error instanceof Error ? error.message : "Unavailable");
+      } finally { pending = false; }
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 10_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [isAlice]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1015,7 +1072,8 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     }
   };
 
-  const count = threads.length > 0 ? threads.length : activeSessions.length;
+  const count = (threads.length > 0 ? threads.length : activeSessions.length) +
+    aliceCodingTasks.length;
 
   return (
     <WidgetSection
@@ -1036,6 +1094,32 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       }
       testId="chat-widget-orchestrator"
     >
+      {isAlice ? (
+        <a
+          href="/control/coding"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-2 block rounded-md border border-border/50 px-2 py-1.5 text-[11px] text-txt hover:border-accent/50"
+        >
+          Start an Alice repository task · approve with your passkey
+        </a>
+      ) : null}
+      {isAlice && aliceCodingError ? (
+        <p className="mb-2 text-[11px] text-danger">Alice coding tasks unavailable: {aliceCodingError}</p>
+      ) : null}
+      {aliceCodingTasks.length > 0 ? (
+        <div className="mb-2 flex flex-col gap-2">
+          {aliceCodingTasks.map((task) => (
+            <div key={task.taskId} className="rounded-lg border border-border/50 bg-bg-accent/30 p-2 text-[11px]">
+              <div className="font-semibold text-txt">Alice repository task · {task.state.replace(/_/g, " ")}</div>
+              <div className="truncate text-muted">{task.taskId} · {relativeTime(task.updatedAt)}</div>
+              {task.pullRequestUrl && /^https:\/\/github\.com\/(?:rndrntwrk|Render-Network-OS)\/[A-Za-z0-9_.-]+\/pull\/[1-9][0-9]*$/.test(task.pullRequestUrl) ? (
+                <a href={task.pullRequestUrl} target="_blank" rel="noopener noreferrer" className="text-accent underline">Review draft pull request</a>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="mb-2">
         <input
           value={search}

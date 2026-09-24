@@ -619,6 +619,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
             capabilityId,
             nonce,
             Date.now(),
+            body.scope === "coding.pr.create" ? "coding.pr.create" : "coding.patch.sandbox",
           ),
           (result) => result.ok,
         );
@@ -627,7 +628,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
               ok: true,
               options,
               approval: {
-                action: "coding.patch.sandbox",
+                action: body.scope === "coding.pr.create" ? "coding.pr.create" : "coding.patch.sandbox",
                 target: String(body.target),
                 argumentHash: String(body.argumentHash),
                 expiresAt: Date.now() + 300_000,
@@ -677,7 +678,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
             binding: config.binding,
             subjectId: pending.capabilityId!,
             details: {
-              action: "coding.patch.sandbox",
+              action: pending.scope ?? "coding.patch.sandbox",
               target: pending.target!,
               argumentHash: pending.argumentHash!,
             },

@@ -61,6 +61,8 @@ const secrets = {
   ELIZA_VAULT_PASSPHRASE: "runtime-vault-passphrase-with-at-least-32-bytes",
   ALICE_STATE_PLANE_SERVICE_TOKEN:
     "state-plane-service-token-with-at-least-32-bytes",
+  ALICE_CODING_PUBLISH_TOKEN:
+    "coding-publish-secret-with-at-least-32-bytes",
   ALICE_RUNTIME_RELEASE_TOKEN: runtimeToken,
   OPENAI_API_KEY: runtimeToken,
   ALICE_RUNTIME_RELEASE_TOKEN_SHA256: `sha256:${createHash("sha256")
@@ -131,12 +133,19 @@ describe("Alice protected Program admission", () => {
 
     const codingConfigs = {
       ...containerConfigs,
+      control: {
+        secrets: { required: [
+          ...containerConfigs.control.secrets.required,
+          "ALICE_CODING_PUBLISH_TOKEN",
+        ] },
+      },
       runtimeHost: {
         secrets: {
           required: [
             ...containerConfigs.runtimeHost.secrets.required,
             "ALICE_GITHUB_APP_ID",
             "ALICE_GITHUB_APP_PRIVATE_KEY_B64",
+            "ALICE_CODING_PUBLISH_TOKEN",
           ],
         },
       },

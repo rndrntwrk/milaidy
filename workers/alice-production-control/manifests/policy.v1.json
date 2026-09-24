@@ -17,7 +17,8 @@
   ],
   "capabilityActions": [
     "sandbox.execute",
-    "coding.patch.sandbox"
+    "coding.patch.sandbox",
+    "coding.pr.create"
   ],
   "disabledActions": [
     "social.post",
@@ -62,7 +63,7 @@
     "stream": "installed-but-disabled",
     "social": "native owner conversations only; connector plane inert",
     "trading": "installed-but-disabled",
-    "codingExecution": "installed-but-disabled",
+    "codingExecution": "owner-passkey-approved isolated sandbox tasks; draft pull requests require exact task approval",
     "signing": "not-present"
   },
   "nativeOwnerConversations": {

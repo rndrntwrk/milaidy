@@ -33,7 +33,7 @@ const envelope: ProgramEnvelope = {
       "draft.create",
       "runtime.health",
     ],
-    capabilityActions: ["sandbox.execute", "coding.patch.sandbox"],
+    capabilityActions: ["sandbox.execute", "coding.patch.sandbox", "coding.pr.create"],
     disabledActions: [
       "social.post",
       "social.message",

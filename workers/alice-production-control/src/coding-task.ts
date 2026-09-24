@@ -6,7 +6,13 @@ export type AliceCodingRequest = {
   repository: string;
   baseCommit: string;
   prompt: string;
+  delivery?: "pull-request";
 };
+
+export function aliceCodingAction(request: AliceCodingRequest):
+  "coding.patch.sandbox" | "coding.pr.create" {
+  return request.delivery === "pull-request" ? "coding.pr.create" : "coding.patch.sandbox";
+}
 
 export type PreparedAliceCodingTask = {
   taskId: string;
@@ -19,7 +25,9 @@ function validCodingRequest(value: unknown): value is AliceCodingRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Record<string, unknown>;
   return (
-    Object.keys(request).sort().join(",") === "baseCommit,prompt,repository" &&
+    (Object.keys(request).sort().join(",") === "baseCommit,prompt,repository" ||
+      (Object.keys(request).sort().join(",") === "baseCommit,delivery,prompt,repository" &&
+        request.delivery === "pull-request")) &&
     validAliceCodingRepositoryTarget(request.repository) &&
     typeof request.baseCommit === "string" &&
     /^[a-f0-9]{40}$/.test(request.baseCommit) &&
@@ -53,7 +61,7 @@ export async function prepareAliceCodingTask(
   const argumentHash = await aliceCodingArgumentHash(value);
   const request = value as AliceCodingRequest;
   if (
-    grant.scope !== "coding.patch.sandbox" ||
+    grant.scope !== aliceCodingAction(request) ||
     grant.target !== request.repository ||
     grant.argumentHash !== argumentHash ||
     !/^cap-[a-f0-9-]{36}$/.test(grant.capabilityId)
@@ -66,7 +74,7 @@ export async function prepareAliceCodingTask(
     argumentHash,
     intent: {
       intentId: `intent-${grant.capabilityId}`,
-      action: "coding.patch.sandbox",
+      action: aliceCodingAction(request),
       target: request.repository,
       argumentHash,
       nonce: grant.nonce,

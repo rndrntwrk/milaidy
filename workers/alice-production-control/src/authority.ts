@@ -68,6 +68,7 @@ export type DeviceBoundCredential = {
 
 export type PendingWebAuthnChallenge = {
   kind: "register" | "approve";
+  scope?: "coding.patch.sandbox" | "coding.pr.create";
   challenge: string;
   owner: string;
   expiresAt: number;
@@ -307,11 +308,13 @@ function validState(value: unknown): value is AuthorityLedgerState {
       Number.isSafeInteger(stored.admissionGeneration) && stored.admissionGeneration > 0;
     if (!common) return false;
     if (stored.kind === "register") {
-      return stored.capabilityId === undefined && stored.target === undefined &&
+      return stored.scope === undefined && stored.capabilityId === undefined && stored.target === undefined &&
         stored.nonce === undefined &&
         stored.argumentHash === undefined && stored.grantExpiresAt === undefined;
     }
     return stored.kind === "approve" &&
+      (stored.scope === undefined || stored.scope === "coding.patch.sandbox" ||
+        stored.scope === "coding.pr.create") &&
       typeof stored.capabilityId === "string" &&
       /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(stored.capabilityId) &&
       validAliceCodingRepositoryTarget(stored.target) &&
@@ -1019,6 +1022,7 @@ export class AuthorityLedger {
     capabilityId: string,
     nonce: string,
     now: number,
+    scope: "coding.patch.sandbox" | "coding.pr.create" = "coding.patch.sandbox",
   ) {
     const gate = this.webauthnGate(owner, now);
     if (gate) return { ok: false, code: gate } as const;
@@ -1031,12 +1035,14 @@ export class AuthorityLedger {
       !validDigest(argumentHash) ||
       !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(capabilityId) ||
       !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/.test(nonce) ||
+      (scope !== "coding.patch.sandbox" && scope !== "coding.pr.create") ||
       this.state.capabilities[capabilityId]
     ) {
       return { ok: false, code: "WEBAUTHN_APPROVAL_INVALID" } as const;
     }
     this.state.webauthn.pending = {
       kind: "approve",
+      scope,
       challenge,
       owner,
       expiresAt: now + 300_000,
@@ -1086,7 +1092,7 @@ export class AuthorityLedger {
     const grant: CapabilityGrant = {
       capabilityId: pending.capabilityId,
       owner,
-      scope: "coding.patch.sandbox",
+      scope: pending.scope ?? "coding.patch.sandbox",
       target: pending.target!,
       argumentHash: pending.argumentHash,
       nonce: pending.nonce,
@@ -1125,7 +1131,8 @@ export class AuthorityLedger {
         return { allowed: false, code: "PAUSED_RELEASE", risk: existingDecision.decision.risk } as const;
       }
       if (
-        (intent.action === "sandbox.execute" || intent.action === "coding.patch.sandbox") &&
+        (intent.action === "sandbox.execute" || intent.action === "coding.patch.sandbox" ||
+          intent.action === "coding.pr.create") &&
         pausedScopes.includes("coding")
       ) {
         return { allowed: false, code: "PAUSED_CODING", risk: existingDecision.decision.risk } as const;

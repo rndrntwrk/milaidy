@@ -105,4 +105,21 @@ describe("Alice WebAuthn authority", () => {
     expect(unpaused.completeWebAuthnApproval(owner, challenge, credential.id, 1,
       now + 4).code).toBe("WEBAUTHN_APPROVAL_INVALID");
   });
+
+  test("binds a publication grant to the owner, task request and action", () => {
+    const ledger = registeredLedger();
+    expect(ledger.beginWebAuthnApproval(owner, challenge, target, argumentHash,
+      "cap-publish-1", "nonce-publish-1", now + 2, "coding.pr.create").ok).toBe(true);
+    const completed = ledger.completeWebAuthnApproval(owner, challenge, credential.id, 1, now + 3);
+    expect(completed).toMatchObject({ ok: true, grant: { scope: "coding.pr.create" } });
+    const grant = ledger.exportState().capabilities["cap-publish-1"]!;
+    const intent = {
+      intentId: "intent-publish-1", action: "coding.pr.create", target,
+      argumentHash, nonce: grant.nonce, expiresAt: now + 60_000,
+      capabilityId: grant.capabilityId, ...binding,
+    };
+    expect(ledger.authorize({ ...intent, action: "coding.patch.sandbox" }, now + 4, owner).code)
+      .toBe("CAPABILITY_MISMATCH");
+    expect(ledger.authorize(intent, now + 5, owner).code).toBe("CAPABILITY_AUTHORIZED");
+  });
 });

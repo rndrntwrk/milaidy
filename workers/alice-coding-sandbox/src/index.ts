@@ -11,6 +11,68 @@ export { AliceCodingLease, ContainerProxy };
 const MODEL = "workers-ai/@cf/openai/gpt-oss-120b";
 const TASK_ID = /^task-cap-[a-f0-9-]{36}$/;
 const MAX_PATCH_BYTES = 128_000;
+const MAX_CHANGE_BYTES = 110_000;
+const MAX_CHANGED_FILES = 25;
+
+type CodingChange = { path: string; mode: "100644" | "100755"; contentB64: string | null };
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function validChangedPath(path: string): boolean {
+  return path.length > 0 && path.length <= 255 &&
+    !/[\u0000-\u001f\u007f]/.test(path) &&
+    !path.startsWith("/") &&
+    path.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+}
+
+async function collectChanges(sandbox: ReturnType<typeof getSandbox>): Promise<CodingChange[]> {
+  const listing = await sandbox.exec(
+    "cd /workspace/repo && git -c diff.renames=false diff --cached --raw -z HEAD | base64 > /workspace/changes.b64",
+    { timeout: 30_000 },
+  );
+  if (!listing.success) throw new Error("CODING_CHANGE_LIST_FAILED");
+  const encoded = (await sandbox.readFile("/workspace/changes.b64")).content.replace(/\s/g, "");
+  const binary = atob(encoded);
+  const raw = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(
+    Uint8Array.from(binary, (character) => character.charCodeAt(0)),
+  );
+  const fields = raw.split("\0");
+  if (fields.at(-1) !== "") throw new Error("CODING_CHANGE_LIST_INVALID");
+  fields.pop();
+  if (fields.length === 0 || fields.length % 2 !== 0 ||
+    fields.length / 2 > MAX_CHANGED_FILES) throw new Error("CODING_CHANGE_LIST_INVALID");
+  const changes: CodingChange[] = [];
+  for (let index = 0; index < fields.length; index += 2) {
+    const metadata = /^:(\d{6}) (\d{6}) [a-f0-9]+ [a-f0-9]+ ([AMD])$/.exec(fields[index]!);
+    const path = fields[index + 1]!;
+    if (!metadata || !validChangedPath(path) ||
+      !["100644", "100755"].includes(metadata[3] === "D" ? metadata[1]! : metadata[2]!)) {
+      throw new Error("CODING_CHANGE_LIST_INVALID");
+    }
+    const mode = (metadata[3] === "D" ? metadata[1] : metadata[2]) as CodingChange["mode"];
+    let contentB64: string | null = null;
+    if (metadata[3] !== "D") {
+      const output = `/workspace/change-${index / 2}.b64`;
+      const blob = await sandbox.exec(
+        `cd /workspace/repo && git show ${shellQuote(`:${path}`)} | base64 > ${output}`,
+        { timeout: 30_000 },
+      );
+      if (!blob.success) throw new Error("CODING_CHANGE_READ_FAILED");
+      const encodedBlob = (await sandbox.readFile(output)).content.replace(/\s/g, "");
+      if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encodedBlob)) {
+        throw new Error("CODING_CHANGE_READ_FAILED");
+      }
+      contentB64 = encodedBlob;
+    }
+    changes.push({ path, mode, contentB64 });
+    if (new TextEncoder().encode(JSON.stringify(changes)).byteLength > MAX_CHANGE_BYTES) {
+      throw new Error("CODING_CHANGE_SET_TOO_LARGE");
+    }
+  }
+  return changes;
+}
 
 export class AliceCodingSandbox extends Sandbox {
   enableInternet = false;
@@ -71,7 +133,8 @@ async function parseInput(request: Request): Promise<CodingInput & {
     input.schemaVersion !== "alice.coding-execution.v1" ||
     !TASK_ID.test(input.taskId) ||
     !/^owner:sha256:[a-f0-9]{64}$/.test(input.actor) ||
-    input.intent?.action !== "coding.patch.sandbox" ||
+    !["coding.patch.sandbox", "coding.pr.create"].includes(input.intent?.action) ||
+    (coding.delivery === "pull-request") !== (input.intent?.action === "coding.pr.create") ||
     input.intent.capabilityId !== input.taskId.slice(5) ||
     input.intent.target !== coding.repository ||
     input.intent.argumentHash !== argumentHash ||
@@ -116,7 +179,7 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
     return Response.json({ ok: false, code: state.code }, { status: start.status });
   }
   const sandbox = getSandbox(env.ALICE_CODING_SANDBOX, input.taskId);
-  let result: { patch: string; summary: string } | null = null;
+  let result: { patch: string; summary: string; changes?: CodingChange[] } | null = null;
   let failure: unknown = null;
   let destroyed = false;
   try {
@@ -157,7 +220,7 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
     );
     if (!run.success) throw new Error("CODING_AGENT_FAILED");
     const diff = await sandbox.exec(
-      "cd /workspace/repo && git add -N . && git diff --binary HEAD > /workspace/patch.diff && wc -c < /workspace/patch.diff",
+      "cd /workspace/repo && git add -A && git diff --cached --binary HEAD > /workspace/patch.diff && wc -c < /workspace/patch.diff",
       { timeout: 30_000 },
     );
     const patchBytes = Number(diff.stdout.trim());
@@ -165,7 +228,10 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
       throw new Error("CODING_PATCH_TOO_LARGE");
     }
     const patch = await sandbox.readFile("/workspace/patch.diff");
-    result = { patch: patch.content, summary: run.stdout.slice(-2_000) };
+    result = input.intent.action === "coding.pr.create"
+      ? { patch: "", summary: run.stdout.slice(-2_000),
+          changes: await collectChanges(sandbox) }
+      : { patch: patch.content, summary: run.stdout.slice(-2_000) };
   } catch (error) {
     failure = error;
   } finally {

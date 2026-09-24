@@ -288,6 +288,9 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
           (binding) => ({
             binding: binding.name,
             className: binding.class_name,
+            ...(binding.script_name === undefined
+              ? {}
+              : { scriptName: binding.script_name }),
           }),
         ),
         migrations: durableObjectMigrations(identityConfig),

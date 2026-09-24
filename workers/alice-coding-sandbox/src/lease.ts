@@ -16,7 +16,11 @@ type LeaseState = {
   useCount: number;
   status: "running" | "done" | "failed";
   failureCode: string | null;
-  result: { patch: string; summary: string } | null;
+  result: {
+    patch: string;
+    summary: string;
+    changes?: Array<{ path: string; mode: "100644" | "100755"; contentB64: string | null }>;
+  } | null;
 };
 
 const MAX_MODEL_CALLS = 40;
@@ -87,7 +91,7 @@ export class AliceCodingLease extends DurableObject<AliceCodingSandboxEnv> {
         typeof taskId !== "string" || !/^task-cap-[a-f0-9-]{36}$/.test(taskId) ||
         typeof argumentHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(argumentHash) ||
         typeof actor !== "string" || !/^owner:sha256:[a-f0-9]{64}$/.test(actor) ||
-        !intent || intent.action !== "coding.patch.sandbox" ||
+        !intent || !["coding.patch.sandbox", "coding.pr.create"].includes(intent.action) ||
         intent.capabilityId !== taskId.slice(5) || intent.argumentHash !== argumentHash ||
         !Number.isSafeInteger(intent.expiresAt) || intent.expiresAt <= Date.now() ||
         !admission || !admission.binding ||
@@ -157,6 +161,10 @@ export class AliceCodingLease extends DurableObject<AliceCodingSandboxEnv> {
     if (!result || typeof result !== "object" || Array.isArray(result) ||
       typeof (result as Record<string, unknown>).patch !== "string" ||
       typeof (result as Record<string, unknown>).summary !== "string" ||
+      (existing.intent.action === "coding.pr.create" &&
+        !Array.isArray((result as Record<string, unknown>).changes)) ||
+      (existing.intent.action === "coding.patch.sandbox" &&
+        "changes" in (result as Record<string, unknown>)) ||
       new TextEncoder().encode(JSON.stringify(result)).byteLength > 150_000) {
       return Response.json({ code: "CODING_RESULT_INVALID" }, { status: 400 });
     }

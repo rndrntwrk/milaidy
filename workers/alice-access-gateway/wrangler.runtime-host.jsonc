@@ -33,6 +33,7 @@
       "ALICE_RUNTIME_REVISION"
       ,"ALICE_GITHUB_APP_ID"
       ,"ALICE_GITHUB_APP_PRIVATE_KEY_B64"
+      ,"ALICE_CODING_PUBLISH_TOKEN"
     ]
   },
   "services": [
@@ -47,6 +48,11 @@
   ],
   "durable_objects": {
     "bindings": [
+      {
+        "name": "ALICE_AUTHORITY",
+        "class_name": "AliceAuthority",
+        "script_name": "alice-production-control"
+      },
       {
         "name": "ALICE_RUNTIME_CONTAINER",
         "class_name": "AliceRuntimeContainer"
