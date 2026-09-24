@@ -215,6 +215,65 @@ jobs:
           if (!response.ok || value.ok !== true) process.exitCode = 1;
           NODE
 
+      - name: Diagnose Container Application readback without mutation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          const account = '036df6c823669b8fa2f66cf4c16eeb29';
+          const base = `https://api.cloudflare.com/client/v4/accounts/${account}/containers/applications`;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          if (typeof token !== 'string' || token.length < 32) {
+            throw new Error('ALICE_CONTAINER_DIAGNOSTIC_TOKEN_MISSING');
+          }
+          const probe = async (stage, url) => {
+            let response;
+            try {
+              response = await fetch(url, { method: 'GET', redirect: 'manual',
+                signal: AbortSignal.timeout(30_000), headers: {
+                  authorization: `Bearer ${token}`, accept: 'application/json',
+                  'cache-control': 'no-cache',
+                } });
+            } catch {
+              console.log(JSON.stringify({ stage, category: 'transport' }));
+              return null;
+            }
+            let body;
+            try {
+              const raw = await response.text();
+              if (raw.length > 262_144) throw new Error('oversize');
+              body = JSON.parse(raw);
+            } catch {
+              console.log(JSON.stringify({ stage, category: 'json', status: response.status }));
+              return null;
+            }
+            const result = body?.result;
+            const codes = [...new Set((Array.isArray(body?.errors) ? body.errors : [])
+              .map(error => error?.code).filter(code => Number.isSafeInteger(code)))].slice(0, 8);
+            console.log(JSON.stringify({ stage, status: response.status,
+              success: body?.success === true, errorCodes: codes,
+              resultType: Array.isArray(result) ? 'array' : typeof result,
+              resultCount: Array.isArray(result) ? result.length : null }));
+            return response.ok && body?.success === true ? result : null;
+          };
+          for (const name of ['alice-production-runtime', 'alice-coding-sandbox']) {
+            const listed = await probe(`${name}:list`, `${base}?name=${encodeURIComponent(name)}`);
+            if (!Array.isArray(listed)) continue;
+            const matched = listed.filter(item => item?.name === name);
+            console.log(JSON.stringify({ stage: `${name}:match`, count: matched.length,
+              idFormatValid: matched.length === 1 &&
+                /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(matched[0]?.id ?? '') }));
+            if (matched.length !== 1 || typeof matched[0]?.id !== 'string') continue;
+            const path = `${base}/${encodeURIComponent(matched[0].id)}`;
+            const detail = await probe(`${name}:detail`, path);
+            await probe(`${name}:versions`, `${path}/versions`);
+            await probe(`${name}:instances`, `${path}/instances`);
+            if (detail?.active_rollout_id) {
+              await probe(`${name}:rollout`, `${path}/rollouts/${encodeURIComponent(detail.active_rollout_id)}`);
+            }
+          }
+          NODE
+
       - name: Read Worker content identity diagnostics without mutation
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
