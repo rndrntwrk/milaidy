@@ -26,7 +26,7 @@ function appJwt(env: GitHubAppEnvironment, now = Date.now()): string {
     exp: issuedAt + 540,
     iss: appId,
   })}`;
-  return `${input}.${sign("RSA-SHA256", Buffer.from(input), key).toString("base64url")}`;
+  return `${input}.${Buffer.from(sign("RSA-SHA256", Buffer.from(input), key)).toString("base64url")}`;
 }
 
 function githubHeaders(token: string): Record<string, string> {
