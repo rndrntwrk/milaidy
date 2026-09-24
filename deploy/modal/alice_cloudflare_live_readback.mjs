@@ -872,6 +872,8 @@ function codingWorkflowIdentity(value) {
     value?.script_deleted === true ||
     (value?.script_deleted !== undefined &&
       typeof value.script_deleted !== "boolean") ||
+    (value?.schedules !== undefined &&
+      (!Array.isArray(value.schedules) || value.schedules.length !== 0)) ||
     !canonicalIsoTimestamp(value?.created_on) ||
     !canonicalIsoTimestamp(value?.modified_on) ||
     Date.parse(value.modified_on) < Date.parse(value.created_on)
@@ -933,6 +935,63 @@ export async function fetchAliceCodingWorkflowState({
     if (safeReadbackErrors.has(error)) throw error;
     readbackInvalid();
   }
+}
+
+export async function fetchAliceCodingWorkflowPrestate({
+  fetchImpl = globalThis.fetch,
+  apiToken,
+  accountId = ALICE_CLOUDFLARE_TARGET.accountId,
+  zoneId = ZONE_ID,
+  baseUrl = API_BASE,
+}) {
+  if (!validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl })) {
+    readbackInvalid();
+  }
+  try {
+    const client = { fetchImpl, apiToken, baseUrl };
+    const listed = await apiGetAllResults(client,
+      `/accounts/${accountId}/workflows`);
+    const matches = listed.filter((item) =>
+      item?.name === ALICE_CODING_TARGET.codingWorkflow);
+    if (matches.length > 1) readbackInvalid();
+    if (matches.length === 1) {
+      const state = await fetchAliceCodingWorkflowState({
+        fetchImpl, apiToken, accountId, zoneId, baseUrl,
+      });
+      if (state.workflow.id !== matches[0].id) readbackInvalid();
+      return { workflow: state.workflow, versions: state.versions };
+    }
+    const response = await fetchImpl(new URL(
+      `${baseUrl}/accounts/${accountId}/workflows/${ALICE_CODING_TARGET.codingWorkflow}`), {
+      method: "GET", headers: { authorization: `Bearer ${apiToken}`,
+        accept: "application/json", "cache-control": "no-cache" },
+    });
+    if (!(response instanceof Response) || response.status !== 404) {
+      readbackInvalid();
+    }
+    return { absent: true };
+  } catch (error) {
+    if (safeReadbackErrors.has(error)) throw error;
+    readbackInvalid();
+  }
+}
+
+export function resolveAliceCandidateCodingWorkflowVersion({ previous, current }) {
+  const verified = verifyAliceCodingWorkflowStateSnapshot(current);
+  const before = previous?.absent === true
+    ? []
+    : verifyAliceCodingWorkflowStateSnapshot(previous).versions;
+  if (previous?.absent !== true &&
+      previous?.workflow?.id !== verified.workflow.id) readbackInvalid();
+  const previousById = new Map(before.map((version) => [version.id, version]));
+  for (const version of before) {
+    if (!canonicalEqual(verified.versions.find((item) => item.id === version.id),
+      version)) readbackInvalid();
+  }
+  const additions = verified.versions.filter((version) =>
+    !previousById.has(version.id));
+  if (additions.length !== 1) readbackInvalid();
+  return additions[0];
 }
 
 async function apiGetResponse({ fetchImpl, apiToken, baseUrl }, pathname) {

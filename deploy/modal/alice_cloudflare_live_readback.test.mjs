@@ -14,7 +14,9 @@ import {
   fetchAliceCloudflareProviderState,
   fetchAliceCodingContainerState,
   fetchAliceCodingWorkflowState,
+  fetchAliceCodingWorkflowPrestate,
   fetchAliceCloudflareWorkflowVersionState,
+  resolveAliceCandidateCodingWorkflowVersion,
   verifyAliceCodingWorkflowStateSnapshot,
   verifyAliceCloudflareWorkflowVersionSnapshot,
 } from "./alice_cloudflare_live_readback.mjs";
@@ -746,6 +748,51 @@ test("coding Workflow readback binds its live owner and exact deployed version",
   detail = { ...version, limits: { steps: 7 } };
   await assert.rejects(() => fetchAliceCodingWorkflowState(options),
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
+});
+
+test("coding Workflow candidate version is new relative to the anchored baseline", async () => {
+  const workflow = {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    name: "alice-production-coding", scriptName: "alice-production-control",
+    className: "AliceCodingWorkflow", createdOn: "2026-08-22T12:00:00.000Z",
+    modifiedOn: "2026-08-22T12:00:01.000Z", scriptDeleted: false,
+  };
+  const version = {
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    className: "AliceCodingWorkflow", workflowId: workflow.id,
+    createdOn: workflow.createdOn, modifiedOn: workflow.modifiedOn,
+    hasDag: true, language: "javascript", defaultRetention: null,
+    limits: { steps: 8 },
+  };
+  const next = { ...version, id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    createdOn: "2026-08-22T12:00:02.000Z",
+    modifiedOn: "2026-08-22T12:00:02.000Z" };
+  assert.deepEqual(resolveAliceCandidateCodingWorkflowVersion({
+    previous: { absent: true }, current: { workflow, versions: [version] },
+  }), version);
+  assert.deepEqual(resolveAliceCandidateCodingWorkflowVersion({
+    previous: { workflow, versions: [version] },
+    current: { workflow, versions: [version, next] },
+  }), next);
+  assert.throws(() => resolveAliceCandidateCodingWorkflowVersion({
+    previous: { workflow, versions: [version] },
+    current: { workflow, versions: [version] },
+  }), /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
+  assert.throws(() => resolveAliceCandidateCodingWorkflowVersion({
+    previous: { absent: true }, current: { workflow, versions: [version, next] },
+  }), /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
+  const options = { apiToken: "read-only-token", accountId, zoneId, baseUrl,
+    fetchImpl: async (url) => {
+      const pathname = new URL(url).pathname.replace("/client/v4", "");
+      if (pathname === `/accounts/${accountId}/workflows`) {
+        return json({ success: true, result: [] });
+      }
+      if (pathname === `/accounts/${accountId}/workflows/alice-production-coding`) {
+        return new Response("", { status: 404 });
+      }
+      throw new Error("unexpected request");
+    } };
+  assert.deepEqual(await fetchAliceCodingWorkflowPrestate(options), { absent: true });
 });
 
 test("coding Container readback binds the exact private namespace and image", async () => {

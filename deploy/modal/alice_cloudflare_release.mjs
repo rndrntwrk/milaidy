@@ -20,6 +20,9 @@ import {
   fetchAliceCloudflareContinuityState,
   fetchAliceCloudflarePostDeploymentReadback,
   fetchAliceCloudflareWorkflowVersionState,
+  fetchAliceCodingWorkflowPrestate,
+  resolveAliceCandidateCodingWorkflowVersion,
+  verifyAliceCodingWorkflowStateSnapshot,
   verifyAliceCloudflareWorkflowVersionSnapshot,
 } from "./alice_cloudflare_live_readback.mjs";
 import {
@@ -672,6 +675,147 @@ async function deleteOwnedCodingContainerApplication({ apiToken }) {
     if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250));
   }
   releaseInvalid("ALICE_CODING_CONTAINER_DELETE_INVALID");
+}
+
+function verifyCodingWorkflowOwnedIdentity(identity) {
+  if (!exactKeys(identity, ["workflowId", "candidateVersionId"]) ||
+      !VERSION_ID.test(identity.workflowId ?? "") ||
+      !VERSION_ID.test(identity.candidateVersionId ?? "")) {
+    releaseInvalid("ALICE_CODING_WORKFLOW_OWNERSHIP_INVALID");
+  }
+  return identity;
+}
+
+async function restoreCodingWorkflowPrestate({ apiToken, expected, ownedIdentity }) {
+  const current = await fetchAliceCodingWorkflowPrestate({ apiToken });
+  if (expected.absent === true) {
+    if (current.absent === true) return current;
+    const owned = verifyCodingWorkflowOwnedIdentity(ownedIdentity);
+    if (current.workflow.id !== owned.workflowId ||
+        current.versions.length !== 1 ||
+        current.versions[0].id !== owned.candidateVersionId) {
+      releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+    }
+    const url = `${API_BASE}/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}` +
+      `/workflows/${ALICE_CODING_TARGET.codingWorkflow}`;
+    let instances;
+    try {
+      const resourceResponse = await fetch(url, { headers: {
+        authorization: `Bearer ${apiToken}`, accept: "application/json",
+        "cache-control": "no-cache",
+      } });
+      if (!resourceResponse.ok) releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+      const resource = (await resourceResponse.json()).result;
+      if (resource?.id !== owned.workflowId ||
+          resource.script_name !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
+          resource.class_name !== "AliceCodingWorkflow" ||
+          (resource.schedules !== undefined && resource.schedules.length !== 0)) {
+        releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+      }
+      const response = await fetch(`${url}/instances?per_page=1`, {
+        headers: { authorization: `Bearer ${apiToken}`, accept: "application/json",
+          "cache-control": "no-cache" },
+      });
+      if (!response.ok) releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+      instances = await response.json();
+    } catch {
+      releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+    }
+    if (instances?.success !== true ||
+        !Array.isArray(instances.result) ||
+        instances.result.length !== 0 ||
+        instances.result_info?.total_count !== 0) {
+      releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+    }
+    let deletion;
+    try {
+      deletion = await fetch(url, { method: "DELETE", headers: {
+        authorization: `Bearer ${apiToken}`, accept: "application/json",
+      } });
+    } catch {
+      releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+    }
+    if (!deletion.ok) releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+    let envelope;
+    try { envelope = await deletion.json(); } catch {
+      releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+    }
+    if (envelope?.success !== true || envelope.result?.status !== "ok") {
+      releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+    }
+    const absent = await fetchAliceCodingWorkflowPrestate({ apiToken });
+    if (absent.absent !== true) releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+    return absent;
+  }
+  const before = verifyAliceCodingWorkflowStateSnapshot(expected);
+  const after = verifyAliceCodingWorkflowStateSnapshot(current);
+  if (before.workflow.id !== after.workflow.id ||
+      before.versions.some((version) =>
+        canonicalAliceJson(after.versions.find((item) => item.id === version.id)) !==
+          canonicalAliceJson(version))) {
+    releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+  }
+  return after;
+}
+
+async function registerCandidateCodingWorkflow({ apiToken, baseline, controlConfig }) {
+  const coding = controlConfig?.workflows?.find((item) =>
+    item.name === ALICE_CODING_TARGET.codingWorkflow);
+  if (controlConfig?.name !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
+      coding?.class_name !== "AliceCodingWorkflow" ||
+      coding?.limits?.steps !== 8 ||
+      controlConfig.workflows.filter((item) =>
+        item.name === ALICE_CODING_TARGET.codingWorkflow).length !== 1) {
+    releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+  }
+  const current = await fetchAliceCodingWorkflowPrestate({ apiToken });
+  const unchanged = baseline?.absent === true
+    ? current.absent === true
+    : current.absent !== true &&
+      canonicalAliceJson(current) === canonicalAliceJson(baseline);
+  if (!unchanged) releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+  let response;
+  try {
+    response = await fetch(
+      `${API_BASE}/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}` +
+        `/workflows/${ALICE_CODING_TARGET.codingWorkflow}`,
+      { method: "PUT", headers: { authorization: `Bearer ${apiToken}`,
+        accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({ script_name: controlConfig.name,
+          class_name: coding.class_name, limits: { steps: 8 } }) },
+    );
+  } catch { releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID"); }
+  if (!(response instanceof Response) || !response.ok) {
+    releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+  }
+  let registered;
+  try { registered = await response.json(); } catch {
+    releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+  }
+  if (registered?.success !== true ||
+      !VERSION_ID.test(registered.result?.id ?? "") ||
+      !VERSION_ID.test(registered.result?.version_id ?? "") ||
+      registered.result?.name !== ALICE_CODING_TARGET.codingWorkflow ||
+      registered.result?.script_name !== controlConfig.name ||
+      registered.result?.class_name !== coding.class_name) {
+    releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const after = await fetchAliceCodingWorkflowPrestate({ apiToken });
+    if (after.absent !== true && after.workflow.id === registered.result.id) {
+      const candidate = resolveAliceCandidateCodingWorkflowVersion({
+        previous: baseline, current: after,
+      });
+      if (candidate.id !== registered.result.version_id) {
+        releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+      }
+      return verifyCodingWorkflowOwnedIdentity({
+        workflowId: after.workflow.id, candidateVersionId: candidate.id,
+      });
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
 }
 
 async function readFirstCodingDeploymentVersion({ apiToken, expectedBundleSha256, config }) {
@@ -1515,6 +1659,8 @@ async function createRollbackAnchor({
     apiToken,
     expectedWorkflowId: continuity.readback.workflow.id,
   });
+  const codingWorkflow = codingMode
+    ? await fetchAliceCodingWorkflowPrestate({ apiToken }) : undefined;
   const terminalWorkers = await captureAliceCloudflareWorkerRollbackState({
     apiToken,
     includeCodingSandbox: codingMode,
@@ -1535,6 +1681,8 @@ async function createRollbackAnchor({
       apiToken,
       expectedWorkflowId: terminalContinuity.readback.workflow.id,
     });
+  const terminalCodingWorkflow = codingMode
+    ? await fetchAliceCodingWorkflowPrestate({ apiToken }) : undefined;
   if (
     canonicalAliceJson(workers) !== canonicalAliceJson(terminalWorkers) ||
     canonicalAliceJson(codingContainerApplication) !==
@@ -1546,7 +1694,9 @@ async function createRollbackAnchor({
     canonicalAliceJson(continuity.sanitized) !==
       canonicalAliceJson(terminalContinuity.sanitized) ||
     canonicalAliceJson(workflowVersions) !==
-      canonicalAliceJson(terminalWorkflowVersions)
+      canonicalAliceJson(terminalWorkflowVersions) ||
+    canonicalAliceJson(codingWorkflow) !==
+      canonicalAliceJson(terminalCodingWorkflow)
   ) {
     releaseInvalid("ALICE_ROLLBACK_ANCHOR_INVALID");
   }
@@ -1565,7 +1715,7 @@ async function createRollbackAnchor({
       workflowVersions,
       workers,
       ...(codingMode ? { codingContainerApplicationAbsent:
-        codingContainerApplication === null } : {}),
+        codingContainerApplication === null, codingWorkflow } : {}),
     },
   };
   verifyAliceCloudflareRollbackAnchor(anchor, {
@@ -1607,7 +1757,7 @@ export function verifyAliceCloudflareRollbackAnchor(
       "workflowVersions",
       "workers",
       ...(anchor.schemaVersion === "alice.cloudflare-rollback-anchor.v8"
-        ? ["codingContainerApplicationAbsent"] : []),
+        ? ["codingContainerApplicationAbsent", "codingWorkflow"] : []),
     ]) ||
     !canonicalIsoTimestamp(anchor.previous.capturedAt) ||
     typeof anchor.previous.coherent !== "boolean" ||
@@ -1639,6 +1789,13 @@ export function verifyAliceCloudflareRollbackAnchor(
         (typeof anchor.previous.codingContainerApplicationAbsent !== "boolean" ||
         (anchor.previous.workers[CODING_ROLE].absent === true) !==
           anchor.previous.codingContainerApplicationAbsent)) {
+      throw new Error("ALICE_ROLLBACK_ANCHOR_INVALID");
+    }
+    if (anchor.schemaVersion === "alice.cloudflare-rollback-anchor.v8" &&
+        anchor.previous.codingWorkflow?.absent !== true) {
+      verifyAliceCodingWorkflowStateSnapshot(anchor.previous.codingWorkflow);
+    } else if (anchor.schemaVersion === "alice.cloudflare-rollback-anchor.v8" &&
+        !exactKeys(anchor.previous.codingWorkflow, ["absent"])) {
       throw new Error("ALICE_ROLLBACK_ANCHOR_INVALID");
     }
   } catch {
@@ -1755,6 +1912,7 @@ export function verifyAliceCloudflareAnchorStillCurrent({
   traffic,
   continuityConfig,
   workflowVersions,
+  codingWorkflow,
 }) {
   try {
     verifyAliceContainerApplicationRollbackState(containerApplication);
@@ -1778,7 +1936,10 @@ export function verifyAliceCloudflareAnchorStillCurrent({
     canonicalAliceJson(continuityConfig) !==
       canonicalAliceJson(anchor.previous.continuityConfig) ||
     canonicalAliceJson(workflowVersions) !==
-      canonicalAliceJson(anchor.previous.workflowVersions)
+      canonicalAliceJson(anchor.previous.workflowVersions) ||
+    (anchor.schemaVersion === "alice.cloudflare-rollback-anchor.v8" &&
+      canonicalAliceJson(codingWorkflow) !==
+        canonicalAliceJson(anchor.previous.codingWorkflow))
   ) releaseInvalid("ALICE_CLOUDFLARE_ANCHOR_DRIFTED");
   // Wrangler --strict rejects every API-origin Worker, including our recovery
   // baseline. Keep its substantive conflict checks beside exact-state admission.
@@ -1832,6 +1993,7 @@ export function verifyAliceCloudflarePrepareEvidence(
       "controlVersionId",
       "uploadedVersions",
       "traffic",
+      ...(roles.includes(CODING_ROLE) ? ["codingWorkflowOwnedIdentity"] : []),
     ]) ||
     value.schemaVersion !== "alice.cloudflare-prepare-evidence.v1" ||
     !canonicalIsoTimestamp(value.observedAt) ||
@@ -1843,6 +2005,9 @@ export function verifyAliceCloudflarePrepareEvidence(
     value.controlVersionId !== value.uploadedVersions.control
   ) {
     releaseInvalid("ALICE_CLOUDFLARE_PREPARE_INVALID");
+  }
+  if (roles.includes(CODING_ROLE)) {
+    verifyCodingWorkflowOwnedIdentity(value.codingWorkflowOwnedIdentity);
   }
   try {
     aliceTrafficSemanticState(value.traffic);
@@ -2153,6 +2318,7 @@ export async function executeAliceCloudflareRollbacks({
   anchor,
   expectedDurableObjectNamespaceIds,
   expectedContinuityDigest,
+  codingWorkflowOwnedIdentity,
   operations = {},
 }) {
   const fetchWorkflowVersions = operations.fetchWorkflowVersions ??
@@ -2171,6 +2337,8 @@ export async function executeAliceCloudflareRollbacks({
     ((options) => restoreAliceCloudflareWorkerRollbackState(options));
   const restoreCodingContainer = operations.restoreCodingContainer ??
     ((options) => deleteOwnedCodingContainerApplication(options));
+  const restoreCodingWorkflow = operations.restoreCodingWorkflow ??
+    ((options) => restoreCodingWorkflowPrestate(options));
   const restoreContinuity = operations.restoreContinuity ??
     ((options) => restoreAliceCloudflareContinuityState(options));
   const restoreContainerApplication = operations.restoreContainerApplication ??
@@ -2247,6 +2415,7 @@ export async function executeAliceCloudflareRollbacks({
   let workers;
   let continuity;
   let workflowVersionContinuity;
+  let codingWorkflow;
   try {
     traffic = await restoreTraffic({
       apiToken,
@@ -2258,6 +2427,12 @@ export async function executeAliceCloudflareRollbacks({
   if (anchor.previous.workers[CODING_ROLE]?.absent === true &&
       failures.length > 0) await failClosed();
   try {
+    if (anchor.previous.codingWorkflow) {
+      codingWorkflow = await restoreCodingWorkflow({
+        apiToken, expected: anchor.previous.codingWorkflow,
+        ownedIdentity: codingWorkflowOwnedIdentity,
+      });
+    }
     if (anchor.previous.workers[CODING_ROLE]?.absent === true &&
         anchor.previous.codingContainerApplicationAbsent === true) {
       await restoreCodingContainer({ apiToken });
@@ -2318,6 +2493,7 @@ export async function executeAliceCloudflareRollbacks({
     },
     queueSafety,
     workflowVersionContinuity,
+    ...(anchor.previous.codingWorkflow ? { codingWorkflow } : {}),
   };
 }
 
@@ -2417,6 +2593,12 @@ async function main() {
       expectedDurableObjectNamespaceIds,
       expectedContinuityDigest:
         release.manifest.cloudflare.continuityConfigSha256,
+      ...(codingMode && fs.existsSync(prepareEvidencePath) ? {
+        codingWorkflowOwnedIdentity: verifyAliceCloudflarePrepareEvidence(
+          readJson(prepareEvidencePath), { sourceCommit,
+            deploymentManifestSha256: release.deploymentManifestSha256 },
+        ).codingWorkflowOwnedIdentity,
+      } : {}),
     });
     writeReadonly(readbackPath, rollbackEvidence);
     return;
@@ -2467,8 +2649,11 @@ async function main() {
     codingMode,
   });
   const commandEnv = aliceCloudflareCommandEnv();
-  const verifyLive = async () =>
-    fetchAliceCloudflarePostDeploymentReadback({
+  const verifyLive = async (
+    codingBaseline = anchor.previous.codingWorkflow,
+    codingWorkflowOwnedIdentity,
+  ) => {
+    const readback = await fetchAliceCloudflarePostDeploymentReadback({
       apiToken,
       ownerEmailSha256:
         release.configs.access.vars.ALICE_OWNER_EMAIL_SHA256,
@@ -2482,12 +2667,29 @@ async function main() {
       expectedEffectiveConfigs: release.effectiveConfigs,
       expectedDurableObjectNamespaceIds,
     });
+    if (!codingMode) return readback;
+    const candidate = resolveAliceCandidateCodingWorkflowVersion({
+      previous: codingBaseline,
+      current: { workflow: readback.codingWorkflow,
+        versions: readback.codingWorkflowVersions },
+    });
+    if (codingWorkflowOwnedIdentity &&
+        (readback.codingWorkflow.id !== codingWorkflowOwnedIdentity.workflowId ||
+        candidate.id !== codingWorkflowOwnedIdentity.candidateVersionId)) {
+      releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+    }
+    return { ...readback, codingCandidateWorkflowVersionId: candidate.id };
+  };
   if (phase === "verify") {
-    writeReadonly(readbackPath, await verifyLive());
+    const baseline = codingMode && fs.existsSync(rollbackProofPath)
+      ? readJson(rollbackProofPath).codingWorkflow
+      : anchor.previous.codingWorkflow;
+    writeReadonly(readbackPath, await verifyLive(baseline));
     return;
   }
 
   if (phase === "prepare") {
+    let codingWorkflowOwnedIdentity;
     const containerMode = [
       "alice.deployment-manifest.v2",
       "alice.deployment-manifest.v3",
@@ -2541,6 +2743,8 @@ async function main() {
           apiToken,
           expectedWorkflowId: freshContinuity.readback.workflow.id,
         });
+      const freshCodingWorkflow = codingMode
+        ? await fetchAliceCodingWorkflowPrestate({ apiToken }) : undefined;
       verifyAliceCloudflareAnchorStillCurrent({
         anchor,
         configs: release.configs,
@@ -2549,6 +2753,7 @@ async function main() {
         traffic: freshTraffic,
         continuityConfig: freshContinuity.sanitized,
         workflowVersions: freshWorkflowVersions,
+        codingWorkflow: freshCodingWorkflow,
       });
       dryRunExactBundles({
         wranglerBin,
@@ -2637,6 +2842,10 @@ async function main() {
         env: commandEnv,
         errorCode: "ALICE_CONTROL_PREPARE_FAILED",
       });
+      if (codingMode) codingWorkflowOwnedIdentity = await registerCandidateCodingWorkflow({
+        apiToken, baseline: anchor.previous.codingWorkflow,
+        controlConfig: release.configs.control,
+      });
       await applyAliceCandidateTrafficState({
         apiToken,
         expected: aliceExpectedReleaseControlTrafficState(
@@ -2663,6 +2872,7 @@ async function main() {
         sourceCommit,
         deploymentManifestSha256: release.deploymentManifestSha256,
         ...prepared,
+        ...(codingMode ? { codingWorkflowOwnedIdentity } : {}),
       }, {
         sourceCommit,
         deploymentManifestSha256: release.deploymentManifestSha256,
@@ -2681,6 +2891,7 @@ async function main() {
             expectedDurableObjectNamespaceIds,
             expectedContinuityDigest:
               release.manifest.cloudflare.continuityConfigSha256,
+            codingWorkflowOwnedIdentity,
           });
           if (!fs.existsSync(readbackPath)) {
             writeReadonly(readbackPath, rollbackEvidence);
@@ -2705,6 +2916,7 @@ async function main() {
       deploymentManifestSha256: release.deploymentManifestSha256,
     },
   );
+  let codingWorkflowOwnedIdentity = prepareEvidence.codingWorkflowOwnedIdentity;
   const containerMode = admission.evidence.schemaVersion ===
     "alice.program-admission.v2";
   const candidateExpected = {
@@ -2822,7 +3034,7 @@ async function main() {
       canonicalAliceJson(continuityBeforePromotion.candidateConfig) !==
         canonicalAliceJson(continuityAfterPromotion.candidateConfig)
     ) releaseInvalid("ALICE_CONTINUITY_CHANGED_DURING_PROMOTION");
-    await verifyLive();
+    await verifyLive(anchor.previous.codingWorkflow, codingWorkflowOwnedIdentity);
     const rollbackEvidence = await executeRollbacks({
       wranglerBin,
       sourceRoot,
@@ -2833,6 +3045,7 @@ async function main() {
       expectedDurableObjectNamespaceIds,
       expectedContinuityDigest:
         release.manifest.cloudflare.continuityConfigSha256,
+      codingWorkflowOwnedIdentity,
     });
     writeReadonly(rollbackProofPath, rollbackEvidence);
     try {
@@ -2873,6 +3086,10 @@ async function main() {
           "aiGateway", "connectorPlane", "runtimeHost"],
         "ALICE_WORKER_FORWARD_RESTORATION_FAILED",
       );
+      if (codingMode) codingWorkflowOwnedIdentity = await registerCandidateCodingWorkflow({
+        apiToken, baseline: rollbackEvidence.codingWorkflow,
+        controlConfig: release.configs.control,
+      });
       await transitionAliceContainerApplication({
         apiToken,
         expectedCurrent: rollbackEvidence.containerApplication,
@@ -2900,7 +3117,8 @@ async function main() {
         expectedDigest: release.manifest.cloudflare.continuityConfigSha256,
         expectedQueueDeliveryPaused: false,
       });
-      writeReadonly(readbackPath, await verifyLive());
+      writeReadonly(readbackPath, await verifyLive(
+        rollbackEvidence.codingWorkflow, codingWorkflowOwnedIdentity));
     } catch (forwardError) {
       try {
         await executeRollbacks({
@@ -2913,6 +3131,7 @@ async function main() {
           expectedDurableObjectNamespaceIds,
           expectedContinuityDigest:
             release.manifest.cloudflare.continuityConfigSha256,
+          codingWorkflowOwnedIdentity,
         });
       } catch (secondRollbackError) {
         throw new AggregateError(
@@ -2937,6 +3156,7 @@ async function main() {
         expectedDurableObjectNamespaceIds,
         expectedContinuityDigest:
           release.manifest.cloudflare.continuityConfigSha256,
+        codingWorkflowOwnedIdentity,
       });
       if (!fs.existsSync(readbackPath)) {
         writeReadonly(readbackPath, rollbackEvidence);

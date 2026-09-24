@@ -17,7 +17,8 @@ import {
 } from "./alice_workflow_binding_canary.mjs";
 import { verifyAliceCloudflareContainerImageEvidence } from
   "./alice_cloudflare_container_image.mjs";
-import { verifyAliceCodingWorkflowStateSnapshot } from
+import { resolveAliceCandidateCodingWorkflowVersion,
+  verifyAliceCodingWorkflowStateSnapshot } from
   "./alice_cloudflare_live_readback.mjs";
 
 const OWNER_ORIGIN = "https://alice.rndrntwrk.com";
@@ -624,6 +625,16 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         !VERSION_ID.test(cloudflareLiveReadback.codingContainer.id ?? "") ||
         !/^[a-f0-9]{32}$/.test(
           cloudflareLiveReadback.codingContainer.namespaceId ?? "")) invalid();
+    try {
+      const candidate = resolveAliceCandidateCodingWorkflowVersion({
+        previous: cloudflareRollbackProof.codingWorkflow,
+        current: { workflow: cloudflareLiveReadback.codingWorkflow,
+          versions: cloudflareLiveReadback.codingWorkflowVersions },
+      });
+      if (candidate.id !== cloudflareLiveReadback.codingCandidateWorkflowVersionId) {
+        invalid();
+      }
+    } catch { invalid(); }
   }
   const startedAt = now();
   if (!Number.isSafeInteger(startedAt) || startedAt < 1) invalid();

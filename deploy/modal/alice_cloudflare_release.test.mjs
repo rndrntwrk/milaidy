@@ -1451,6 +1451,7 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     worker: "alice-coding-sandbox", absent: true,
   };
   codingAnchor.previous.codingContainerApplicationAbsent = true;
+  codingAnchor.previous.codingWorkflow = { absent: true };
   assert.deepEqual(verifyAliceCloudflareRollbackAnchor(codingAnchor, {
     sourceCommit, deploymentManifestSha256,
   }), codingAnchor);
@@ -1556,6 +1557,21 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     }),
     prepareEvidence,
   );
+  const codingPrepareEvidence = {
+    ...prepareEvidence,
+    uploadedVersions: { ...prepareEvidence.uploadedVersions,
+      codingSandbox: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" },
+    codingWorkflowOwnedIdentity: {
+      workflowId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      candidateVersionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    },
+  };
+  assert.deepEqual(verifyAliceCloudflarePrepareEvidence(codingPrepareEvidence,
+    { sourceCommit, deploymentManifestSha256 }), codingPrepareEvidence);
+  assert.throws(() => verifyAliceCloudflarePrepareEvidence({
+    ...codingPrepareEvidence, codingWorkflowOwnedIdentity: undefined,
+  }, { sourceCommit, deploymentManifestSha256 }),
+  /ALICE_CODING_WORKFLOW_OWNERSHIP_INVALID/);
   const resourceNames = [
     "accessWorker", "runtimeHostWorker", "statePlaneWorker",
     "connectorPlaneWorker", "controlWorker", "evidenceQueue",
@@ -1930,7 +1946,12 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
         worker: "alice-coding-sandbox", absent: true,
       } },
       codingContainerApplicationAbsent: true,
+      codingWorkflow: { absent: true },
     } },
+    codingWorkflowOwnedIdentity: {
+      workflowId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      candidateVersionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    },
     expectedDurableObjectNamespaceIds: {},
     expectedContinuityDigest: `sha256:${"1".repeat(64)}`,
     operations: {
@@ -1942,6 +1963,14 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
         current: aliceTestContainerApplicationState(),
       }),
       restoreTraffic: async () => ({ after: trafficState }),
+      restoreCodingWorkflow: async ({ ownedIdentity }) => {
+        assert.deepEqual(ownedIdentity, {
+          workflowId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          candidateVersionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        });
+        mutations.push("coding-workflow-deleted");
+        return { absent: true };
+      },
       restoreCodingContainer: async () => { mutations.push("coding-container-deleted"); },
       restoreWorkers: async () => {
         mutations.push("coding-worker-deleted");
@@ -1951,7 +1980,8 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
         mutations: ["alice-production-evidence-v1"] }),
     },
   });
-  assert.deepEqual(mutations, ["coding-container-deleted", "coding-worker-deleted"]);
+  assert.deepEqual(mutations, ["coding-workflow-deleted",
+    "coding-container-deleted", "coding-worker-deleted"]);
 });
 
 for (const failurePoint of ["control-command", "worker-settings"]) {
