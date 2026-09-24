@@ -7,7 +7,7 @@ import test from 'node:test';
 import { buildAliceHostWorkerArtifact } from './build-alice-host-worker-artifact.mjs';
 import { buildAliceWorkerBundleArtifact, serializeAliceWorkerBundleArtifact } from '../deploy/modal/alice_worker_bundle_artifact.mjs';
 
-test('rebuilds Control and both hosts while proving the other three Workers and migrations unchanged', t => {
+test('rebuilds Control and both hosts while preserving stable Worker bytes and migrations', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alice-host-build-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   const sourceRoot = path.join(root, 'source');
@@ -25,14 +25,14 @@ test('rebuilds Control and both hosts while proving the other three Workers and 
   git('add', '.'); git('commit', '-m', 'Host source');
   const deploymentControllerCommit = git('rev-parse', 'HEAD');
   const baseRoot = path.join(root, 'base'); fs.mkdirSync(baseRoot);
-  for (const worker of ['alice-access-gateway', 'alice-runtime-container-host', 'alice-production-control', 'alice-ai-gateway', 'alice-state-plane', 'alice-connector-plane']) {
+  for (const worker of ['alice-access-gateway', 'alice-runtime-container-host', 'alice-production-control', 'alice-ai-gateway', 'alice-state-plane', 'alice-connector-plane', 'alice-coding-sandbox']) {
     fs.mkdirSync(path.join(baseRoot, worker));
     fs.writeFileSync(path.join(baseRoot, worker, 'index.js'), `original ${worker}\n//# sourceMappingURL=index.js.map\n`);
     fs.writeFileSync(path.join(baseRoot, worker, 'index.js.map'), JSON.stringify({version: 3, sources: [`${worker}.ts`], mappings: ''}));
   }
   const migrations = path.join(baseRoot, 'alice-state-plane/migrations'); fs.mkdirSync(migrations);
   for (const name of ['0001_alice_state.sql', '0002_execution_records.sql', '0003_eliza_database.sql']) fs.writeFileSync(path.join(migrations, name), `-- ${name}\n`);
-  const base = buildAliceWorkerBundleArtifact({root: baseRoot, sourceCommit, wranglerVersion: '4.122.0'});
+  const base = buildAliceWorkerBundleArtifact({root: baseRoot, sourceCommit, wranglerVersion: '4.122.0', schemaVersion: 'alice.worker-bundle-artifact.v4'});
   fs.writeFileSync(path.join(baseRoot, 'alice-worker-bundles.json'), serializeAliceWorkerBundleArtifact(base));
   const wranglerBin = path.join(root, 'wrangler');
   fs.writeFileSync(wranglerBin, `#!${process.execPath}
@@ -52,6 +52,7 @@ if (process.argv[2] === 'versions' && process.argv[3] === 'upload') {
 }
 if (process.argv[2] !== 'deploy') process.exit(9);
 const worker = path.basename(path.dirname(config));
+if (worker === 'alice-coding-sandbox') process.exit(12);
 const unchanged = ['alice-ai-gateway', 'alice-state-plane', 'alice-connector-plane'].includes(worker);
 const emitted = worker === 'alice-access-gateway' ? (config.endsWith('wrangler.runtime-host.jsonc') ? 'runtime-host.js' : 'worker.js') : 'index.js';
 const content = unchanged ? 'original ' + worker + '\\n//# sourceMappingURL=index.js.map\\n' : 'rebuilt reviewed ' + worker + path.basename(config);
@@ -61,7 +62,7 @@ fs.writeFileSync(path.join(out, emitted), content);
   const result = buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'output')});
   assert.equal(result.sourceCommit, deploymentControllerCommit);
   for (const role of ['control', 'access', 'runtimeHost']) assert.notEqual(result.bundles[role].sha256, base.bundles[role].sha256);
-  for (const role of ['aiGateway', 'statePlane', 'connectorPlane']) {
+  for (const role of ['aiGateway', 'statePlane', 'connectorPlane', 'codingSandbox']) {
     assert.deepEqual(result.bundles[role], base.bundles[role]);
     const relative = `${base.bundles[role].path}.map`;
     assert.deepEqual(fs.readFileSync(path.join(root, 'output', relative)), fs.readFileSync(path.join(baseRoot, relative)));
