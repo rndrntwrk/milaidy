@@ -57,6 +57,7 @@ async function watchTask(taskId) {
     for (let attempt = 0; attempt < 100 && selectedTaskId === taskId; attempt++) {
       const response = await fetch('/control/api/v1/coding/tasks/' + encodeURIComponent(taskId));
       const current = await response.json();
+      if (selectedTaskId !== taskId) return;
       if (!response.ok || current.ok !== true) throw new Error(current.code || 'TASK_STATUS_UNAVAILABLE');
       const work = current.work;
       if (work?.state === 'completed') {
@@ -77,9 +78,10 @@ async function watchTask(taskId) {
   }
 }
 void loadTasks().then(() => {
+  if (selectedTaskId !== null) return;
   const last = localStorage.getItem('alice-coding-last-task');
   if (last) void watchTask(last);
-}).catch((error) => { status.textContent = error.message; });
+}).catch((error) => { if (selectedTaskId === null) status.textContent = error.message; });
 document.getElementById('register').addEventListener('click', async () => {
   try {
     passkeyApi();
