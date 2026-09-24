@@ -51,7 +51,7 @@ describe("Alice durable mutation evidence outbox wiring", () => {
 
     const emergencyRoutes = ingress.slice(
       ingress.indexOf('path === "/control/api/v1/state"'),
-      ingress.indexOf('path === "/control/api/v1/capabilities/grant"'),
+      ingress.indexOf("const webauthnRoutes:"),
     );
     expect(emergencyRoutes).toContain("const pauseMatch = path.match");
     expect(ingress).toContain("/control/internal/v1/emergency/pause-all");
