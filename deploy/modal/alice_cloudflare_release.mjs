@@ -15,6 +15,7 @@ import {
 } from "../../workers/alice-effective-config.js";
 import {
   aliceEffectiveConfigFromWrangler,
+  selectAliceCandidateRuntimeContainerBinding,
 } from "./alice_cloudflare_config.mjs";
 import {
   fetchAliceCloudflareContinuityState,
@@ -287,20 +288,20 @@ export function buildAliceCandidateContainerApplicationTarget({
   const container = materializedWranglerConfig?.containers?.[0];
   const durableObjectBindings =
     materializedWranglerConfig?.durable_objects?.bindings;
+  const runtimeBinding = selectAliceCandidateRuntimeContainerBinding(
+    durableObjectBindings,
+  );
   if (
     verifyAliceContainerApplicationRollbackState(previous) !== previous ||
     materializedWranglerConfig?.account_id !== previous.accountId ||
     !Array.isArray(materializedWranglerConfig?.containers) ||
     materializedWranglerConfig.containers.length !== 1 ||
-    !Array.isArray(durableObjectBindings) ||
-    durableObjectBindings.length !== 1 ||
+    !runtimeBinding ||
     container?.name !== previous.applicationName ||
     container?.class_name !== "AliceRuntimeContainer" ||
     container?.instance_type !== "standard-4" ||
     container?.max_instances !== previous.maxInstances ||
-    durableObjectBindings[0]?.name !== "ALICE_RUNTIME_CONTAINER" ||
-    durableObjectBindings[0]?.class_name !== container.class_name ||
-    Object.hasOwn(durableObjectBindings[0], "script_name") ||
+    runtimeBinding.class_name !== container.class_name ||
     previous.schedulingPolicy !== "default" ||
     previous.rolloutActiveGracePeriod !== 0
   ) {

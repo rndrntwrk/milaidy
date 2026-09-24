@@ -287,10 +287,17 @@ test("promotes and restores one exact captured Container application target", as
         max_instances: 1,
       }],
       durable_objects: {
-        bindings: [{
-          name: "ALICE_RUNTIME_CONTAINER",
-          class_name: "AliceRuntimeContainer",
-        }],
+        bindings: [
+          {
+            name: "ALICE_AUTHORITY",
+            class_name: "AliceAuthority",
+            script_name: "alice-production-control",
+          },
+          {
+            name: "ALICE_RUNTIME_CONTAINER",
+            class_name: "AliceRuntimeContainer",
+          },
+        ],
       },
       observability: { logs: { enabled: true } },
     },

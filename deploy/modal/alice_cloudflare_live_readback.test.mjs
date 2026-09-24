@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import test from "node:test";
 
 import {
@@ -9,6 +10,7 @@ import {
   digestAliceCloudflareContinuityConfig,
 } from "./alice_cloudflare_continuity.mjs";
 import {
+  aliceCandidateRuntimeHostNamespaceIds,
   fetchAliceCloudflareContinuityState,
   fetchAliceCloudflarePostDeploymentReadback,
   fetchAliceCloudflareProviderState,
@@ -34,6 +36,32 @@ const accessAudience = "alice-access-audience";
 const fixtures = aliceTestProviderReadbacks({ accessAudience });
 const continuityFixture = aliceTestCloudflareContinuityReadback();
 const workflowVersionFixture = aliceTestWorkflowVersions();
+
+test("derives the candidate runtime-host authority from the existing Control namespace", () => {
+  const config = JSON.parse(fs.readFileSync(new URL(
+    "../../workers/alice-access-gateway/wrangler.runtime-host.jsonc",
+    import.meta.url,
+  ), "utf8"));
+  const legacy = continuityFixture.durableObjectNamespaceIds;
+  const candidate = aliceCandidateRuntimeHostNamespaceIds(
+    config, legacy.runtimeHost, legacy.control,
+  );
+  assert.equal(candidate.length, 2);
+  assert.deepEqual(candidate.find((binding) => binding.name === "ALICE_AUTHORITY"), {
+    className: "AliceAuthority",
+    name: "ALICE_AUTHORITY",
+    namespaceId: legacy.control.find((binding) => binding.name === "ALICE_AUTHORITY").namespaceId,
+    scriptName: "alice-production-control",
+  });
+  assert.deepEqual(aliceCandidateRuntimeHostNamespaceIds(
+    config, candidate, legacy.control,
+  ), candidate);
+  assert.throws(() => aliceCandidateRuntimeHostNamespaceIds(
+    config,
+    [{ ...candidate[0], namespaceId: "6".repeat(32) }, candidate[1]],
+    legacy.control,
+  ), /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
+});
 
 function json(value) {
   return Response.json(value, { headers: { "cache-control": "no-store" } });
@@ -1344,10 +1372,17 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
             name: runtimeHostApplication.name,
           }],
           durable_objects: {
-            bindings: [{
-              class_name: "AliceRuntimeContainer",
-              name: "ALICE_RUNTIME_CONTAINER",
-            }],
+            bindings: [
+              {
+                class_name: "AliceAuthority",
+                name: "ALICE_AUTHORITY",
+                script_name: roles.control,
+              },
+              {
+                class_name: "AliceRuntimeContainer",
+                name: "ALICE_RUNTIME_CONTAINER",
+              },
+            ],
           },
         } : {}),
       }]),
@@ -1385,7 +1420,13 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       }
       assert.deepEqual(
         input.expectedDurableObjectNamespaceIds,
-        postDeploymentInput.expectedDurableObjectNamespaceIds[input.role],
+        input.role === "runtimeHost"
+          ? aliceCandidateRuntimeHostNamespaceIds(
+              input.materializedWranglerConfig,
+              postDeploymentInput.expectedDurableObjectNamespaceIds.runtimeHost,
+              postDeploymentInput.expectedDurableObjectNamespaceIds.control,
+            )
+          : postDeploymentInput.expectedDurableObjectNamespaceIds[input.role],
       );
       return { role: input.role, worker: input.materializedWranglerConfig.name };
     },

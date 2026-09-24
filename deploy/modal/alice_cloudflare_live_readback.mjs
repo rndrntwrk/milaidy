@@ -11,6 +11,7 @@ import {
 import { verifyAliceDeploymentManifest } from "./alice_deployment_manifest.mjs";
 import {
   aliceEffectiveConfigFromWrangler,
+  selectAliceCandidateRuntimeContainerBinding,
 } from "./alice_cloudflare_config.mjs";
 import {
   buildAliceAccessPolicyProviderConfig,
@@ -270,6 +271,36 @@ function codingNamespaceIds(config, namespaceList, controlIds) {
       scriptName,
     };
   });
+}
+
+export function aliceCandidateRuntimeHostNamespaceIds(config, runtimeHostIds, controlIds) {
+  if (!selectAliceCandidateRuntimeContainerBinding(config?.durable_objects?.bindings) ||
+      !Array.isArray(runtimeHostIds) || !Array.isArray(controlIds)) readbackInvalid();
+  const container = runtimeHostIds.filter((binding) =>
+    binding.name === "ALICE_RUNTIME_CONTAINER");
+  const authority = controlIds.filter((binding) =>
+    binding.name === "ALICE_AUTHORITY");
+  if (container.length !== 1 || authority.length !== 1 ||
+      container[0].className !== "AliceRuntimeContainer" ||
+      container[0].scriptName !== null ||
+      authority[0].className !== "AliceAuthority" ||
+      authority[0].scriptName !== null ||
+      !/^[a-f0-9]{32}$/.test(container[0].namespaceId ?? "") ||
+      !/^[a-f0-9]{32}$/.test(authority[0].namespaceId ?? "")) readbackInvalid();
+  const expectedAuthority = {
+    className: "AliceAuthority",
+    name: "ALICE_AUTHORITY",
+    namespaceId: authority[0].namespaceId,
+    scriptName: ALICE_CLOUDFLARE_TARGET.controlWorker,
+  };
+  if (runtimeHostIds.length === 1) return [expectedAuthority, container[0]];
+  if (runtimeHostIds.length !== 2 ||
+      runtimeHostIds.filter((binding) => binding.name === "ALICE_AUTHORITY").length !== 1 ||
+      canonicalAliceJson(runtimeHostIds.find((binding) =>
+        binding.name === "ALICE_AUTHORITY")) !== canonicalAliceJson(expectedAuthority)) {
+    readbackInvalid();
+  }
+  return runtimeHostIds;
 }
 
 export async function fetchAliceRuntimeHostContainerState({
@@ -1166,6 +1197,11 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         `/accounts/${accountId}/workers/durable_objects/namespaces`),
       expectedDurableObjectNamespaceIds.control,
     ) : null;
+    const runtimeHostCandidateIds = aliceCandidateRuntimeHostNamespaceIds(
+      materializedWranglerConfigs.runtimeHost,
+      expectedDurableObjectNamespaceIds.runtimeHost,
+      expectedDurableObjectNamespaceIds.control,
+    );
     const codingContainerState = codingMode
       ? await fetchAliceCodingContainerState({
           fetchImpl, apiToken, accountId, baseUrl,
@@ -1253,7 +1289,8 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         deployedMainModule,
         deploymentMainPath: config.main,
         expectedDurableObjectNamespaceIds: role === "codingSandbox"
-          ? codingIds : expectedDurableObjectNamespaceIds[role],
+          ? codingIds : role === "runtimeHost"
+            ? runtimeHostCandidateIds : expectedDurableObjectNamespaceIds[role],
       });
       workerTerminalAnchors[role] = {
         deployment: deploymentAfterContent,
