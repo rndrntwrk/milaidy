@@ -95,6 +95,60 @@ permissions:
   packages: read
 
 jobs:
+  verify-deploy-token-identity:
+    name: Verify production deploy-token identity without mutation
+    if: ${{ inputs.read_status_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: alice-production
+    permissions:
+      contents: read
+    outputs:
+      deploy_token_id: ${{ steps.deploy-token-identity.outputs.token_id }}
+    steps:
+      - name: Enforce current protected controller before deploy credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/release/alice-production-core-2026-08-22"
+          test "$REF_PROTECTED" = "true"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" --jq .object.sha)" = "$GITHUB_SHA"
+
+      - name: Verify exact production deploy-token identity without mutation
+        id: deploy-token-identity
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          if (typeof token !== 'string' || token.length < 32) {
+            throw new Error('ALICE_DEPLOY_TOKEN_IDENTITY_INVALID');
+          }
+          let response;
+          try {
+            response = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
+              method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(30_000),
+              headers: { authorization: `Bearer ${token}`, accept: 'application/json',
+                'cache-control': 'no-cache' },
+            });
+          } catch { throw new Error('ALICE_DEPLOY_TOKEN_VERIFY_TRANSPORT'); }
+          if (!response.ok) throw new Error(`ALICE_DEPLOY_TOKEN_VERIFY_HTTP_${response.status}`);
+          let envelope;
+          try { envelope = await response.json(); } catch {
+            throw new Error('ALICE_DEPLOY_TOKEN_VERIFY_JSON_INVALID');
+          }
+          const id = envelope?.result?.id;
+          if (envelope?.success !== true || !/^[a-f0-9]{32}$/.test(id ?? '') ||
+              envelope.result.status !== 'active') {
+            throw new Error('ALICE_DEPLOY_TOKEN_IDENTITY_INVALID');
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `token_id=${id}\n`);
+          console.log(JSON.stringify({ deployTokenVerified: true, active: true }));
+          NODE
+
   read-status:
     name: Read authenticated Alice deployment status
     if: ${{ inputs.read_status_only }}
@@ -191,6 +245,146 @@ jobs:
             }));
             await content.body?.cancel();
             if (!content.ok) throw new Error(`ALICE_DIAGNOSTIC_CONTENT_HTTP_${content.status}`);
+          }
+          NODE
+
+  verify-deploy-token-policy:
+    name: Verify exact production deploy-token policy without mutation
+    needs: verify-deploy-token-identity
+    if: ${{ inputs.read_status_only && needs.verify-deploy-token-identity.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: alice-production-cloudflare-recovery
+    permissions:
+      contents: read
+    steps:
+      - name: Read production deploy-token policy through the separate policy reader
+        env:
+          CLOUDFLARE_TOKEN_POLICY_READ_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN_POLICY_READ_TOKEN }}
+          DEPLOY_TOKEN_ID: ${{ needs.verify-deploy-token-identity.outputs.deploy_token_id }}
+        run: |
+          node --input-type=module <<'NODE'
+          const id = process.env.DEPLOY_TOKEN_ID;
+          const bearer = process.env.CLOUDFLARE_TOKEN_POLICY_READ_TOKEN;
+          if (!/^[a-f0-9]{32}$/.test(id ?? '') ||
+              typeof bearer !== 'string' || bearer.length < 32) {
+            throw new Error('ALICE_DEPLOY_TOKEN_POLICY_INPUT_INVALID');
+          }
+          const read = async path => {
+            let response;
+            try {
+              response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
+                method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(30_000),
+                headers: { authorization: `Bearer ${bearer}`, accept: 'application/json',
+                  'cache-control': 'no-cache' },
+              });
+            } catch { throw new Error('ALICE_DEPLOY_TOKEN_POLICY_TRANSPORT'); }
+            if (!response.ok) throw new Error(`ALICE_DEPLOY_TOKEN_POLICY_HTTP_${response.status}`);
+            const raw = await response.text();
+            if (raw.length > 262144) throw new Error('ALICE_DEPLOY_TOKEN_POLICY_TOO_LARGE');
+            let envelope;
+            try { envelope = JSON.parse(raw); } catch {
+              throw new Error('ALICE_DEPLOY_TOKEN_POLICY_JSON_INVALID');
+            }
+            if (envelope?.success !== true || !('result' in envelope)) {
+              throw new Error('ALICE_DEPLOY_TOKEN_POLICY_ENVELOPE_INVALID');
+            }
+            return envelope;
+          };
+          const readCatalog = async () => {
+            const catalog = [];
+            const seen = new Set();
+            let total = null;
+            for (let page = 1; page <= 50; page += 1) {
+              const envelope = await read(
+                `/user/tokens/permission_groups?page=${page}&per_page=100`);
+              const rows = envelope.result;
+              const info = envelope.result_info;
+              if (!Array.isArray(rows) || info?.page !== page ||
+                  !Number.isSafeInteger(info.total_count) ||
+                  info.total_count < 1 || info.total_count > 5000 ||
+                  (total !== null && info.total_count !== total)) {
+                throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
+              }
+              total = info.total_count;
+              for (const group of rows) {
+                if (!/^[a-f0-9]{32}$/.test(group?.id ?? '') || seen.has(group.id)) {
+                  throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
+                }
+                seen.add(group.id);
+                catalog.push(group);
+              }
+              if (catalog.length === total) return catalog;
+              if (rows.length === 0 || catalog.length > total) {
+                throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
+              }
+            }
+            throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
+          };
+          const [tokenEnvelope, catalog] = await Promise.all([
+            read(`/user/tokens/${id}`), readCatalog(),
+          ]);
+          const token = tokenEnvelope.result;
+          const account = 'com.cloudflare.api.account.036df6c823669b8fa2f66cf4c16eeb29';
+          const zone = 'com.cloudflare.api.account.zone.7b24984479ee4cddb6c5d8a9b7a0f2c6';
+          const now = Date.now();
+          const validUntil = Date.parse(token?.expires_on ?? '');
+          const validFrom = token?.not_before == null ||
+            Date.parse(token.not_before) <= now;
+          const validity = token?.expires_on == null ||
+            (Number.isFinite(validUntil) && validUntil >= now + 5 * 60 * 60 * 1000);
+          const groups = new Map(Array.isArray(catalog) ? catalog.map(group =>
+            [group.id, group]) : []);
+          if (!Array.isArray(catalog) || groups.size !== catalog.length) {
+            throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
+          }
+          const policies = token?.policies;
+          const resource = policy => {
+            const entries = Object.entries(policy?.resources ?? {});
+            return entries.length === 1 && entries[0][1] === '*' ? entries[0][0] : null;
+          };
+          const accountPolicy = Array.isArray(policies) ? policies.find(p => resource(p) === account) : null;
+          const zonePolicy = Array.isArray(policies) ? policies.find(p => resource(p) === zone) : null;
+          const names = policy => new Set((policy?.permission_groups ?? []).map(ref => {
+            const group = groups.get(ref?.id);
+            if (!group || !Array.isArray(group.scopes) ||
+                !group.scopes.includes(policy === accountPolicy
+                  ? 'com.cloudflare.api.account' : 'com.cloudflare.api.account.zone')) {
+              throw new Error('ALICE_DEPLOY_TOKEN_POLICY_GROUP_INVALID');
+            }
+            return group.name;
+          }));
+          const requiredAccount = [
+            'Workers Scripts Write', 'Workers Containers Write', 'Queues Write',
+            'D1 Write', 'Workers R2 Storage Read', 'Vectorize Read',
+            'AI Gateway Read', 'Access: Apps and Policies Read',
+            'Access: Service Tokens Read', 'Access: Device Posture Read',
+          ];
+          const requiredZone = ['Workers Routes Write',
+            'Access: Apps and Policies Read'];
+          const exactResources = Array.isArray(policies) && policies.length === 2 &&
+            accountPolicy && zonePolicy && accountPolicy !== zonePolicy &&
+            policies.every(p => p.effect === 'allow');
+          const accountNames = names(accountPolicy);
+          const zoneNames = names(zonePolicy);
+          const requiredPermissions = requiredAccount.every(name => accountNames.has(name)) &&
+            requiredZone.every(name => zoneNames.has(name));
+          const noUnexpectedWrites = [...accountNames, ...zoneNames].every(name =>
+            !/(?: Write| Edit)$/.test(name) ||
+            requiredAccount.includes(name) || requiredZone.includes(name));
+          const conditionUnrestricted = token?.condition == null ||
+            (typeof token.condition === 'object' && !Array.isArray(token.condition) &&
+              Object.keys(token.condition).length === 0);
+          const active = token?.id === id && token?.status === 'active' &&
+            validFrom && validity;
+          console.log(JSON.stringify({ tokenName: typeof token?.name === 'string'
+            ? token.name.replace(/[^A-Za-z0-9 _.-]/g, '').slice(0, 80) : null,
+            active: Boolean(active), conditionUnrestricted,
+            exactResources: Boolean(exactResources),
+            requiredPermissions, noUnexpectedWrites }));
+          if (!active || !conditionUnrestricted || !exactResources ||
+              !requiredPermissions || !noUnexpectedWrites) {
+            throw new Error('ALICE_DEPLOY_TOKEN_POLICY_INVALID');
           }
           NODE
 
