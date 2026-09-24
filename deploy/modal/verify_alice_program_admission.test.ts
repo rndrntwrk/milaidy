@@ -110,28 +110,46 @@ describe("Alice protected Program admission", () => {
         },
       },
     };
+    const containerSecrets = {
+      ...secrets,
+      ALICE_SOURCE_COMMIT: sourceCommit,
+      ALICE_DEPLOYMENT_CONTROLLER_COMMIT: sourceCommit,
+      ALICE_ELIZA_COMMIT: "6".repeat(40),
+      ALICE_POLICY_HASH: `sha256:${"7".repeat(64)}`,
+      ALICE_PROGRAM_DIGEST: `sha256:${"8".repeat(64)}`,
+      ALICE_RELEASE_DIGEST: releaseDigest,
+      ALICE_RUNTIME_API_TOKEN: secrets.MILADY_API_TOKEN,
+      ALICE_CAPABILITY_BOM_SHA256: `sha256:${"a".repeat(64)}`,
+      ALICE_RUNTIME_BUILD_MANIFEST_SHA256: `sha256:${"9".repeat(64)}`,
+      ALICE_RUNTIME_IMAGE: runtimeImage,
+      ALICE_RUNTIME_REVISION: "49",
+      ALICE_RUNTIME_VAULT_PASSPHRASE: secrets.ELIZA_VAULT_PASSPHRASE,
+    } as any;
     expect(() =>
-      verifyAliceRouteSecretClosure(
-        containerConfigs,
-        {
-          ...secrets,
-          ALICE_SOURCE_COMMIT: sourceCommit,
-          ALICE_DEPLOYMENT_CONTROLLER_COMMIT: sourceCommit,
-          ALICE_ELIZA_COMMIT: "6".repeat(40),
-          ALICE_POLICY_HASH: `sha256:${"7".repeat(64)}`,
-          ALICE_PROGRAM_DIGEST: `sha256:${"8".repeat(64)}`,
-          ALICE_RELEASE_DIGEST: releaseDigest,
-          ALICE_RUNTIME_API_TOKEN: secrets.MILADY_API_TOKEN,
-          ALICE_CAPABILITY_BOM_SHA256: `sha256:${"a".repeat(64)}`,
-          ALICE_RUNTIME_BUILD_MANIFEST_SHA256: `sha256:${"9".repeat(64)}`,
-          ALICE_RUNTIME_IMAGE: runtimeImage,
-          ALICE_RUNTIME_REVISION: "49",
-          ALICE_RUNTIME_VAULT_PASSPHRASE: secrets.ELIZA_VAULT_PASSPHRASE,
-        } as any,
-        releaseDigest,
-        true,
-      )
+      verifyAliceRouteSecretClosure(containerConfigs, containerSecrets, releaseDigest, true),
     ).not.toThrow();
+
+    const codingConfigs = {
+      ...containerConfigs,
+      runtimeHost: {
+        secrets: {
+          required: [
+            ...containerConfigs.runtimeHost.secrets.required,
+            "ALICE_GITHUB_APP_ID",
+            "ALICE_GITHUB_APP_PRIVATE_KEY_B64",
+          ],
+        },
+      },
+    };
+    expect(() =>
+      verifyAliceRouteSecretClosure(codingConfigs, containerSecrets, releaseDigest, true, true),
+    ).not.toThrow();
+    expect(() =>
+      verifyAliceRouteSecretClosure(codingConfigs, containerSecrets, releaseDigest, true, false),
+    ).toThrow("ALICE_RELEASE_SECRETS_INVALID");
+    expect(() =>
+      verifyAliceRouteSecretClosure(containerConfigs, containerSecrets, releaseDigest, true, true),
+    ).toThrow("ALICE_RELEASE_SECRETS_INVALID");
   });
 
   test("accepts only exact scoped token pairs and release-bound runtime bearer", () => {

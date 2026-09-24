@@ -8,7 +8,10 @@ import {
   type AliceRuntimeConfigSource,
   type AliceTrustPins,
 } from "../../workers/alice-production-control/src/runtime-config";
-import { canonicalAliceJson } from "../../workers/alice-effective-config.js";
+import {
+  canonicalAliceJson,
+  verifyAliceDeploymentManifestBinding,
+} from "../../workers/alice-effective-config.js";
 import { deriveAliceRuntimeReleaseCredential } from "./alice_modal_release.mjs";
 
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
@@ -117,6 +120,7 @@ export function verifyAliceRouteSecretClosure(
   secrets: RouteSecretSource,
   releaseDigest: string,
   containerMode: boolean,
+  codingMode = false,
 ): void {
   const containerAccessSecrets = [
     "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
@@ -138,6 +142,9 @@ export function verifyAliceRouteSecretClosure(
     "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
     "ALICE_ELIZA_COMMIT",
     "ALICE_RUNTIME_REVISION",
+    ...(codingMode
+      ? ["ALICE_GITHUB_APP_ID", "ALICE_GITHUB_APP_PRIVATE_KEY_B64"]
+      : []),
   ];
   const distinctSecrets = [
     secrets.ALICE_ACCESS_GATEWAY_SERVICE_TOKEN,
@@ -157,6 +164,8 @@ export function verifyAliceRouteSecretClosure(
     !configs ||
     !secrets ||
     typeof containerMode !== "boolean" ||
+    typeof codingMode !== "boolean" ||
+    (codingMode && !containerMode) ||
     !DIGEST.test(releaseDigest) ||
     !exactRequiredSecrets(
       configs.access,
@@ -280,6 +289,10 @@ export async function verifyAliceProgramAdmission({
   });
   const containerMode =
     config.envelope.schemaVersion === "alice.program-envelope.v2";
+  const manifest = await verifyAliceDeploymentManifestBinding({
+    encodedManifest: controlVars.ALICE_DEPLOYMENT_MANIFEST_B64,
+    expectedManifestSha256: controlVars.ALICE_DEPLOYMENT_MANIFEST_SHA256,
+  });
   verifyAliceRouteSecretClosure(
     configs,
     {
@@ -305,6 +318,7 @@ export async function verifyAliceProgramAdmission({
     },
     config.binding.releaseDigest,
     containerMode,
+    manifest.schemaVersion === "alice.deployment-manifest.v4",
   );
   const release = config.envelope.release;
   const evidence = {
