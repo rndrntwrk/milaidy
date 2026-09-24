@@ -16,6 +16,7 @@ import {
   executeAliceCloudflareRollbacks,
   materializeAliceWorkerSecretFiles,
   normalizeAliceContainerApplicationRollbackState,
+  readCodingContainerApplication,
   restoreAliceContainerApplication,
   parseAliceWranglerUploadVersionId,
   transitionAliceContainerApplication,
@@ -74,6 +75,42 @@ function aliceTestContainerApplicationState({
     },
   };
 }
+
+test("coding rollback read uses the default fetch for absent and present applications", async () => {
+  const originalFetch = globalThis.fetch;
+  const apiToken = "test-token-with-at-least-thirty-two-bytes";
+  const application = {
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    name: "alice-coding-sandbox",
+  };
+  try {
+    let calls = 0;
+    globalThis.fetch = async (url) => {
+      calls += 1;
+      assert.match(String(url), /\/containers\/applications\?name=alice-coding-sandbox$/);
+      return Response.json({ success: true, result: [] });
+    };
+    assert.equal(await readCodingContainerApplication({ apiToken }), null);
+    assert.equal(calls, 1);
+
+    globalThis.fetch = async (url) => {
+      calls += 1;
+      return Response.json({ success: true, result:
+        String(url).includes("?name=") ? [application] : application });
+    };
+    assert.deepEqual(await readCodingContainerApplication({ apiToken }), application);
+    assert.equal(calls, 3);
+
+    globalThis.fetch = async () => Response.json(
+      { success: false, errors: [{ code: 1001 }] }, { status: 403 });
+    await assert.rejects(
+      () => readCodingContainerApplication({ apiToken }),
+      /ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("builds one exact-byte staged upload, promotion, and rollback sequence", () => {
   const sourceCommit = "1".repeat(40);
