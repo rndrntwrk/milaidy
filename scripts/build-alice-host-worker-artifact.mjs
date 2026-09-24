@@ -62,6 +62,12 @@ export function buildAliceHostWorkerArtifact({
   ]) {
     const destination = path.join(outputRoot, base.bundles[role].path);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
+    if (role === 'codingSandbox') {
+      // Controller-only releases cannot change this Worker's source. Keep the
+      // already-attested bytes instead of rebundling from a different install layout.
+      fs.copyFileSync(path.join(baseRoot, base.bundles[role].path), destination, fs.constants.COPYFILE_EXCL);
+      continue;
+    }
     execFileSync(wranglerBin, [
       'deploy', '--dry-run', '--outdir', path.dirname(destination),
       '--config', path.join(sourceRoot, 'workers', configName),
