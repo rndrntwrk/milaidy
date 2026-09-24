@@ -54,6 +54,22 @@ test("status-only dispatch cannot start deployment or recovery and prints no cre
   assert.match(statusJob, /const digest = v =>/);
 });
 
+test("read-only deploy-token proof uses the bootstrap account-token API", () => {
+  const identityJob = workflow.slice(
+    workflow.indexOf("  verify-deploy-token-identity:"),
+    workflow.indexOf("\n  read-status:"),
+  );
+  const policyJob = workflow.slice(
+    workflow.indexOf("  verify-deploy-token-policy:"),
+    workflow.indexOf("\n  read-owner-status:"),
+  );
+  assert.match(bootstrapSource, /`\/accounts\/\$\{ALICE_CLOUDFLARE_TARGET\.accountId\}\/tokens\/verify`/);
+  assert.match(identityJob, /\/accounts\/036df6c823669b8fa2f66cf4c16eeb29\/tokens\/verify/);
+  assert.match(policyJob, /`\/accounts\/\$\{accountId\}\/tokens\/\$\{id\}`/);
+  assert.match(policyJob, /`\/accounts\/\$\{accountId\}\/tokens\/permission_groups\?page=/);
+  assert.doesNotMatch(identityJob + policyJob, /\/user\/tokens\//);
+});
+
 test("production deployment uses Container Program v2 without a Modal promotion path", () => {
   assert.match(workflow, /^      runtime_revision:/m);
   assert.doesNotMatch(workflow, /^      modal_revision:/m);
