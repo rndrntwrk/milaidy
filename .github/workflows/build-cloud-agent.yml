@@ -147,7 +147,7 @@ jobs:
           # organization fork; never float on either develop branch.
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "${#eliza_sha}" -eq 40
-          expected_eliza_sha="f50f4ae3e84168b1f93a7265041aa03fe5f9f392"
+          expected_eliza_sha="7cdfca05b33038ec18ae5c8502df39c01d180090"
           reviewed_eliza_ref="refs/pull/8/head"
           git clone --no-checkout --filter=blob:none https://github.com/rndrntwrk/eliza.git eliza
           git -C eliza fetch --depth=1 origin "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-8"

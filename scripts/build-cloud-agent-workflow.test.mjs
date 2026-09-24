@@ -156,7 +156,7 @@ test("cloud builds hydrate the tracked Eliza commit from the exact reviewed PR h
     /git clone --no-checkout --filter=blob:none https:\/\/github\.com\/rndrntwrk\/eliza\.git eliza/,
   );
   assert.match(workflow, /git -C eliza fetch --depth=1 origin "\$eliza_sha"/);
-  assert.match(workflow, /expected_eliza_sha="f50f4ae3e84168b1f93a7265041aa03fe5f9f392"/);
+  assert.match(workflow, /expected_eliza_sha="7cdfca05b33038ec18ae5c8502df39c01d180090"/);
   assert.match(
     workflow,
     /reviewed_eliza_ref="refs\/pull\/8\/head"/,
@@ -229,7 +229,7 @@ test("Alice materializes the real commands capability from the exact reviewed El
     path.join(repoRoot, "deploy/Dockerfile.ci"),
     "utf8",
   );
-  assert.match(workflow, /f50f4ae3e84168b1f93a7265041aa03fe5f9f392/);
+  assert.match(workflow, /7cdfca05b33038ec18ae5c8502df39c01d180090/);
   assert.match(workflow, /cd eliza\/plugins\/plugin-commands[\s\S]*?bun run build/);
   assert.match(
     dockerfile,
