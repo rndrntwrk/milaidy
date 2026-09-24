@@ -550,6 +550,9 @@ test("materializes Container runtime secrets only for the separate runtime host"
     connectorPlane: {
       secrets: { required: ["ALICE_STATE_PLANE_SERVICE_TOKEN"] },
     },
+    codingSandbox: JSON.parse(fs.readFileSync(path.join(
+      repoRoot, "workers/alice-coding-sandbox/wrangler.jsonc",
+    ), "utf8")),
   };
   const secretOverrides = {
     ALICE_EVIDENCE_QUEUE_HMAC_KEY: "evidence-hmac-key-0123456789",
@@ -579,6 +582,10 @@ test("materializes Container runtime secrets only for the separate runtime host"
       /ALICE_RELEASE_SECRETS_INVALID/,
     );
     result = materializeAliceWorkerSecretFiles(configs, secretOverrides);
+    assert.deepEqual(JSON.parse(fs.readFileSync(result.paths.codingSandbox, "utf8")), {});
+    assert.throws(() => materializeAliceWorkerSecretFiles({
+      ...configs, codingSandbox: { secrets: {} },
+    }, secretOverrides), /ALICE_RELEASE_SECRETS_INVALID/);
     const access = JSON.parse(fs.readFileSync(result.paths.access, "utf8"));
     const runtimeHost = JSON.parse(
       fs.readFileSync(result.paths.runtimeHost, "utf8"),
