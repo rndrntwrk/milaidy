@@ -551,10 +551,17 @@ test("normalizes the pre-mutation runtimeHost application against its current im
       name: application.name,
     }],
     durable_objects: {
-      bindings: [{
-        class_name: "AliceRuntimeContainer",
-        name: "ALICE_RUNTIME_CONTAINER",
-      }],
+      bindings: [
+        {
+          class_name: "AliceAuthority",
+          name: "ALICE_AUTHORITY",
+          script_name: "alice-production-control",
+        },
+        {
+          class_name: "AliceRuntimeContainer",
+          name: "ALICE_RUNTIME_CONTAINER",
+        },
+      ],
     },
   };
   assert.deepEqual(
@@ -578,6 +585,25 @@ test("normalizes the pre-mutation runtimeHost application against its current im
       activeInstances: 0,
     },
   );
+  for (const bindings of [
+    config.durable_objects.bindings.slice(1),
+    [
+      { ...config.durable_objects.bindings[0], script_name: "wrong-control" },
+      config.durable_objects.bindings[1],
+    ],
+  ]) {
+    assert.throws(() => verifyAliceContainerApplicationReadback({
+      application,
+      applicationInstances: [],
+      applicationCanonicalInstances: [],
+      applicationDurableObjects: [],
+      expectedApplicationImage: image,
+      materializedWranglerConfig: {
+        ...config, durable_objects: { bindings },
+      },
+      expectedNamespaceId: namespaceId,
+    }), /ALICE_WORKER_PROVIDER_READBACK_MISMATCH/);
+  }
   const noProviderActor = {
     application, applicationInstances: [], applicationCanonicalInstances: [],
     applicationDurableObjects: [], expectedApplicationImage: image,

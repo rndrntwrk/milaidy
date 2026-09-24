@@ -13,6 +13,7 @@ import {
 } from "./alice_deployment_manifest.mjs";
 import {
   assertAliceWranglerMatchesEffectiveConfig,
+  selectAliceCandidateRuntimeContainerBinding,
 } from "./alice_cloudflare_config.mjs";
 import {
   buildAliceAccessPolicyProviderConfig,
@@ -439,6 +440,9 @@ export function verifyAliceContainerApplicationReadback({
   const expectedImage = expectedApplicationImage ?? container?.image;
   const durableObjectBindings =
     materializedWranglerConfig?.durable_objects?.bindings;
+  const runtimeBinding = selectAliceCandidateRuntimeContainerBinding(
+    durableObjectBindings,
+  );
   const health = application?.health?.instances;
   const ports = application?.configuration?.ports;
   // Cloudflare returns the application deployment count and resolved resources
@@ -448,15 +452,12 @@ export function verifyAliceContainerApplicationReadback({
     materializedWranglerConfig?.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
     !Array.isArray(materializedWranglerConfig?.containers) ||
     materializedWranglerConfig.containers.length !== 1 ||
-    !Array.isArray(durableObjectBindings) ||
-    durableObjectBindings.length !== 1 ||
+    !runtimeBinding ||
     container?.name !== "alice-production-runtime" ||
     container?.class_name !== "AliceRuntimeContainer" ||
     container?.instance_type !== "standard-4" ||
     container?.max_instances !== 1 ||
-    durableObjectBindings[0]?.name !== "ALICE_RUNTIME_CONTAINER" ||
-    durableObjectBindings[0]?.class_name !== container.class_name ||
-    present(durableObjectBindings[0]?.script_name) ||
+    runtimeBinding.class_name !== container.class_name ||
     !NAMESPACE_ID.test(expectedNamespaceId ?? "") ||
     !UUID.test(application.id ?? "") ||
     application.account_id !== materializedWranglerConfig.account_id ||
@@ -757,7 +758,9 @@ export async function verifyAliceWorkerProviderReadback({
         applicationCanonicalInstances: containerApplicationCanonicalInstances,
         applicationDurableObjects: containerApplicationDurableObjects,
         materializedWranglerConfig,
-        expectedNamespaceId: continuityNamespaceIds[0]?.namespaceId,
+        expectedNamespaceId: continuityNamespaceIds.find(
+          (binding) => binding.name === "ALICE_RUNTIME_CONTAINER",
+        )?.namespaceId,
       })
     : null;
   if (

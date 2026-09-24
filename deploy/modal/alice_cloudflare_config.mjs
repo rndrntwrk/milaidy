@@ -175,6 +175,25 @@ function durableObjectBindings(config) {
   }));
 }
 
+export function selectAliceCandidateRuntimeContainerBinding(bindings) {
+  if (!Array.isArray(bindings) || bindings.length !== 2) return null;
+  const container = bindings.find((binding) =>
+    binding?.name === "ALICE_RUNTIME_CONTAINER");
+  const authority = bindings.find((binding) =>
+    binding?.name === "ALICE_AUTHORITY");
+  if (
+    !container || !authority ||
+    canonicalAliceJson(Object.keys(container).sort()) !==
+      canonicalAliceJson(["class_name", "name"]) ||
+    canonicalAliceJson(Object.keys(authority).sort()) !==
+      canonicalAliceJson(["class_name", "name", "script_name"]) ||
+    container.class_name !== "AliceRuntimeContainer" ||
+    authority.class_name !== "AliceAuthority" ||
+    authority.script_name !== ALICE_CLOUDFLARE_TARGET.controlWorker
+  ) return null;
+  return container;
+}
+
 function durableObjectMigrations(config) {
   return (config.migrations ?? []).map((migration) => ({
     tag: migration.tag,

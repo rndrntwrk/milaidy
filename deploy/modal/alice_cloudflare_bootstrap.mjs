@@ -2349,7 +2349,9 @@ async function main() {
         applicationDurableObjects: containerState.applicationDurableObjects,
         expectedApplicationImage,
         materializedWranglerConfig: runtimeHostBootstrapConfig,
-        expectedNamespaceId: runtimeHostNamespaces[0]?.namespaceId,
+        expectedNamespaceId: runtimeHostNamespaces.find(
+          (binding) => binding.name === "ALICE_RUNTIME_CONTAINER",
+        )?.namespaceId,
       });
     },
     fetchTraffic: async () =>
