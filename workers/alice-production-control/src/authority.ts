@@ -57,6 +57,35 @@ type ReleaseHistoryRecord = {
   rollbackBoundary: string;
 };
 
+export type DeviceBoundCredential = {
+  id: string;
+  publicKeyB64: string;
+  counter: number;
+  transports: string[];
+  owner: string;
+  createdAt: number;
+};
+
+export type PendingWebAuthnChallenge = {
+  kind: "register" | "approve";
+  challenge: string;
+  owner: string;
+  expiresAt: number;
+  binding: ReleaseBinding;
+  admissionGeneration: number;
+  capabilityId?: string;
+  target?: string;
+  nonce?: string;
+  argumentHash?: string;
+  grantExpiresAt?: number;
+};
+
+export function validAliceCodingRepositoryTarget(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 191) return false;
+  const match = /^(rndrntwrk|Render-Network-OS)\/([A-Za-z0-9_.-]+)$/.exec(value);
+  return Boolean(match && match[2] !== "." && match[2] !== "..");
+}
+
 export type ReleaseActivationCandidate = {
   binding: ReleaseBinding;
   deploymentManifestSha256: string;
@@ -82,7 +111,7 @@ export type VerifiedRecoveryAuthorization = {
 };
 
 export type AuthorityLedgerState = {
-  schemaVersion: "alice.authority-ledger.v3";
+  schemaVersion: "alice.authority-ledger.v4";
   binding: ReleaseBinding;
   deploymentManifestSha256: string;
   admissionGeneration: number;
@@ -96,6 +125,10 @@ export type AuthorityLedgerState = {
   consumedNonces: string[];
   intentDecisions: Record<string, StoredIntentDecision>;
   capabilities: Record<string, CapabilityGrant>;
+  webauthn: {
+    credential: DeviceBoundCredential | null;
+    pending: PendingWebAuthnChallenge | null;
+  };
   budget: {
     windowId: string;
     usedUnits: number;
@@ -234,6 +267,7 @@ function validState(value: unknown): value is AuthorityLedgerState {
     const grant = capability as CapabilityGrant;
     return (
       /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(grant.capabilityId) &&
+      /^owner:sha256:[a-f0-9]{64}$/.test(grant.owner) &&
       typeof grant.scope === "string" &&
       typeof grant.target === "string" &&
       grant.target.trim().length > 0 &&
@@ -247,6 +281,45 @@ function validState(value: unknown): value is AuthorityLedgerState {
       (grant.usedAt === null || (Number.isFinite(grant.usedAt) && grant.usedAt > 0)) &&
       validBinding(grant)
     );
+  };
+  const validCredential = (credential: unknown): credential is DeviceBoundCredential => {
+    if (!credential || typeof credential !== "object" || Array.isArray(credential)) return false;
+    const stored = credential as DeviceBoundCredential;
+    return (
+      /^[A-Za-z0-9_-]{16,1024}$/.test(stored.id) &&
+      /^[A-Za-z0-9_-]{16,8192}$/.test(stored.publicKeyB64) &&
+      Number.isSafeInteger(stored.counter) && stored.counter >= 0 &&
+      Array.isArray(stored.transports) &&
+      stored.transports.length <= 8 &&
+      stored.transports.every((transport) => typeof transport === "string" && transport.length <= 32) &&
+      /^owner:sha256:[a-f0-9]{64}$/.test(stored.owner) &&
+      Number.isSafeInteger(stored.createdAt) && stored.createdAt > 0
+    );
+  };
+  const validChallenge = (pending: unknown): pending is PendingWebAuthnChallenge => {
+    if (!pending || typeof pending !== "object" || Array.isArray(pending)) return false;
+    const stored = pending as PendingWebAuthnChallenge;
+    const common =
+      /^[A-Za-z0-9_-]{32,256}$/.test(stored.challenge) &&
+      /^owner:sha256:[a-f0-9]{64}$/.test(stored.owner) &&
+      Number.isSafeInteger(stored.expiresAt) && stored.expiresAt > 0 &&
+      validBinding(stored.binding) &&
+      Number.isSafeInteger(stored.admissionGeneration) && stored.admissionGeneration > 0;
+    if (!common) return false;
+    if (stored.kind === "register") {
+      return stored.capabilityId === undefined && stored.target === undefined &&
+        stored.nonce === undefined &&
+        stored.argumentHash === undefined && stored.grantExpiresAt === undefined;
+    }
+    return stored.kind === "approve" &&
+      typeof stored.capabilityId === "string" &&
+      /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(stored.capabilityId) &&
+      validAliceCodingRepositoryTarget(stored.target) &&
+      typeof stored.nonce === "string" &&
+      /^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/.test(stored.nonce) &&
+      validDigest(stored.argumentHash) &&
+      Number.isSafeInteger(stored.grantExpiresAt) &&
+      Number(stored.grantExpiresAt) >= stored.expiresAt;
   };
   const validIntentDecision = (decision: unknown): decision is StoredIntentDecision => {
     if (!decision || typeof decision !== "object") return false;
@@ -323,7 +396,7 @@ function validState(value: unknown): value is AuthorityLedgerState {
           activeHistory.rollbackBoundary === state.rollbackBoundary,
       );
   const structurallyValid = (
-    state.schemaVersion === "alice.authority-ledger.v3" &&
+    state.schemaVersion === "alice.authority-ledger.v4" &&
     bindingValid &&
     releaseStateValid &&
     validRollbackBoundary(state.rollbackBoundary) &&
@@ -346,6 +419,11 @@ function validState(value: unknown): value is AuthorityLedgerState {
       ([capabilityId, capability]) =>
         validCapability(capability) && capability.capabilityId === capabilityId,
     ) &&
+    state.webauthn !== null &&
+    typeof state.webauthn === "object" &&
+    !Array.isArray(state.webauthn) &&
+    (state.webauthn.credential === null || validCredential(state.webauthn.credential)) &&
+    (state.webauthn.pending === null || validChallenge(state.webauthn.pending)) &&
     state.budget !== null &&
     typeof state.budget === "object" &&
     typeof state.budget.windowId === "string" &&
@@ -416,6 +494,15 @@ function migrateAuthorityState(value: unknown): AuthorityLedgerState {
     migrated.deploymentManifestSha256 = ZERO_DIGEST;
     migrated.admissionGeneration = 0;
   }
+  if (migrated.schemaVersion === "alice.authority-ledger.v3") {
+    // Production v3 could not issue capabilities. Refuse an unexpected
+    // nonempty capability map instead of importing ownerless grants.
+    if (Object.keys(migrated.capabilities ?? {}).length !== 0) {
+      throw new Error("AUTHORITY_STATE_MIGRATION_REQUIRED");
+    }
+    migrated.schemaVersion = "alice.authority-ledger.v4";
+    migrated.webauthn = { credential: null, pending: null };
+  }
   if (!validState(migrated)) throw new Error("AUTHORITY_STATE_INVALID");
   return migrated;
 }
@@ -453,7 +540,7 @@ export class AuthorityLedger {
       throw new Error("AUTHORITY_CONFIG_INVALID");
     }
     return new AuthorityLedger({
-      schemaVersion: "alice.authority-ledger.v3",
+      schemaVersion: "alice.authority-ledger.v4",
       binding: structuredClone(binding),
       deploymentManifestSha256: manifestSha256,
       admissionGeneration: unadmitted ? 0 : 1,
@@ -476,6 +563,7 @@ export class AuthorityLedger {
       consumedNonces: [],
       intentDecisions: {},
       capabilities: {},
+      webauthn: { credential: null, pending: null },
       budget: {
         windowId: "",
         usedUnits: 0,
@@ -738,6 +826,7 @@ export class AuthorityLedger {
     this.state.consumedNonces = [];
     this.state.intentDecisions = {};
     this.state.capabilities = {};
+    this.state.webauthn.pending = null;
     this.state.sequence += 1;
     return {
       ok: true,
@@ -846,7 +935,175 @@ export class AuthorityLedger {
     return record && record.resumedAt === null ? structuredClone(record) : null;
   }
 
-  authorize(intent: ActionIntent, now: number) {
+  webauthnState() {
+    return structuredClone(this.state.webauthn);
+  }
+
+  private webauthnGate(owner: string, now: number): string | null {
+    if (!/^owner:sha256:[a-f0-9]{64}$/.test(owner) || !Number.isSafeInteger(now) || now <= 0) {
+      return "WEBAUTHN_REQUEST_INVALID";
+    }
+    if (this.state.admissionGeneration === 0 || isUnadmittedBinding(this.state.binding)) {
+      return "RELEASE_ADMISSION_DENIED";
+    }
+    const paused = this.activePausedScopes();
+    if (paused.includes("all") || paused.includes("release") || paused.includes("coding")) {
+      return "WEBAUTHN_PAUSED";
+    }
+    return null;
+  }
+
+  beginWebAuthnRegistration(owner: string, challenge: string, now: number) {
+    const gate = this.webauthnGate(owner, now);
+    if (gate) return { ok: false, code: gate } as const;
+    if (this.state.webauthn.credential) {
+      return { ok: false, code: "WEBAUTHN_ALREADY_REGISTERED" } as const;
+    }
+    if (!/^[A-Za-z0-9_-]{32,256}$/.test(challenge)) {
+      return { ok: false, code: "WEBAUTHN_CHALLENGE_INVALID" } as const;
+    }
+    this.state.webauthn.pending = {
+      kind: "register",
+      challenge,
+      owner,
+      expiresAt: now + 300_000,
+      binding: structuredClone(this.state.binding),
+      admissionGeneration: this.state.admissionGeneration,
+    };
+    this.state.sequence += 1;
+    return { ok: true, code: "WEBAUTHN_REGISTRATION_CHALLENGE_ISSUED" } as const;
+  }
+
+  completeWebAuthnRegistration(
+    owner: string,
+    challenge: string,
+    credential: Omit<DeviceBoundCredential, "owner" | "createdAt">,
+    now: number,
+  ) {
+    const gate = this.webauthnGate(owner, now);
+    if (gate) return { ok: false, code: gate } as const;
+    const pending = this.state.webauthn.pending;
+    if (
+      pending?.kind !== "register" ||
+      pending.owner !== owner ||
+      pending.challenge !== challenge ||
+      pending.expiresAt <= now ||
+      pending.admissionGeneration !== this.state.admissionGeneration ||
+      !bindingMatches(pending.binding, this.state.binding) ||
+      this.state.webauthn.credential
+    ) {
+      return { ok: false, code: "WEBAUTHN_CHALLENGE_INVALID" } as const;
+    }
+    const candidate: DeviceBoundCredential = { ...credential, owner, createdAt: now };
+    if (
+      !/^[A-Za-z0-9_-]{16,1024}$/.test(candidate.id) ||
+      !/^[A-Za-z0-9_-]{16,8192}$/.test(candidate.publicKeyB64) ||
+      !Number.isSafeInteger(candidate.counter) || candidate.counter < 0 ||
+      !Array.isArray(candidate.transports) ||
+      candidate.transports.length > 8 ||
+      candidate.transports.some((value) => typeof value !== "string" || value.length > 32)
+    ) {
+      return { ok: false, code: "WEBAUTHN_CREDENTIAL_INVALID" } as const;
+    }
+    this.state.webauthn.credential = candidate;
+    this.state.webauthn.pending = null;
+    this.state.sequence += 1;
+    return { ok: true, code: "WEBAUTHN_CREDENTIAL_REGISTERED" } as const;
+  }
+
+  beginWebAuthnApproval(
+    owner: string,
+    challenge: string,
+    target: string,
+    argumentHash: string,
+    capabilityId: string,
+    nonce: string,
+    now: number,
+  ) {
+    const gate = this.webauthnGate(owner, now);
+    if (gate) return { ok: false, code: gate } as const;
+    if (this.state.webauthn.credential?.owner !== owner) {
+      return { ok: false, code: "WEBAUTHN_CREDENTIAL_REQUIRED" } as const;
+    }
+    if (
+      !/^[A-Za-z0-9_-]{32,256}$/.test(challenge) ||
+      !validAliceCodingRepositoryTarget(target) ||
+      !validDigest(argumentHash) ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(capabilityId) ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/.test(nonce) ||
+      this.state.capabilities[capabilityId]
+    ) {
+      return { ok: false, code: "WEBAUTHN_APPROVAL_INVALID" } as const;
+    }
+    this.state.webauthn.pending = {
+      kind: "approve",
+      challenge,
+      owner,
+      expiresAt: now + 300_000,
+      binding: structuredClone(this.state.binding),
+      admissionGeneration: this.state.admissionGeneration,
+      capabilityId,
+      target,
+      nonce,
+      argumentHash,
+      grantExpiresAt: now + 600_000,
+    };
+    this.state.sequence += 1;
+    return { ok: true, code: "WEBAUTHN_APPROVAL_CHALLENGE_ISSUED" } as const;
+  }
+
+  completeWebAuthnApproval(
+    owner: string,
+    challenge: string,
+    credentialId: string,
+    counter: number,
+    now: number,
+  ) {
+    const gate = this.webauthnGate(owner, now);
+    if (gate) return { ok: false, code: gate } as const;
+    const pending = this.state.webauthn.pending;
+    const credential = this.state.webauthn.credential;
+    if (
+      pending?.kind !== "approve" ||
+      pending.owner !== owner ||
+      pending.challenge !== challenge ||
+      pending.expiresAt <= now ||
+      pending.admissionGeneration !== this.state.admissionGeneration ||
+      !bindingMatches(pending.binding, this.state.binding) ||
+      credential?.owner !== owner ||
+      credential.id !== credentialId ||
+      !Number.isSafeInteger(counter) ||
+      counter < credential.counter ||
+      !pending.capabilityId ||
+      !pending.nonce ||
+      !pending.argumentHash ||
+      !pending.grantExpiresAt ||
+      pending.grantExpiresAt <= now ||
+      this.state.capabilities[pending.capabilityId]
+    ) {
+      return { ok: false, code: "WEBAUTHN_APPROVAL_INVALID" } as const;
+    }
+    const grant: CapabilityGrant = {
+      capabilityId: pending.capabilityId,
+      owner,
+      scope: "coding.patch.sandbox",
+      target: pending.target!,
+      argumentHash: pending.argumentHash,
+      nonce: pending.nonce,
+      expiresAt: pending.grantExpiresAt,
+      rollbackBoundary: this.state.rollbackBoundary,
+      revokedAt: null,
+      usedAt: null,
+      ...structuredClone(this.state.binding),
+    };
+    credential.counter = counter;
+    this.state.capabilities[grant.capabilityId] = grant;
+    this.state.webauthn.pending = null;
+    this.state.sequence += 1;
+    return { ok: true, code: "CAPABILITY_GRANTED", grant: structuredClone(grant) } as const;
+  }
+
+  authorize(intent: ActionIntent, now: number, actor = "") {
     const fingerprint = intentFingerprint(intent);
     const existingDecision = this.state.intentDecisions[intent.intentId];
     if (existingDecision) {
@@ -881,6 +1138,9 @@ export class AuthorityLedger {
         if (currentCapability.revokedAt !== null) {
           return { allowed: false, code: "CAPABILITY_REVOKED", risk: existingDecision.decision.risk } as const;
         }
+        if (currentCapability.owner !== actor) {
+          return { allowed: false, code: "CAPABILITY_MISMATCH", risk: existingDecision.decision.risk } as const;
+        }
         if (currentCapability.expiresAt <= now) {
           return { allowed: false, code: "CAPABILITY_EXPIRED", risk: existingDecision.decision.risk } as const;
         }
@@ -896,6 +1156,7 @@ export class AuthorityLedger {
       : null;
     const decision = authorizeIntent(intent, {
       now,
+      actor,
       binding: this.state.binding,
       pausedScopes: this.activePausedScopes(),
       consumedNonces: this.state.consumedNonces,

@@ -4,6 +4,7 @@
   "name": "alice-runtime-container-host",
   "main": "src/runtime-host.ts",
   "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
   "minify": true,
@@ -30,6 +31,8 @@
       "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
       "ALICE_ELIZA_COMMIT",
       "ALICE_RUNTIME_REVISION"
+      ,"ALICE_GITHUB_APP_ID"
+      ,"ALICE_GITHUB_APP_PRIVATE_KEY_B64"
     ]
   },
   "services": [

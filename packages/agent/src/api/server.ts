@@ -1528,7 +1528,7 @@ function parseBoundedLimit(rawLimit: string | null, fallback = 15): number {
  * changes to the config schema infrastructure.
  */
 const SENSITIVE_KEY_RE =
-  /password|secret|api.?key|private.?key|seed.?phrase|authorization|connection.?string|credential|(?<!max)tokens?$/i;
+  /password|secret|api.?key|private.?key|seed.?phrase|authorization|connection.?string|credential|(?<!max)tokens?$|_pat$/i;
 
 function isBlockedObjectKey(key: string): boolean {
   return (
@@ -1620,7 +1620,7 @@ function redactDeep(val: unknown): unknown {
  * whose key matches the sensitive pattern is automatically covered —
  * no manual enumeration required.
  */
-function redactConfigSecrets(
+export function redactConfigSecrets(
   config: Record<string, unknown>,
 ): Record<string, unknown> {
   return redactDeep(config) as Record<string, unknown>;

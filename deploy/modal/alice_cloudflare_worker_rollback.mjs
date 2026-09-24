@@ -1,4 +1,5 @@
 import {
+  ALICE_CODING_TARGET,
   ALICE_CLOUDFLARE_TARGET,
   canonicalAliceJson,
 } from "../../workers/alice-effective-config.js";
@@ -14,6 +15,7 @@ const ROLES = [
   "statePlane",
   "connectorPlane",
 ];
+const CODING_ROLE = "codingSandbox";
 const RESTORE_ORDER = [
   "access",
   "runtimeHost",
@@ -29,6 +31,7 @@ const WORKERS = Object.freeze({
   aiGateway: ALICE_CLOUDFLARE_TARGET.aiGatewayWorker,
   statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
   connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
+  codingSandbox: ALICE_CODING_TARGET.codingSandboxWorker,
 });
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -728,6 +731,48 @@ async function captureWorker(client, role) {
   return snapshot;
 }
 
+async function codingWorkerExists(client) {
+  const scripts = await apiRequest(client, "GET",
+    `/accounts/${client.accountId}/workers/scripts`, undefined,
+    { role: CODING_ROLE, stage: "script-list" });
+  if (!Array.isArray(scripts) || scripts.some((script) =>
+    script === null || typeof script !== "object")) {
+    readbackInvalid({ role: CODING_ROLE, stage: "script-list" }, "shape");
+  }
+  const matches = scripts.filter((script) => script.id === WORKERS[CODING_ROLE]);
+  if (matches.length > 1) {
+    readbackInvalid({ role: CODING_ROLE, stage: "script-list" }, "duplicate");
+  }
+  return matches.length === 1;
+}
+
+async function deleteNewCodingWorker(client) {
+  if (!await codingWorkerExists(client)) return;
+  let response;
+  try {
+    response = await client.fetchImpl(
+      `${client.baseUrl}/accounts/${client.accountId}/workers/scripts/${WORKERS[CODING_ROLE]}`,
+      { method: "DELETE", headers: {
+        authorization: `Bearer ${client.apiToken}`,
+        accept: "application/json",
+      } },
+    );
+  } catch {
+    readbackInvalid({ role: CODING_ROLE, stage: "delete" }, "transport");
+  }
+  // Never use force=true: it can remove associated bindings and Durable Objects.
+  if (!(response instanceof Response) || !response.ok) {
+    readbackInvalid({ role: CODING_ROLE, stage: "delete" }, "http", {
+      status: response?.status,
+    });
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (!await codingWorkerExists(client)) return;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  readbackInvalid({ role: CODING_ROLE, stage: "delete" }, "still_present");
+}
+
 function verifyWorkerSnapshot(value, role) {
   exactKeys(value, ["scriptSettings", "serving", "versionResources", "worker"], [
     "scriptSettings",
@@ -760,8 +805,19 @@ function verifyWorkerSnapshot(value, role) {
 }
 
 export function verifyAliceCloudflareWorkerRollbackStateSnapshot(value) {
-  exactKeys(value, ROLES, ROLES);
+  const includeCodingSandbox = Object.hasOwn(value ?? {}, CODING_ROLE);
+  exactKeys(value, includeCodingSandbox ? [...ROLES, CODING_ROLE] : ROLES,
+    includeCodingSandbox ? [...ROLES, CODING_ROLE] : ROLES);
   for (const role of ROLES) verifyWorkerSnapshot(value[role], role);
+  if (includeCodingSandbox) {
+    const coding = value[CODING_ROLE];
+    if (coding?.absent === true) {
+      exactKeys(coding, ["absent", "worker"], ["absent", "worker"]);
+      if (coding.worker !== WORKERS[CODING_ROLE]) invalid();
+    } else {
+      verifyWorkerSnapshot(coding, CODING_ROLE);
+    }
+  }
   return value;
 }
 
@@ -770,11 +826,17 @@ export async function captureAliceCloudflareWorkerRollbackState({
   apiToken,
   accountId = ALICE_CLOUDFLARE_TARGET.accountId,
   baseUrl = API_BASE,
+  includeCodingSandbox = false,
 }) {
   if (!validInputs({ fetchImpl, apiToken, accountId, baseUrl })) invalid();
   const client = { fetchImpl, apiToken, accountId, baseUrl };
   const state = {};
   for (const role of ROLES) state[role] = await captureWorker(client, role);
+  if (includeCodingSandbox) {
+    state[CODING_ROLE] = await codingWorkerExists(client)
+      ? await captureWorker(client, CODING_ROLE)
+      : { worker: WORKERS[CODING_ROLE], absent: true };
+  }
   return verifyAliceCloudflareWorkerRollbackStateSnapshot(state);
 }
 
@@ -805,20 +867,34 @@ export async function restoreAliceCloudflareWorkerRollbackState({
       invalid();
     }
   }
+  const coding = expected[CODING_ROLE];
+  if (coding?.absent === true) {
+    await deleteNewCodingWorker(client);
+  } else if (coding) {
+    const root = `/accounts/${accountId}/workers/scripts/${WORKERS[CODING_ROLE]}`;
+    const patched = normalizeAliceCloudflareScriptSettings(await apiRequest(
+      client, "PATCH", `${root}/script-settings`,
+      scriptSettingsPatch(coding.scriptSettings),
+    ));
+    if (canonicalAliceJson(patched) !== canonicalAliceJson(coding.scriptSettings)) invalid();
+  }
   const first = await captureAliceCloudflareWorkerRollbackState({
     fetchImpl,
     apiToken,
     accountId,
     baseUrl,
+    includeCodingSandbox: Boolean(coding),
   });
   const second = await captureAliceCloudflareWorkerRollbackState({
     fetchImpl,
     apiToken,
     accountId,
     baseUrl,
+    includeCodingSandbox: Boolean(coding),
   });
   const rollbackTarget = (state) => Object.fromEntries(
-    ROLES.map((role) => {
+    Object.keys(state).map((role) => {
+      if (state[role].absent === true) return [role, state[role]];
       const { deploymentId: _deploymentId, ...serving } = state[role].serving;
       return [role, { ...state[role], serving }];
     }),
@@ -832,7 +908,12 @@ export async function restoreAliceCloudflareWorkerRollbackState({
       first[role].serving.deploymentId !==
         second[role].serving.deploymentId ||
       first[role].serving.deploymentId ===
-        expected[role].serving.deploymentId)
+        expected[role].serving.deploymentId) ||
+    (coding && coding.absent !== true &&
+      (first[CODING_ROLE].serving.deploymentId !==
+        second[CODING_ROLE].serving.deploymentId ||
+        first[CODING_ROLE].serving.deploymentId ===
+          coding.serving.deploymentId))
   ) {
     invalid();
   }
@@ -841,7 +922,13 @@ export async function restoreAliceCloudflareWorkerRollbackState({
       previousDeploymentId: expected[role].serving.deploymentId,
       rollbackDeploymentId: second[role].serving.deploymentId,
       versionId: second[role].serving.versionId,
-    }])),
+    }]).concat(coding ? [[CODING_ROLE, coding.absent === true ? {
+      absent: true,
+    } : {
+      previousDeploymentId: coding.serving.deploymentId,
+      rollbackDeploymentId: second[CODING_ROLE].serving.deploymentId,
+      versionId: second[CODING_ROLE].serving.versionId,
+    }]] : [])),
     restored: second,
   };
 }

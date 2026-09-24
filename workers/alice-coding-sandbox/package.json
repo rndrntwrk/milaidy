@@ -1,0 +1,19 @@
+{
+  "name": "@rndrntwrk/alice-coding-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cloudflare/sandbox": "0.12.10"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2",
+    "wrangler": "4.122.0"
+  },
+  "scripts": {
+    "test": "bun test test",
+    "types": "wrangler types --config wrangler.jsonc worker-configuration.d.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "dry-run": "wrangler deploy --dry-run"
+  }
+}

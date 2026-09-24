@@ -85,6 +85,10 @@ function cloudflareTerminalIdentity(value) {
     provider: value.provider,
     terminalSnapshotStable: true,
     workflowVersions: value.workflowVersions,
+    codingWorkflow: value.codingWorkflow ?? null,
+    codingWorkflowVersions: value.codingWorkflowVersions ?? null,
+    codingCandidateWorkflowVersionId: value.codingCandidateWorkflowVersionId ?? null,
+    codingContainer: value.codingContainer ?? null,
     aliceTrafficBindings: value.aliceTrafficBindings,
     workers: value.workers,
   };

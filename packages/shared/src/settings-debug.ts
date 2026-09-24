@@ -7,7 +7,7 @@ import { isTruthyEnvValue } from "./env-utils.js";
 
 /** Keys whose values are always redacted in debug dumps. */
 const SENSITIVE_KEY_RE =
-  /(?:^|\.|_)(?:secret|password|token|apikey|api_key|privatekey|private_key|mnemonic|credential|authorization|bearer|cookie|sessionkey|session_id)(?:\.|_|$)|^apikey$|_api_key$|_key$/i;
+  /(?:^|\.|_)(?:secret|password|token|apikey|api_key|privatekey|private_key|mnemonic|credential|authorization|bearer|cookie|sessionkey|session_id)(?:\.|_|$)|^apikey$|_api_key$|_key$|_pat$/i;
 
 const MAX_DEPTH = 14;
 const MAX_ARRAY = 40;

@@ -23,6 +23,8 @@ const ALICE_RUNTIME_ALLOWED_HOSTS = [
   "chatgpt.com",
   "stream.rndrntwrk.com",
   "api.telegram.org",
+  "api.github.com",
+  "github.com",
   "discord.com",
   "gateway.discord.gg",
   // Discord's Ready event supplies a regional gateway for session resumption.

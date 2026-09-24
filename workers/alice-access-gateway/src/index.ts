@@ -1167,6 +1167,7 @@ const FULL_RUNTIME_API_READS = [
   /^\/api\/stream\/status$/,
   /^\/api\/coding-agents\/coordinator\/status$/,
   /^\/api\/coding-agents\/coordinator\/threads$/,
+  /^\/api\/coding-agents\/coordinator\/threads\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
   /^\/api\/apps\/runs$/,
   /^\/music-player\/status$/,
   /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/state$/,

@@ -11,6 +11,9 @@ export type AliceRuntimeContainerEnvironmentSource = {
   ALICE_RUNTIME_API_TOKEN: string;
   ALICE_RUNTIME_RELEASE_TOKEN: string;
   ALICE_RUNTIME_VAULT_PASSPHRASE: string;
+  ALICE_GITHUB_AGENT_PAT?: string;
+  ALICE_GITHUB_APP_ID?: string;
+  ALICE_GITHUB_APP_PRIVATE_KEY_B64?: string;
   ALICE_STATE_PLANE_SERVICE_TOKEN: string;
   ALICE_PROGRAM_DIGEST: string;
   ALICE_RELEASE_DIGEST: string;
@@ -29,6 +32,12 @@ export function buildAliceRuntimeContainerEnv(
   env: AliceRuntimeContainerEnvironmentSource,
 ): Record<string, string> {
   const runtimeRevision = Number(env.ALICE_RUNTIME_REVISION);
+  if (
+    Boolean(env.ALICE_GITHUB_APP_ID?.trim()) !==
+    Boolean(env.ALICE_GITHUB_APP_PRIVATE_KEY_B64?.trim())
+  ) {
+    throw new Error("ALICE_GITHUB_APP_CREDENTIAL_INCOMPLETE");
+  }
   if (
     [
       env.ALICE_ACCESS_PROXY_SECRET,
@@ -91,9 +100,12 @@ export function buildAliceRuntimeContainerEnv(
     OPENAI_EMBEDDING_MODEL: "@cf/baai/bge-m3",
     OPENAI_EMBEDDING_DIMENSIONS: "1024",
     CODEX_AUTH_PATH: "/tmp/alice-runtime/codex/auth.json",
-    CODEX_CLI_SMALL_MODEL: "gpt-5.6-luna",
-    CODEX_CLI_LARGE_MODEL: "gpt-5.6-sol",
+    CODEX_CLI_SMALL_MODEL: "gpt-6-luna",
+    CODEX_CLI_LARGE_MODEL: "gpt-6-sol",
     CODEX_REASONING_EFFORT: "max",
+    ELIZA_ACP_DEFAULT_AGENT: "codex",
+    ELIZA_CODEX_MODEL_POWERFUL: "gpt-6-sol",
+    ELIZA_CODEX_MODEL_FAST: "gpt-6-sol",
     MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
     ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
     ALICE_STATE_PLANE_URL:
@@ -104,6 +116,17 @@ export function buildAliceRuntimeContainerEnv(
       "http://alice-state-plane.internal/v1/openai-codex-credentials",
     ALICE_STATE_OWNER_ID: ALICE_RUNTIME_STATE_OWNER_ID,
     ELIZA_VAULT_PASSPHRASE: env.ALICE_RUNTIME_VAULT_PASSPHRASE,
+    ...(env.ALICE_GITHUB_AGENT_PAT?.trim()
+      ? { GITHUB_AGENT_PAT: env.ALICE_GITHUB_AGENT_PAT.trim() }
+      : {}),
+    ...(env.ALICE_GITHUB_APP_ID?.trim() &&
+    env.ALICE_GITHUB_APP_PRIVATE_KEY_B64?.trim()
+      ? {
+          GITHUB_APP_ID: env.ALICE_GITHUB_APP_ID.trim(),
+          GITHUB_APP_PRIVATE_KEY_B64:
+            env.ALICE_GITHUB_APP_PRIVATE_KEY_B64.trim(),
+        }
+      : {}),
     ALICE_RUNTIME_PROFILE: "full-gated",
     ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
     ENABLE_AUTONOMY: "false",

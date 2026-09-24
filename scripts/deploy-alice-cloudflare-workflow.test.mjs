@@ -357,7 +357,7 @@ test("rollback journals contain relocatable Worker bytes and artifact-relative c
   }
 });
 
-test("deployment attests every module in the six-role Worker artifact", () => {
+test("deployment attests every module in the seven-role Worker artifact", () => {
   const attest = workflow.match(
     /- name: Verify immutable Worker attestations before unrouted fail-closed bootstrap[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
@@ -369,6 +369,7 @@ test("deployment attests every module in the six-role Worker artifact", () => {
     "alice-ai-gateway",
     "alice-state-plane",
     "alice-connector-plane",
+    "alice-coding-sandbox",
     "alice-runtime-container-host",
   ]) {
     assert.match(
@@ -509,7 +510,7 @@ test("six-role mutation steps receive connector credentials only step-locally", 
   }
 });
 
-test("both independent recovery lanes require all six relocated Worker modules", () => {
+test("both independent recovery lanes require every relocated Worker module", () => {
   for (const source of [workflow, watchdog]) {
     const recovery = source.match(
       /- name: Consume external journal and recover Cloudflare independently[\s\S]*?(?=\n      - name:)/,
@@ -526,6 +527,9 @@ test("both independent recovery lanes require all six relocated Worker modules",
       recovery,
       /test ! -L "\$recovery_root\/alice-worker-bundles\/\$worker\/index\.js"/,
     );
+    assert.match(recovery, /\.schemaVersion == "alice\.deployment-manifest\.v4"/);
+    assert.match(recovery, /test -s "\$recovery_root\/alice-worker-bundles\/alice-coding-sandbox\/index\.js"/);
+    assert.match(recovery, /test ! -L "\$recovery_root\/alice-worker-bundles\/alice-coding-sandbox\/index\.js"/);
     assert.match(
       recovery,
       /for migration in \\\n+\s+0001_alice_state\.sql \\\n+\s+0002_execution_records\.sql \\\n+\s+0003_eliza_database\.sql/,

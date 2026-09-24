@@ -156,7 +156,7 @@ describe("Alice final-image capability runtime inventory", () => {
     ]);
   });
 
-  it("admits configured native Telegram and Discord while retaining other policy denials", () => {
+  it("admits Telegram and Discord while keeping GitHub disabled pending a scoped grant", () => {
     const policy = JSON.parse(
       fs.readFileSync(
         new URL(
@@ -183,14 +183,16 @@ describe("Alice final-image capability runtime inventory", () => {
     }
     expect(packages.has("@elizaos/plugin-telegram")).toBe(true);
     expect(packages.has("@elizaos/plugin-discord")).toBe(true);
+    expect(packages.has("@elizaos/plugin-github")).toBe(true);
     packages = new Set([
       ...[...packages].filter((name) =>
-        ["@elizaos/plugin-telegram", "@elizaos/plugin-discord"].includes(name),
+        ["@elizaos/plugin-telegram", "@elizaos/plugin-discord", "@elizaos/plugin-github"].includes(name),
       ),
       "@elizaos/plugin-discord-local",
     ]);
     expect(enforceAliceFullGatedCapabilityPolicy(packages, policy)).toEqual([
       "@elizaos/plugin-discord-local",
+      "@elizaos/plugin-github",
     ]);
     expect([...packages]).toEqual([
       "@elizaos/plugin-telegram",

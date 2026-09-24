@@ -17,6 +17,9 @@ import {
 } from "./alice_workflow_binding_canary.mjs";
 import { verifyAliceCloudflareContainerImageEvidence } from
   "./alice_cloudflare_container_image.mjs";
+import { resolveAliceCandidateCodingWorkflowVersion,
+  verifyAliceCodingWorkflowStateSnapshot } from
+  "./alice_cloudflare_live_readback.mjs";
 
 const OWNER_ORIGIN = "https://alice.rndrntwrk.com";
 const ACCOUNT_ID = "036df6c823669b8fa2f66cf4c16eeb29";
@@ -368,6 +371,7 @@ function validateProviderRollbackForward(
   cloudflareLive: Record<string, any>,
   providerPromotion: Record<string, any>,
   expected: any,
+  codingMode = false,
 ) {
   const containerMode = Object.hasOwn(expected.release, "runtimeRevision");
   const modalPromotion = containerMode ? null : providerPromotion;
@@ -389,6 +393,7 @@ function validateProviderRollbackForward(
       "aiGateway",
       "statePlane",
       "connectorPlane",
+      ...(codingMode ? ["codingSandbox"] : []),
     ].every((role) =>
       object(cloudflareLive.workers[role])) ||
     (!containerMode &&
@@ -564,6 +569,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       ? ![
           "alice.deployment-manifest.v2",
           "alice.deployment-manifest.v3",
+          "alice.deployment-manifest.v4",
         ].includes(manifest.schemaVersion)
       : manifest.schemaVersion !== "alice.deployment-manifest.v1") ||
     manifest.source.sourceCommit !== expected.release.sourceCommit ||
@@ -583,7 +589,10 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     deploymentPauseEvidence.result?.edgeReadinessConfirmed !== true ||
     !object(deploymentPauseEvidence.active) ||
     !object(deploymentPauseEvidence.result?.pause) ||
-    rollbackAnchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v7"
+    rollbackAnchor.schemaVersion !==
+      (manifest.schemaVersion === "alice.deployment-manifest.v4"
+        ? "alice.cloudflare-rollback-anchor.v8"
+        : "alice.cloudflare-rollback-anchor.v7")
   ) invalid();
 
   const manifestBytes = `${canonicalAliceJson(manifest)}\n`;
@@ -595,6 +604,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     cloudflareLiveReadback,
     providerPromotionEvidence,
     expected,
+    manifest.schemaVersion === "alice.deployment-manifest.v4",
   );
   const workflowId = cloudflareLiveReadback.provider?.continuityConfig?.workflow?.id;
   const workflowVersion = resolveAliceCandidateWorkflowVersion({
@@ -602,6 +612,30 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     current: cloudflareLiveReadback.workflowVersions,
     expectedWorkflowId: workflowId,
   });
+  if (manifest.schemaVersion === "alice.deployment-manifest.v4") {
+    try {
+      verifyAliceCodingWorkflowStateSnapshot({
+        workflow: cloudflareLiveReadback.codingWorkflow,
+        versions: cloudflareLiveReadback.codingWorkflowVersions,
+      });
+    } catch {
+      invalid();
+    }
+    if (!object(cloudflareLiveReadback.codingContainer) ||
+        !VERSION_ID.test(cloudflareLiveReadback.codingContainer.id ?? "") ||
+        !/^[a-f0-9]{32}$/.test(
+          cloudflareLiveReadback.codingContainer.namespaceId ?? "")) invalid();
+    try {
+      const candidate = resolveAliceCandidateCodingWorkflowVersion({
+        previous: cloudflareRollbackProof.codingWorkflow,
+        current: { workflow: cloudflareLiveReadback.codingWorkflow,
+          versions: cloudflareLiveReadback.codingWorkflowVersions },
+      });
+      if (candidate.id !== cloudflareLiveReadback.codingCandidateWorkflowVersionId) {
+        invalid();
+      }
+    } catch { invalid(); }
+  }
   const startedAt = now();
   if (!Number.isSafeInteger(startedAt) || startedAt < 1) invalid();
   const owner = await validateAliceOwnerAuthorization(ownerAuthorization, {

@@ -61,6 +61,7 @@ import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
 import { MiladyCharacterPersistenceService } from "../services/character-persistence.js";
 import { OwnerBindingService } from "../services/owner-binding.ts";
+import { AliceGitHubInstallationService } from "../services/alice-github-installation.ts";
 import { inboxAction } from "../actions/inbox.js";
 import { inboxTriageProvider } from "../providers/inbox-triage.js";
 import { createTriggerTaskAction } from "../triggers/action.js";
@@ -114,6 +115,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       AgentEventService as ServiceClass,
       MiladyCharacterPersistenceService as ServiceClass,
       OwnerBindingService as ServiceClass,
+      AliceGitHubInstallationService as ServiceClass,
     ],
 
     init: async (_pluginConfig, runtime: IAgentRuntime) => {
