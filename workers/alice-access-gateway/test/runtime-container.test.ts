@@ -311,8 +311,15 @@ test("routes the state host through the private service binding without exposing
   expect(hostEntrypoint).toContain(
     'export { AliceRuntimeContainer } from "./alice-runtime-container";',
   );
-  expect(hostEntrypoint).toContain("export default {};");
-  expect(hostEntrypoint).not.toContain("fetch");
+  expect(hostEntrypoint).toContain(
+    'url.pathname === "/internal/v1/coding/archive"',
+  );
+  expect(hostEntrypoint).toContain(
+    'url.pathname === "/internal/v1/coding/model"',
+  );
+  expect(hostEntrypoint).toContain(
+    'return new Response("Not found", { status: 404 });',
+  );
 });
 
 const invalidStatePlaneEnvironments: Array<
