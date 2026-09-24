@@ -300,12 +300,15 @@ describe("private Alice state service", () => {
       sessionId: "session-001", payload: { state: "queued" }, updatedAt: 1_777_000_000_000,
       idempotencyKey: "idem-task-001",
     })).status).toBe(200);
-    expect((await invoke({ operation: "record.list", ownerId: "owner-001", sessionId: "session-001", kind: "task", limit: 10 })).status).toBe(200);
+    expect((await invoke({ operation: "record.list", ownerId: "owner-001", kind: "work",
+      recordIdPrefix: "work-cap-", limit: 10, order: "desc", metadataOnly: true })).status).toBe(200);
     expect((await invoke({
       operation: "records.atomic", operationId: "atomic-task-001",
       records: [{ kind: "task", recordId: "task-001", ownerId: "owner-001", sessionId: "session-001", payload: { state: "running" }, updatedAt: 1_777_000_000_001 }],
     })).status).toBe(200);
     expect(calls.map((call) => call.operation)).toEqual(["put", "list", "atomic"]);
+    expect(calls[1]?.value).toEqual({ ownerId: "owner-001", kind: "work",
+      recordIdPrefix: "work-cap-", limit: 10, order: "desc", metadataOnly: true });
     expect((await invoke({ operation: "sql", statement: "SELECT 1" })).status).toBe(400);
   });
 
