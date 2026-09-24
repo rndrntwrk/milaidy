@@ -55,6 +55,10 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/api\/lifeops\/overview$/,
   /^\/api\/lifeops\/activity-signals$/,
   /^\/api\/lifeops\/connectors\/google\/status$/,
+  /^\/api\/lifeops\/(?:definitions|goals)$/,
+  /^\/api\/lifeops\/(?:definitions|goals)\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
+  /^\/api\/lifeops\/goals\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/review$/i,
+  /^\/api\/lifeops\/occurrences\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/explanation$/i,
   /^\/api\/workbench\/overview$/,
   /^\/api\/workbench\/tasks(?:\/[^/]+)?$/,
   /^\/api\/subscription\/status$/,
@@ -78,6 +82,8 @@ const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/subscription\/openai\/(?:start|exchange)$/,
   /^\/api\/agent\/restart$/,
+  /^\/api\/lifeops\/(?:definitions|goals)$/,
+  /^\/api\/lifeops\/occurrences\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/(?:complete|skip|snooze)$/i,
   /^\/api\/connectors$/,
 ];
 
@@ -133,7 +139,8 @@ export function evaluateAliceProductionRequest(
 
   if (isAliceFullRuntimeProfile(env)) {
     if (normalizedMethod === "PUT" &&
-      (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname))) {
+      (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname) ||
+        /^\/api\/lifeops\/(?:definitions|goals)\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(pathname))) {
       return { allowed: true };
     }
     if (normalizedMethod === "GET" || normalizedMethod === "HEAD") {

@@ -1161,6 +1161,10 @@ const FULL_RUNTIME_API_READS = [
   /^\/api\/lifeops\/overview$/,
   /^\/api\/lifeops\/activity-signals$/,
   /^\/api\/lifeops\/connectors\/google\/status$/,
+  /^\/api\/lifeops\/(?:definitions|goals)$/,
+  /^\/api\/lifeops\/(?:definitions|goals)\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
+  /^\/api\/lifeops\/goals\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/review$/i,
+  /^\/api\/lifeops\/occurrences\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/explanation$/i,
   /^\/api\/workbench\/overview$/,
   /^\/api\/workbench\/tasks(?:\/[^/]+)?$/,
   /^\/api\/subscription\/status$/,
@@ -1184,6 +1188,8 @@ const FULL_RUNTIME_WRITES = [
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/subscription\/openai\/(?:start|exchange)$/,
   /^\/api\/agent\/restart$/,
+  /^\/api\/lifeops\/(?:definitions|goals)$/,
+  /^\/api\/lifeops\/occurrences\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/(?:complete|skip|snooze)$/i,
 ];
 
 const FULL_RUNTIME_DELETES = [
@@ -1222,7 +1228,8 @@ function isFullRuntimeProof(proof: unknown): boolean {
 function isFullRuntimeRequest(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
   if (normalized === "PUT" &&
-    (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname))) return true;
+    (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname) ||
+      /^\/api\/lifeops\/(?:definitions|goals)\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(pathname))) return true;
   if (normalized === "POST" && pathname === "/api/connectors") return true;
   if (normalized === "DELETE" && /^\/api\/connectors\/[a-zA-Z0-9_-]+$/.test(pathname)) return true;
   if (normalized === "GET" || normalized === "HEAD") {
