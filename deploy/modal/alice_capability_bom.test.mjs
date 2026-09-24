@@ -522,6 +522,23 @@ test("materializes exact lock-bound Bun workspace packages before the final-imag
   }
 });
 
+test("image materialization fails before final copy when a policy package is missing", () => {
+  const root = fixtureRoot();
+  try {
+    fs.mkdirSync(path.join(root, "node_modules"));
+    fs.writeFileSync(path.join(root, "bun.lock"), "[packages]\n");
+    assert.throws(
+      () => materializeAliceCapabilityWorkspacePackages({
+        root,
+        policy: policy([packageEntry("@elizaos/plugin-github", "policy-disabled")]),
+      }),
+      /ALICE_CAPABILITY_PACKAGE_MISSING: @elizaos\/plugin-github/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("final-image BOM execution loads typed package entrypoints through the pinned tsx loader", () => {
   const root = fixtureRoot();
   try {
