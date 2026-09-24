@@ -17,6 +17,8 @@ import {
 } from "./alice_workflow_binding_canary.mjs";
 import { verifyAliceCloudflareContainerImageEvidence } from
   "./alice_cloudflare_container_image.mjs";
+import { verifyAliceCodingWorkflowStateSnapshot } from
+  "./alice_cloudflare_live_readback.mjs";
 
 const OWNER_ORIGIN = "https://alice.rndrntwrk.com";
 const ACCOUNT_ID = "036df6c823669b8fa2f66cf4c16eeb29";
@@ -609,6 +611,16 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     current: cloudflareLiveReadback.workflowVersions,
     expectedWorkflowId: workflowId,
   });
+  if (manifest.schemaVersion === "alice.deployment-manifest.v4") {
+    try {
+      verifyAliceCodingWorkflowStateSnapshot({
+        workflow: cloudflareLiveReadback.codingWorkflow,
+        versions: cloudflareLiveReadback.codingWorkflowVersions,
+      });
+    } catch {
+      invalid();
+    }
+  }
   const startedAt = now();
   if (!Number.isSafeInteger(startedAt) || startedAt < 1) invalid();
   const owner = await validateAliceOwnerAuthorization(ownerAuthorization, {
