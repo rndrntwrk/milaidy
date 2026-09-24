@@ -19,6 +19,7 @@ import {
 } from "./runtime-config";
 import { verifyAccessJwt, verifyAccessServiceJwt } from "./access";
 import { validateAliceOwnerOrigin } from "./owner-origin";
+import { aliceCodingArgumentHash, parseAliceCodingRequest } from "./coding-task";
 import { authorityDurableName } from "./durable-names";
 import type { ActionIntent, ModelBudgetRequest, ReleaseBinding } from "./policy";
 import {
@@ -778,8 +779,21 @@ async function handleOwnerApi(
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return jsonResponse({ ok: false, code: "WEBAUTHN_REQUEST_INVALID" }, 400);
     }
+    let approvalBinding: Record<string, unknown> = {};
+    if (webauthnRoute === "/webauthn/approve/options") {
+      try {
+        const coding = parseAliceCodingRequest((body as Record<string, unknown>).request);
+        approvalBinding = {
+          target: coding.repository,
+          argumentHash: await aliceCodingArgumentHash(coding),
+        };
+      } catch {
+        return jsonResponse({ ok: false, code: "CODING_REQUEST_INVALID" }, 400);
+      }
+    }
     const { response, value } = await callDurable(authority, webauthnRoute, {
       ...body,
+      ...approvalBinding,
       actor,
     });
     return jsonResponse(value, response.status);
