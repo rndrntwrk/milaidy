@@ -20,11 +20,13 @@ import {
 import { verifyAccessJwt, verifyAccessServiceJwt } from "./access";
 import { validateAliceOwnerOrigin } from "./owner-origin";
 import {
+  aliceCodingAction,
   aliceCodingArgumentHash,
   parseAliceCodingRequest,
   prepareAliceCodingTask,
 } from "./coding-task";
 import { codingPageResponse } from "./coding-page";
+import { aliceCodingResultSha256, signAliceCodingPublish } from "./coding-publish-signature";
 import { authorityDurableName } from "./durable-names";
 import type { ActionIntent, CapabilityGrant, ModelBudgetRequest, ReleaseBinding } from "./policy";
 import {
@@ -793,6 +795,7 @@ async function handleOwnerApi(
         approvalBinding = {
           target: coding.repository,
           argumentHash: await aliceCodingArgumentHash(coding),
+          scope: aliceCodingAction(coding),
         };
       } catch {
         return jsonResponse({ ok: false, code: "CODING_REQUEST_INVALID" }, 400);
@@ -1173,7 +1176,8 @@ async function handleWorkQueueMessage(
           record,
         };
       }
-      if (operation.action === "coding.patch.sandbox" && item.coding) {
+      if ((operation.action === "coding.patch.sandbox" ||
+        operation.action === "coding.pr.create") && item.coding) {
         const response = await env.ALICE_CODING_SANDBOX.fetch(
           new Request("https://alice-coding.internal/internal/v1/coding/execute", {
             method: "POST",
@@ -1201,7 +1205,45 @@ async function handleWorkQueueMessage(
           !value.result || typeof value.result !== "object") {
           throw new Error("CODING_SANDBOX_UNAVAILABLE");
         }
-        return value.result as Record<string, unknown>;
+        if (operation.action === "coding.patch.sandbox") {
+          return value.result as Record<string, unknown>;
+        }
+        const generated = value.result as Record<string, unknown>;
+        if (typeof generated.summary !== "string" ||
+          !Array.isArray(generated.changes)) throw new Error("CODING_RESULT_INVALID");
+        const result = { summary: generated.summary, changes: generated.changes };
+        const publish = {
+          schemaVersion: "alice.coding-publish.v1",
+          taskId: item.planId,
+          actor,
+          admission: item.admission,
+          intent: operation,
+          coding: item.coding,
+          branch: `alice/${item.planId}`,
+          requestedAt: item.enqueuedAt,
+          resultSha256: await aliceCodingResultSha256(result),
+          result,
+        };
+        const body = JSON.stringify(publish);
+        const published = await env.ALICE_RUNTIME_HOST.fetch(new Request(
+          "https://alice-runtime-host.internal/internal/v1/coding/publish", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-alice-coding-signature": await signAliceCodingPublish(
+                body, env.ALICE_CODING_PUBLISH_TOKEN,
+              ),
+            },
+            body,
+          },
+        ));
+        const publication = await published.json() as Record<string, unknown>;
+        if (!published.ok || publication.ok !== true ||
+          !publication.result || typeof publication.result !== "object") {
+          throw new Error(typeof publication.code === "string" ? publication.code :
+            "CODING_PUBLISH_UNAVAILABLE");
+        }
+        return { ...(publication.result as Record<string, unknown>), summary: generated.summary };
       }
       throw new Error("WORK_OPERATION_UNSUPPORTED");
     },

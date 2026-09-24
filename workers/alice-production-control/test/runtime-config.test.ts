@@ -137,7 +137,7 @@ async function fixture(modelDailyBudgetUnits = 10_000, coding = false) {
         "draft.create",
         "runtime.health",
       ],
-      capabilityActions: ["sandbox.execute", "coding.patch.sandbox"],
+      capabilityActions: ["sandbox.execute", "coding.patch.sandbox", "coding.pr.create"],
       disabledActions: [
         "social.post",
         "social.message",

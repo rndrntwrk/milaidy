@@ -1036,6 +1036,17 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       }
       testId="chat-widget-orchestrator"
     >
+      {typeof window !== "undefined" &&
+      window.location.hostname === "alice.rndrntwrk.com" ? (
+        <a
+          href="/control/coding"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-2 block rounded-md border border-border/50 px-2 py-1.5 text-[11px] text-txt hover:border-accent/50"
+        >
+          Start an Alice repository task · approve with your passkey
+        </a>
+      ) : null}
       <div className="mb-2">
         <input
           value={search}

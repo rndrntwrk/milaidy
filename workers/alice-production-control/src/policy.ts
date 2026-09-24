@@ -65,6 +65,7 @@ const LOW_RISK_ACTIONS = new Set([
   "runtime.health",
   "sandbox.execute",
   "coding.patch.sandbox",
+  "coding.pr.create",
   "model.inference",
 ]);
 
@@ -79,6 +80,7 @@ export const ALICE_AUTONOMOUS_ACTIONS = Object.freeze([
 export const ALICE_CAPABILITY_ACTIONS = Object.freeze([
   "sandbox.execute",
   "coding.patch.sandbox",
+  "coding.pr.create",
 ]);
 
 const DISABLED_ACTIONS = new Set(ALICE_DISABLED_ACTIONS);
@@ -133,7 +135,8 @@ export function authorizeIntent(
     return { allowed: false, code: "PAUSED_RELEASE", risk };
   }
   if (
-    (intent.action === "sandbox.execute" || intent.action === "coding.patch.sandbox") &&
+    (intent.action === "sandbox.execute" || intent.action === "coding.patch.sandbox" ||
+      intent.action === "coding.pr.create") &&
     context.pausedScopes.includes("coding")
   ) {
     return { allowed: false, code: "PAUSED_CODING", risk };

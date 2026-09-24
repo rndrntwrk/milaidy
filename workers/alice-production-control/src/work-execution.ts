@@ -161,6 +161,8 @@ export function buildAlicePlanExecutionRecords(
 
 const IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
+// /v1/state rejects the entire serialized records.atomic request above this size.
+const MAX_STATE_OPERATION_BYTES = 65_536;
 const WORK_ACTION_SCOPE = new Map<string, string | null>([
   ["research.read", "model"],
   ["research.retrieve", "model"],
@@ -169,6 +171,7 @@ const WORK_ACTION_SCOPE = new Map<string, string | null>([
   ["runtime.health", null],
   ["sandbox.execute", "coding"],
   ["coding.patch.sandbox", "coding"],
+  ["coding.pr.create", "coding"],
 ]);
 
 function exactObject(value: unknown, keys: string[]): value is Record<string, unknown> {
@@ -204,7 +207,9 @@ function validateWorkItem(value: unknown): AliceWorkItem {
   const candidate = value as Record<string, unknown> | null;
   const codingAction =
     candidate?.intent !== null && typeof candidate?.intent === "object" &&
-    (candidate.intent as Record<string, unknown>).action === "coding.patch.sandbox";
+    ["coding.patch.sandbox", "coding.pr.create"].includes(
+      String((candidate.intent as Record<string, unknown>).action),
+    );
   if (
     !exactObject(value, [
       "actor", "admission", "approvalId", "enqueuedAt", "intent", "planId",
@@ -493,7 +498,8 @@ export async function processAliceWork(
     }
     let result: Record<string, unknown>;
     try {
-      if (item.intent.action === "coding.patch.sandbox" &&
+      if ((item.intent.action === "coding.patch.sandbox" ||
+        item.intent.action === "coding.pr.create") &&
         (!item.coding ||
           await aliceCodingArgumentHash(item.coding) !== item.intent.argumentHash ||
           item.coding.repository !== item.intent.target)) {
@@ -504,12 +510,17 @@ export async function processAliceWork(
       if (error instanceof Error &&
         ["WORK_OPERATION_UNSUPPORTED", "CODING_TASK_FAILED", "CAPABILITY_REVOKED",
           "CAPABILITY_EXPIRED", "INTENT_EXPIRED", "PAUSED_ALL", "PAUSED_RELEASE",
-          "PAUSED_CODING", "RELEASE_ADMISSION_CHANGED"].includes(error.message)) {
+          "PAUSED_CODING", "RELEASE_ADMISSION_CHANGED", "CODING_BASE_MOVED",
+          "CODING_BRANCH_CONFLICT", "CODING_EMPTY_PATCH", "CODING_RESULT_INVALID",
+          "CODING_CHANGE_SET_TOO_LARGE", "CODING_CHANGE_LIST_INVALID",
+          "CODING_PUBLISH_REQUEST_INVALID", "CODING_PUBLISH_AUTH_DENIED",
+          "CODING_REPOSITORY_UNAVAILABLE"].includes(error.message)) {
         return await terminalFailure(item, attempt, error.message, deps);
       }
       throw error;
     }
-    if (item.intent.action === "coding.patch.sandbox") {
+    if (item.intent.action === "coding.patch.sandbox" ||
+      item.intent.action === "coding.pr.create") {
       const finalReleaseCode = releaseGateCode(item, await deps.checkRelease());
       if (finalReleaseCode) return await terminalFailure(item, attempt, finalReleaseCode, deps);
       const finalAuthorization = await deps.checkAuthorization(item.intent, item.actor);
@@ -523,7 +534,7 @@ export async function processAliceWork(
       }
     }
     const completedAt = deps.now();
-    await deps.applyAtomic({
+    const completion = {
       operationId: boundedIdentifier("work-completed-", item.workId),
       records: executionRecords(
         item,
@@ -533,7 +544,13 @@ export async function processAliceWork(
         "WORK_COMPLETED",
         result,
       ),
-    });
+    };
+    if (item.intent.action === "coding.patch.sandbox" &&
+      new TextEncoder().encode(JSON.stringify({ operation: "records.atomic", ...completion })).byteLength >
+        MAX_STATE_OPERATION_BYTES) {
+      return await terminalFailure(item, attempt, "CODING_RESULT_TOO_LARGE", deps);
+    }
+    await deps.applyAtomic(completion);
     await deps.emitEvidence(executionEvidence(
       item,
       attempt,

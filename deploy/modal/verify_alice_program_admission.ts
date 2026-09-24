@@ -31,6 +31,7 @@ type RouteSecretSource = {
   OPENAI_API_KEY: string;
   ALICE_DEPLOYMENT_PAUSE_TOKEN: string;
   ALICE_STATE_PLANE_SERVICE_TOKEN?: string;
+  ALICE_CODING_PUBLISH_TOKEN?: string;
   ALICE_EVIDENCE_QUEUE_HMAC_KEY: string;
   MILADY_API_TOKEN: string;
   ELIZA_VAULT_PASSPHRASE: string;
@@ -103,6 +104,7 @@ export function verifyAliceProtectedAdmissionSecretClosure(
     secrets?.ALICE_MODAL_PROXY_SECRET,
     secrets?.ALICE_DEPLOYMENT_PAUSE_TOKEN,
     secrets?.ALICE_STATE_PLANE_SERVICE_TOKEN,
+    secrets?.ALICE_CODING_PUBLISH_TOKEN,
     secrets?.MILADY_API_TOKEN,
     secrets?.ELIZA_VAULT_PASSPHRASE,
   ];
@@ -143,7 +145,8 @@ export function verifyAliceRouteSecretClosure(
     "ALICE_ELIZA_COMMIT",
     "ALICE_RUNTIME_REVISION",
     ...(codingMode
-      ? ["ALICE_GITHUB_APP_ID", "ALICE_GITHUB_APP_PRIVATE_KEY_B64"]
+      ? ["ALICE_GITHUB_APP_ID", "ALICE_GITHUB_APP_PRIVATE_KEY_B64",
+          "ALICE_CODING_PUBLISH_TOKEN"]
       : []),
   ];
   const distinctSecrets = [
@@ -159,6 +162,7 @@ export function verifyAliceRouteSecretClosure(
     secrets.MILADY_API_TOKEN,
     secrets.ELIZA_VAULT_PASSPHRASE,
     ...(containerMode ? [secrets.ALICE_STATE_PLANE_SERVICE_TOKEN] : []),
+    ...(codingMode ? [secrets.ALICE_CODING_PUBLISH_TOKEN] : []),
   ];
   if (
     !configs ||
@@ -191,6 +195,7 @@ export function verifyAliceRouteSecretClosure(
       "ALICE_DEPLOYMENT_PAUSE_TOKEN",
       "ALICE_EVIDENCE_QUEUE_HMAC_KEY",
       "ALICE_STATE_PLANE_SERVICE_TOKEN",
+      ...(codingMode ? ["ALICE_CODING_PUBLISH_TOKEN"] : []),
     ]) ||
     !exactRequiredSecrets(configs.aiGateway, [
       "ALICE_AI_CONTROL_SERVICE_TOKEN",
@@ -213,6 +218,7 @@ export function verifyAliceRouteSecretClosure(
     !secureValue(secrets.MILADY_API_TOKEN) ||
     !secureValue(secrets.ELIZA_VAULT_PASSPHRASE) ||
     (containerMode && !secureValue(secrets.ALICE_STATE_PLANE_SERVICE_TOKEN)) ||
+    (codingMode && !secureValue(secrets.ALICE_CODING_PUBLISH_TOKEN)) ||
     (containerMode &&
       (!COMMIT.test(secrets.ALICE_SOURCE_COMMIT ?? "") ||
         !COMMIT.test(

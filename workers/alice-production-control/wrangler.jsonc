@@ -41,6 +41,7 @@
       ,"ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN"
       ,"ALICE_EVIDENCE_QUEUE_HMAC_KEY"
       ,"ALICE_STATE_PLANE_SERVICE_TOKEN"
+      ,"ALICE_CODING_PUBLISH_TOKEN"
     ]
   },
   "durable_objects": {
@@ -88,6 +89,10 @@
     {
       "binding": "ALICE_CODING_SANDBOX",
       "service": "alice-coding-sandbox"
+    },
+    {
+      "binding": "ALICE_RUNTIME_HOST",
+      "service": "alice-runtime-container-host"
     }
   ],
   "queues": {

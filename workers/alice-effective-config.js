@@ -372,8 +372,13 @@ export function buildAliceCodingRuntimeHostEffectiveConfig(inputs) {
     schemaVersion: "alice.container-runtime-host-effective-config.v2",
     bindings: {
       ...base.bindings,
+      durableObjects: [{
+        binding: "ALICE_AUTHORITY", className: "AliceAuthority",
+        scriptName: ALICE_CLOUDFLARE_TARGET.controlWorker,
+      }, ...base.bindings.durableObjects],
       secretNames: [...base.bindings.secretNames,
-        "ALICE_GITHUB_APP_ID", "ALICE_GITHUB_APP_PRIVATE_KEY_B64"].sort(),
+        "ALICE_GITHUB_APP_ID", "ALICE_GITHUB_APP_PRIVATE_KEY_B64",
+        "ALICE_CODING_PUBLISH_TOKEN"].sort(),
     },
   };
 }
@@ -549,7 +554,11 @@ export function buildAliceCodingControlEffectiveConfig(inputs) {
       services: [...base.bindings.services, {
         binding: "ALICE_CODING_SANDBOX",
         service: ALICE_CODING_TARGET.codingSandboxWorker,
+      }, {
+        binding: "ALICE_RUNTIME_HOST",
+        service: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker,
       }],
+      secretNames: [...base.bindings.secretNames, "ALICE_CODING_PUBLISH_TOKEN"].sort(),
     },
   };
 }

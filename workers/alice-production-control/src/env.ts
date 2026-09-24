@@ -12,6 +12,8 @@ export interface AliceWorkerEnv extends AliceRuntimeConfigSource {
   ALICE_WORK_QUEUE: Queue<AliceWorkQueueEnvelope>;
   ALICE_STATE_PLANE: Fetcher;
   ALICE_CODING_SANDBOX: Fetcher;
+  ALICE_RUNTIME_HOST: Fetcher;
+  ALICE_CODING_PUBLISH_TOKEN: string;
   ALICE_STATE_PLANE_SERVICE_TOKEN: string;
   ALICE_EVIDENCE_QUEUE_HMAC_KEY: string;
   ALICE_EVIDENCE: R2Bucket;
