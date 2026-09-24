@@ -32,6 +32,13 @@ test("rejects mixed versions, changed settings and a different image before rest
   expect(() => planAliceQualifiedRestoration(otherImage)).toThrow("CONTAINER_STATE_DRIFTED");
 });
 
+test("does not reaccept a coding release after its new Worker was removed by rollback", () => {
+  const data = fixture();
+  data.anchor.previous.workers.codingSandbox = { worker: "alice-coding-sandbox", absent: true };
+  data.candidate.workers.codingSandbox = { versionId: "candidate-codingSandbox" };
+  expect(() => planAliceQualifiedRestoration(data)).toThrow("CODING_RELEASE_UNSUPPORTED");
+});
+
 test("requires an exact artifact and owner pause selection", () => {
   const value = { runId: "34031795256", artifactDigest: `sha256:${"a".repeat(64)}`,
     anchorDigest: `sha256:${"b".repeat(64)}`, ownerPauseId: "pause-exact-failed-acceptance" };

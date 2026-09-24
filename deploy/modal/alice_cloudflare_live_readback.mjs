@@ -4,9 +4,11 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  ALICE_CODING_TARGET,
   ALICE_CLOUDFLARE_TARGET,
   canonicalAliceJson,
 } from "../../workers/alice-effective-config.js";
+import { verifyAliceDeploymentManifest } from "./alice_deployment_manifest.mjs";
 import {
   aliceEffectiveConfigFromWrangler,
 } from "./alice_cloudflare_config.mjs";
@@ -37,6 +39,8 @@ const ROLES = [
   "connectorPlane",
   "runtimeHost",
 ];
+const codingRoles = (codingMode) => codingMode
+  ? [...ROLES, "codingSandbox"] : ROLES;
 const RUNTIME_HOST_WORKER = ALICE_CLOUDFLARE_TARGET.runtimeHostWorker;
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -236,9 +240,36 @@ function expectedWorkerName(role) {
     statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
     connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
     runtimeHost: RUNTIME_HOST_WORKER,
+    codingSandbox: ALICE_CODING_TARGET.codingSandboxWorker,
   }[role];
   if (typeof target !== "string" || target.length === 0) readbackInvalid();
   return target;
+}
+
+function codingNamespaceIds(config, namespaceList, controlIds) {
+  if (config?.name !== ALICE_CODING_TARGET.codingSandboxWorker ||
+      !Array.isArray(namespaceList) || !Array.isArray(controlIds)) {
+    readbackInvalid();
+  }
+  return (config.durable_objects?.bindings ?? []).map((binding) => {
+    const scriptName = binding.script_name ?? null;
+    const matching = scriptName === ALICE_CLOUDFLARE_TARGET.controlWorker
+      ? controlIds.filter((item) => item.name === binding.name &&
+          item.className === binding.class_name && item.scriptName === null)
+      : namespaceList.filter((item) =>
+          item.script === ALICE_CODING_TARGET.codingSandboxWorker &&
+          item.class === binding.class_name && item.use_sqlite === true);
+    if (matching.length !== 1) readbackInvalid();
+    const namespaceId = scriptName === ALICE_CLOUDFLARE_TARGET.controlWorker
+      ? matching[0].namespaceId : matching[0].id;
+    if (!/^[a-f0-9]{32}$/.test(namespaceId ?? "")) readbackInvalid();
+    return {
+      className: binding.class_name,
+      name: binding.name,
+      namespaceId,
+      scriptName,
+    };
+  });
 }
 
 export async function fetchAliceRuntimeHostContainerState({
@@ -820,6 +851,12 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
   verifyWorker = verifyAliceWorkerProviderReadback,
   now = Date.now,
 }) {
+  let codingMode = false;
+  try {
+    codingMode = JSON.parse(serializedManifest)?.schemaVersion ===
+      "alice.deployment-manifest.v4";
+  } catch { /* The provider verifier rejects malformed manifests. */ }
+  const roles = codingRoles(codingMode);
   if (
     !validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl }) ||
     !materializedWranglerConfigs ||
@@ -920,9 +957,15 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       accountId,
       baseUrl,
     });
+    const codingIds = codingMode ? codingNamespaceIds(
+      materializedWranglerConfigs.codingSandbox,
+      await apiGetAllResults(client,
+        `/accounts/${accountId}/workers/durable_objects/namespaces`),
+      expectedDurableObjectNamespaceIds.control,
+    ) : null;
     const workers = {};
     const workerTerminalAnchors = {};
-    for (const role of ROLES) {
+    for (const role of roles) {
       const config = materializedWranglerConfigs[role];
       const expectedEffectiveConfig = expectedEffectiveConfigs[role];
       if (!config || config.name !== expectedWorkerName(role)) {
@@ -998,8 +1041,8 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         serializedManifest,
         deployedMainModule,
         deploymentMainPath: config.main,
-        expectedDurableObjectNamespaceIds:
-          expectedDurableObjectNamespaceIds[role],
+        expectedDurableObjectNamespaceIds: role === "codingSandbox"
+          ? codingIds : expectedDurableObjectNamespaceIds[role],
       });
       workerTerminalAnchors[role] = {
         deployment: deploymentAfterContent,
@@ -1097,7 +1140,13 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
     ) {
       readbackInvalid();
     }
-    for (const role of ROLES) {
+    if (codingMode && !canonicalEqual(codingIds, codingNamespaceIds(
+      materializedWranglerConfigs.codingSandbox,
+      await apiGetAllResults(client,
+        `/accounts/${accountId}/workers/durable_objects/namespaces`),
+      expectedDurableObjectNamespaceIds.control,
+    ))) readbackInvalid();
+    for (const role of roles) {
       const config = materializedWranglerConfigs[role];
       const workerRoot = `/accounts/${accountId}/workers/scripts/${config.name}`;
       const terminalDeployment = latestDeployment(
@@ -1182,8 +1231,12 @@ if (invokedPath === import.meta.url) {
     ) {
       readbackInvalid();
     }
+    const codingMode = verifyAliceDeploymentManifest(
+      fs.readFileSync(manifestPath, "utf8"),
+    ).schemaVersion === "alice.deployment-manifest.v4";
+    const roles = codingRoles(codingMode);
     const materializedWranglerConfigs = Object.fromEntries(
-      ROLES.map((role) => [
+      roles.map((role) => [
         role,
         JSON.parse(
           fs.readFileSync(path.join(configDir, `${role}.wrangler.json`), "utf8"),
@@ -1191,7 +1244,7 @@ if (invokedPath === import.meta.url) {
       ]),
     );
     const expectedEffectiveConfigs = Object.fromEntries(
-      ROLES.map((role) => [
+      roles.map((role) => [
         role,
         aliceEffectiveConfigFromWrangler(
           role,

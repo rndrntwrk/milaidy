@@ -368,6 +368,7 @@ function validateProviderRollbackForward(
   cloudflareLive: Record<string, any>,
   providerPromotion: Record<string, any>,
   expected: any,
+  codingMode = false,
 ) {
   const containerMode = Object.hasOwn(expected.release, "runtimeRevision");
   const modalPromotion = containerMode ? null : providerPromotion;
@@ -389,6 +390,7 @@ function validateProviderRollbackForward(
       "aiGateway",
       "statePlane",
       "connectorPlane",
+      ...(codingMode ? ["codingSandbox"] : []),
     ].every((role) =>
       object(cloudflareLive.workers[role])) ||
     (!containerMode &&
@@ -564,6 +566,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       ? ![
           "alice.deployment-manifest.v2",
           "alice.deployment-manifest.v3",
+          "alice.deployment-manifest.v4",
         ].includes(manifest.schemaVersion)
       : manifest.schemaVersion !== "alice.deployment-manifest.v1") ||
     manifest.source.sourceCommit !== expected.release.sourceCommit ||
@@ -583,7 +586,10 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     deploymentPauseEvidence.result?.edgeReadinessConfirmed !== true ||
     !object(deploymentPauseEvidence.active) ||
     !object(deploymentPauseEvidence.result?.pause) ||
-    rollbackAnchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v7"
+    rollbackAnchor.schemaVersion !==
+      (manifest.schemaVersion === "alice.deployment-manifest.v4"
+        ? "alice.cloudflare-rollback-anchor.v8"
+        : "alice.cloudflare-rollback-anchor.v7")
   ) invalid();
 
   const manifestBytes = `${canonicalAliceJson(manifest)}\n`;
@@ -595,6 +601,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     cloudflareLiveReadback,
     providerPromotionEvidence,
     expected,
+    manifest.schemaVersion === "alice.deployment-manifest.v4",
   );
   const workflowId = cloudflareLiveReadback.provider?.continuityConfig?.workflow?.id;
   const workflowVersion = resolveAliceCandidateWorkflowVersion({

@@ -41,6 +41,7 @@ const ROLES = [
   "statePlane",
   "connectorPlane",
   "runtimeHost",
+  "codingSandbox",
 ];
 
 function mismatch() {
@@ -788,6 +789,7 @@ export async function verifyAliceWorkerProviderReadback({
     statePlane: "statePlaneWorkerBundleSha256",
     connectorPlane: "connectorPlaneWorkerBundleSha256",
     runtimeHost: "runtimeHostWorkerBundleSha256",
+    codingSandbox: "codingSandboxWorkerBundleSha256",
   }[role];
   if (
     (typeof deployedMainModule !== "string" &&

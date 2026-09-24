@@ -11,8 +11,8 @@ import {
   verifyAliceWorkerBundleArtifact,
 } from '../deploy/modal/alice_worker_bundle_artifact.mjs';
 
-// Control and both container host Workers may change. Compile all six to prove
-// shared-source changes preserve the other three Workers and migrations.
+// Control and both container host Workers may change. Recompile every role to
+// prove shared-source changes preserve the remaining signed bytes and migrations.
 export function buildAliceHostWorkerArtifact({
   sourceRoot, sourceCommit, deploymentControllerCommit, baseRoot, outputRoot,
   wranglerBin,
@@ -38,7 +38,10 @@ export function buildAliceHostWorkerArtifact({
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(path.join(baseRoot, member.path), destination, fs.constants.COPYFILE_EXCL);
   }
-  for (const role of ['aiGateway', 'statePlane', 'connectorPlane']) {
+  const stableRoles = Object.hasOwn(base.bundles, 'codingSandbox')
+    ? ['aiGateway', 'statePlane', 'connectorPlane', 'codingSandbox']
+    : ['aiGateway', 'statePlane', 'connectorPlane'];
+  for (const role of stableRoles) {
     const relative = `${base.bundles[role].path}.map`;
     const sourceMap = path.join(baseRoot, relative);
     if (!fs.existsSync(sourceMap)) continue;
@@ -53,6 +56,9 @@ export function buildAliceHostWorkerArtifact({
     ['aiGateway', 'alice-ai-gateway/wrangler.jsonc', 'index.js'],
     ['statePlane', 'alice-state-plane/wrangler.jsonc', 'index.js'],
     ['connectorPlane', 'alice-connector-plane/wrangler.jsonc', 'index.js'],
+    ...(Object.hasOwn(base.bundles, 'codingSandbox')
+      ? [['codingSandbox', 'alice-coding-sandbox/wrangler.jsonc', 'index.js']]
+      : []),
   ]) {
     const destination = path.join(outputRoot, base.bundles[role].path);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
@@ -63,9 +69,10 @@ export function buildAliceHostWorkerArtifact({
     fs.renameSync(path.join(path.dirname(destination), emittedName), destination);
   }
   const artifact = buildAliceWorkerBundleArtifact({
-    root: outputRoot, sourceCommit: deploymentControllerCommit, wranglerVersion: '4.122.0',
+    root: outputRoot, sourceCommit: deploymentControllerCommit,
+    wranglerVersion: '4.122.0', schemaVersion: base.schemaVersion,
   });
-  if (['aiGateway', 'statePlane', 'connectorPlane'].some(role =>
+  if (stableRoles.some(role =>
     artifact.bundles[role].sha256 !== base.bundles[role].sha256) ||
     JSON.stringify(artifact.migrations) !== JSON.stringify(base.migrations)) {
     throw new Error('ALICE_HOST_WORKER_BASE_DRIFT');
@@ -81,6 +88,9 @@ export function buildAliceHostWorkerArtifact({
       ['connectorPlane', 'alice-connector-plane/wrangler.jsonc'],
       ['runtimeHost', 'alice-access-gateway/wrangler.runtime-host.jsonc'],
       ['access', 'alice-access-gateway/wrangler.jsonc'],
+      ...(Object.hasOwn(base.bundles, 'codingSandbox')
+        ? [['codingSandbox', 'alice-coding-sandbox/wrangler.jsonc']]
+        : []),
     ]) {
       const signedBundlePath = path.join(outputRoot, artifact.bundles[role].path);
       const outdir = path.join(dryRunRoot, role);

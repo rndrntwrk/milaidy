@@ -13,9 +13,12 @@ import {
   buildAliceAiGatewayEffectiveConfig,
   buildAliceContainerAccessEffectiveConfig,
   buildAliceRuntimeHostEffectiveConfig,
+  buildAliceCodingRuntimeHostEffectiveConfig,
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceCodingControlEffectiveConfig,
+  buildAliceCodingSandboxEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
   digestAliceEffectiveConfig,
   encodeAliceDeploymentManifest,
@@ -266,6 +269,48 @@ test("builds a v3 Container manifest with a distinct runtime-host config and bun
     priorV2,
     "prior Container manifests remain readable without retroactive host fields",
   );
+});
+
+test("v4 binds the coding Sandbox Worker", async () => {
+  const { modalRevision: _modalRevision, ...common } = valid;
+  const codingArtifact = aliceTestVerifiedWorkerBundleArtifact({
+    sourceCommit: valid.deploymentControllerCommit,
+    codingSandbox: true,
+  });
+  const codingInputs = {
+    ...common,
+    accessEffectiveConfig: containerAccessEffectiveConfig,
+    runtimeHostEffectiveConfig: buildAliceCodingRuntimeHostEffectiveConfig({
+      runtimeImage: containerAccessEffectiveConfig.values.runtimeImage,
+    }),
+    controlEffectiveConfig: buildAliceCodingControlEffectiveConfig({
+      accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+      accessAudience,
+      ownerEmailSha256: accessPolicyReadback.ownerEmailSha256,
+      modelDailyBudgetUnits: 10_000,
+      runtimeRevision: 49,
+      releaseAccessAudience: "alice-release-controller-audience",
+      releaseServiceTokenIdSha256: "R".repeat(43),
+    }),
+    codingSandboxEffectiveConfig: buildAliceCodingSandboxEffectiveConfig(),
+    workerBundleArtifact: codingArtifact,
+    runtimeImage: containerAccessEffectiveConfig.values.runtimeImage,
+    runtimeRevision: 49,
+    rollbackBoundary: "container:alice-runtime:v49",
+  };
+  const manifest = await buildAliceDeploymentManifest(codingInputs);
+  assert.equal(manifest.schemaVersion, "alice.deployment-manifest.v4");
+  assert.equal(manifest.cloudflare.codingSandboxWorker, "alice-coding-sandbox");
+  assert.equal(manifest.cloudflare.codingSandboxWorkerBundleSha256,
+    codingArtifact.bundles.codingSandbox.sha256);
+  const bytes = serializeAliceDeploymentManifest(manifest);
+  assert.deepEqual(verifyAliceDeploymentManifest(bytes), manifest);
+  await verifyAliceEffectiveConfigBinding({
+    encodedManifest: encodeAliceDeploymentManifest(bytes),
+    expectedManifestSha256: digestAliceDeploymentManifest(bytes),
+    role: "codingSandbox",
+    effectiveConfig: codingInputs.codingSandboxEffectiveConfig,
+  });
 });
 
 test("rejects substituted targets, ambiguous bytes, and self-referential fields", async () => {

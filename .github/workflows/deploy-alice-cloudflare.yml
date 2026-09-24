@@ -635,6 +635,7 @@ jobs:
             "${RUNNER_TEMP}/alice-worker-bundles/alice-ai-gateway/index.js" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/index.js" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-connector-plane/index.js" \
+            "${RUNNER_TEMP}/alice-worker-bundles/alice-coding-sandbox/index.js" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-runtime-container-host/index.js" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/migrations/0001_alice_state.sql" \
             "${RUNNER_TEMP}/alice-worker-bundles/alice-state-plane/migrations/0002_execution_records.sql" \
@@ -992,6 +993,7 @@ jobs:
           NODE
       - name: Materialize signed manifest and exact-byte Worker configs
         env:
+          ALICE_WORKER_BUNDLE_SCHEMA_VERSION: alice.worker-bundle-artifact.v4
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
           ALICE_SOURCE_ROOT: ${{ github.workspace }}
@@ -1032,6 +1034,8 @@ jobs:
             "${RUNNER_TEMP}/alice-release/wrangler/connectorPlane.wrangler.json" >/dev/null
           jq -e '.workers_dev == false and .preview_urls == false and .routes == []' \
             "${RUNNER_TEMP}/alice-release/wrangler/runtimeHost.wrangler.json" >/dev/null
+          jq -e '.workers_dev == false and .preview_urls == false and .routes == []' \
+            "${RUNNER_TEMP}/alice-release/wrangler/codingSandbox.wrangler.json" >/dev/null
           manifest="${RUNNER_TEMP}/alice-release/alice-deployment-manifest.json"
           provider="${RUNNER_TEMP}/alice-release/provider-readback.json"
           preimport_manifest="${PREIMPORT_ROOT}/alice-deployment-manifest.json"
@@ -1202,6 +1206,8 @@ jobs:
           ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token-sha256
           ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-release/.alice-evidence-queue-hmac-key
           ALICE_CLOUDFLARE_RELEASE_PHASE: prepare
+          ALICE_GITHUB_APP_ID: ${{ secrets.ALICE_GITHUB_APP_ID }}
+          ALICE_GITHUB_APP_PRIVATE_KEY_B64: ${{ secrets.ALICE_GITHUB_APP_PRIVATE_KEY_B64 }}
           ALICE_CONNECTOR_SERVICE_TOKEN: ${{ secrets.ALICE_CONNECTOR_SERVICE_TOKEN }}
           ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN: ${{ secrets.ALICE_CONTROL_CONNECTOR_SERVICE_TOKEN }}
           ALICE_DEPLOYMENT_PAUSE_TOKEN: ${{ secrets.ALICE_DEPLOYMENT_PAUSE_TOKEN }}
@@ -1665,6 +1671,12 @@ jobs:
             test -s "$recovery_root/alice-worker-bundles/$worker/index.js"
             test ! -L "$recovery_root/alice-worker-bundles/$worker/index.js"
           done
+          if jq -e '.schemaVersion == "alice.deployment-manifest.v4"' \
+            "$recovery_root/alice-release/alice-deployment-manifest.json" >/dev/null
+          then
+            test -s "$recovery_root/alice-worker-bundles/alice-coding-sandbox/index.js"
+            test ! -L "$recovery_root/alice-worker-bundles/alice-coding-sandbox/index.js"
+          fi
           for migration in \
             0001_alice_state.sql \
             0002_execution_records.sql \

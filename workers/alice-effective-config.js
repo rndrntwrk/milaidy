@@ -28,6 +28,10 @@ export const ALICE_CLOUDFLARE_TARGET = Object.freeze({
   workQueue: "alice-production-work-v1",
   workDlq: "alice-production-work-dlq-v1",
 });
+export const ALICE_CODING_TARGET = Object.freeze({
+  codingSandboxWorker: "alice-coding-sandbox",
+  codingWorkflow: "alice-production-coding",
+});
 
 export const ALICE_AI_CHAT_MODELS = Object.freeze({
   "workers-ai/@cf/openai/gpt-oss-20b": "@cf/openai/gpt-oss-20b",
@@ -360,6 +364,19 @@ export function buildAliceRuntimeHostEffectiveConfig(inputs) {
   };
 }
 
+export function buildAliceCodingRuntimeHostEffectiveConfig(inputs) {
+  const base = buildAliceRuntimeHostEffectiveConfig(inputs);
+  return {
+    ...base,
+    schemaVersion: "alice.container-runtime-host-effective-config.v2",
+    bindings: {
+      ...base.bindings,
+      secretNames: [...base.bindings.secretNames,
+        "ALICE_GITHUB_APP_ID", "ALICE_GITHUB_APP_PRIVATE_KEY_B64"].sort(),
+    },
+  };
+}
+
 export function buildAliceControlEffectiveConfig(inputs) {
   if (
     !validateOwnerInputs(inputs, [
@@ -512,6 +529,57 @@ export function buildAliceContainerControlEffectiveConfig(inputs) {
     ...legacy,
     schemaVersion: "alice.container-control-effective-config.v1",
     values: { ...values, runtimeRevision },
+  };
+}
+
+export function buildAliceCodingControlEffectiveConfig(inputs) {
+  const base = buildAliceContainerControlEffectiveConfig(inputs);
+  return {
+    ...base,
+    schemaVersion: "alice.container-control-effective-config.v2",
+    bindings: {
+      ...base.bindings,
+      workflows: [...base.bindings.workflows, {
+        binding: "ALICE_CODING_WORKFLOW",
+        name: ALICE_CODING_TARGET.codingWorkflow,
+        className: "AliceCodingWorkflow",
+        steps: 8,
+      }],
+      services: [...base.bindings.services, {
+        binding: "ALICE_CODING_SANDBOX",
+        service: ALICE_CODING_TARGET.codingSandboxWorker,
+      }],
+    },
+  };
+}
+
+export function buildAliceCodingSandboxEffectiveConfig() {
+  return {
+    schemaVersion: "alice.coding-sandbox-effective-config.v1",
+    worker: {
+      ...alicePrivatePlaneWorker(ALICE_CODING_TARGET.codingSandboxWorker),
+      compatibilityDate: "2026-08-22",
+    },
+    bindings: {
+      containers: [{
+        className: "AliceCodingSandbox",
+        image: "docker.io/cloudflare/sandbox:0.12.10-opencode@sha256:37d70eb910c3b9d5d71639a14e91571327c343fc8e59bfbc6b54cc5fed5b036c",
+        instanceType: "lite",
+        maxInstances: 4,
+      }],
+      durableObjects: [
+        { name: "ALICE_CODING_SANDBOX", className: "AliceCodingSandbox" },
+        { name: "ALICE_CODING_LEASE", className: "AliceCodingLease" },
+        { name: "ALICE_AUTHORITY", className: "AliceAuthority", scriptName: ALICE_CLOUDFLARE_TARGET.controlWorker },
+      ],
+      migrations: [{
+        tag: "alice-coding-sandbox-v1",
+        newSqliteClasses: ["AliceCodingSandbox", "AliceCodingLease"],
+      }],
+      services: [{ binding: "ALICE_RUNTIME_HOST", service: ALICE_CLOUDFLARE_TARGET.runtimeHostWorker }],
+      secretNames: [],
+    },
+    observability: alicePrivatePlaneObservability(),
   };
 }
 
@@ -704,10 +772,16 @@ function validDeploymentManifest(value) {
   const containerMode = [
     "alice.deployment-manifest.v2",
     "alice.deployment-manifest.v3",
+    "alice.deployment-manifest.v4",
   ].includes(value?.schemaVersion);
   const runtimeHostMode =
-    value?.schemaVersion === "alice.deployment-manifest.v3";
-  const targetEntries = Object.entries(ALICE_CLOUDFLARE_TARGET).filter(
+    ["alice.deployment-manifest.v3", "alice.deployment-manifest.v4"]
+      .includes(value?.schemaVersion);
+  const codingMode = value?.schemaVersion === "alice.deployment-manifest.v4";
+  const targetEntries = Object.entries({
+    ...ALICE_CLOUDFLARE_TARGET,
+    ...(codingMode ? ALICE_CODING_TARGET : {}),
+  }).filter(
     ([key]) => runtimeHostMode || key !== "runtimeHostWorker",
   );
   return (
@@ -733,6 +807,8 @@ function validDeploymentManifest(value) {
       "statePlaneConfigSha256",
       "statePlaneWorkerBundleSha256",
       "vectorizeProviderConfigSha256",
+      ...(codingMode ? ["codingSandboxConfigSha256",
+        "codingSandboxWorkerBundleSha256"] : []),
     ]) &&
     targetEntries.every(
       ([key, expected]) => value.cloudflare[key] === expected,
@@ -751,6 +827,8 @@ function validDeploymentManifest(value) {
     DIGEST.test(value.cloudflare.statePlaneConfigSha256) &&
     DIGEST.test(value.cloudflare.connectorPlaneConfigSha256) &&
     DIGEST.test(value.cloudflare.statePlaneWorkerBundleSha256) &&
+    (!codingMode || (DIGEST.test(value.cloudflare.codingSandboxConfigSha256) &&
+      DIGEST.test(value.cloudflare.codingSandboxWorkerBundleSha256))) &&
     DIGEST.test(value.cloudflare.vectorizeProviderConfigSha256) &&
     DIGEST.test(value.cloudflare.connectorPlaneWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.stateMigrationSetSha256) &&
@@ -835,6 +913,7 @@ export async function verifyAliceEffectiveConfigBinding({
     aiGateway: "aiGatewayConfigSha256",
     statePlane: "statePlaneConfigSha256",
     connectorPlane: "connectorPlaneConfigSha256",
+    codingSandbox: "codingSandboxConfigSha256",
   }[role];
   if (
     !digestField ||

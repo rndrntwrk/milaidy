@@ -327,6 +327,12 @@ jobs:
             test -s "$recovery_root/alice-worker-bundles/$worker/index.js"
             test ! -L "$recovery_root/alice-worker-bundles/$worker/index.js"
           done
+          if jq -e '.schemaVersion == "alice.deployment-manifest.v4"' \
+            "$recovery_root/alice-release/alice-deployment-manifest.json" >/dev/null
+          then
+            test -s "$recovery_root/alice-worker-bundles/alice-coding-sandbox/index.js"
+            test ! -L "$recovery_root/alice-worker-bundles/alice-coding-sandbox/index.js"
+          fi
           for migration in \
             0001_alice_state.sql \
             0002_execution_records.sql \

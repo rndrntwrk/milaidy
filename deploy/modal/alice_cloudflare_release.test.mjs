@@ -172,6 +172,27 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   }
 });
 
+test("v4 stages the coding Sandbox before Control and has no prior version to roll back", () => {
+  const sourceCommit = "a".repeat(40);
+  const roleIds = Object.fromEntries([
+    "access", "runtimeHost", "control", "aiGateway", "statePlane",
+    "connectorPlane", "codingSandbox",
+  ].map((role) => [role, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]));
+  const commands = buildAliceProtectedCloudflareCommands({
+    wranglerBin: "/tools/wrangler",
+    configDir: "/release/config",
+    bundleRoot: "/release/bundles",
+    sourceCommit,
+    releaseRunId: "123456789-2",
+    uploadedVersions: roleIds,
+    rollbackVersions: { ...roleIds, codingSandbox: null },
+    codingMode: true,
+  });
+  assert.equal(commands.uploads[0].role, "codingSandbox");
+  assert.equal(commands.promotions[0].role, "codingSandbox");
+  assert.equal(commands.rollbacks.some((item) => item.role === "codingSandbox"), false);
+});
+
 test("promotes and restores one exact captured Container application target", async () => {
   const previousImage =
     `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"1".repeat(64)}`;
@@ -1212,7 +1233,7 @@ test("the protected command requires attested bundles and terminal live readback
   assert.match(source, /gh[\s\S]*attestation[\s\S]*verify/);
   assert.match(source, /--source-digest/);
   assert.match(source, /alice-cloudflare-container-bringup\.yml/);
-  assert.match(source, /verifyGitHubAttestations\(\{ sourceRoot, deploymentControllerCommit, artifactRoot \}\)/);
+  assert.match(source, /verifyGitHubAttestations\(\{[\s\S]*?sourceRoot, deploymentControllerCommit, artifactRoot, codingMode,[\s\S]*?\}\)/);
   assert.match(source, /fetchAliceCloudflarePostDeploymentReadback/);
   assert.match(source, /applyAliceCandidateTrafficState/);
   assert.match(source, /restoreAliceTrafficState/);

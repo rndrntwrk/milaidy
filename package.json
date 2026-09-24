@@ -64,6 +64,8 @@
     "packages/plugin-music-library",
     "packages/plugin-music-player",
     "packages/plugin-shopify",
+    "workers/alice-production-control",
+    "workers/alice-coding-sandbox",
     "deploy/cloud-agent-template"
   ],
   "type": "module",
