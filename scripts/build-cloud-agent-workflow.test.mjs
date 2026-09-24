@@ -156,14 +156,14 @@ test("cloud builds hydrate the tracked Eliza commit from the exact reviewed PR h
     /git clone --no-checkout --filter=blob:none https:\/\/github\.com\/rndrntwrk\/eliza\.git eliza/,
   );
   assert.match(workflow, /git -C eliza fetch --depth=1 origin "\$eliza_sha"/);
-  assert.match(workflow, /expected_eliza_sha="aa5f9c05c585cbc03bb72f9509e504d544531f3a"/);
+  assert.match(workflow, /expected_eliza_sha="f50f4ae3e84168b1f93a7265041aa03fe5f9f392"/);
   assert.match(
     workflow,
-    /reviewed_eliza_ref="refs\/pull\/7\/head"/,
+    /reviewed_eliza_ref="refs\/pull\/8\/head"/,
   );
   assert.match(
     workflow,
-    /git -C eliza fetch --depth=1 origin "\$reviewed_eliza_ref:refs\/remotes\/origin\/alice-reviewed-pr-7"/,
+    /git -C eliza fetch --depth=1 origin "\$reviewed_eliza_ref:refs\/remotes\/origin\/alice-reviewed-pr-8"/,
   );
   assert.match(workflow, /test "\$reviewed_eliza_sha" = "\$expected_eliza_sha"/);
   assert.match(workflow, /test "\$eliza_sha" = "\$reviewed_eliza_sha"/);
@@ -229,7 +229,7 @@ test("Alice materializes the real commands capability from the exact reviewed El
     path.join(repoRoot, "deploy/Dockerfile.ci"),
     "utf8",
   );
-  assert.match(workflow, /aa5f9c05c585cbc03bb72f9509e504d544531f3a/);
+  assert.match(workflow, /f50f4ae3e84168b1f93a7265041aa03fe5f9f392/);
   assert.match(workflow, /cd eliza\/plugins\/plugin-commands[\s\S]*?bun run build/);
   assert.match(
     dockerfile,
@@ -376,7 +376,7 @@ test("protected Alice qualification verifies provider identity and exact Worker 
   );
 });
 
-test("cloud builds qualify and emit the complete six-role Alice Worker graph", () => {
+test("cloud builds qualify and emit the complete Alice Worker graph", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -395,6 +395,7 @@ test("cloud builds qualify and emit the complete six-role Alice Worker graph", (
     "alice-state-plane",
     "alice-connector-plane",
     "alice-runtime-container-host",
+    "alice-coding-sandbox",
   ]);
   for (const worker of workerList) {
     assert.match(

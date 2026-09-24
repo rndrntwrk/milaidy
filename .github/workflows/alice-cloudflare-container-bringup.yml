@@ -295,7 +295,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_IMAGE: ${{ inputs.runtime_image }}
-          ELIZA_SHA: aa5f9c05c585cbc03bb72f9509e504d544531f3a
+          ELIZA_SHA: f50f4ae3e84168b1f93a7265041aa03fe5f9f392
         shell: bash
         run: |
           set -euo pipefail
@@ -817,7 +817,7 @@ jobs:
           ALICE_SOURCE_ROOT: ${{ github.workspace }}
           ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}
           ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.CONTROLLER_SHA }}
-          ALICE_ELIZA_COMMIT: aa5f9c05c585cbc03bb72f9509e504d544531f3a
+          ALICE_ELIZA_COMMIT: f50f4ae3e84168b1f93a7265041aa03fe5f9f392
           ALICE_RELEASE_EPOCH: ${{ inputs.release_epoch }}
           ALICE_RUNTIME_REVISION: ${{ inputs.runtime_revision }}
           ALICE_POLICY_HASH: ${{ inputs.policy_hash }}
