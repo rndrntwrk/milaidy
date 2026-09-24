@@ -106,6 +106,9 @@ source.control.workflows = source.control.workflows.filter(
 source.control.services = source.control.services.filter(
   (service) => service.binding === "ALICE_STATE_PLANE",
 );
+source.control.secrets.required = source.control.secrets.required.filter(
+  (name) => name !== "ALICE_CODING_PUBLISH_TOKEN",
+);
 const effective = {
   access: buildAliceContainerAccessEffectiveConfig({
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
