@@ -7,9 +7,11 @@ export interface AliceWorkerEnv extends AliceRuntimeConfigSource {
   ALICE_AUTHORITY: DurableObjectNamespace;
   ALICE_SESSIONS: DurableObjectNamespace;
   ALICE_PLANS: Workflow<AlicePlan>;
+  ALICE_CODING_WORKFLOW: Workflow<import("./coding-workflow").AliceCodingWorkflowInput>;
   ALICE_EVIDENCE_QUEUE: Queue<EvidenceQueueEnvelope>;
   ALICE_WORK_QUEUE: Queue<AliceWorkQueueEnvelope>;
   ALICE_STATE_PLANE: Fetcher;
+  ALICE_CODING_SANDBOX: Fetcher;
   ALICE_STATE_PLANE_SERVICE_TOKEN: string;
   ALICE_EVIDENCE_QUEUE_HMAC_KEY: string;
   ALICE_EVIDENCE: R2Bucket;

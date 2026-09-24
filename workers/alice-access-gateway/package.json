@@ -6,6 +6,9 @@
   "dependencies": {
     "@cloudflare/containers": "0.3.7"
   },
+  "devDependencies": {
+    "@types/node": "25.5.0"
+  },
   "scripts": {
     "test": "bun test test",
     "types": "wrangler types --config wrangler.jsonc --env-interface AliceAccessGatewayBindings worker-configuration.d.ts",

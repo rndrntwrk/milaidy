@@ -1,6 +1,11 @@
 import type { ActionIntent, ReleaseAdmission } from "./policy";
 import { canonicalJson } from "./program";
 import type { AlicePlan } from "./plan";
+import {
+  aliceCodingArgumentHash,
+  parseAliceCodingRequest,
+  type AliceCodingRequest,
+} from "./coding-task";
 
 export type AliceWorkItem = {
   schemaVersion: "alice.work-item.v1";
@@ -12,6 +17,7 @@ export type AliceWorkItem = {
   enqueuedAt: number;
   admission: ReleaseAdmission;
   intent: ActionIntent;
+  coding?: AliceCodingRequest;
 };
 
 export type AliceWorkQueueEnvelope = {
@@ -34,7 +40,7 @@ export type WorkExecutionDependencies = {
     pausedScopes: string[];
   }>;
   checkAuthorization(intent: ActionIntent, actor: string): Promise<{ allowed: boolean; code: string }>;
-  execute(operation: ActionIntent, actor: string): Promise<Record<string, unknown>>;
+  execute(operation: ActionIntent, actor: string, item: AliceWorkItem): Promise<Record<string, unknown>>;
   emitEvidence(record: unknown): Promise<void>;
 };
 
@@ -195,10 +201,14 @@ function sameAdmission(left: ReleaseAdmission, right: ReleaseAdmission): boolean
 }
 
 function validateWorkItem(value: unknown): AliceWorkItem {
+  const candidate = value as Record<string, unknown> | null;
+  const codingAction =
+    candidate?.intent !== null && typeof candidate?.intent === "object" &&
+    (candidate.intent as Record<string, unknown>).action === "coding.patch.sandbox";
   if (
     !exactObject(value, [
       "actor", "admission", "approvalId", "enqueuedAt", "intent", "planId",
-      "schemaVersion", "sessionId", "workId",
+      "schemaVersion", "sessionId", "workId", ...(codingAction ? ["coding"] : []),
     ]) ||
     value.schemaVersion !== "alice.work-item.v1" ||
     ![value.workId, value.planId, value.approvalId, value.sessionId].every(
@@ -221,6 +231,7 @@ function validateWorkItem(value: unknown): AliceWorkItem {
     throw new Error("WORK_ITEM_INVALID");
   }
   const intent = value.intent as Record<string, unknown>;
+  if (codingAction) parseAliceCodingRequest(value.coding);
   const intentKeys = [
     "action", "argumentHash", "expiresAt", "intentId", "nonce", "policyHash",
     "programDigest", "releaseDigest", "target",
@@ -482,9 +493,16 @@ export async function processAliceWork(
     }
     let result: Record<string, unknown>;
     try {
-      result = await deps.execute(item.intent, item.actor);
+      if (item.intent.action === "coding.patch.sandbox" &&
+        (!item.coding ||
+          await aliceCodingArgumentHash(item.coding) !== item.intent.argumentHash ||
+          item.coding.repository !== item.intent.target)) {
+        return await terminalFailure(item, attempt, "CODING_REQUEST_MISMATCH", deps);
+      }
+      result = await deps.execute(item.intent, item.actor, item);
     } catch (error) {
-      if (error instanceof Error && error.message === "WORK_OPERATION_UNSUPPORTED") {
+      if (error instanceof Error &&
+        ["WORK_OPERATION_UNSUPPORTED", "CODING_TASK_FAILED"].includes(error.message)) {
         return await terminalFailure(item, attempt, error.message, deps);
       }
       throw error;

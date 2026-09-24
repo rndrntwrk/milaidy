@@ -9,6 +9,7 @@ import {
   type WorkExecutionDependencies,
 } from "../src/work-execution";
 import type { AlicePlan } from "../src/plan";
+import { aliceCodingArgumentHash } from "../src/coding-task";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 const now = 1_787_400_000_000;
@@ -68,6 +69,42 @@ function dependencies(overrides: Partial<WorkExecutionDependencies> = {}) {
 }
 
 describe("Alice durable work execution", () => {
+  test("carries only an exact authorized coding request into the isolated executor", async () => {
+    const coding = {
+      repository: "Render-Network-OS/555-bot",
+      baseCommit: "a".repeat(40),
+      prompt: "Fix the Telegram acknowledgement.",
+    };
+    const codingItem: AliceWorkItem = {
+      ...item,
+      coding,
+      intent: {
+        ...item.intent,
+        action: "coding.patch.sandbox",
+        target: coding.repository,
+        argumentHash: await aliceCodingArgumentHash(coding),
+        capabilityId: "cap-00000000-0000-4000-8000-000000000001",
+      },
+    };
+    const accepted = dependencies();
+    const envelope = await createAliceWorkQueueEnvelope(codingItem, key);
+    await expect(processAliceWork(envelope, 1, key, accepted.deps)).resolves.toEqual({
+      disposition: "ack", code: "WORK_COMPLETED",
+    });
+    expect(accepted.executions()).toBe(1);
+    const mismatch = dependencies();
+    const different = { ...codingItem, coding: { ...coding, prompt: "Different task" } };
+    await expect(processAliceWork(
+      await createAliceWorkQueueEnvelope(different, key), 1, key, mismatch.deps,
+    )).resolves.toEqual({ disposition: "ack", code: "CODING_REQUEST_MISMATCH" });
+    expect(mismatch.executions()).toBe(0);
+    const failed = dependencies({ async execute() { throw new Error("CODING_TASK_FAILED"); } });
+    await expect(processAliceWork(envelope, 1, key, failed.deps)).resolves.toEqual({
+      disposition: "ack", code: "CODING_TASK_FAILED",
+    });
+    expect(JSON.stringify(failed.writes[0])).toContain('"state":"failed"');
+  });
+
   test("builds one canonical plan, approval, and work record per authorized intent", () => {
     const plan: AlicePlan = {
       schemaVersion: "alice.plan.v1",

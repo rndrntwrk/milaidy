@@ -19,9 +19,14 @@ import {
 } from "./runtime-config";
 import { verifyAccessJwt, verifyAccessServiceJwt } from "./access";
 import { validateAliceOwnerOrigin } from "./owner-origin";
-import { aliceCodingArgumentHash, parseAliceCodingRequest } from "./coding-task";
+import {
+  aliceCodingArgumentHash,
+  parseAliceCodingRequest,
+  prepareAliceCodingTask,
+} from "./coding-task";
+import { codingPageResponse } from "./coding-page";
 import { authorityDurableName } from "./durable-names";
-import type { ActionIntent, ModelBudgetRequest, ReleaseBinding } from "./policy";
+import type { ActionIntent, CapabilityGrant, ModelBudgetRequest, ReleaseBinding } from "./policy";
 import {
   authorizeDeploymentPause,
   authorizeEmergencyRecovery,
@@ -38,6 +43,7 @@ import { createAliceStatePlaneClient } from "./state-plane-client";
 import {
   processAliceDeadLetter,
   processAliceWork,
+  type AliceWorkItem,
   type AliceWorkQueueEnvelope,
 } from "./work-execution";
 import {
@@ -47,6 +53,7 @@ import {
 
 export { AliceAuthority, AliceSession } from "./durable";
 export { AlicePlanWorkflow } from "./workflow";
+export { AliceCodingWorkflow } from "./coding-workflow";
 
 const ALICE_WORK_QUEUE_NAME = "alice-production-work-v1";
 const ALICE_WORK_DLQ_NAME = "alice-production-work-dlq-v1";
@@ -799,6 +806,76 @@ async function handleOwnerApi(
     return jsonResponse(value, response.status);
   }
 
+  const codingTaskMatch = path.match(/^\/control\/api\/v1\/coding\/tasks\/([^/]+)$/);
+  if (codingTaskMatch && request.method === "GET") {
+    const taskId = decodeURIComponent(codingTaskMatch[1]!);
+    if (!validId(taskId)) return jsonResponse({ ok: false, code: "TASK_ID_INVALID" }, 400);
+    try {
+      const instance = await env.ALICE_CODING_WORKFLOW.get(taskId);
+      const state = createAliceStatePlaneClient(
+        env.ALICE_STATE_PLANE,
+        env.ALICE_STATE_PLANE_SERVICE_TOKEN,
+      );
+      const work = await state.getRecord("work", `work-${taskId.slice(5)}`, actor);
+      return jsonResponse({ ok: true, taskId, workflow: await instance.status(),
+        work: work?.payload ?? null });
+    } catch {
+      return jsonResponse({ ok: false, code: "TASK_NOT_FOUND" }, 404);
+    }
+  }
+  if (path === "/control/api/v1/coding/tasks" && request.method === "POST") {
+    const body = await readBoundedJson(request) as Record<string, unknown>;
+    if (!body || typeof body !== "object" || Array.isArray(body) ||
+      !body.grant || typeof body.grant !== "object") {
+      return jsonResponse({ ok: false, code: "CODING_REQUEST_INVALID" }, 400);
+    }
+    let prepared: Awaited<ReturnType<typeof prepareAliceCodingTask>>;
+    const grant = body.grant as CapabilityGrant;
+    try {
+      prepared = await prepareAliceCodingTask(body.request, grant);
+      if (grant.owner !== actor ||
+        !Number.isSafeInteger(grant.expiresAt) ||
+        grant.expiresAt <= Date.now() ||
+        grant.expiresAt - 600_000 < 1) {
+        throw new Error("CODING_GRANT_MISMATCH");
+      }
+    } catch {
+      return jsonResponse({ ok: false, code: "CODING_GRANT_MISMATCH" }, 403);
+    }
+    const taskId = prepared.taskId;
+    const codingConfig = await runtimeConfig(env);
+    const codingRelease = await callDurable(authority, "/release/check");
+    if (!codingRelease.response.ok) {
+      return jsonResponse(codingRelease.value, codingRelease.response.status);
+    }
+    const workItem: AliceWorkItem = {
+      schemaVersion: "alice.work-item.v1",
+      workId: `work-${grant.capabilityId}`,
+      planId: taskId,
+      approvalId: `approval-${grant.capabilityId}`,
+      actor,
+      sessionId: taskId,
+      enqueuedAt: grant.expiresAt - 600_000,
+      admission: {
+        binding: codingConfig.binding,
+        deploymentManifestSha256: codingConfig.deploymentManifestSha256,
+        admissionGeneration: codingRelease.value.admissionGeneration,
+      },
+      intent: prepared.intent,
+      coding: prepared.request,
+    };
+    try {
+      await env.ALICE_CODING_WORKFLOW.create({
+        id: taskId,
+        params: { taskId, actor, sessionId: taskId,
+          requestedAt: workItem.enqueuedAt, workItem },
+      });
+    } catch {
+      return jsonResponse({ ok: false, code: "CODING_TASK_CREATE_FAILED" }, 503);
+    }
+    return jsonResponse({ ok: true, taskId, status: "queued" }, 202);
+  }
+
   if (path === "/control/api/v1/capabilities/grant" && request.method === "POST") {
     const config = await runtimeConfig(env);
     const record = evidenceRecord(
@@ -970,6 +1047,10 @@ async function handleFetch(
     }
     const owner = await requireOwner(request, loadOwnerAccessConfig(env));
     if (!owner.ok) return owner.response;
+    if (request.method === "GET") {
+      const codingPage = codingPageResponse(path);
+      if (codingPage) return codingPage;
+    }
     if (path === "/control") {
       const config = await runtimeConfig(env).catch(() => null);
       const authority = env.ALICE_AUTHORITY.getByName(authorityDurableName());
@@ -1052,7 +1133,7 @@ async function handleWorkQueueMessage(
         code: String(current.value.decision?.code ?? "INTENT_DENIED"),
       };
     },
-    async execute(operation: ActionIntent, actor: string) {
+    async execute(operation: ActionIntent, actor: string, item: AliceWorkItem) {
       if (operation.action === "runtime.health") {
         return {
           operation: operation.action,
@@ -1067,6 +1148,27 @@ async function handleWorkQueueMessage(
           operation: operation.action,
           record,
         };
+      }
+      if (operation.action === "coding.patch.sandbox" && item.coding) {
+        const response = await env.ALICE_CODING_SANDBOX.fetch(
+          new Request("https://alice-coding.internal/internal/v1/coding/execute", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              schemaVersion: "alice.coding-execution.v1",
+              taskId: item.planId,
+              request: item.coding,
+              intent: operation,
+            }),
+          }),
+        );
+        const value = await response.json() as Record<string, unknown>;
+        if (response.status === 410) throw new Error("CODING_TASK_FAILED");
+        if (!response.ok || value.ok !== true ||
+          !value.result || typeof value.result !== "object") {
+          throw new Error("CODING_SANDBOX_UNAVAILABLE");
+        }
+        return value.result as Record<string, unknown>;
       }
       throw new Error("WORK_OPERATION_UNSUPPORTED");
     },

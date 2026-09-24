@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "036df6c823669b8fa2f66cf4c16eeb29",
+  "name": "alice-coding-sandbox",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "containers": [
+    {
+      "class_name": "AliceCodingSandbox",
+      "image": "docker.io/cloudflare/sandbox:0.12.10-opencode@sha256:37d70eb910c3b9d5d71639a14e91571327c343fc8e59bfbc6b54cc5fed5b036c",
+      "instance_type": "lite",
+      "max_instances": 4
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "ALICE_CODING_SANDBOX", "class_name": "AliceCodingSandbox" },
+      { "name": "ALICE_CODING_LEASE", "class_name": "AliceCodingLease" }
+    ]
+  },
+  "migrations": [
+    { "tag": "alice-coding-sandbox-v1", "new_sqlite_classes": ["AliceCodingSandbox", "AliceCodingLease"] }
+  ],
+  "services": [
+    { "binding": "ALICE_RUNTIME_HOST", "service": "alice-runtime-container-host" }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": true }
+  }
+}
