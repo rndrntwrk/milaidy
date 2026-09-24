@@ -61,6 +61,14 @@ const EXPECTED_DURABLE_OBJECT_BINDINGS = Object.freeze({
     }),
   ]),
 });
+const CURRENT_RUNTIME_HOST_BINDINGS = Object.freeze([
+  Object.freeze({
+    className: "AliceAuthority",
+    name: "ALICE_AUTHORITY",
+    scriptName: "alice-production-control",
+  }),
+  ...EXPECTED_DURABLE_OBJECT_BINDINGS.runtimeHost,
+]);
 
 export function aliceCloudflareContinuitySentinelBytes() {
   return `${canonicalAliceJson({
@@ -143,15 +151,18 @@ function normalizeNamespaceIds(value) {
   }
   const namespaceOwners = new Map();
   for (const role of ROLES) {
-    if (
-      canonicalAliceJson(
-        result[role].map(({ className, name, scriptName }) => ({
-          className,
-          name,
-          scriptName,
-        })),
-      ) !== canonicalAliceJson(sorted(EXPECTED_DURABLE_OBJECT_BINDINGS[role]))
-    ) {
+    const observedIdentity = canonicalAliceJson(
+      result[role].map(({ className, name, scriptName }) => ({
+        className,
+        name,
+        scriptName,
+      })),
+    );
+    const legacyIdentity = canonicalAliceJson(sorted(EXPECTED_DURABLE_OBJECT_BINDINGS[role]));
+    const currentIdentity = role === "runtimeHost"
+      ? canonicalAliceJson(sorted(CURRENT_RUNTIME_HOST_BINDINGS))
+      : legacyIdentity;
+    if (observedIdentity !== legacyIdentity && observedIdentity !== currentIdentity) {
       invalid();
     }
     for (const binding of result[role]) {
@@ -160,18 +171,29 @@ function normalizeNamespaceIds(value) {
       namespaceOwners.set(binding.namespaceId, owners);
     }
   }
+  const named = (role, name) => result[role].find((binding) => binding.name === name);
+  const accessRuntime = named("access", "ALICE_RUNTIME_CONTAINER");
+  const hostRuntime = named("runtimeHost", "ALICE_RUNTIME_CONTAINER");
+  const hostAuthority = named("runtimeHost", "ALICE_AUTHORITY");
+  const controlAuthority = named("control", "ALICE_AUTHORITY");
   if (
-    result.access[0]?.namespaceId !== result.runtimeHost[0]?.namespaceId
+    accessRuntime?.namespaceId !== hostRuntime?.namespaceId ||
+    (hostAuthority && hostAuthority.namespaceId !== controlAuthority?.namespaceId)
   ) {
     invalid();
   }
   for (const owners of namespaceOwners.values()) {
     if (owners.length === 1) continue;
-    if (
-      owners.length !== 2 ||
-      canonicalAliceJson(owners.map(({ role }) => role).sort()) !==
-        canonicalAliceJson(["access", "runtimeHost"])
-    ) {
+    const roles = canonicalAliceJson(owners.map(({ role }) => role).sort());
+    const sharedRuntime = owners.length === 2 &&
+      roles === canonicalAliceJson(["access", "runtimeHost"]) &&
+      owners.every(({ name, className }) =>
+        name === "ALICE_RUNTIME_CONTAINER" && className === "AliceRuntimeContainer");
+    const sharedAuthority = owners.length === 2 &&
+      roles === canonicalAliceJson(["control", "runtimeHost"]) &&
+      owners.every(({ name, className }) =>
+        name === "ALICE_AUTHORITY" && className === "AliceAuthority");
+    if (!sharedRuntime && !sharedAuthority) {
       invalid();
     }
   }

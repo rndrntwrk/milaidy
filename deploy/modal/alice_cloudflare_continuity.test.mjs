@@ -178,6 +178,26 @@ test("admits only the exact external Access reference to the runtimeHost-owned n
       durableObjectNamespaceIds,
     });
   assert.doesNotThrow(() => build(readback.durableObjectNamespaceIds));
+  const currentHost = {
+    ...readback.durableObjectNamespaceIds,
+    runtimeHost: [
+      {
+        className: "AliceAuthority",
+        name: "ALICE_AUTHORITY",
+        namespaceId: "11111111111111111111111111111111",
+        scriptName: "alice-production-control",
+      },
+      ...readback.durableObjectNamespaceIds.runtimeHost,
+    ],
+  };
+  assert.doesNotThrow(() => build(currentHost));
+  assert.throws(() => build({
+    ...currentHost,
+    runtimeHost: [
+      { ...currentHost.runtimeHost[0], namespaceId: "66666666666666666666666666666666" },
+      currentHost.runtimeHost[1],
+    ],
+  }), /ALICE_CLOUDFLARE_CONTINUITY_CONFIG_INVALID/);
 
   const substitutions = [
     {
