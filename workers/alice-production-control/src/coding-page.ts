@@ -2,7 +2,7 @@ const page = `<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Alice coding task</title>
 <h1>Alice coding task</h1>
-<p>Telegram pairing signs you in to chat. A device passkey approves each exact repository task.</p>
+<p>Telegram pairing/Elevated is separate from approval of this coding task. A device passkey approves each exact repository task.</p>
 <form id="task">
   <p><label>Repository <input name="repository" required placeholder="rndrntwrk/repository" autocomplete="off"></label></p>
   <p><label>Base commit SHA <input name="baseCommit" required pattern="[a-f0-9]{40}" autocomplete="off"></label></p>
@@ -10,12 +10,15 @@ const page = `<!doctype html>
   <p><button type="button" id="register">Register device passkey</button> <button type="submit">Approve and run</button></p>
 </form>
 <p role="status" id="status">Ready.</p><pre id="result"></pre>
+<h2>Recent coding tasks</h2><ul id="history"></ul>
 <script src="/control/coding.js" defer></script></html>`;
 
 const script = `const form = document.getElementById('task');
 const status = document.getElementById('status');
 const result = document.getElementById('result');
+const history = document.getElementById('history');
 const button = form.querySelector('button[type=submit]');
+let selectedTaskId = null;
 async function post(path, body) {
   const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const value = await response.json();
@@ -28,6 +31,55 @@ function passkeyApi() {
     throw new Error('This browser cannot use the required device passkey API.');
   }
 }
+async function loadTasks() {
+  const response = await fetch('/control/api/v1/coding/tasks');
+  const value = await response.json();
+  if (!response.ok || value.ok !== true || !Array.isArray(value.tasks)) {
+    throw new Error(value.code || 'TASK_LIST_UNAVAILABLE');
+  }
+  history.replaceChildren();
+  for (const task of value.tasks) {
+    const row = document.createElement('li');
+    const link = document.createElement('button');
+    link.type = 'button';
+    link.textContent = task.taskId + ' · ' + new Date(task.updatedAt).toLocaleString();
+    link.addEventListener('click', () => { void watchTask(task.taskId); });
+    row.append(link);
+    history.append(row);
+  }
+}
+async function watchTask(taskId) {
+  selectedTaskId = taskId;
+  localStorage.setItem('alice-coding-last-task', taskId);
+  result.textContent = '';
+  status.textContent = 'Loading task ' + taskId + '…';
+  try {
+    for (let attempt = 0; attempt < 100 && selectedTaskId === taskId; attempt++) {
+      const response = await fetch('/control/api/v1/coding/tasks/' + encodeURIComponent(taskId));
+      const current = await response.json();
+      if (!response.ok || current.ok !== true) throw new Error(current.code || 'TASK_STATUS_UNAVAILABLE');
+      const work = current.work;
+      if (work?.state === 'completed') {
+        status.textContent = 'Patch ready for review: ' + taskId;
+        result.textContent = work.result?.patch || 'No patch was produced.';
+        await loadTasks();
+        return;
+      }
+      if (work?.state === 'failed' || work?.state === 'dead-lettered' || current.workflow?.status === 'errored') {
+        throw new Error(work?.code || current.workflow?.error?.message || 'CODING_TASK_FAILED');
+      }
+      status.textContent = 'Task ' + taskId + ' is ' + (work?.state || 'starting') + '…';
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+    if (selectedTaskId === taskId) status.textContent = 'Still running. Task ID: ' + taskId;
+  } catch (error) {
+    if (selectedTaskId === taskId) status.textContent = error.message;
+  }
+}
+void loadTasks().then(() => {
+  const last = localStorage.getItem('alice-coding-last-task');
+  if (last) void watchTask(last);
+}).catch((error) => { status.textContent = error.message; });
 document.getElementById('register').addEventListener('click', async () => {
   try {
     passkeyApi();
@@ -57,24 +109,9 @@ form.addEventListener('submit', async (event) => {
     });
     if (!credential) throw new Error('PASSKEY_CANCELLED');
     const approval = await post('/control/api/v1/webauthn/approve/verify', { response: credential.toJSON() });
+    localStorage.setItem('alice-coding-last-task', 'task-' + approval.grant.capabilityId);
     const task = await post('/control/api/v1/coding/tasks', { request, grant: approval.grant });
-    status.textContent = 'Task ' + task.taskId + ' queued. Waiting for result…';
-    for (let attempt = 0; attempt < 100; attempt++) {
-      const response = await fetch('/control/api/v1/coding/tasks/' + encodeURIComponent(task.taskId));
-      const current = await response.json();
-      if (!response.ok || current.ok !== true) throw new Error(current.code || 'TASK_STATUS_UNAVAILABLE');
-      const work = current.work;
-      if (work?.state === 'completed') {
-        status.textContent = 'Patch ready for review.';
-        result.textContent = work.result?.patch || 'No patch was produced.';
-        return;
-      }
-      if (work?.state === 'failed' || work?.state === 'dead-lettered' || current.workflow?.status === 'errored') {
-        throw new Error(work?.code || current.workflow?.error?.message || 'CODING_TASK_FAILED');
-      }
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-    }
-    status.textContent = 'Still running. Task ID: ' + task.taskId;
+    await watchTask(task.taskId);
   } catch (error) { status.textContent = error.message; }
   finally { button.disabled = false; }
 });`;

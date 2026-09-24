@@ -502,10 +502,25 @@ export async function processAliceWork(
       result = await deps.execute(item.intent, item.actor, item);
     } catch (error) {
       if (error instanceof Error &&
-        ["WORK_OPERATION_UNSUPPORTED", "CODING_TASK_FAILED"].includes(error.message)) {
+        ["WORK_OPERATION_UNSUPPORTED", "CODING_TASK_FAILED", "CAPABILITY_REVOKED",
+          "CAPABILITY_EXPIRED", "INTENT_EXPIRED", "PAUSED_ALL", "PAUSED_RELEASE",
+          "PAUSED_CODING", "RELEASE_ADMISSION_CHANGED"].includes(error.message)) {
         return await terminalFailure(item, attempt, error.message, deps);
       }
       throw error;
+    }
+    if (item.intent.action === "coding.patch.sandbox") {
+      const finalReleaseCode = releaseGateCode(item, await deps.checkRelease());
+      if (finalReleaseCode) return await terminalFailure(item, attempt, finalReleaseCode, deps);
+      const finalAuthorization = await deps.checkAuthorization(item.intent, item.actor);
+      if (!finalAuthorization.allowed || finalAuthorization.code !== "INTENT_ALREADY_AUTHORIZED") {
+        return await terminalFailure(item, attempt,
+          finalAuthorization.allowed ? "WORK_AUTHORIZATION_NOT_PREEXISTING" : finalAuthorization.code,
+          deps);
+      }
+      if (item.intent.expiresAt <= deps.now()) {
+        return await terminalFailure(item, attempt, "INTENT_EXPIRED", deps);
+      }
     }
     const completedAt = deps.now();
     await deps.applyAtomic({

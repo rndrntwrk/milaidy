@@ -3,6 +3,7 @@ import {
   aliceCodingArgumentHash,
   parseAliceCodingRequest,
 } from "../../alice-production-control/src/coding-task";
+import type { ActionIntent, ReleaseAdmission } from "../../alice-production-control/src/policy";
 import { AliceCodingLease, type AliceCodingSandboxEnv } from "./lease";
 
 export { AliceCodingLease, ContainerProxy };
@@ -46,13 +47,10 @@ AliceCodingSandbox.outboundByHost = {
 type CodingInput = {
   schemaVersion: "alice.coding-execution.v1";
   taskId: string;
+  actor: string;
+  admission: ReleaseAdmission;
   request: unknown;
-  intent: {
-    action: string;
-    target: string;
-    argumentHash: string;
-    capabilityId: string;
-  };
+  intent: ActionIntent;
 };
 
 async function parseInput(request: Request): Promise<CodingInput & {
@@ -72,10 +70,22 @@ async function parseInput(request: Request): Promise<CodingInput & {
   if (
     input.schemaVersion !== "alice.coding-execution.v1" ||
     !TASK_ID.test(input.taskId) ||
+    !/^owner:sha256:[a-f0-9]{64}$/.test(input.actor) ||
     input.intent?.action !== "coding.patch.sandbox" ||
     input.intent.capabilityId !== input.taskId.slice(5) ||
     input.intent.target !== coding.repository ||
-    input.intent.argumentHash !== argumentHash
+    input.intent.argumentHash !== argumentHash ||
+    !input.admission ||
+    !/^sha256:[a-f0-9]{64}$/.test(input.admission.deploymentManifestSha256) ||
+    !Number.isSafeInteger(input.admission.admissionGeneration) ||
+    input.admission.admissionGeneration < 1 ||
+    !input.admission.binding ||
+    ["programDigest", "releaseDigest", "policyHash"].some((key) =>
+      !/^sha256:[a-f0-9]{64}$/.test(input.admission.binding[key as keyof typeof input.admission.binding]) ||
+      input.admission.binding[key as keyof typeof input.admission.binding] !==
+        input.intent[key as keyof typeof input.admission.binding]) ||
+    !Number.isSafeInteger(input.intent.expiresAt) ||
+    input.intent.expiresAt <= Date.now()
   ) throw new Error("CODING_REQUEST_INVALID");
   return { ...input, request: coding };
 }
@@ -96,6 +106,7 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
   env: AliceCodingSandboxEnv): Promise<Response> {
   const start = await leaseCall(env, input.taskId, "/start", {
     taskId: input.taskId, argumentHash: input.intent.argumentHash,
+    actor: input.actor, admission: input.admission, intent: input.intent,
   });
   const state = await start.json() as Record<string, unknown>;
   if (state.code === "CODING_ALREADY_COMPLETED") {
@@ -109,6 +120,9 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
   let failure: unknown = null;
   let destroyed = false;
   try {
+    if (input.intent.expiresAt - Date.now() < 120_000) {
+      throw new Error("CODING_APPROVAL_NEAR_EXPIRY");
+    }
     const archiveUrl = new URL("https://alice-runtime-host.internal/internal/v1/coding/archive");
     archiveUrl.searchParams.set("repository", input.request.repository);
     archiveUrl.searchParams.set("baseCommit", input.request.baseCommit);
@@ -135,9 +149,11 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
         },
       },
     }));
+    const runBudgetMs = Math.min(480_000, input.intent.expiresAt - Date.now() - 45_000);
+    if (runBudgetMs < 30_000) throw new Error("CODING_APPROVAL_NEAR_EXPIRY");
     const run = await sandbox.exec(
       `cd /workspace/repo && OPENCODE_CONFIG=/workspace/opencode.json opencode run --model alice/${MODEL} "$(cat /workspace/prompt.txt)"`,
-      { timeout: 480_000 },
+      { timeout: runBudgetMs },
     );
     if (!run.success) throw new Error("CODING_AGENT_FAILED");
     const diff = await sandbox.exec(
@@ -165,8 +181,9 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
       ? failure.message : "CODING_EXECUTION_FAILED";
     if (destroyed) {
       const failed = await leaseCall(env, input.taskId, "/fail", { token: state.token, code });
-      if (!failed.ok) throw new Error("CODING_LEASE_FINALIZATION_FAILED");
-      return Response.json({ ok: false, code }, { status: 410 });
+      if (!failed.ok && failed.status !== 410) throw new Error("CODING_LEASE_FINALIZATION_FAILED");
+      const failureState = await failed.json() as { code?: string };
+      return Response.json({ ok: false, code: failureState.code ?? code }, { status: 410 });
     }
     throw new Error(code);
   }
@@ -174,6 +191,10 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
   const completed = await leaseCall(env, input.taskId, "/complete", {
     token: state.token, result,
   });
+  if (completed.status === 410) {
+    const rejected = await completed.json() as { code?: string };
+    return Response.json({ ok: false, code: rejected.code ?? "CODING_TASK_FAILED" }, { status: 410 });
+  }
   if (!completed.ok) throw new Error("CODING_RESULT_PERSIST_FAILED");
   return Response.json({ ok: true, taskId: input.taskId, result });
 }

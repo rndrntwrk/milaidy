@@ -103,6 +103,17 @@ describe("Alice durable work execution", () => {
       disposition: "ack", code: "CODING_TASK_FAILED",
     });
     expect(JSON.stringify(failed.writes[0])).toContain('"state":"failed"');
+    let authorizationChecks = 0;
+    const revoked = dependencies({ async checkAuthorization() {
+      authorizationChecks += 1;
+      return authorizationChecks === 1
+        ? { allowed: true, code: "INTENT_ALREADY_AUTHORIZED" }
+        : { allowed: false, code: "CAPABILITY_REVOKED" };
+    } });
+    await expect(processAliceWork(envelope, 1, key, revoked.deps)).resolves.toEqual({
+      disposition: "ack", code: "CAPABILITY_REVOKED",
+    });
+    expect(JSON.stringify(revoked.writes[0])).toContain('"state":"failed"');
   });
 
   test("builds one canonical plan, approval, and work record per authorized intent", () => {

@@ -18,7 +18,8 @@
   "durable_objects": {
     "bindings": [
       { "name": "ALICE_CODING_SANDBOX", "class_name": "AliceCodingSandbox" },
-      { "name": "ALICE_CODING_LEASE", "class_name": "AliceCodingLease" }
+      { "name": "ALICE_CODING_LEASE", "class_name": "AliceCodingLease" },
+      { "name": "ALICE_AUTHORITY", "class_name": "AliceAuthority", "script_name": "alice-production-control" }
     ]
   },
   "migrations": [

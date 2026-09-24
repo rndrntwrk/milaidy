@@ -41,6 +41,12 @@ export function createAliceStatePlaneClient(
     return boundedResponse(response);
   };
   return {
+    async listWorkHeaders(ownerId: string, limit: number) {
+      const value = await invoke({ operation: "record.list", ownerId, kind: "work",
+        recordIdPrefix: "work-cap-", limit, order: "desc", metadataOnly: true });
+      if (!Array.isArray(value.records)) throw new Error("STATE_DEPENDENCY_UNAVAILABLE");
+      return value.records as Array<{ recordId: string; updatedAt: number }>;
+    },
     async getRecord(kind: string, recordId: string, ownerId: string) {
       const value = await invoke({ operation: "record.get", kind, recordId, ownerId });
       return (value.record ?? null) as {

@@ -809,19 +809,37 @@ async function handleOwnerApi(
   const codingTaskMatch = path.match(/^\/control\/api\/v1\/coding\/tasks\/([^/]+)$/);
   if (codingTaskMatch && request.method === "GET") {
     const taskId = decodeURIComponent(codingTaskMatch[1]!);
-    if (!validId(taskId)) return jsonResponse({ ok: false, code: "TASK_ID_INVALID" }, 400);
+    if (!/^task-cap-[a-f0-9-]{36}$/.test(taskId)) {
+      return jsonResponse({ ok: false, code: "TASK_ID_INVALID" }, 400);
+    }
     try {
-      const instance = await env.ALICE_CODING_WORKFLOW.get(taskId);
       const state = createAliceStatePlaneClient(
         env.ALICE_STATE_PLANE,
         env.ALICE_STATE_PLANE_SERVICE_TOKEN,
       );
       const work = await state.getRecord("work", `work-${taskId.slice(5)}`, actor);
-      return jsonResponse({ ok: true, taskId, workflow: await instance.status(),
+      let workflow: unknown = null;
+      try {
+        workflow = await (await env.ALICE_CODING_WORKFLOW.get(taskId)).status();
+      } catch { /* A durable work record outlives Workflow status retention. */ }
+      if (!work && !workflow) return jsonResponse({ ok: false, code: "TASK_NOT_FOUND" }, 404);
+      return jsonResponse({ ok: true, taskId, workflow,
         work: work?.payload ?? null });
     } catch {
       return jsonResponse({ ok: false, code: "TASK_NOT_FOUND" }, 404);
     }
+  }
+  if (path === "/control/api/v1/coding/tasks" && request.method === "GET") {
+    const state = createAliceStatePlaneClient(
+      env.ALICE_STATE_PLANE, env.ALICE_STATE_PLANE_SERVICE_TOKEN,
+    );
+    const headers = await state.listWorkHeaders(actor, 100);
+    const tasks = headers.filter((entry) =>
+      /^work-cap-[a-f0-9-]{36}$/.test(entry.recordId) &&
+      Number.isSafeInteger(entry.updatedAt),
+    ).map((entry) => ({ taskId: `task-${entry.recordId.slice(5)}`,
+      updatedAt: entry.updatedAt }));
+    return jsonResponse({ ok: true, tasks });
   }
   if (path === "/control/api/v1/coding/tasks" && request.method === "POST") {
     const body = await readBoundedJson(request) as Record<string, unknown>;
@@ -871,7 +889,13 @@ async function handleOwnerApi(
           requestedAt: workItem.enqueuedAt, workItem },
       });
     } catch {
-      return jsonResponse({ ok: false, code: "CODING_TASK_CREATE_FAILED" }, 503);
+      try {
+        const existing = await env.ALICE_CODING_WORKFLOW.get(taskId);
+        await existing.status();
+        return jsonResponse({ ok: true, taskId, status: "existing" }, 202);
+      } catch {
+        return jsonResponse({ ok: false, code: "CODING_TASK_CREATE_FAILED" }, 503);
+      }
     }
     return jsonResponse({ ok: true, taskId, status: "queued" }, 202);
   }
@@ -1157,13 +1181,22 @@ async function handleWorkQueueMessage(
             body: JSON.stringify({
               schemaVersion: "alice.coding-execution.v1",
               taskId: item.planId,
+              actor,
+              admission: item.admission,
               request: item.coding,
               intent: operation,
             }),
           }),
         );
         const value = await response.json() as Record<string, unknown>;
-        if (response.status === 410) throw new Error("CODING_TASK_FAILED");
+        if (response.status === 410) {
+          const code = String(value.code ?? "");
+          throw new Error([
+            "CAPABILITY_REVOKED", "CAPABILITY_EXPIRED", "INTENT_EXPIRED",
+            "PAUSED_ALL", "PAUSED_RELEASE", "PAUSED_CODING",
+            "RELEASE_ADMISSION_CHANGED",
+          ].includes(code) ? code : "CODING_TASK_FAILED");
+        }
         if (!response.ok || value.ok !== true ||
           !value.result || typeof value.result !== "object") {
           throw new Error("CODING_SANDBOX_UNAVAILABLE");
