@@ -287,10 +287,14 @@ jobs:
           ./node_modules/.bin/wrangler types \
             --config workers/alice-connector-plane/wrangler.jsonc \
             workers/alice-connector-plane/worker-configuration.d.ts
+          ./node_modules/.bin/wrangler types \
+            --config workers/alice-coding-sandbox/wrangler.jsonc \
+            workers/alice-coding-sandbox/worker-configuration.d.ts
           bun x tsc --project workers/alice-production-control/tsconfig.json --noEmit
           bun x tsc --project workers/alice-access-gateway/tsconfig.json --noEmit
           bun x tsc --project workers/alice-state-plane/tsconfig.json --noEmit
           bun x tsc --project workers/alice-connector-plane/tsconfig.json --noEmit
+          bun x tsc --project workers/alice-coding-sandbox/tsconfig.json --noEmit
 
       - name: Build exact Alice Worker bundles
         id: worker_bundles
@@ -300,7 +304,7 @@ jobs:
           bundle_root="$(mktemp -d "${RUNNER_TEMP}/alice-worker-bundles.XXXXXX")"
           wrangler_version="$(./node_modules/.bin/wrangler --version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
           test "$wrangler_version" = "4.122.0"
-          for worker in alice-access-gateway alice-production-control alice-ai-gateway alice-state-plane alice-connector-plane alice-runtime-container-host; do
+          for worker in alice-access-gateway alice-production-control alice-ai-gateway alice-state-plane alice-connector-plane alice-runtime-container-host alice-coding-sandbox; do
             mkdir "$bundle_root/$worker"
             config="workers/$worker/wrangler.jsonc"
             if [ "$worker" = "alice-runtime-container-host" ]; then
@@ -343,6 +347,7 @@ jobs:
           ALICE_WORKER_BUNDLE_ROOT="$bundle_root" \
           ALICE_WORKER_BUNDLE_ARTIFACT_PATH="$bundle_root/alice-worker-bundles.json" \
           ALICE_WRANGLER_VERSION="$wrangler_version" \
+          ALICE_WORKER_BUNDLE_SCHEMA_VERSION="alice.worker-bundle-artifact.v4" \
           node deploy/modal/alice_worker_bundle_artifact.mjs
           test -s "$bundle_root/alice-worker-bundles.json"
           echo "root=$bundle_root" >> "$GITHUB_OUTPUT"

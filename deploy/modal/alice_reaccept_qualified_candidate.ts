@@ -44,6 +44,10 @@ export function parseAliceReacceptSelection(serialized: string) {
 
 // Only a coherent recorded rollback target or the complete retained candidate is eligible.
 export function planAliceQualifiedRestoration({ workers, application, anchor, candidate, target }: any) {
+  // A first coding release creates a Worker that rollback removes. Reaccepting
+  // its old version ID after deletion cannot preserve the qualified identity.
+  if ([workers, anchor.previous.workers, candidate.workers].some(value =>
+    Object.hasOwn(value ?? {}, "codingSandbox"))) fail("CODING_RELEASE_UNSUPPORTED");
   const prior = roles.every(role => workers[role]?.serving?.versionId === anchor.previous.workers[role]?.serving?.versionId);
   const retained = roles.every(role => workers[role]?.serving?.versionId === candidate.workers[role]?.versionId);
   if (!prior && !retained) fail("WORKER_STATE_DRIFTED");
@@ -82,6 +86,9 @@ export async function loadQualified(temp: string) {
     artifactPath: path.join(root, "alice-worker-bundles/alice-worker-bundles.json"),
     artifactRoot: path.join(root, "alice-worker-bundles"), configDir: path.join(root, "alice-release/wrangler"),
   });
+  if (release.manifest.schemaVersion === "alice.deployment-manifest.v4") {
+    fail("CODING_RELEASE_UNSUPPORTED");
+  }
   for (const file of ["rollback-anchor.json", "program-admission.json", "alice-deployment-manifest.json"]) {
     if (!equal(read(path.join(root, "alice-release", file)), read(path.join(releaseRoot, file)))) fail("JOURNAL_BINDING_INVALID");
   }

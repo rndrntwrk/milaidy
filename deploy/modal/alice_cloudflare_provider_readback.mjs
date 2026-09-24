@@ -41,6 +41,7 @@ const ROLES = [
   "statePlane",
   "connectorPlane",
   "runtimeHost",
+  "codingSandbox",
 ];
 
 function mismatch() {
@@ -641,23 +642,20 @@ function providerQueueConsumer(consumer) {
   };
 }
 
-function expectedWorkflow(config) {
-  const workflow = config.workflows?.[0];
-  if (!workflow) return null;
-  return {
+function expectedWorkflows(config) {
+  return (config.workflows ?? []).map((workflow) => ({
     className: workflow.class_name,
     name: workflow.name,
     scriptName: config.name,
-  };
+  }));
 }
 
-function providerWorkflow(workflow) {
-  if (!workflow) return null;
-  return {
+function providerWorkflows(value) {
+  return (Array.isArray(value) ? value : value ? [value] : []).map((workflow) => ({
     className: workflow.class_name,
     name: workflow.name,
     scriptName: workflow.script_name,
-  };
+  }));
 }
 
 export async function digestAliceProviderConfig(config) {
@@ -788,6 +786,7 @@ export async function verifyAliceWorkerProviderReadback({
     statePlane: "statePlaneWorkerBundleSha256",
     connectorPlane: "connectorPlaneWorkerBundleSha256",
     runtimeHost: "runtimeHostWorkerBundleSha256",
+    codingSandbox: "codingSandboxWorkerBundleSha256",
   }[role];
   if (
     (typeof deployedMainModule !== "string" &&
@@ -871,8 +870,8 @@ export async function verifyAliceWorkerProviderReadback({
       expectedQueueConsumer(materializedWranglerConfig),
     ) ||
     !canonicalEqual(
-      providerWorkflow(workflow),
-      expectedWorkflow(materializedWranglerConfig),
+      providerWorkflows(workflow),
+      expectedWorkflows(materializedWranglerConfig),
     ) ||
     scriptSettings?.logpush === true ||
     (scriptSettings?.tail_consumers?.length ?? 0) !== 0 ||
@@ -890,7 +889,8 @@ export async function verifyAliceWorkerProviderReadback({
     "worker.minify",
     "worker.uploadSourceMaps",
     ...(role === "control"
-      ? ["bindings.migrations", "bindings.workflows[0].steps"]
+      ? ["bindings.migrations", ...materializedWranglerConfig.workflows.map(
+          (_workflow, index) => `bindings.workflows[${index}].steps`)]
       : []),
   ];
   const sanitizedReadback = {

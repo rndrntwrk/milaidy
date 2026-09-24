@@ -4,9 +4,11 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  ALICE_CODING_TARGET,
   ALICE_CLOUDFLARE_TARGET,
   canonicalAliceJson,
 } from "../../workers/alice-effective-config.js";
+import { verifyAliceDeploymentManifest } from "./alice_deployment_manifest.mjs";
 import {
   aliceEffectiveConfigFromWrangler,
 } from "./alice_cloudflare_config.mjs";
@@ -37,6 +39,8 @@ const ROLES = [
   "connectorPlane",
   "runtimeHost",
 ];
+const codingRoles = (codingMode) => codingMode
+  ? [...ROLES, "codingSandbox"] : ROLES;
 const RUNTIME_HOST_WORKER = ALICE_CLOUDFLARE_TARGET.runtimeHostWorker;
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -236,9 +240,36 @@ function expectedWorkerName(role) {
     statePlane: ALICE_CLOUDFLARE_TARGET.statePlaneWorker,
     connectorPlane: ALICE_CLOUDFLARE_TARGET.connectorPlaneWorker,
     runtimeHost: RUNTIME_HOST_WORKER,
+    codingSandbox: ALICE_CODING_TARGET.codingSandboxWorker,
   }[role];
   if (typeof target !== "string" || target.length === 0) readbackInvalid();
   return target;
+}
+
+function codingNamespaceIds(config, namespaceList, controlIds) {
+  if (config?.name !== ALICE_CODING_TARGET.codingSandboxWorker ||
+      !Array.isArray(namespaceList) || !Array.isArray(controlIds)) {
+    readbackInvalid();
+  }
+  return (config.durable_objects?.bindings ?? []).map((binding) => {
+    const scriptName = binding.script_name ?? null;
+    const matching = scriptName === ALICE_CLOUDFLARE_TARGET.controlWorker
+      ? controlIds.filter((item) => item.name === binding.name &&
+          item.className === binding.class_name && item.scriptName === null)
+      : namespaceList.filter((item) =>
+          item.script === ALICE_CODING_TARGET.codingSandboxWorker &&
+          item.class === binding.class_name && item.use_sqlite === true);
+    if (matching.length !== 1) readbackInvalid();
+    const namespaceId = scriptName === ALICE_CLOUDFLARE_TARGET.controlWorker
+      ? matching[0].namespaceId : matching[0].id;
+    if (!/^[a-f0-9]{32}$/.test(namespaceId ?? "")) readbackInvalid();
+    return {
+      className: binding.class_name,
+      name: binding.name,
+      namespaceId,
+      scriptName,
+    };
+  });
 }
 
 export async function fetchAliceRuntimeHostContainerState({
@@ -305,6 +336,62 @@ export async function fetchAliceRuntimeHostContainerState({
     ));
     if (!canonicalEqual(detailed, terminalDetail)) readbackInvalid();
     return { application: terminalDetail, ...instanceState };
+  } catch (error) {
+    if (safeReadbackErrors.has(error)) throw error;
+    readbackInvalid();
+  }
+}
+
+export async function fetchAliceCodingContainerState({
+  fetchImpl = globalThis.fetch,
+  apiToken,
+  config,
+  namespaceIds,
+  accountId = ALICE_CLOUDFLARE_TARGET.accountId,
+  baseUrl = API_BASE,
+}) {
+  if (!validInputs({ apiToken, accountId, zoneId: ZONE_ID, baseUrl, fetchImpl }) ||
+      config?.name !== ALICE_CODING_TARGET.codingSandboxWorker ||
+      !Array.isArray(namespaceIds)) readbackInvalid();
+  const container = config.containers?.[0];
+  const binding = namespaceIds.find((item) =>
+    item.name === "ALICE_CODING_SANDBOX" &&
+    item.className === "AliceCodingSandbox" && item.scriptName === null);
+  if (config.containers?.length !== 1 ||
+      container?.name !== ALICE_CODING_TARGET.codingContainerApplication ||
+      !/^[a-f0-9]{32}$/.test(binding?.namespaceId ?? "")) readbackInvalid();
+  try {
+    const client = { fetchImpl, apiToken, baseUrl };
+    const base = `/accounts/${accountId}/containers/applications`;
+    const listed = result(await apiGetJson(client, base,
+      { name: ALICE_CODING_TARGET.codingContainerApplication }));
+    const application = exactOne(listed, (item) =>
+      item?.name === ALICE_CODING_TARGET.codingContainerApplication);
+    if (listed.length !== 1 || !UUID.test(application.id ?? "")) readbackInvalid();
+    const detailed = result(await apiGetJson(client, `${base}/${application.id}`));
+    const rollout = detailed?.active_rollout_id
+      ? result(await apiGetJson(client,
+          `${base}/${application.id}/rollouts/${detailed.active_rollout_id}`))
+      : null;
+    const terminal = result(await apiGetJson(client, `${base}/${application.id}`));
+    if (!canonicalEqual(detailed, terminal) ||
+        detailed?.id !== application.id ||
+        detailed.account_id !== accountId ||
+        detailed.name !== container.name ||
+        detailed.durable_objects?.namespace_id !== binding.namespaceId ||
+        detailed.configuration?.image !== container.image ||
+        detailed.configuration?.instance_type !== container.instance_type ||
+        detailed.max_instances !== container.max_instances ||
+        (rollout !== null && (rollout.status !== "completed" ||
+          rollout.target_version !== detailed.version))) readbackInvalid();
+    return {
+      id: detailed.id,
+      version: detailed.version,
+      namespaceId: binding.namespaceId,
+      image: detailed.configuration.image,
+      instanceType: detailed.configuration.instance_type,
+      maxInstances: detailed.max_instances,
+    };
   } catch (error) {
     if (safeReadbackErrors.has(error)) throw error;
     readbackInvalid();
@@ -629,7 +716,7 @@ function canonicalIsoTimestamp(value) {
   }
 }
 
-function workflowVersionIdentity(value, expectedWorkflowId) {
+function workflowVersionIdentity(value, expectedWorkflowId, expectedClassName, expectedSteps) {
   const retention = value?.default_retention;
   const normalizedRetention = retention === undefined
     ? null
@@ -646,7 +733,7 @@ function workflowVersionIdentity(value, expectedWorkflowId) {
     );
   if (
     !UUID.test(value?.id ?? "") ||
-    value?.class_name !== "AlicePlanWorkflow" ||
+    value?.class_name !== expectedClassName ||
     !canonicalIsoTimestamp(value?.created_on) ||
     !canonicalIsoTimestamp(value?.modified_on) ||
     Date.parse(value.modified_on) < Date.parse(value.created_on) ||
@@ -654,7 +741,7 @@ function workflowVersionIdentity(value, expectedWorkflowId) {
     !UUID.test(value?.workflow_id ?? "") ||
     typeof value?.has_dag !== "boolean" ||
     value?.language !== "javascript" ||
-    value?.limits?.steps !== 16 ||
+    value?.limits?.steps !== expectedSteps ||
     !validRetention
   ) {
     readbackInvalid();
@@ -675,7 +762,12 @@ function workflowVersionIdentity(value, expectedWorkflowId) {
 export function verifyAliceCloudflareWorkflowVersionSnapshot(
   snapshot,
   expectedWorkflowId,
+  { workflowName = ALICE_CLOUDFLARE_TARGET.planWorkflow } = {},
 ) {
+  const coding = workflowName === ALICE_CODING_TARGET.codingWorkflow;
+  if (!coding && workflowName !== ALICE_CLOUDFLARE_TARGET.planWorkflow) readbackInvalid();
+  const className = coding ? "AliceCodingWorkflow" : "AlicePlanWorkflow";
+  const steps = coding ? 8 : 16;
   if (
     !Array.isArray(snapshot) ||
     snapshot.length < 1 ||
@@ -700,7 +792,7 @@ export function verifyAliceCloudflareWorkflowVersionSnapshot(
             success_retention: identity?.defaultRetention?.successMs,
           },
       limits: { steps: identity?.limits?.steps },
-    }, expectedWorkflowId);
+    }, expectedWorkflowId, className, steps);
     if (!canonicalEqual(normalized, identity)) readbackInvalid();
     return normalized;
   });
@@ -720,34 +812,39 @@ export async function fetchAliceCloudflareWorkflowVersionState({
   fetchImpl = globalThis.fetch,
   apiToken,
   expectedWorkflowId,
+  workflowName = ALICE_CLOUDFLARE_TARGET.planWorkflow,
   accountId = ALICE_CLOUDFLARE_TARGET.accountId,
   zoneId = ZONE_ID,
   baseUrl = API_BASE,
 }) {
   if (
     !validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl }) ||
-    !UUID.test(expectedWorkflowId ?? "")
+    !UUID.test(expectedWorkflowId ?? "") ||
+    ![ALICE_CLOUDFLARE_TARGET.planWorkflow,
+      ALICE_CODING_TARGET.codingWorkflow].includes(workflowName)
   ) {
     readbackInvalid();
   }
   try {
     const client = { fetchImpl, apiToken, baseUrl };
-    const root =
-      `/accounts/${accountId}/workflows/${ALICE_CLOUDFLARE_TARGET.planWorkflow}/versions`;
+    const coding = workflowName === ALICE_CODING_TARGET.codingWorkflow;
+    const className = coding ? "AliceCodingWorkflow" : "AlicePlanWorkflow";
+    const steps = coding ? 8 : 16;
+    const root = `/accounts/${accountId}/workflows/${workflowName}/versions`;
     const listed = await apiGetAllResults(client, root);
     if (listed.length < 1 || listed.length > 20) readbackInvalid();
     const identities = [];
     for (const listedVersion of listed) {
       const listedIdentity = workflowVersionIdentity(
         listedVersion,
-        expectedWorkflowId,
+        expectedWorkflowId, className, steps,
       );
       const detailed = result(
         await apiGetJson(client, `${root}/${listedIdentity.id}`),
       );
       const detailIdentity = workflowVersionIdentity(
         detailed,
-        expectedWorkflowId,
+        expectedWorkflowId, className, steps,
       );
       if (!canonicalEqual(listedIdentity, detailIdentity)) readbackInvalid();
       identities.push(detailIdentity);
@@ -758,11 +855,143 @@ export async function fetchAliceCloudflareWorkflowVersionState({
     return verifyAliceCloudflareWorkflowVersionSnapshot(
       identities.sort((left, right) => left.id.localeCompare(right.id)),
       expectedWorkflowId,
+      { workflowName },
     );
   } catch (error) {
     if (safeReadbackErrors.has(error)) throw error;
     readbackInvalid();
   }
+}
+
+function codingWorkflowIdentity(value) {
+  if (
+    !UUID.test(value?.id ?? "") ||
+    value?.name !== ALICE_CODING_TARGET.codingWorkflow ||
+    value?.script_name !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
+    value?.class_name !== "AliceCodingWorkflow" ||
+    value?.script_deleted === true ||
+    (value?.script_deleted !== undefined &&
+      typeof value.script_deleted !== "boolean") ||
+    (value?.schedules !== undefined &&
+      (!Array.isArray(value.schedules) || value.schedules.length !== 0)) ||
+    !canonicalIsoTimestamp(value?.created_on) ||
+    !canonicalIsoTimestamp(value?.modified_on) ||
+    Date.parse(value.modified_on) < Date.parse(value.created_on)
+  ) readbackInvalid();
+  return {
+    id: value.id,
+    name: value.name,
+    scriptName: value.script_name,
+    className: value.class_name,
+    createdOn: value.created_on,
+    modifiedOn: value.modified_on,
+    scriptDeleted: false,
+  };
+}
+
+export function verifyAliceCodingWorkflowStateSnapshot({ workflow, versions }) {
+  const normalized = codingWorkflowIdentity({
+    id: workflow?.id,
+    name: workflow?.name,
+    script_name: workflow?.scriptName,
+    class_name: workflow?.className,
+    created_on: workflow?.createdOn,
+    modified_on: workflow?.modifiedOn,
+    script_deleted: workflow?.scriptDeleted,
+  });
+  if (!canonicalEqual(normalized, workflow)) readbackInvalid();
+  return {
+    workflow: normalized,
+    versions: verifyAliceCloudflareWorkflowVersionSnapshot(
+      versions, normalized.id,
+      { workflowName: ALICE_CODING_TARGET.codingWorkflow },
+    ),
+  };
+}
+
+export async function fetchAliceCodingWorkflowState({
+  fetchImpl = globalThis.fetch,
+  apiToken,
+  accountId = ALICE_CLOUDFLARE_TARGET.accountId,
+  zoneId = ZONE_ID,
+  baseUrl = API_BASE,
+}) {
+  if (!validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl })) {
+    readbackInvalid();
+  }
+  try {
+    const providerWorkflow = result(await apiGetJson(
+      { fetchImpl, apiToken, baseUrl },
+      `/accounts/${accountId}/workflows/${ALICE_CODING_TARGET.codingWorkflow}`,
+    ));
+    const workflow = codingWorkflowIdentity(providerWorkflow);
+    const versions = await fetchAliceCloudflareWorkflowVersionState({
+      fetchImpl, apiToken, accountId, zoneId, baseUrl,
+      workflowName: ALICE_CODING_TARGET.codingWorkflow,
+      expectedWorkflowId: workflow.id,
+    });
+    return { workflow, versions, providerWorkflow };
+  } catch (error) {
+    if (safeReadbackErrors.has(error)) throw error;
+    readbackInvalid();
+  }
+}
+
+export async function fetchAliceCodingWorkflowPrestate({
+  fetchImpl = globalThis.fetch,
+  apiToken,
+  accountId = ALICE_CLOUDFLARE_TARGET.accountId,
+  zoneId = ZONE_ID,
+  baseUrl = API_BASE,
+}) {
+  if (!validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl })) {
+    readbackInvalid();
+  }
+  try {
+    const client = { fetchImpl, apiToken, baseUrl };
+    const listed = await apiGetAllResults(client,
+      `/accounts/${accountId}/workflows`);
+    const matches = listed.filter((item) =>
+      item?.name === ALICE_CODING_TARGET.codingWorkflow);
+    if (matches.length > 1) readbackInvalid();
+    if (matches.length === 1) {
+      const state = await fetchAliceCodingWorkflowState({
+        fetchImpl, apiToken, accountId, zoneId, baseUrl,
+      });
+      if (state.workflow.id !== matches[0].id) readbackInvalid();
+      return { workflow: state.workflow, versions: state.versions };
+    }
+    const response = await fetchImpl(new URL(
+      `${baseUrl}/accounts/${accountId}/workflows/${ALICE_CODING_TARGET.codingWorkflow}`), {
+      method: "GET", headers: { authorization: `Bearer ${apiToken}`,
+        accept: "application/json", "cache-control": "no-cache" },
+    });
+    if (!(response instanceof Response) || response.status !== 404) {
+      readbackInvalid();
+    }
+    return { absent: true };
+  } catch (error) {
+    if (safeReadbackErrors.has(error)) throw error;
+    readbackInvalid();
+  }
+}
+
+export function resolveAliceCandidateCodingWorkflowVersion({ previous, current }) {
+  const verified = verifyAliceCodingWorkflowStateSnapshot(current);
+  const before = previous?.absent === true
+    ? []
+    : verifyAliceCodingWorkflowStateSnapshot(previous).versions;
+  if (previous?.absent !== true &&
+      previous?.workflow?.id !== verified.workflow.id) readbackInvalid();
+  const previousById = new Map(before.map((version) => [version.id, version]));
+  for (const version of before) {
+    if (!canonicalEqual(verified.versions.find((item) => item.id === version.id),
+      version)) readbackInvalid();
+  }
+  const additions = verified.versions.filter((version) =>
+    !previousById.has(version.id));
+  if (additions.length !== 1) readbackInvalid();
+  return additions[0];
 }
 
 async function apiGetResponse({ fetchImpl, apiToken, baseUrl }, pathname) {
@@ -820,6 +1049,12 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
   verifyWorker = verifyAliceWorkerProviderReadback,
   now = Date.now,
 }) {
+  let codingMode = false;
+  try {
+    codingMode = JSON.parse(serializedManifest)?.schemaVersion ===
+      "alice.deployment-manifest.v4";
+  } catch { /* The provider verifier rejects malformed manifests. */ }
+  const roles = codingRoles(codingMode);
   if (
     !validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl }) ||
     !materializedWranglerConfigs ||
@@ -861,6 +1096,11 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         zoneId,
         baseUrl,
       });
+    const codingWorkflowState = codingMode
+      ? await fetchAliceCodingWorkflowState({
+          fetchImpl, apiToken, accountId, zoneId, baseUrl,
+        })
+      : null;
     const providerFingerprints = await verifyProvider({
       serializedManifest,
       accessPolicyReadback: providerState.accessPolicyReadback,
@@ -920,9 +1160,21 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       accountId,
       baseUrl,
     });
+    const codingIds = codingMode ? codingNamespaceIds(
+      materializedWranglerConfigs.codingSandbox,
+      await apiGetAllResults(client,
+        `/accounts/${accountId}/workers/durable_objects/namespaces`),
+      expectedDurableObjectNamespaceIds.control,
+    ) : null;
+    const codingContainerState = codingMode
+      ? await fetchAliceCodingContainerState({
+          fetchImpl, apiToken, accountId, baseUrl,
+          config: materializedWranglerConfigs.codingSandbox,
+          namespaceIds: codingIds,
+        }) : null;
     const workers = {};
     const workerTerminalAnchors = {};
-    for (const role of ROLES) {
+    for (const role of roles) {
       const config = materializedWranglerConfigs[role];
       const expectedEffectiveConfig = expectedEffectiveConfigs[role];
       if (!config || config.name !== expectedWorkerName(role)) {
@@ -983,7 +1235,9 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         scriptAndVersionSettings,
         subdomain,
         queueConsumer,
-        workflow: role === "control" ? workflow : null,
+        workflow: role === "control"
+          ? codingMode ? [workflow, codingWorkflowState.providerWorkflow] : workflow
+          : null,
         ...(role === "runtimeHost" ? {
           containerApplication: runtimeHostContainerState.application,
           containerApplicationInstances:
@@ -998,8 +1252,8 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         serializedManifest,
         deployedMainModule,
         deploymentMainPath: config.main,
-        expectedDurableObjectNamespaceIds:
-          expectedDurableObjectNamespaceIds[role],
+        expectedDurableObjectNamespaceIds: role === "codingSandbox"
+          ? codingIds : expectedDurableObjectNamespaceIds[role],
       });
       workerTerminalAnchors[role] = {
         deployment: deploymentAfterContent,
@@ -1038,6 +1292,11 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         zoneId,
         baseUrl,
       });
+    const terminalCodingWorkflowState = codingMode
+      ? await fetchAliceCodingWorkflowState({
+          fetchImpl, apiToken, accountId, zoneId, baseUrl,
+        })
+      : null;
     const terminalProviderFingerprints = await verifyProvider({
       serializedManifest,
       accessPolicyReadback: terminalProviderState.accessPolicyReadback,
@@ -1074,6 +1333,12 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         accountId,
         baseUrl,
       });
+    const terminalCodingContainerState = codingMode
+      ? await fetchAliceCodingContainerState({
+          fetchImpl, apiToken, accountId, baseUrl,
+          config: materializedWranglerConfigs.codingSandbox,
+          namespaceIds: codingIds,
+        }) : null;
     if (
       !canonicalEqual(providerState.sanitized, terminalProviderState.sanitized) ||
       !canonicalEqual(providerFingerprints, terminalProviderFingerprints) ||
@@ -1090,6 +1355,12 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       !canonicalEqual(consumers, terminalConsumers) ||
       !canonicalEqual(workflow, terminalWorkflow)
       || !canonicalEqual(workflowVersions, terminalWorkflowVersions) ||
+      (codingMode && (!canonicalEqual(codingWorkflowState.workflow,
+        terminalCodingWorkflowState.workflow) ||
+        !canonicalEqual(codingWorkflowState.versions,
+          terminalCodingWorkflowState.versions) ||
+        !canonicalEqual(codingContainerState,
+          terminalCodingContainerState))) ||
       !canonicalEqual(
         runtimeHostContainerState,
         terminalRuntimeHostContainerState,
@@ -1097,7 +1368,13 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
     ) {
       readbackInvalid();
     }
-    for (const role of ROLES) {
+    if (codingMode && !canonicalEqual(codingIds, codingNamespaceIds(
+      materializedWranglerConfigs.codingSandbox,
+      await apiGetAllResults(client,
+        `/accounts/${accountId}/workers/durable_objects/namespaces`),
+      expectedDurableObjectNamespaceIds.control,
+    ))) readbackInvalid();
+    for (const role of roles) {
       const config = materializedWranglerConfigs[role];
       const workerRoot = `/accounts/${accountId}/workers/scripts/${config.name}`;
       const terminalDeployment = latestDeployment(
@@ -1148,6 +1425,11 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       },
       terminalSnapshotStable: true,
       workflowVersions,
+      ...(codingMode ? {
+        codingWorkflow: codingWorkflowState.workflow,
+        codingWorkflowVersions: codingWorkflowState.versions,
+        codingContainer: codingContainerState,
+      } : {}),
       aliceTrafficBindings: {
         routes: normalizedRoutes(aliceRoutes),
         customDomains: [],
@@ -1182,8 +1464,12 @@ if (invokedPath === import.meta.url) {
     ) {
       readbackInvalid();
     }
+    const codingMode = verifyAliceDeploymentManifest(
+      fs.readFileSync(manifestPath, "utf8"),
+    ).schemaVersion === "alice.deployment-manifest.v4";
+    const roles = codingRoles(codingMode);
     const materializedWranglerConfigs = Object.fromEntries(
-      ROLES.map((role) => [
+      roles.map((role) => [
         role,
         JSON.parse(
           fs.readFileSync(path.join(configDir, `${role}.wrangler.json`), "utf8"),
@@ -1191,7 +1477,7 @@ if (invokedPath === import.meta.url) {
       ]),
     );
     const expectedEffectiveConfigs = Object.fromEntries(
-      ROLES.map((role) => [
+      roles.map((role) => [
         role,
         aliceEffectiveConfigFromWrangler(
           role,

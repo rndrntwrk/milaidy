@@ -643,6 +643,7 @@ jobs:
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-ai-gateway/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-connector-plane/index.js" \
+            "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-coding-sandbox/index.js" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/migrations/0001_alice_state.sql" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/migrations/0002_execution_records.sql" \
             "${RUNNER_TEMP}/alice-preimport-materialize/worker-bundles/alice-state-plane/migrations/0003_eliza_database.sql"
@@ -810,6 +811,7 @@ jobs:
 
       - name: Materialize fresh signed-input manifest and provider readback
         env:
+          ALICE_WORKER_BUNDLE_SCHEMA_VERSION: alice.worker-bundle-artifact.v4
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
           ALICE_SOURCE_ROOT: ${{ github.workspace }}

@@ -22,6 +22,7 @@ process.once("exit", () => {
 export function aliceTestVerifiedWorkerBundleArtifact({
   sourceCommit,
   workerModules = {},
+  codingSandbox = false,
 }) {
   const root = fs.mkdtempSync(
     path.join(os.tmpdir(), "alice-test-worker-artifact."),
@@ -34,6 +35,7 @@ export function aliceTestVerifiedWorkerBundleArtifact({
     aiGateway: "alice-ai-gateway",
     statePlane: "alice-state-plane",
     connectorPlane: "alice-connector-plane",
+    ...(codingSandbox ? { codingSandbox: "alice-coding-sandbox" } : {}),
   };
   for (const [role, worker] of Object.entries(roles)) {
     fs.mkdirSync(path.join(root, worker));
@@ -59,6 +61,9 @@ export function aliceTestVerifiedWorkerBundleArtifact({
       root,
       sourceCommit,
       wranglerVersion: "4.122.0",
+      schemaVersion: codingSandbox
+        ? "alice.worker-bundle-artifact.v4"
+        : "alice.worker-bundle-artifact.v3",
     }),
   );
   return verifyAliceWorkerBundleArtifact(serialized, {

@@ -273,7 +273,8 @@ export async function loadRuntimeConfig(
   }
   const containerManifest =
     manifest.schemaVersion === "alice.deployment-manifest.v2" ||
-    manifest.schemaVersion === "alice.deployment-manifest.v3";
+    manifest.schemaVersion === "alice.deployment-manifest.v3" ||
+    manifest.schemaVersion === "alice.deployment-manifest.v4";
   if (containerManifest !== containerMode) {
     throw new Error("ALICE_RELEASE_MANIFEST_MISMATCH");
   }

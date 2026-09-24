@@ -3,14 +3,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  ALICE_CODING_TARGET,
   ALICE_CLOUDFLARE_TARGET,
   buildAliceAccessEffectiveConfig,
   buildAliceContainerAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceCodingControlEffectiveConfig,
+  buildAliceCodingSandboxEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceRuntimeHostEffectiveConfig,
+  buildAliceCodingRuntimeHostEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
   canonicalAliceJson,
   digestAliceEffectiveConfig,
@@ -73,6 +77,7 @@ const CONTAINER_INPUT_KEYS = [
   "runtimeHostEffectiveConfig",
   "runtimeRevision",
 ];
+const CODING_INPUT_KEYS = [...CONTAINER_INPUT_KEYS, "codingSandboxEffectiveConfig"];
 
 function exactKeys(value, expected) {
   return (
@@ -90,6 +95,8 @@ function effectiveConfigsAreCanonical(value) {
     const containerMode =
       value.accessEffectiveConfig?.schemaVersion ===
       "alice.container-access-effective-config.v2";
+    const codingMode = value.workerBundleArtifact?.schemaVersion ===
+      "alice.worker-bundle-artifact.v4";
     const expectedAccess =
       containerMode
         ? buildAliceContainerAccessEffectiveConfig({
@@ -106,7 +113,9 @@ function effectiveConfigsAreCanonical(value) {
           });
     const expectedControl = (
       containerMode
-        ? buildAliceContainerControlEffectiveConfig
+        ? codingMode
+          ? buildAliceCodingControlEffectiveConfig
+          : buildAliceContainerControlEffectiveConfig
         : buildAliceControlEffectiveConfig
     )({
       accessIssuer: controlValues?.accessIssuer,
@@ -122,7 +131,9 @@ function effectiveConfigsAreCanonical(value) {
     });
     const expectedAiGateway = buildAliceAiGatewayEffectiveConfig();
     const expectedRuntimeHost = containerMode
-      ? buildAliceRuntimeHostEffectiveConfig({
+      ? (codingMode
+        ? buildAliceCodingRuntimeHostEffectiveConfig
+        : buildAliceRuntimeHostEffectiveConfig)({
           runtimeImage: value.runtimeHostEffectiveConfig?.values?.runtimeImage,
         })
       : null;
@@ -152,7 +163,9 @@ function effectiveConfigsAreCanonical(value) {
       canonicalAliceJson(value.statePlaneEffectiveConfig) ===
         canonicalAliceJson(expectedStatePlane) &&
       canonicalAliceJson(value.connectorPlaneEffectiveConfig) ===
-        canonicalAliceJson(expectedConnectorPlane)
+        canonicalAliceJson(expectedConnectorPlane) &&
+      (!codingMode || canonicalAliceJson(value.codingSandboxEffectiveConfig) ===
+        canonicalAliceJson(buildAliceCodingSandboxEffectiveConfig()))
     );
   } catch {
     return false;
@@ -163,6 +176,8 @@ async function validInputs(value) {
   const containerMode =
     value?.accessEffectiveConfig?.schemaVersion ===
     "alice.container-access-effective-config.v2";
+  const codingMode = value?.workerBundleArtifact?.schemaVersion ===
+    "alice.worker-bundle-artifact.v4";
   let providerConfigsValid = false;
   let continuityConfigValid = false;
   let workerBundleArtifactValid = false;
@@ -199,6 +214,7 @@ async function validInputs(value) {
         "aiGateway",
         "statePlane",
         "connectorPlane",
+        ...(codingMode ? ["codingSandbox"] : []),
       ].every(
         (role) => DIGEST.test(bundleDigests[role] ?? ""),
       );
@@ -206,7 +222,9 @@ async function validInputs(value) {
     workerBundleArtifactValid = false;
   }
   return (
-    exactKeys(value, containerMode ? CONTAINER_INPUT_KEYS : LEGACY_INPUT_KEYS) &&
+    exactKeys(value, codingMode ? CODING_INPUT_KEYS :
+      containerMode ? CONTAINER_INPUT_KEYS : LEGACY_INPUT_KEYS) &&
+    (!codingMode || containerMode) &&
     Number.isSafeInteger(value.releaseEpoch) &&
     value.releaseEpoch > 0 &&
     COMMIT.test(value.sourceCommit) &&
@@ -240,11 +258,16 @@ function validManifest(value) {
   const containerMode = [
     "alice.deployment-manifest.v2",
     "alice.deployment-manifest.v3",
+    "alice.deployment-manifest.v4",
   ].includes(value?.schemaVersion);
   const runtimeHostMode =
-    value?.schemaVersion === "alice.deployment-manifest.v3";
+    ["alice.deployment-manifest.v3", "alice.deployment-manifest.v4"]
+      .includes(value?.schemaVersion);
+  const codingMode = value?.schemaVersion === "alice.deployment-manifest.v4";
   const target = runtimeHostMode
-    ? ALICE_CLOUDFLARE_TARGET
+    ? codingMode
+      ? { ...ALICE_CLOUDFLARE_TARGET, ...ALICE_CODING_TARGET }
+      : ALICE_CLOUDFLARE_TARGET
     : LEGACY_CLOUDFLARE_TARGET;
   if (
     !exactKeys(value, ["schemaVersion", "release", "source", "cloudflare"]) ||
@@ -280,6 +303,8 @@ function validManifest(value) {
       "statePlaneConfigSha256",
       "statePlaneWorkerBundleSha256",
       "vectorizeProviderConfigSha256",
+      ...(codingMode ? ["codingSandboxConfigSha256",
+        "codingSandboxWorkerBundleSha256"] : []),
       ...(runtimeHostMode
         ? [
             "runtimeHostConfigSha256",
@@ -340,6 +365,8 @@ function validManifest(value) {
     DIGEST.test(value.cloudflare.statePlaneConfigSha256) &&
     DIGEST.test(value.cloudflare.connectorPlaneConfigSha256) &&
     DIGEST.test(value.cloudflare.statePlaneWorkerBundleSha256) &&
+    (!codingMode || (DIGEST.test(value.cloudflare.codingSandboxConfigSha256) &&
+      DIGEST.test(value.cloudflare.codingSandboxWorkerBundleSha256))) &&
     DIGEST.test(value.cloudflare.connectorPlaneWorkerBundleSha256) &&
     DIGEST.test(value.cloudflare.stateMigrationSetSha256) &&
     (!runtimeHostMode ||
@@ -370,9 +397,12 @@ export async function buildAliceDeploymentManifest(inputs) {
   const containerMode =
     inputs.accessEffectiveConfig.schemaVersion ===
     "alice.container-access-effective-config.v2";
+  const codingMode = inputs.workerBundleArtifact.schemaVersion ===
+    "alice.worker-bundle-artifact.v4";
   return {
     schemaVersion: containerMode
-      ? "alice.deployment-manifest.v3"
+      ? codingMode ? "alice.deployment-manifest.v4" :
+        "alice.deployment-manifest.v3"
       : "alice.deployment-manifest.v1",
     release: {
       releaseEpoch: inputs.releaseEpoch,
@@ -392,7 +422,9 @@ export async function buildAliceDeploymentManifest(inputs) {
     },
     cloudflare: {
       ...(containerMode
-        ? ALICE_CLOUDFLARE_TARGET
+        ? codingMode
+          ? { ...ALICE_CLOUDFLARE_TARGET, ...ALICE_CODING_TARGET }
+          : ALICE_CLOUDFLARE_TARGET
         : LEGACY_CLOUDFLARE_TARGET),
       accessConfigSha256: await digestAliceEffectiveConfig(
         inputs.accessEffectiveConfig,
@@ -428,6 +460,12 @@ export async function buildAliceDeploymentManifest(inputs) {
         inputs.connectorPlaneEffectiveConfig,
       ),
       statePlaneWorkerBundleSha256: workerBundleDigests.statePlane,
+      ...(codingMode ? {
+        codingSandboxConfigSha256: await digestAliceEffectiveConfig(
+          inputs.codingSandboxEffectiveConfig,
+        ),
+        codingSandboxWorkerBundleSha256: workerBundleDigests.codingSandbox,
+      } : {}),
       connectorPlaneWorkerBundleSha256: workerBundleDigests.connectorPlane,
       stateMigrationSetSha256: aliceWorkerMigrationSetDigest(
         inputs.workerBundleArtifact,
@@ -487,10 +525,16 @@ if (invokedPath === import.meta.url) {
       ownerEmailSha256: process.env.ALICE_OWNER_EMAIL_SHA256,
       runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
     });
-    const runtimeHostEffectiveConfig = buildAliceRuntimeHostEffectiveConfig({
+    const codingMode = process.env.ALICE_WORKER_BUNDLE_SCHEMA_VERSION ===
+      "alice.worker-bundle-artifact.v4";
+    const runtimeHostEffectiveConfig = (codingMode
+      ? buildAliceCodingRuntimeHostEffectiveConfig
+      : buildAliceRuntimeHostEffectiveConfig)({
       runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
     });
-    const controlEffectiveConfig = buildAliceContainerControlEffectiveConfig({
+    const controlEffectiveConfig = (codingMode
+      ? buildAliceCodingControlEffectiveConfig
+      : buildAliceContainerControlEffectiveConfig)({
       accessIssuer: process.env.ALICE_ACCESS_ISSUER,
       accessAudience: process.env.ALICE_ACCESS_AUDIENCE,
       ownerEmailSha256: process.env.ALICE_OWNER_EMAIL_SHA256,
@@ -573,6 +617,9 @@ if (invokedPath === import.meta.url) {
       aiGatewayEffectiveConfig: buildAliceAiGatewayEffectiveConfig(),
       statePlaneEffectiveConfig,
       connectorPlaneEffectiveConfig,
+      ...(codingMode ? {
+        codingSandboxEffectiveConfig: buildAliceCodingSandboxEffectiveConfig(),
+      } : {}),
     });
     const bytes = serializeAliceDeploymentManifest(manifest);
     const outputPath = process.env.ALICE_DEPLOYMENT_MANIFEST_PATH;
