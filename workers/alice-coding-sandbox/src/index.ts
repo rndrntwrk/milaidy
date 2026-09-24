@@ -35,7 +35,7 @@ async function collectChanges(sandbox: ReturnType<typeof getSandbox>): Promise<C
   if (!listing.success) throw new Error("CODING_CHANGE_LIST_FAILED");
   const encoded = (await sandbox.readFile("/workspace/changes.b64")).content.replace(/\s/g, "");
   const binary = atob(encoded);
-  const raw = new TextDecoder("utf-8", { fatal: true }).decode(
+  const raw = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(
     Uint8Array.from(binary, (character) => character.charCodeAt(0)),
   );
   const fields = raw.split("\0");
