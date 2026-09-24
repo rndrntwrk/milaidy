@@ -44,6 +44,8 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/alice_worker_bundle_artifact.test.mjs',
   'deploy/modal/alice_deployment_manifest.mjs',
   'deploy/modal/alice_deployment_manifest.test.mjs',
+  'deploy/modal/verify_alice_program_admission.ts',
+  'deploy/modal/verify_alice_program_admission.test.ts',
   'workers/alice-access-gateway/src/alice-runtime-container.ts',
   'workers/alice-access-gateway/src/alice-runtime-host.ts',
   'workers/alice-access-gateway/test/runtime-container.test.ts',
