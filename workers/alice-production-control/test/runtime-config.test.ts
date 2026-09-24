@@ -4,6 +4,10 @@ import { canonicalJson, type ProgramEnvelope } from "../src/program";
 import {
   buildAliceAccessEffectiveConfig,
   buildAliceAiGatewayEffectiveConfig,
+  buildAliceCodingControlEffectiveConfig,
+  buildAliceCodingRuntimeHostEffectiveConfig,
+  buildAliceCodingSandboxEffectiveConfig,
+  buildAliceContainerAccessEffectiveConfig,
   buildAliceConnectorPlaneEffectiveConfig,
   buildAliceControlEffectiveConfig,
   buildAliceStatePlaneEffectiveConfig,
@@ -31,7 +35,7 @@ function base64Url(value: string | ArrayBuffer): string {
   return Buffer.from(typeof value === "string" ? value : new Uint8Array(value)).toString("base64url");
 }
 
-async function fixture(modelDailyBudgetUnits = 10_000) {
+async function fixture(modelDailyBudgetUnits = 10_000, coding = false) {
   const ownerEmailSha256 = base64Url(
     await crypto.subtle.digest(
       "SHA-256",
@@ -41,7 +45,9 @@ async function fixture(modelDailyBudgetUnits = 10_000) {
   const releaseSource = {
     sourceCommit: "521c1697089e43e10158acad0582f2b000514520",
     deploymentControllerCommit: "6".repeat(40),
-    runtimeImage: `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"a".repeat(64)}`,
+    runtimeImage: coding
+      ? `registry.cloudflare.com/036df6c823669b8fa2f66cf4c16eeb29/alice-runtime@sha256:${"a".repeat(64)}`
+      : `ghcr.io/rndrntwrk/milaidy-agent@sha256:${"a".repeat(64)}`,
     runtimeBuildManifestSha256: `sha256:${"c".repeat(64)}`,
     elizaCommit: "a21d401bf7429bc8c794698b20832512b5315187",
   };
@@ -56,29 +62,47 @@ async function fixture(modelDailyBudgetUnits = 10_000) {
     releaseEpoch: 1,
     ...releaseSource,
     capabilityBomSha256: `sha256:${"f".repeat(64)}`,
-    modalRevision: 49,
+    ...(coding ? { runtimeRevision: 49 } : { modalRevision: 49 }),
     policyHash: `sha256:${"b".repeat(64)}`,
-    rollbackBoundary: "modal:alice-runtime:v49",
+    rollbackBoundary: `${coding ? "container" : "modal"}:alice-runtime:v49`,
     ...providerReadbacks,
     cloudflareContinuityReadback: aliceTestCloudflareContinuityReadback(),
     workerBundleArtifact: aliceTestVerifiedWorkerBundleArtifact({
       sourceCommit: releaseSource.deploymentControllerCommit,
+      ...(coding ? { codingSandbox: true } : {}),
     }),
-    accessEffectiveConfig: buildAliceAccessEffectiveConfig({
-      accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
-      accessAudience: "access-audience",
-      ownerEmailSha256,
-      upstreamOrigin: "https://rndrntwrk--alice.modal.run",
-    }),
-    controlEffectiveConfig: buildAliceControlEffectiveConfig({
-      accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
-      accessAudience: "access-audience",
-      ownerEmailSha256,
-      modelDailyBudgetUnits,
-      modalRevision: 49,
-      releaseAccessAudience: "alice-release-controller-audience",
-      releaseServiceTokenIdSha256: "R".repeat(43),
-    }),
+    accessEffectiveConfig: coding
+      ? buildAliceContainerAccessEffectiveConfig({
+          accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+          accessAudience: "access-audience",
+          ownerEmailSha256,
+          runtimeImage: releaseSource.runtimeImage,
+        })
+      : buildAliceAccessEffectiveConfig({
+          accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+          accessAudience: "access-audience",
+          ownerEmailSha256,
+          upstreamOrigin: "https://rndrntwrk--alice.modal.run",
+        }),
+    ...(coding
+      ? {
+          runtimeHostEffectiveConfig: buildAliceCodingRuntimeHostEffectiveConfig({
+            runtimeImage: releaseSource.runtimeImage,
+          }),
+          codingSandboxEffectiveConfig: buildAliceCodingSandboxEffectiveConfig(),
+        }
+      : {}),
+    controlEffectiveConfig: (coding
+      ? buildAliceCodingControlEffectiveConfig
+      : buildAliceControlEffectiveConfig)({
+        accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+        accessAudience: "access-audience",
+        ownerEmailSha256,
+        modelDailyBudgetUnits,
+        ...(coding ? { runtimeRevision: 49 } : { modalRevision: 49 }),
+        releaseAccessAudience: "alice-release-controller-audience",
+        releaseServiceTokenIdSha256: "R".repeat(43),
+      }),
     aiGatewayEffectiveConfig: buildAliceAiGatewayEffectiveConfig(),
     statePlaneEffectiveConfig: buildAliceStatePlaneEffectiveConfig({
       databaseId: "11111111-2222-3333-4444-555555555555",
@@ -91,7 +115,7 @@ async function fixture(modelDailyBudgetUnits = 10_000) {
     deploymentManifest,
   );
   const envelope: ProgramEnvelope = {
-    schemaVersion: "alice.program-envelope.v1",
+    schemaVersion: coding ? "alice.program-envelope.v2" : "alice.program-envelope.v1",
     programId: "alice-production-core-2026-08-22",
     issuedAt: "2026-08-22T12:00:00.000Z",
     expiresAt: "2026-08-29T12:00:00.000Z",
@@ -101,9 +125,9 @@ async function fixture(modelDailyBudgetUnits = 10_000) {
       deploymentManifestSha256: digestAliceDeploymentManifest(
         deploymentManifestBytes,
       ),
-      modalRevision: 49,
+      ...(coding ? { runtimeRevision: 49 } : { modalRevision: 49 }),
       policyHash: `sha256:${"b".repeat(64)}`,
-      rollbackBoundary: "modal:alice-runtime:v49",
+      rollbackBoundary: `${coding ? "container" : "modal"}:alice-runtime:v49`,
     },
     autonomy: {
       autonomousActions: [
@@ -171,7 +195,9 @@ async function fixture(modelDailyBudgetUnits = 10_000) {
       ALICE_PROGRAM_ENVELOPE_B64: base64Url(JSON.stringify(envelope)),
       ALICE_PROGRAM_SIGNATURE_B64: signature,
       ALICE_PROGRAM_PUBLIC_JWK_B64: base64Url(JSON.stringify(publicJwk)),
-      ALICE_MODAL_REVISION: "49",
+      ...(coding
+        ? { ALICE_RUNTIME_REVISION: "49" }
+        : { ALICE_MODAL_REVISION: "49" }),
       ALICE_DEPLOYMENT_MANIFEST_SHA256: envelope.release.deploymentManifestSha256,
       ALICE_DEPLOYMENT_MANIFEST_B64: encodeAliceDeploymentManifest(
         deploymentManifestBytes,
@@ -234,6 +260,21 @@ describe("Alice runtime configuration", () => {
       } as unknown as typeof config),
     ).toEqual({ runtimeRevision: 50 });
     expect(config.deploymentManifestSha256).toBe(envelope.release.deploymentManifestSha256);
+  });
+
+  test("admits a signed v4 coding release against its coding Control config", async () => {
+    const { env, trustPins } = await fixture(10_000, true);
+    const now = Date.parse("2026-08-22T18:00:00.000Z");
+    const config = await loadRuntimeConfig(env, now, trustPins);
+    expect(config.runtimeRevision).toBe(49);
+    expect(releaseRevisionResponseFields(config)).toEqual({ runtimeRevision: 49 });
+    await expect(
+      loadRuntimeConfig(
+        { ...env, ALICE_MODEL_DAILY_BUDGET_UNITS: "9999" },
+        now,
+        trustPins,
+      ),
+    ).rejects.toThrow("ALICE_EFFECTIVE_CONFIG_MISMATCH");
   });
 
   test("binds the corpus budget to the signed configuration and enforces its ceiling", async () => {

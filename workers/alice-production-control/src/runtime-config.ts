@@ -9,6 +9,7 @@ import type { ReleaseBinding } from "./policy";
 import {
   buildAliceControlEffectiveConfig,
   buildAliceContainerControlEffectiveConfig,
+  buildAliceCodingControlEffectiveConfig,
   verifyAliceDeploymentManifestBinding,
   verifyAliceEffectiveConfigBinding,
 } from "../../alice-effective-config.js";
@@ -319,7 +320,9 @@ export async function loadRuntimeConfig(
   }
 
   const controlEffectiveConfig = containerMode
-    ? buildAliceContainerControlEffectiveConfig({
+    ? (manifest.schemaVersion === "alice.deployment-manifest.v4"
+        ? buildAliceCodingControlEffectiveConfig
+        : buildAliceContainerControlEffectiveConfig)({
         accessIssuer: ownerAccess.accessIssuer,
         accessAudience: ownerAccess.accessAudience,
         ownerEmailSha256: ownerAccess.ownerEmailSha256,
