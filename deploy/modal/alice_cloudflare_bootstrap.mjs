@@ -127,6 +127,14 @@ const EXPECTED_DURABLE_OBJECT_BINDINGS = Object.freeze({
     }),
   ]),
 });
+const CANDIDATE_RUNTIME_HOST_BINDINGS = Object.freeze([
+  Object.freeze({
+    className: "AliceAuthority",
+    name: "ALICE_AUTHORITY",
+    scriptName: ALICE_CLOUDFLARE_TARGET.controlWorker,
+  }),
+  ...EXPECTED_DURABLE_OBJECT_BINDINGS.runtimeHost,
+]);
 const TRANSIENT_READ_ATTEMPTS = 3;
 const TRANSIENT_READ_DELAY_MS = 100;
 
@@ -1002,7 +1010,9 @@ export function buildAliceBootstrapPrivateWorkerConfig({
   ) {
     invalid();
   }
-  const expectedBindings = EXPECTED_DURABLE_OBJECT_BINDINGS[role];
+  const expectedBindings = role === "runtimeHost"
+    ? CANDIDATE_RUNTIME_HOST_BINDINGS
+    : EXPECTED_DURABLE_OBJECT_BINDINGS[role];
   const observedBindings = sourceConfig.durable_objects?.bindings;
   if (
     !Array.isArray(observedBindings) ||
@@ -1201,16 +1211,23 @@ function extractAliceBootstrapRoleNamespaceIds(role, version) {
     name,
     scriptName,
   }));
-  const expectedIdentity = EXPECTED_DURABLE_OBJECT_BINDINGS[role].map(
+  const expectedIdentity = (bindings) => bindings.map(
     ({ className, name, scriptName = null }) => ({
       className,
       name,
       scriptName,
     }),
   );
+  const observedIdentity = canonicalAliceJson(identity);
+  const expectedLegacyIdentity = canonicalAliceJson(expectedIdentity(
+    EXPECTED_DURABLE_OBJECT_BINDINGS[role],
+  ));
+  const expectedCurrentIdentity = role === "runtimeHost"
+    ? canonicalAliceJson(expectedIdentity(CANDIDATE_RUNTIME_HOST_BINDINGS))
+    : expectedLegacyIdentity;
   if (
-    canonicalAliceJson(identity) !==
-      canonicalAliceJson(expectedIdentity) ||
+    (observedIdentity !== expectedLegacyIdentity &&
+      observedIdentity !== expectedCurrentIdentity) ||
     namespaces.some(
       (binding) => !NAMESPACE_ID.test(binding.namespaceId ?? ""),
     ) ||
@@ -1232,27 +1249,38 @@ function verifyAliceBootstrapNamespaceRelationships(
       const prior = seen.get(binding.namespaceId);
       if (prior !== undefined) {
         const pair = new Set([prior.role, role]);
-        if (
-          pair.size !== 2 ||
-          !pair.has("access") ||
-          !pair.has("runtimeHost") ||
-          prior.name !== "ALICE_RUNTIME_CONTAINER" ||
-          binding.name !== "ALICE_RUNTIME_CONTAINER"
-        ) {
+        const sharedRuntime = pair.size === 2 && pair.has("access") &&
+          pair.has("runtimeHost") && prior.name === "ALICE_RUNTIME_CONTAINER" &&
+          binding.name === "ALICE_RUNTIME_CONTAINER" &&
+          prior.className === "AliceRuntimeContainer" &&
+          binding.className === "AliceRuntimeContainer";
+        const sharedAuthority = pair.size === 2 && pair.has("control") &&
+          pair.has("runtimeHost") && prior.name === "ALICE_AUTHORITY" &&
+          binding.name === "ALICE_AUTHORITY" &&
+          prior.className === "AliceAuthority" &&
+          binding.className === "AliceAuthority";
+        if (!sharedRuntime && !sharedAuthority) {
           invalid();
         }
       } else {
-        seen.set(binding.namespaceId, { role, name: binding.name });
+        seen.set(binding.namespaceId, { role, name: binding.name, className: binding.className });
       }
     }
   }
-  const accessRuntime = namespaceIdsByRole.access?.[0];
-  const hostRuntime = namespaceIdsByRole.runtimeHost?.[0];
+  const named = (role, name) => namespaceIdsByRole[role]?.find(
+    (binding) => binding.name === name,
+  );
+  const accessRuntime = named("access", "ALICE_RUNTIME_CONTAINER");
+  const hostRuntime = named("runtimeHost", "ALICE_RUNTIME_CONTAINER");
+  const hostAuthority = named("runtimeHost", "ALICE_AUTHORITY");
+  const controlAuthority = named("control", "ALICE_AUTHORITY");
   if (
     (accessRuntime && !hostRuntime) ||
     (requireRuntimeReference && (!accessRuntime || !hostRuntime)) ||
     (accessRuntime && hostRuntime &&
-      accessRuntime.namespaceId !== hostRuntime.namespaceId)
+      accessRuntime.namespaceId !== hostRuntime.namespaceId) ||
+    (hostAuthority && (!controlAuthority ||
+      hostAuthority.namespaceId !== controlAuthority.namespaceId))
   ) {
     invalid();
   }
@@ -2428,7 +2456,9 @@ async function main() {
       bootstrapVersionBoundarySha256,
       bootstrapVersionId: versionId,
       runtimeHostVersionId: versionIds.runtimeHost,
-      runtimeHostNamespaceId: namespaceIds.runtimeHost[0]?.namespaceId,
+      runtimeHostNamespaceId: namespaceIds.runtimeHost.find(
+        (binding) => binding.name === "ALICE_RUNTIME_CONTAINER",
+      )?.namespaceId,
       runtimeHostContainerApplication: runtimeHostBoundary,
       bootstrapStatePath,
       mode,

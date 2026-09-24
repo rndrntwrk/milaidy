@@ -280,6 +280,31 @@ test("extracts the exact six-role provider-assigned Durable Object namespaces", 
       scriptName: null,
     }],
   });
+  const currentRuntimeHost = version([
+    {
+      type: "durable_object_namespace",
+      name: "ALICE_AUTHORITY",
+      class_name: "AliceAuthority",
+      script_name: "alice-production-control",
+      namespace_id: "1".repeat(32),
+    },
+    ...versions.runtimeHost.resources.bindings,
+  ]);
+  const currentIds = extractAliceBootstrapNamespaceIds({
+    ...versions,
+    runtimeHost: currentRuntimeHost,
+  });
+  assert.equal(
+    currentIds.runtimeHost.find((binding) => binding.name === "ALICE_AUTHORITY")?.namespaceId,
+    ids.control.find((binding) => binding.name === "ALICE_AUTHORITY")?.namespaceId,
+  );
+  assert.throws(() => extractAliceBootstrapNamespaceIds({
+    ...versions,
+    runtimeHost: version([
+      { ...currentRuntimeHost.resources.bindings[0], namespace_id: "6".repeat(32) },
+      ...versions.runtimeHost.resources.bindings,
+    ]),
+  }), /ALICE_CLOUDFLARE_BOOTSTRAP_INVALID/);
   assert.throws(() =>
     extractAliceBootstrapNamespaceIds({
       ...versions,
@@ -1212,6 +1237,13 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
       },
     ],
   ]) {
+    const bindings = role === "runtimeHost"
+      ? [{
+          name: "ALICE_AUTHORITY",
+          class_name: "AliceAuthority",
+          script_name: "alice-production-control",
+        }, binding]
+      : [binding];
     const config = bootstrapModule.buildAliceBootstrapPrivateWorkerConfig({
       role,
       ...(role === "runtimeHost" ? { runtimeImage: exactRuntimeImage } : {}),
@@ -1236,7 +1268,7 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
         d1_databases: [{ binding: "DB", database_id: "provider-id" }],
         vectorize: [{ binding: "VECTOR", index_name: "provider-index" }],
         r2_buckets: [{ binding: "OBJECTS", bucket_name: "provider-bucket" }],
-        durable_objects: { bindings: [binding] },
+        durable_objects: { bindings },
         migrations: [{
           tag: `${role}-v1`,
           new_sqlite_classes: [binding.class_name],
@@ -1250,7 +1282,7 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
     assert.equal(config.workers_dev, false);
     assert.equal(config.preview_urls, false);
     assert.deepEqual(config.secrets, { required: [] });
-    assert.deepEqual(config.durable_objects.bindings, [binding]);
+    assert.deepEqual(config.durable_objects.bindings, bindings);
     assert.equal("services" in config, false);
     assert.equal("containers" in config, role === "runtimeHost");
     if (role === "runtimeHost") {
@@ -1260,6 +1292,19 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
     assert.equal("vectorize" in config, false);
     assert.equal("r2_buckets" in config, false);
   }
+  const actualRuntimeHostConfig = JSON.parse(fs.readFileSync(
+    new URL("../../workers/alice-access-gateway/wrangler.runtime-host.jsonc", import.meta.url),
+    "utf8",
+  ));
+  assert.equal(
+    bootstrapModule.buildAliceBootstrapPrivateWorkerConfig({
+      role: "runtimeHost",
+      runtimeImage: exactRuntimeImage,
+      sourceConfig: actualRuntimeHostConfig,
+      deploymentMainPath: "/release/alice-runtime-container-host/index.js",
+    }).containers[0].image,
+    exactRuntimeImage,
+  );
   for (const runtimeImage of [
     undefined,
     `registry.cloudflare.com/${sourceConfig.account_id}/alice-runtime:latest`,
@@ -1272,10 +1317,17 @@ test("materializes only inert unrouted pre-release Worker identities", () => {
         sourceConfig: {
           account_id: sourceConfig.account_id,
           name: "alice-runtime-container-host",
-          durable_objects: { bindings: [{
-            name: "ALICE_RUNTIME_CONTAINER",
-            class_name: "AliceRuntimeContainer",
-          }] },
+          durable_objects: { bindings: [
+            {
+              name: "ALICE_AUTHORITY",
+              class_name: "AliceAuthority",
+              script_name: "alice-production-control",
+            },
+            {
+              name: "ALICE_RUNTIME_CONTAINER",
+              class_name: "AliceRuntimeContainer",
+            },
+          ] },
           containers: [{
             name: "alice-production-runtime",
             class_name: "AliceRuntimeContainer",
