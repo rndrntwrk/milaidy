@@ -58,7 +58,7 @@ jobs:
       - name: Hydrate exact reviewed Eliza PR head
         if: ${{ !inputs.diagnostic_only }}
         env:
-          EXPECTED_ELIZA_SHA: f50f4ae3e84168b1f93a7265041aa03fe5f9f392
+          EXPECTED_ELIZA_SHA: 7cdfca05b33038ec18ae5c8502df39c01d180090
         run: |
           set -euo pipefail
           test "$(git config -f .gitmodules --get submodule.eliza.url)" = \

@@ -509,7 +509,7 @@ jobs:
 
       - name: Hydrate exact reviewed Eliza PR head
         env:
-          EXPECTED_ELIZA_SHA: f50f4ae3e84168b1f93a7265041aa03fe5f9f392
+          EXPECTED_ELIZA_SHA: 7cdfca05b33038ec18ae5c8502df39c01d180090
         run: |
           set -euo pipefail
           test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
@@ -577,7 +577,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_IMAGE: ${{ inputs.runtime_image }}
-          ELIZA_SHA: f50f4ae3e84168b1f93a7265041aa03fe5f9f392
+          ELIZA_SHA: 7cdfca05b33038ec18ae5c8502df39c01d180090
         run: |
           set -euo pipefail
           printf '%s' "$RUNTIME_IMAGE" | grep -Eq '^ghcr\.io/rndrntwrk/milaidy-agent@sha256:[a-f0-9]{64}$'
@@ -999,7 +999,7 @@ jobs:
           ALICE_SOURCE_ROOT: ${{ github.workspace }}
           ALICE_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
           ALICE_DEPLOYMENT_CONTROLLER_COMMIT: ${{ env.CONTROLLER_SHA }}
-          ALICE_ELIZA_COMMIT: f50f4ae3e84168b1f93a7265041aa03fe5f9f392
+          ALICE_ELIZA_COMMIT: 7cdfca05b33038ec18ae5c8502df39c01d180090
           ALICE_CLOUDFLARE_RUNTIME_IMAGE: ${{ env.ALICE_CLOUDFLARE_RUNTIME_IMAGE }}
           ALICE_RUNTIME_BUILD_MANIFEST_SHA256: ${{ env.ALICE_RUNTIME_BUILD_MANIFEST_SHA256 }}
           ALICE_CAPABILITY_BOM_SHA256: ${{ env.ALICE_CAPABILITY_BOM_SHA256 }}
@@ -1589,7 +1589,7 @@ jobs:
 
       - name: Hydrate exact reviewed Eliza PR head
         env:
-          EXPECTED_ELIZA_SHA: f50f4ae3e84168b1f93a7265041aa03fe5f9f392
+          EXPECTED_ELIZA_SHA: 7cdfca05b33038ec18ae5c8502df39c01d180090
         run: |
           set -euo pipefail
           test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
