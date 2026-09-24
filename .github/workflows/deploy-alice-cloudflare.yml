@@ -129,7 +129,7 @@ jobs:
           }
           let response;
           try {
-            response = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
+            response = await fetch('https://api.cloudflare.com/client/v4/accounts/036df6c823669b8fa2f66cf4c16eeb29/tokens/verify', {
               method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(30_000),
               headers: { authorization: `Bearer ${token}`, accept: 'application/json',
                 'cache-control': 'no-cache' },
@@ -270,6 +270,7 @@ jobs:
               typeof bearer !== 'string' || bearer.length < 32) {
             throw new Error('ALICE_DEPLOY_TOKEN_POLICY_INPUT_INVALID');
           }
+          const accountId = '036df6c823669b8fa2f66cf4c16eeb29';
           const read = async path => {
             let response;
             try {
@@ -297,7 +298,7 @@ jobs:
             let total = null;
             for (let page = 1; page <= 50; page += 1) {
               const envelope = await read(
-                `/user/tokens/permission_groups?page=${page}&per_page=100`);
+                `/accounts/${accountId}/tokens/permission_groups?page=${page}&per_page=100`);
               const rows = envelope.result;
               const info = envelope.result_info;
               if (!Array.isArray(rows) || info?.page !== page ||
@@ -322,10 +323,10 @@ jobs:
             throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
           };
           const [tokenEnvelope, catalog] = await Promise.all([
-            read(`/user/tokens/${id}`), readCatalog(),
+            read(`/accounts/${accountId}/tokens/${id}`), readCatalog(),
           ]);
           const token = tokenEnvelope.result;
-          const account = 'com.cloudflare.api.account.036df6c823669b8fa2f66cf4c16eeb29';
+          const account = `com.cloudflare.api.account.${accountId}`;
           const zone = 'com.cloudflare.api.account.zone.7b24984479ee4cddb6c5d8a9b7a0f2c6';
           const now = Date.now();
           const validUntil = Date.parse(token?.expires_on ?? '');
