@@ -484,6 +484,15 @@ if (fs.existsSync(bunDir)) {
 }
 __AISDK_FIX__
 
+# Bun does not install this policy-disabled workspace plugin at the root, even
+# though the capability inventory must attest its exact reviewed build.
+RUN set -e; \
+  rm -rf node_modules/@elizaos/plugin-github; \
+  mkdir -p node_modules/@elizaos/plugin-github; \
+  cp eliza/plugins/plugin-github/package.json node_modules/@elizaos/plugin-github/; \
+  cp -a eliza/plugins/plugin-github/dist node_modules/@elizaos/plugin-github/dist; \
+  test -f node_modules/@elizaos/plugin-github/dist/index.js
+
 # Bun keeps reviewed workspace packages as links back into the source checkout.
 # Convert only exact policy packages whose root lock record names that exact
 # workspace into physical node_modules bytes before the strict capability BOM.

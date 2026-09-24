@@ -223,6 +223,10 @@ export function materializeAliceCapabilityWorkspacePackages({ root, policy }) {
     materializedPackages.push(packageName);
   }
 
+  if (missingPackages.length > 0) {
+    throw new Error(`ALICE_CAPABILITY_PACKAGE_MISSING: ${missingPackages.join(", ")}`);
+  }
+
   return {
     materializedPackages,
     preservedPackages,
