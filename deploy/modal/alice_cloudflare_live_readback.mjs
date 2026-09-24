@@ -342,6 +342,62 @@ export async function fetchAliceRuntimeHostContainerState({
   }
 }
 
+export async function fetchAliceCodingContainerState({
+  fetchImpl = globalThis.fetch,
+  apiToken,
+  config,
+  namespaceIds,
+  accountId = ALICE_CLOUDFLARE_TARGET.accountId,
+  baseUrl = API_BASE,
+}) {
+  if (!validInputs({ apiToken, accountId, zoneId: ZONE_ID, baseUrl, fetchImpl }) ||
+      config?.name !== ALICE_CODING_TARGET.codingSandboxWorker ||
+      !Array.isArray(namespaceIds)) readbackInvalid();
+  const container = config.containers?.[0];
+  const binding = namespaceIds.find((item) =>
+    item.name === "ALICE_CODING_SANDBOX" &&
+    item.className === "AliceCodingSandbox" && item.scriptName === null);
+  if (config.containers?.length !== 1 ||
+      container?.name !== ALICE_CODING_TARGET.codingContainerApplication ||
+      !/^[a-f0-9]{32}$/.test(binding?.namespaceId ?? "")) readbackInvalid();
+  try {
+    const client = { fetchImpl, apiToken, baseUrl };
+    const base = `/accounts/${accountId}/containers/applications`;
+    const listed = result(await apiGetJson(client, base,
+      { name: ALICE_CODING_TARGET.codingContainerApplication }));
+    const application = exactOne(listed, (item) =>
+      item?.name === ALICE_CODING_TARGET.codingContainerApplication);
+    if (listed.length !== 1 || !UUID.test(application.id ?? "")) readbackInvalid();
+    const detailed = result(await apiGetJson(client, `${base}/${application.id}`));
+    const rollout = detailed?.active_rollout_id
+      ? result(await apiGetJson(client,
+          `${base}/${application.id}/rollouts/${detailed.active_rollout_id}`))
+      : null;
+    const terminal = result(await apiGetJson(client, `${base}/${application.id}`));
+    if (!canonicalEqual(detailed, terminal) ||
+        detailed?.id !== application.id ||
+        detailed.account_id !== accountId ||
+        detailed.name !== container.name ||
+        detailed.durable_objects?.namespace_id !== binding.namespaceId ||
+        detailed.configuration?.image !== container.image ||
+        detailed.configuration?.instance_type !== container.instance_type ||
+        detailed.max_instances !== container.max_instances ||
+        (rollout !== null && (rollout.status !== "completed" ||
+          rollout.target_version !== detailed.version))) readbackInvalid();
+    return {
+      id: detailed.id,
+      version: detailed.version,
+      namespaceId: binding.namespaceId,
+      image: detailed.configuration.image,
+      instanceType: detailed.configuration.instance_type,
+      maxInstances: detailed.max_instances,
+    };
+  } catch (error) {
+    if (safeReadbackErrors.has(error)) throw error;
+    readbackInvalid();
+  }
+}
+
 async function readExactResponseBytes(response, expectedText) {
   const expected = Buffer.from(expectedText, "utf8");
   const reader = response.body?.getReader();
@@ -1051,6 +1107,12 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         `/accounts/${accountId}/workers/durable_objects/namespaces`),
       expectedDurableObjectNamespaceIds.control,
     ) : null;
+    const codingContainerState = codingMode
+      ? await fetchAliceCodingContainerState({
+          fetchImpl, apiToken, accountId, baseUrl,
+          config: materializedWranglerConfigs.codingSandbox,
+          namespaceIds: codingIds,
+        }) : null;
     const workers = {};
     const workerTerminalAnchors = {};
     for (const role of roles) {
@@ -1212,6 +1274,12 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         accountId,
         baseUrl,
       });
+    const terminalCodingContainerState = codingMode
+      ? await fetchAliceCodingContainerState({
+          fetchImpl, apiToken, accountId, baseUrl,
+          config: materializedWranglerConfigs.codingSandbox,
+          namespaceIds: codingIds,
+        }) : null;
     if (
       !canonicalEqual(providerState.sanitized, terminalProviderState.sanitized) ||
       !canonicalEqual(providerFingerprints, terminalProviderFingerprints) ||
@@ -1231,7 +1299,9 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       (codingMode && (!canonicalEqual(codingWorkflowState.workflow,
         terminalCodingWorkflowState.workflow) ||
         !canonicalEqual(codingWorkflowState.versions,
-          terminalCodingWorkflowState.versions))) ||
+          terminalCodingWorkflowState.versions) ||
+        !canonicalEqual(codingContainerState,
+          terminalCodingContainerState))) ||
       !canonicalEqual(
         runtimeHostContainerState,
         terminalRuntimeHostContainerState,
@@ -1299,6 +1369,7 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       ...(codingMode ? {
         codingWorkflow: codingWorkflowState.workflow,
         codingWorkflowVersions: codingWorkflowState.versions,
+        codingContainer: codingContainerState,
       } : {}),
       aliceTrafficBindings: {
         routes: normalizedRoutes(aliceRoutes),

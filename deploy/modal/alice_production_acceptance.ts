@@ -620,6 +620,10 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     } catch {
       invalid();
     }
+    if (!object(cloudflareLiveReadback.codingContainer) ||
+        !VERSION_ID.test(cloudflareLiveReadback.codingContainer.id ?? "") ||
+        !/^[a-f0-9]{32}$/.test(
+          cloudflareLiveReadback.codingContainer.namespaceId ?? "")) invalid();
   }
   const startedAt = now();
   if (!Number.isSafeInteger(startedAt) || startedAt < 1) invalid();

@@ -30,6 +30,7 @@ export const ALICE_CLOUDFLARE_TARGET = Object.freeze({
 });
 export const ALICE_CODING_TARGET = Object.freeze({
   codingSandboxWorker: "alice-coding-sandbox",
+  codingContainerApplication: "alice-coding-sandbox",
   codingWorkflow: "alice-production-coding",
 });
 
@@ -563,6 +564,7 @@ export function buildAliceCodingSandboxEffectiveConfig() {
     bindings: {
       containers: [{
         className: "AliceCodingSandbox",
+        name: ALICE_CODING_TARGET.codingContainerApplication,
         image: "docker.io/cloudflare/sandbox:0.12.10-opencode@sha256:37d70eb910c3b9d5d71639a14e91571327c343fc8e59bfbc6b54cc5fed5b036c",
         instanceType: "lite",
         maxInstances: 4,

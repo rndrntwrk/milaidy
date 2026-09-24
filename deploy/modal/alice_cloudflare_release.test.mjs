@@ -172,7 +172,7 @@ test("builds one exact-byte staged upload, promotion, and rollback sequence", ()
   }
 });
 
-test("v4 stages the coding Sandbox before Control and has no prior version to roll back", () => {
+test("v4 first-creates the coding Sandbox from signed bytes before Control", () => {
   const sourceCommit = "a".repeat(40);
   const roleIds = Object.fromEntries([
     "access", "runtimeHost", "control", "aiGateway", "statePlane",
@@ -189,8 +189,19 @@ test("v4 stages the coding Sandbox before Control and has no prior version to ro
     codingMode: true,
   });
   assert.equal(commands.uploads[0].role, "codingSandbox");
-  assert.equal(commands.promotions[0].role, "codingSandbox");
+  assert.equal(commands.uploads[0].argv[0], "deploy");
+  assert.ok(commands.uploads[0].argv.includes("--no-bundle"));
+  assert.ok(commands.uploads[0].argv.includes("--strict"));
+  assert.equal(commands.promotions[0].role, "control");
   assert.equal(commands.rollbacks.some((item) => item.role === "codingSandbox"), false);
+  const existing = buildAliceProtectedCloudflareCommands({
+    wranglerBin: "/tools/wrangler", configDir: "/release/config",
+    bundleRoot: "/release/bundles", sourceCommit,
+    releaseRunId: "123456789-2", uploadedVersions: roleIds,
+    rollbackVersions: roleIds, codingMode: true,
+  });
+  assert.deepEqual(existing.uploads[0].argv.slice(0, 2), ["versions", "upload"]);
+  assert.equal(existing.promotions[0].role, "codingSandbox");
 });
 
 test("promotes and restores one exact captured Container application target", async () => {
@@ -1434,6 +1445,19 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
     }),
     anchor,
   );
+  const codingAnchor = structuredClone(anchor);
+  codingAnchor.schemaVersion = "alice.cloudflare-rollback-anchor.v8";
+  codingAnchor.previous.workers.codingSandbox = {
+    worker: "alice-coding-sandbox", absent: true,
+  };
+  codingAnchor.previous.codingContainerApplicationAbsent = true;
+  assert.deepEqual(verifyAliceCloudflareRollbackAnchor(codingAnchor, {
+    sourceCommit, deploymentManifestSha256,
+  }), codingAnchor);
+  codingAnchor.previous.codingContainerApplicationAbsent = false;
+  assert.throws(() => verifyAliceCloudflareRollbackAnchor(codingAnchor, {
+    sourceCommit, deploymentManifestSha256,
+  }), /ALICE_ROLLBACK_ANCHOR_INVALID/);
   const configs = Object.fromEntries(Object.entries(anchor.previous.workers).map(
     ([role, snapshot]) => [role, {
       account_id: anchor.accountId,
@@ -1894,6 +1918,40 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
   );
   assert.equal(evidence.continuityRestoration.mode, "prior-serving-state-restored");
   assert.deepEqual(evidence.workflowVersionContinuity.current, workflowVersions);
+  mutations.length = 0;
+  await executeAliceCloudflareRollbacks({
+    wranglerBin: "/tools/wrangler", sourceRoot: "/release/source",
+    commands: { rollbacks: [] }, commandEnv: {},
+    apiToken: "provider-token-value",
+    anchor: { previous: {
+      containerApplication: aliceTestContainerApplicationState(),
+      continuityConfig, trafficState, workflowVersions: [previousWorkflowVersion],
+      workers: { ...workerState, codingSandbox: {
+        worker: "alice-coding-sandbox", absent: true,
+      } },
+      codingContainerApplicationAbsent: true,
+    } },
+    expectedDurableObjectNamespaceIds: {},
+    expectedContinuityDigest: `sha256:${"1".repeat(64)}`,
+    operations: {
+      fetchWorkflowVersions: async () => workflowVersions,
+      pauseEvidenceQueue: async () => ({ after: { ...continuityConfig,
+        evidenceQueue: { ...continuityConfig.evidenceQueue, deliveryPaused: true },
+      } }),
+      restoreContainerApplication: async () => ({
+        current: aliceTestContainerApplicationState(),
+      }),
+      restoreTraffic: async () => ({ after: trafficState }),
+      restoreCodingContainer: async () => { mutations.push("coding-container-deleted"); },
+      restoreWorkers: async () => {
+        mutations.push("coding-worker-deleted");
+        return { deployments: {}, restored: workerState };
+      },
+      restoreContinuity: async () => ({ after: continuityConfig,
+        mutations: ["alice-production-evidence-v1"] }),
+    },
+  });
+  assert.deepEqual(mutations, ["coding-container-deleted", "coding-worker-deleted"]);
 });
 
 for (const failurePoint of ["control-command", "worker-settings"]) {

@@ -87,6 +87,7 @@ function cloudflareTerminalIdentity(value) {
     workflowVersions: value.workflowVersions,
     codingWorkflow: value.codingWorkflow ?? null,
     codingWorkflowVersions: value.codingWorkflowVersions ?? null,
+    codingContainer: value.codingContainer ?? null,
     aliceTrafficBindings: value.aliceTrafficBindings,
     workers: value.workers,
   };

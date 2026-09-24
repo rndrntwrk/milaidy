@@ -12,6 +12,7 @@ import {
   fetchAliceCloudflareContinuityState,
   fetchAliceCloudflarePostDeploymentReadback,
   fetchAliceCloudflareProviderState,
+  fetchAliceCodingContainerState,
   fetchAliceCodingWorkflowState,
   fetchAliceCloudflareWorkflowVersionState,
   verifyAliceCodingWorkflowStateSnapshot,
@@ -744,6 +745,45 @@ test("coding Workflow readback binds its live owner and exact deployed version",
   observed = workflow;
   detail = { ...version, limits: { steps: 7 } };
   await assert.rejects(() => fetchAliceCodingWorkflowState(options),
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
+});
+
+test("coding Container readback binds the exact private namespace and image", async () => {
+  const application = {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    account_id: accountId,
+    name: "alice-coding-sandbox",
+    version: 1,
+    durable_objects: { namespace_id: "a".repeat(32) },
+    configuration: { image: "docker.io/cloudflare/sandbox:0.12.10-opencode@sha256:" +
+      "b".repeat(64), instance_type: "lite" },
+    max_instances: 4,
+    active_rollout_id: null,
+  };
+  const options = {
+    apiToken: "read-only-token", accountId, baseUrl,
+    config: { name: "alice-coding-sandbox", containers: [{
+      name: "alice-coding-sandbox", image: application.configuration.image,
+      instance_type: "lite", max_instances: 4,
+    }] },
+    namespaceIds: [{ name: "ALICE_CODING_SANDBOX",
+      className: "AliceCodingSandbox", scriptName: null,
+      namespaceId: "a".repeat(32) }],
+    fetchImpl: async (url) => {
+      const pathname = new URL(url).pathname.replace("/client/v4", "");
+      if (pathname.endsWith("/containers/applications")) {
+        return json({ success: true, result: [application] });
+      }
+      if (pathname.endsWith(`/containers/applications/${application.id}`)) {
+        return json({ success: true, result: application });
+      }
+      throw new Error("unexpected request");
+    },
+  };
+  const state = await fetchAliceCodingContainerState(options);
+  assert.equal(state.namespaceId, "a".repeat(32));
+  application.durable_objects.namespace_id = "c".repeat(32);
+  await assert.rejects(() => fetchAliceCodingContainerState(options),
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
 });
 

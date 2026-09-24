@@ -442,6 +442,7 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
       bindings: {
         containers: (identityConfig.containers ?? []).map((container) => ({
           className: container.class_name,
+          name: container.name,
           image: container.image,
           instanceType: container.instance_type,
           maxInstances: container.max_instances,
