@@ -20,6 +20,7 @@ import {
   restoreAliceContainerApplication,
   parseAliceWranglerUploadVersionId,
   transitionAliceContainerApplication,
+  verifyAliceCodingContainerApplicationState,
   verifyAliceCloudflareAnchorStillCurrent,
   verifyAliceCloudflarePreparedState,
   verifyAliceCloudflarePrepareEvidence,
@@ -110,6 +111,31 @@ test("coding rollback read uses the default fetch for absent and present applica
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("first coding create waits for the exact rollout and accepts Cloudflare's lite resource shape", () => {
+  const namespaceId = "5".repeat(32);
+  const expected = { image: `docker.io/cloudflare/sandbox@sha256:${"a".repeat(64)}`,
+    instance_type: "lite", max_instances: 4 };
+  const configuration = { image: expected.image, vcpu: 0.0625,
+    memory_mib: 256, disk: { size_mb: 2000 } };
+  const container = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    account_id: "036df6c823669b8fa2f66cf4c16eeb29",
+    name: "alice-coding-sandbox", durable_objects: { namespace_id: namespaceId },
+    max_instances: 4, version: 1,
+    active_rollout_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    configuration };
+  const rollout = { id: container.active_rollout_id, target_version: 2,
+    target_configuration: configuration, status: "progressing" };
+  const input = { container, rollout, expected, namespaceId };
+  assert.equal(verifyAliceCodingContainerApplicationState(input), "pending");
+  rollout.status = "completed";
+  assert.equal(verifyAliceCodingContainerApplicationState(input), "pending");
+  container.version = 2;
+  assert.equal(verifyAliceCodingContainerApplicationState(input), "ready");
+  rollout.target_configuration = { ...configuration, image: "wrong-image" };
+  assert.throws(() => verifyAliceCodingContainerApplicationState(input),
+    /ALICE_CODING_CONTAINER_ROLLOUT_TARGET_INVALID/);
 });
 
 test("builds one exact-byte staged upload, promotion, and rollback sequence", () => {
