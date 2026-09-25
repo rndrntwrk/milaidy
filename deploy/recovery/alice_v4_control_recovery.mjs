@@ -222,7 +222,18 @@ async function promote() {
     console.error(JSON.stringify({ code: "ALICE_RECOVERY_RESOURCE_PATHS",
       paths: differingPaths(actualResources, admittedResources),
       actualBindingNames: actualResources.bindings.map(item => item.name),
-      expectedBindingNames: admittedResources.bindings.map(item => item.name) }));
+      expectedBindingNames: admittedResources.bindings.map(item => item.name),
+      actualScriptMetadata: {
+        handlers: actualResources.script.handlers,
+        namedHandlers: actualResources.script.named_handlers,
+        lastDeployedFrom: actualResources.script.last_deployed_from,
+      },
+      actualRuntimeMetadata: {
+        cacheOptions: actualResources.script_runtime.cache_options,
+        compatibilityFlags: actualResources.script_runtime.compatibility_flags,
+        exports: actualResources.script_runtime.exports,
+        limits: actualResources.script_runtime.limits,
+      } }));
     fail("ALICE_RECOVERY_UPLOADED_BINDINGS_DRIFTED");
   }
   assert.equal(await deploymentVersion(worker), original);
