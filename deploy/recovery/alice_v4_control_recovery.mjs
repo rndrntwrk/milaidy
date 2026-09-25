@@ -144,7 +144,7 @@ async function inertCodingSandbox() {
   }
   return version;
 }
-async function status(expectedVersion, expectedProgram, expectedRelease) {
+async function status(expectedVersion, expectedProgram, expectedRelease, staleEdge = null) {
   const nonce = crypto.randomBytes(32).toString("base64url");
   const response = await fetch("https://alice-release.rndrntwrk.com/control/internal/v1/deployment/status", {
     headers: {
@@ -157,16 +157,21 @@ async function status(expectedVersion, expectedProgram, expectedRelease) {
   });
   if (!response.ok) fail(`ALICE_RECOVERY_STATUS_HTTP_${response.status}`);
   const body = await response.json();
-  if (body.ok !== true || body.authority?.activeReleaseEpoch !== 15 ||
-      body.authority?.deploymentManifestSha256 !== oldManifest ||
-      body.authority?.binding?.programDigest !== oldProgram ||
-      body.authority?.binding?.releaseDigest !== oldRelease ||
-      !body.authority?.pausedScopes?.includes("all") ||
-      body.edgeReadiness?.nonce !== nonce ||
-      body.edgeReadiness?.workerVersionId !== expectedVersion ||
-      body.edgeReadiness?.servingCandidate?.binding?.programDigest !== expectedProgram ||
-      body.edgeReadiness?.servingCandidate?.binding?.releaseDigest !== expectedRelease) {
-    console.error(JSON.stringify({ code: "ALICE_RECOVERY_STATUS_FIELDS",
+  const authorityMatches = body.ok === true && body.code === "DEPLOYMENT_STATUS_READ" &&
+    body.authority?.activeReleaseEpoch === 15 &&
+    body.authority?.deploymentManifestSha256 === oldManifest &&
+    body.authority?.binding?.programDigest === oldProgram &&
+    body.authority?.binding?.releaseDigest === oldRelease &&
+    body.authority?.pausedScopes?.includes("all") &&
+    body.edgeReadiness?.nonce === nonce;
+  const edge = body.edgeReadiness;
+  if (authorityMatches && edge.workerVersionId === expectedVersion &&
+      edge.servingCandidate?.binding?.programDigest === expectedProgram &&
+      edge.servingCandidate?.binding?.releaseDigest === expectedRelease) return body;
+  if (staleEdge && authorityMatches && edge.workerVersionId === staleEdge.version &&
+      edge.servingCandidate?.binding?.programDigest === staleEdge.program &&
+      edge.servingCandidate?.binding?.releaseDigest === staleEdge.release) return null;
+  console.error(JSON.stringify({ code: "ALICE_RECOVERY_STATUS_FIELDS",
       responseCode: body.code,
       authority: {
         activeReleaseEpoch: body.authority?.activeReleaseEpoch,
@@ -185,9 +190,16 @@ async function status(expectedVersion, expectedProgram, expectedRelease) {
       candidateCode: body.candidateAdmission?.code,
       expected: { workerVersionId: expectedVersion, programDigest: expectedProgram,
         releaseDigest: expectedRelease } }));
-    fail("ALICE_RECOVERY_STATUS_MISMATCH");
+  fail("ALICE_RECOVERY_STATUS_MISMATCH");
+}
+async function waitForStatus(worker, expected, stale) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    assert.equal(await deploymentVersion(worker), expected.version);
+    const observed = await status(expected.version, expected.program, expected.release, stale);
+    if (observed) return observed;
+    if (attempt < 19) await new Promise(resolve => setTimeout(resolve, 3_000));
   }
-  return body;
+  fail("ALICE_RECOVERY_EDGE_PROPAGATION_TIMEOUT");
 }
 function comparableResources(resources) {
   const copy = structuredClone(resources);
@@ -260,15 +272,22 @@ async function promote() {
   run("wrangler", ["versions", "deploy", `${recoveryVersion}@100`, "--name", worker,
     "--message", "Restore admitted v15 control with v4 ledger reader", "--yes"], { cwd: oldRoot });
   try {
-    assert.equal(await deploymentVersion(worker), recoveryVersion);
-    const after = await status(recoveryVersion, oldProgram, oldRelease);
+    const after = await waitForStatus(worker,
+      { version: recoveryVersion, program: oldProgram, release: oldRelease },
+      { version: pausedReaderVersion,
+        program: before.edgeReadiness.servingCandidate.binding.programDigest,
+        release: before.edgeReadiness.servingCandidate.binding.releaseDigest });
     assert.equal(after.authority.admissionGeneration, before.authority.admissionGeneration);
     console.log(JSON.stringify({ code: "ALICE_V4_CONTROL_RESTORED_PAUSED", versionId: recoveryVersion,
       releaseEpoch: 15, pausedAll: true, manifest: oldManifest }));
   } catch (error) {
     run("wrangler", ["versions", "deploy", `${pausedReaderVersion}@100`, "--name", worker,
       "--message", "Revert failed v4 control recovery while paused", "--yes"], { cwd: oldRoot });
-    assert.equal(await deploymentVersion(worker), pausedReaderVersion);
+    await waitForStatus(worker,
+      { version: pausedReaderVersion,
+        program: before.edgeReadiness.servingCandidate.binding.programDigest,
+        release: before.edgeReadiness.servingCandidate.binding.releaseDigest },
+      { version: recoveryVersion, program: oldProgram, release: oldRelease });
     throw error;
   }
 }
