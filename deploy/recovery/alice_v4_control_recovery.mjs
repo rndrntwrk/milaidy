@@ -170,21 +170,19 @@ async function status(expectedVersion, expectedProgram, expectedRelease) {
   }
   return body;
 }
-function withoutScriptEtag(resources) {
+function comparableResources(resources) {
   const copy = structuredClone(resources);
   delete copy.script.etag;
+  delete copy.script.handlers;
+  delete copy.script.named_handlers;
+  delete copy.script.last_deployed_from;
+  delete copy.script_runtime.cache_options;
+  delete copy.script_runtime.compatibility_flags;
+  delete copy.script_runtime.exports;
+  delete copy.script_runtime.limits;
   copy.bindings.sort((left, right) =>
     `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`));
   return copy;
-}
-function differingPaths(actual, expected, at = "resources") {
-  if (actual === undefined || expected === undefined) return [at];
-  if (canonicalAliceJson(actual) === canonicalAliceJson(expected)) return [];
-  if (actual === null || expected === null ||
-      typeof actual !== "object" || typeof expected !== "object" ||
-      Array.isArray(actual) !== Array.isArray(expected)) return [at];
-  const keys = new Set([...Object.keys(actual), ...Object.keys(expected)]);
-  return [...keys].flatMap(key => differingPaths(actual[key], expected[key], `${at}.${key}`));
 }
 async function promote() {
   const previous = anchor();
@@ -216,24 +214,22 @@ async function promote() {
   const uploaded = await cloudflare(`/accounts/${account}/workers/scripts/${worker}/versions/${recoveryVersion}`);
   const expectedResources = structuredClone(previous.workers.control.versionResources);
   expectedResources.bindings.push(retainedBinding);
-  const actualResources = withoutScriptEtag(uploaded.resources);
-  const admittedResources = withoutScriptEtag(expectedResources);
-  if (canonicalAliceJson(actualResources) !== canonicalAliceJson(admittedResources)) {
-    console.error(JSON.stringify({ code: "ALICE_RECOVERY_RESOURCE_PATHS",
-      paths: differingPaths(actualResources, admittedResources),
-      actualBindingNames: actualResources.bindings.map(item => item.name),
-      expectedBindingNames: admittedResources.bindings.map(item => item.name),
-      actualScriptMetadata: {
-        handlers: actualResources.script.handlers,
-        namedHandlers: actualResources.script.named_handlers,
-        lastDeployedFrom: actualResources.script.last_deployed_from,
-      },
-      actualRuntimeMetadata: {
-        cacheOptions: actualResources.script_runtime.cache_options,
-        compatibilityFlags: actualResources.script_runtime.compatibility_flags,
-        exports: actualResources.script_runtime.exports,
-        limits: actualResources.script_runtime.limits,
-      } }));
+  exact(uploaded.resources.script.handlers, ["fetch", "queue"]);
+  exact(uploaded.resources.script.named_handlers, [
+    { name: "AliceAuthority", handlers: ["class"] },
+    { name: "AliceSession", handlers: ["class"] },
+    { name: "AlicePlanWorkflow", handlers: ["__workflow_entrypoint", "run"] },
+  ]);
+  assert.equal(uploaded.resources.script.last_deployed_from, "wrangler");
+  for (const field of ["cache_options", "compatibility_flags", "exports", "limits"]) {
+    assert.equal(uploaded.resources.script_runtime[field], undefined);
+  }
+  exact(expectedResources.script_runtime.cache_options, null);
+  exact(expectedResources.script_runtime.compatibility_flags, []);
+  exact(expectedResources.script_runtime.exports, {});
+  exact(expectedResources.script_runtime.limits, null);
+  if (canonicalAliceJson(comparableResources(uploaded.resources)) !==
+      canonicalAliceJson(comparableResources(expectedResources))) {
     fail("ALICE_RECOVERY_UPLOADED_BINDINGS_DRIFTED");
   }
   assert.equal(await deploymentVersion(worker), original);
