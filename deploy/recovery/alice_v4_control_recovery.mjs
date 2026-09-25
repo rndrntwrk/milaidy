@@ -18,11 +18,11 @@ const zone = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const baseCommit = "a3a8a46c1216f029269866735d7d258860536474";
 const priorVersion = "52b44278-383b-4ec4-990b-9d1ee3c264ec";
 const pausedReaderVersion = "0a91f516-c35e-478b-8c0e-fa01cac0be57";
+const recoveryVersion = "e87d5675-0393-4386-bb93-1f3542f04b27";
 const oldManifest = "sha256:b916de03b84b6393946ee4bdff658ad902ad34c4205ce8e0ed8976e04a5f9eab";
 const oldProgram = "sha256:dab631ede0d809f55e127d39d740a0c9ad37474e372a6e42ea03a54b8e940e67";
 const oldRelease = "sha256:3d8000bd3084751e8338cb2735510645d013279a08b9f7ce0183d3e710640346";
 const anchorSha256 = "ee568a71093a365eaa0c28b847c5e4df39ad9486477b8e89199ba299bf1aee77";
-const tag = "alice-v4-rollback-36117813657";
 const retainedSecret = "ALICE_CODING_PUBLISH_TOKEN";
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
@@ -199,16 +199,12 @@ async function promote() {
   const codingVersion = await inertCodingSandbox();
   const app = await cloudflare(`/accounts/${account}/containers/applications/${previous.containerApplication.applicationId}`);
   assert.equal(app.configuration.image, previous.containerApplication.target.configuration.image);
-  run("wrangler", ["versions", "upload", "--config", configPath,
-    "--tag", tag, "--message", "Alice v4 ledger reader for admitted v15 rollback"], { cwd: oldRoot });
   const listed = await cloudflare(`/accounts/${account}/workers/scripts/${worker}/versions?per_page=20`);
   const versions = listed.items;
-  if (!Array.isArray(versions)) fail("ALICE_RECOVERY_VERSION_LIST_INVALID");
-  const selected = versions.filter(item => item.metadata?.annotations?.["workers/tag"] === tag);
-  if (selected.length !== 1) fail("ALICE_RECOVERY_VERSION_TAG_INVALID");
-  const versionId = selected[0].id;
-  if (!uuid.test(versionId)) fail("ALICE_RECOVERY_VERSION_ID_INVALID");
-  const uploaded = await cloudflare(`/accounts/${account}/workers/scripts/${worker}/versions/${versionId}`);
+  if (!Array.isArray(versions) || versions[0]?.id !== recoveryVersion) {
+    fail("ALICE_RECOVERY_UPLOADED_VERSION_DRIFTED");
+  }
+  const uploaded = await cloudflare(`/accounts/${account}/workers/scripts/${worker}/versions/${recoveryVersion}`);
   const expectedResources = structuredClone(previous.workers.control.versionResources);
   expectedResources.bindings.push(retainedBinding);
   if (canonicalAliceJson(withoutScriptEtag(uploaded.resources)) !==
@@ -217,17 +213,17 @@ async function promote() {
   }
   assert.equal(await deploymentVersion(worker), original);
   assert.equal(await inertCodingSandbox(), codingVersion);
-  const afterUpload = await status(pausedReaderVersion,
+  const beforeDeploy = await status(pausedReaderVersion,
     before.edgeReadiness.servingCandidate.binding.programDigest,
     before.edgeReadiness.servingCandidate.binding.releaseDigest);
-  assert.equal(afterUpload.authority.admissionGeneration, before.authority.admissionGeneration);
-  run("wrangler", ["versions", "deploy", `${versionId}@100`, "--name", worker,
+  assert.equal(beforeDeploy.authority.admissionGeneration, before.authority.admissionGeneration);
+  run("wrangler", ["versions", "deploy", `${recoveryVersion}@100`, "--name", worker,
     "--message", "Restore admitted v15 control with v4 ledger reader", "--yes"], { cwd: oldRoot });
   try {
-    assert.equal(await deploymentVersion(worker), versionId);
-    const after = await status(versionId, oldProgram, oldRelease);
+    assert.equal(await deploymentVersion(worker), recoveryVersion);
+    const after = await status(recoveryVersion, oldProgram, oldRelease);
     assert.equal(after.authority.admissionGeneration, before.authority.admissionGeneration);
-    console.log(JSON.stringify({ code: "ALICE_V4_CONTROL_RESTORED_PAUSED", versionId,
+    console.log(JSON.stringify({ code: "ALICE_V4_CONTROL_RESTORED_PAUSED", versionId: recoveryVersion,
       releaseEpoch: 15, pausedAll: true, manifest: oldManifest }));
   } catch (error) {
     run("wrangler", ["versions", "deploy", `${pausedReaderVersion}@100`, "--name", worker,

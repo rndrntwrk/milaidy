@@ -67,7 +67,7 @@ jobs:
       - name: Build and verify only the compatible prior control Worker
         run: node deploy/recovery/alice_v4_control_recovery.mjs prepare
 
-      - name: Upload, verify, and serve only the compatible control Worker
+      - name: Verify and serve only the preuploaded compatible control Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ALICE_RELEASE_ACCESS_CLIENT_ID: ${{ secrets.ALICE_RELEASE_ACCESS_CLIENT_ID }}
