@@ -1,0 +1,46 @@
+diff --git a/workers/alice-production-control/src/authority.ts b/workers/alice-production-control/src/authority.ts
+index ce6d69c3e..bea4a2a38 100644
+--- a/workers/alice-production-control/src/authority.ts
++++ b/workers/alice-production-control/src/authority.ts
+@@ -85 +85 @@ export type AuthorityLedgerState = {
+-  schemaVersion: "alice.authority-ledger.v3";
++  schemaVersion: "alice.authority-ledger.v3" | "alice.authority-ledger.v4";
+@@ -98,0 +99 @@ export type AuthorityLedgerState = {
++  webauthn?: { credential: null; pending: null };
+@@ -326 +327,9 @@ function validState(value: unknown): value is AuthorityLedgerState {
+-    state.schemaVersion === "alice.authority-ledger.v3" &&
++    (state.schemaVersion === "alice.authority-ledger.v3" ||
++      (state.schemaVersion === "alice.authority-ledger.v4" &&
++        state.webauthn !== null &&
++        typeof state.webauthn === "object" &&
++        !Array.isArray(state.webauthn) &&
++        Object.keys(state.webauthn).sort().join(",") === "credential,pending" &&
++        state.webauthn.credential === null &&
++        state.webauthn.pending === null &&
++        Object.keys(state.capabilities ?? {}).length === 0)) &&
+diff --git a/workers/alice-production-control/test/authority.test.ts b/workers/alice-production-control/test/authority.test.ts
+index d644ba4ff..026540d39 100644
+--- a/workers/alice-production-control/test/authority.test.ts
++++ b/workers/alice-production-control/test/authority.test.ts
+@@ -408,0 +409,21 @@ describe("Alice durable authority ledger", () => {
++  test("reads a paused v4 ledger during rollback only without WebAuthn state", () => {
++    const ledger = AuthorityLedger.create(binding, 100);
++    ledger.pause("all", 1_787_400_000_000, "deployment-controller:pause-only", "pause-all-0001");
++    const migrated = {
++      ...ledger.exportState(),
++      schemaVersion: "alice.authority-ledger.v4" as const,
++      webauthn: { credential: null, pending: null },
++    };
++    const restored = AuthorityLedger.restoreGlobal(migrated, 100);
++    expect(restored.snapshot().pausedScopes).toEqual(["all"]);
++    expect(restored.exportState()).toEqual(migrated);
++    expect(() => AuthorityLedger.restoreGlobal({
++      ...migrated,
++      webauthn: { credential: { id: "unexpected" }, pending: null },
++    } as unknown as AuthorityLedgerState, 100)).toThrow("AUTHORITY_STATE_INVALID");
++    expect(() => AuthorityLedger.restoreGlobal({
++      ...migrated,
++      capabilities: { unexpected: {} },
++    } as unknown as AuthorityLedgerState, 100)).toThrow("AUTHORITY_STATE_INVALID");
++  });
++
