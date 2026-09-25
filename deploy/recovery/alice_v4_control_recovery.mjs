@@ -22,6 +22,7 @@ const oldProgram = "sha256:dab631ede0d809f55e127d39d740a0c9ad37474e372a6e42ea03a
 const oldRelease = "sha256:3d8000bd3084751e8338cb2735510645d013279a08b9f7ce0183d3e710640346";
 const anchorSha256 = "ee568a71093a365eaa0c28b847c5e4df39ad9486477b8e89199ba299bf1aee77";
 const tag = "alice-v4-rollback-36117813657";
+const retainedSecret = "ALICE_CODING_PUBLISH_TOKEN";
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
 function run(command, args, options = {}) {
@@ -148,6 +149,8 @@ async function status(expectedVersion, expectedProgram, expectedRelease) {
 function withoutScriptEtag(resources) {
   const copy = structuredClone(resources);
   delete copy.script.etag;
+  copy.bindings.sort((left, right) =>
+    `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`));
   return copy;
 }
 async function promote() {
@@ -161,7 +164,9 @@ async function promote() {
     "sha256:582624c5c9d95b397410e11594ca97a3fe5c8f6fb1e92764cdfbda659b1c9085");
   const current = await cloudflare(`/accounts/${account}/workers/scripts/${worker}/versions/${original}`);
   exact(current.resources.bindings.filter(item => item.type === "secret_text")
-    .map(item => item.name).sort(), secrets);
+    .map(item => item.name).sort(), [...secrets, retainedSecret].sort());
+  const retainedBinding = current.resources.bindings.find(item => item.name === retainedSecret);
+  assert.equal(retainedBinding.type, "secret_text");
   for (const [role, value] of Object.entries(previous.workers)) {
     if (role === "control" || role === "codingSandbox") continue;
     assert.equal(await deploymentVersion(value.worker), value.serving.versionId);
@@ -183,8 +188,10 @@ async function promote() {
   const versionId = selected[0].id;
   if (!uuid.test(versionId)) fail("ALICE_RECOVERY_VERSION_ID_INVALID");
   const uploaded = await cloudflare(`/accounts/${account}/workers/scripts/${worker}/versions/${versionId}`);
+  const expectedResources = structuredClone(previous.workers.control.versionResources);
+  expectedResources.bindings.push(retainedBinding);
   if (canonicalAliceJson(withoutScriptEtag(uploaded.resources)) !==
-      canonicalAliceJson(withoutScriptEtag(previous.workers.control.versionResources))) {
+      canonicalAliceJson(withoutScriptEtag(expectedResources))) {
     fail("ALICE_RECOVERY_UPLOADED_BINDINGS_DRIFTED");
   }
   assert.equal(await deploymentVersion(worker), original);
