@@ -819,6 +819,43 @@ async function registerCandidateCodingWorkflow({ apiToken, baseline, controlConf
   releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
 }
 
+export function verifyAliceCodingContainerApplicationState({
+  container, rollout, expected, namespaceId,
+}) {
+  if (!NAMESPACE_ID.test(namespaceId ?? "") ||
+      typeof expected?.image !== "string" || expected.image.length === 0 ||
+      expected.instance_type !== "lite" ||
+      !Number.isSafeInteger(expected.max_instances) || expected.max_instances < 1 ||
+      !container || !VERSION_ID.test(container.id ?? "") ||
+      container.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
+      container.name !== ALICE_CODING_TARGET.codingContainerApplication ||
+      container.durable_objects?.namespace_id !== namespaceId ||
+      container.max_instances !== expected?.max_instances) {
+    releaseInvalid("ALICE_CODING_CONTAINER_APPLICATION_IDENTITY_INVALID");
+  }
+  const validConfiguration = (value) => value?.image === expected?.image &&
+    (value?.instance_type === expected?.instance_type ||
+      (expected?.instance_type === "lite" && value?.vcpu === 0.0625 &&
+        value?.memory_mib === 256 && value?.disk?.size_mb === 2000));
+  if (!container.active_rollout_id) {
+    if (rollout !== null || !validConfiguration(container.configuration)) {
+      releaseInvalid("ALICE_CODING_CONTAINER_CONFIGURATION_INVALID");
+    }
+    return "ready";
+  }
+  if (!VERSION_ID.test(container.active_rollout_id) ||
+      rollout?.id !== container.active_rollout_id ||
+      !Number.isSafeInteger(rollout.target_version) ||
+      rollout.target_version < 1 ||
+      !validConfiguration(rollout.target_configuration) ||
+      !["pending", "progressing", "completed"].includes(rollout.status)) {
+    releaseInvalid("ALICE_CODING_CONTAINER_ROLLOUT_TARGET_INVALID");
+  }
+  if (rollout.status !== "completed") return "pending";
+  return container.version === rollout.target_version &&
+    validConfiguration(container.configuration) ? "ready" : "pending";
+}
+
 async function readFirstCodingDeploymentVersion({ apiToken, expectedBundleSha256, config }) {
   const worker = (await captureAliceCloudflareWorkerRollbackState({
     apiToken, includeCodingSandbox: true,
@@ -835,28 +872,36 @@ async function readFirstCodingDeploymentVersion({ apiToken, expectedBundleSha256
       expectedBundleSha256) {
     releaseInvalid("ALICE_CODING_SANDBOX_CREATE_INVALID");
   }
-  const container = await readCodingContainerApplication({ apiToken });
   const expected = config?.containers?.[0];
   const binding = worker.versionResources.bindings.find((item) =>
     item.type === "durable_object_namespace" &&
     item.name === "ALICE_CODING_SANDBOX" &&
     item.class_name === "AliceCodingSandbox");
-  const rollout = container?.active_rollout_id
-    ? await aliceContainerApiJson({
+  let container = await readCodingContainerApplication({ apiToken });
+  const rolloutId = container?.active_rollout_id;
+  if (rolloutId != null) {
+    let state = "pending";
+    // Wrangler returns after starting a rollout; its completion is a separate
+    // provider event. Wait for that event before accepting the application.
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const rollout = await aliceContainerApiJson({
         apiToken,
-        pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/containers/applications/${container.id}/rollouts/${container.active_rollout_id}`,
-      }) : null;
-  if (!container ||
-      container.id == null ||
-      container.account_id !== ALICE_CLOUDFLARE_TARGET.accountId ||
-      container.name !== ALICE_CODING_TARGET.codingContainerApplication ||
-      container.durable_objects?.namespace_id !== binding?.namespace_id ||
-      container.configuration?.image !== expected?.image ||
-      container.configuration?.instance_type !== expected?.instance_type ||
-      container.max_instances !== expected?.max_instances ||
-      (rollout !== null && (rollout.status !== "completed" ||
-        rollout.target_version !== container.version))) {
-    releaseInvalid("ALICE_CODING_CONTAINER_APPLICATION_INVALID");
+        pathname: `/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}/containers/applications/${container.id}/rollouts/${rolloutId}`,
+      });
+      state = verifyAliceCodingContainerApplicationState({
+        container, rollout, expected, namespaceId: binding?.namespace_id,
+      });
+      if (state === "ready") break;
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      container = await readCodingContainerApplication({ apiToken });
+    }
+    if (state !== "ready") {
+      releaseInvalid("ALICE_CODING_CONTAINER_ROLLOUT_NOT_READY");
+    }
+  } else {
+    verifyAliceCodingContainerApplicationState({
+      container, rollout: null, expected, namespaceId: binding?.namespace_id,
+    });
   }
   const terminalWorker = (await captureAliceCloudflareWorkerRollbackState({
     apiToken, includeCodingSandbox: true,
