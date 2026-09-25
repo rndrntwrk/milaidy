@@ -166,6 +166,25 @@ async function status(expectedVersion, expectedProgram, expectedRelease) {
       body.edgeReadiness?.workerVersionId !== expectedVersion ||
       body.edgeReadiness?.servingCandidate?.binding?.programDigest !== expectedProgram ||
       body.edgeReadiness?.servingCandidate?.binding?.releaseDigest !== expectedRelease) {
+    console.error(JSON.stringify({ code: "ALICE_RECOVERY_STATUS_FIELDS",
+      responseCode: body.code,
+      authority: {
+        activeReleaseEpoch: body.authority?.activeReleaseEpoch,
+        deploymentManifestSha256: body.authority?.deploymentManifestSha256,
+        programDigest: body.authority?.binding?.programDigest,
+        releaseDigest: body.authority?.binding?.releaseDigest,
+        pausedScopes: body.authority?.pausedScopes,
+        admissionGeneration: body.authority?.admissionGeneration,
+      },
+      edge: {
+        nonceMatches: body.edgeReadiness?.nonce === nonce,
+        workerVersionId: body.edgeReadiness?.workerVersionId,
+        programDigest: body.edgeReadiness?.servingCandidate?.binding?.programDigest,
+        releaseDigest: body.edgeReadiness?.servingCandidate?.binding?.releaseDigest,
+      },
+      candidateCode: body.candidateAdmission?.code,
+      expected: { workerVersionId: expectedVersion, programDigest: expectedProgram,
+        releaseDigest: expectedRelease } }));
     fail("ALICE_RECOVERY_STATUS_MISMATCH");
   }
   return body;
