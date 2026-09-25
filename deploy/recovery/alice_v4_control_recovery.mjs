@@ -14,6 +14,7 @@ const evidenceRoot = path.join(temp, "alice-recovery-evidence");
 const configPath = path.join(temp, "alice-v4-control-wrangler.jsonc");
 const anchorPath = path.join(evidenceRoot, "rollback-anchor.json");
 const account = "036df6c823669b8fa2f66cf4c16eeb29";
+const zone = "7b24984479ee4cddb6c5d8a9b7a0f2c6";
 const baseCommit = "a3a8a46c1216f029269866735d7d258860536474";
 const priorVersion = "52b44278-383b-4ec4-990b-9d1ee3c264ec";
 const pausedReaderVersion = "0a91f516-c35e-478b-8c0e-fa01cac0be57";
@@ -120,6 +121,29 @@ async function deploymentVersion(worker) {
   }
   return current.versions[0].version_id;
 }
+async function inertCodingSandbox() {
+  const worker = "alice-coding-sandbox";
+  const scripts = await cloudflare(`/accounts/${account}/workers/scripts?per_page=100`);
+  if (!Array.isArray(scripts) || scripts.length >= 100 ||
+      scripts.filter(item => item.id === worker).length !== 1) {
+    fail("ALICE_RECOVERY_CODING_SANDBOX_DRIFTED");
+  }
+  const version = await deploymentVersion(worker);
+  if (!uuid.test(version) || !version.startsWith("a7761bc2-")) {
+    fail("ALICE_RECOVERY_CODING_SANDBOX_VERSION_DRIFTED");
+  }
+  const subdomain = await cloudflare(`/accounts/${account}/workers/scripts/${worker}/subdomain`);
+  const routes = await cloudflare(`/zones/${zone}/workers/routes?per_page=100`);
+  const domains = await cloudflare(`/accounts/${account}/workers/domains?per_page=100`);
+  if (subdomain?.enabled !== false || subdomain?.previews_enabled !== false ||
+      !Array.isArray(routes) || routes.length >= 100 ||
+      routes.some(item => item.script === worker) ||
+      !Array.isArray(domains) || domains.length >= 100 ||
+      domains.some(item => item.service === worker)) {
+    fail("ALICE_RECOVERY_CODING_SANDBOX_EXPOSED");
+  }
+  return version;
+}
 async function status(expectedVersion, expectedProgram, expectedRelease) {
   const nonce = crypto.randomBytes(32).toString("base64url");
   const response = await fetch("https://alice-release.rndrntwrk.com/control/internal/v1/deployment/status", {
@@ -172,10 +196,7 @@ async function promote() {
     assert.equal(await deploymentVersion(value.worker), value.serving.versionId);
   }
   assert.equal(previous.workers.codingSandbox.absent, true);
-  const scripts = await cloudflare(`/accounts/${account}/workers/scripts`);
-  if (!Array.isArray(scripts) || scripts.some(item => item.id === "alice-coding-sandbox")) {
-    fail("ALICE_RECOVERY_CODING_SANDBOX_DRIFTED");
-  }
+  const codingVersion = await inertCodingSandbox();
   const app = await cloudflare(`/accounts/${account}/containers/applications/${previous.containerApplication.applicationId}`);
   assert.equal(app.configuration.image, previous.containerApplication.target.configuration.image);
   run("wrangler", ["versions", "upload", "--config", configPath,
@@ -195,6 +216,7 @@ async function promote() {
     fail("ALICE_RECOVERY_UPLOADED_BINDINGS_DRIFTED");
   }
   assert.equal(await deploymentVersion(worker), original);
+  assert.equal(await inertCodingSandbox(), codingVersion);
   const afterUpload = await status(pausedReaderVersion,
     before.edgeReadiness.servingCandidate.binding.programDigest,
     before.edgeReadiness.servingCandidate.binding.releaseDigest);
