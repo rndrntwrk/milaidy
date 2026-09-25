@@ -177,6 +177,15 @@ function withoutScriptEtag(resources) {
     `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`));
   return copy;
 }
+function differingPaths(actual, expected, at = "resources") {
+  if (actual === undefined || expected === undefined) return [at];
+  if (canonicalAliceJson(actual) === canonicalAliceJson(expected)) return [];
+  if (actual === null || expected === null ||
+      typeof actual !== "object" || typeof expected !== "object" ||
+      Array.isArray(actual) !== Array.isArray(expected)) return [at];
+  const keys = new Set([...Object.keys(actual), ...Object.keys(expected)]);
+  return [...keys].flatMap(key => differingPaths(actual[key], expected[key], `${at}.${key}`));
+}
 async function promote() {
   const previous = anchor();
   const { secrets } = varsAndSecrets(previous);
@@ -207,8 +216,13 @@ async function promote() {
   const uploaded = await cloudflare(`/accounts/${account}/workers/scripts/${worker}/versions/${recoveryVersion}`);
   const expectedResources = structuredClone(previous.workers.control.versionResources);
   expectedResources.bindings.push(retainedBinding);
-  if (canonicalAliceJson(withoutScriptEtag(uploaded.resources)) !==
-      canonicalAliceJson(withoutScriptEtag(expectedResources))) {
+  const actualResources = withoutScriptEtag(uploaded.resources);
+  const admittedResources = withoutScriptEtag(expectedResources);
+  if (canonicalAliceJson(actualResources) !== canonicalAliceJson(admittedResources)) {
+    console.error(JSON.stringify({ code: "ALICE_RECOVERY_RESOURCE_PATHS",
+      paths: differingPaths(actualResources, admittedResources),
+      actualBindingNames: actualResources.bindings.map(item => item.name),
+      expectedBindingNames: admittedResources.bindings.map(item => item.name) }));
     fail("ALICE_RECOVERY_UPLOADED_BINDINGS_DRIFTED");
   }
   assert.equal(await deploymentVersion(worker), original);
