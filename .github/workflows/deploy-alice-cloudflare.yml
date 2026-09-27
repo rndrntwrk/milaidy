@@ -1622,6 +1622,7 @@ jobs:
             ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
             ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
             ${{ runner.temp }}/alice-release/cloudflare-emergency-rollback.json
+            ${{ runner.temp }}/alice-release/coding-workflow-owned-identity.json
             ${{ runner.temp }}/alice-release/live-readback.json
             ${{ runner.temp }}/alice-release/program-admission.json
             ${{ runner.temp }}/alice-release/container-image-evidence.json
@@ -1923,6 +1924,11 @@ jobs:
           if test -f "$terminal_root/cloudflare-emergency-rollback.json"
           then
             exit 0
+          fi
+          if test -s "$terminal_root/coding-workflow-owned-identity.json"
+          then
+            cp -- "$terminal_root/coding-workflow-owned-identity.json" \
+              "$recovery_root/alice-release/coding-workflow-owned-identity.json"
           fi
           manifest="$recovery_root/alice-release/alice-deployment-manifest.json"
           manifest_sha256="sha256:$(sha256sum "$manifest" | cut -d' ' -f1)"

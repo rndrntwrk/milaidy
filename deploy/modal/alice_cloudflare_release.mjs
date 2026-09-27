@@ -690,7 +690,18 @@ function verifyCodingWorkflowOwnedIdentity(identity) {
 async function restoreCodingWorkflowPrestate({ apiToken, expected, ownedIdentity }) {
   const current = await fetchAliceCodingWorkflowPrestate({ apiToken });
   if (expected.absent === true) {
-    if (current.absent === true) return current;
+    if (current.absent === true) {
+      // A just-created Workflow can be missing from the list briefly. Confirm
+      // the named resource is absent before treating rollback as complete.
+      const response = await fetch(
+        `${API_BASE}/accounts/${ALICE_CLOUDFLARE_TARGET.accountId}` +
+          `/workflows/${ALICE_CODING_TARGET.codingWorkflow}`,
+        { headers: { authorization: `Bearer ${apiToken}`, accept: "application/json",
+          "cache-control": "no-cache" } },
+      );
+      if (response.status !== 404) releaseInvalid("ALICE_CODING_WORKFLOW_ROLLBACK_INVALID");
+      return current;
+    }
     const owned = verifyCodingWorkflowOwnedIdentity(ownedIdentity);
     if (current.workflow.id !== owned.workflowId ||
         current.versions.length !== 1 ||
@@ -759,7 +770,7 @@ async function restoreCodingWorkflowPrestate({ apiToken, expected, ownedIdentity
   return after;
 }
 
-async function registerCandidateCodingWorkflow({ apiToken, baseline, controlConfig }) {
+async function registerCandidateCodingWorkflow({ apiToken, baseline, controlConfig, onOwned }) {
   const coding = controlConfig?.workflows?.find((item) =>
     item.name === ALICE_CODING_TARGET.codingWorkflow);
   if (controlConfig?.name !== ALICE_CLOUDFLARE_TARGET.controlWorker ||
@@ -801,22 +812,41 @@ async function registerCandidateCodingWorkflow({ apiToken, baseline, controlConf
       registered.result?.class_name !== coding.class_name) {
     releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
   }
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const after = await fetchAliceCodingWorkflowPrestate({ apiToken });
-    if (after.absent !== true && after.workflow.id === registered.result.id) {
-      const candidate = resolveAliceCandidateCodingWorkflowVersion({
-        previous: baseline, current: after,
-      });
-      if (candidate.id !== registered.result.version_id) {
-        releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+  const owned = verifyCodingWorkflowOwnedIdentity({
+    workflowId: registered.result.id,
+    candidateVersionId: registered.result.version_id,
+  });
+  // The PUT owns this exact resource even if Cloudflare's following list/detail
+  // read is briefly inconsistent. Record ownership before the read so rollback
+  // can remove only this version if validation never stabilizes.
+  if (onOwned) onOwned(owned);
+  return confirmAliceCodingWorkflowRegistration({ apiToken, baseline, owned });
+}
+
+export async function confirmAliceCodingWorkflowRegistration({
+  apiToken, baseline, owned,
+  readPrestate = fetchAliceCodingWorkflowPrestate,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+}) {
+  verifyCodingWorkflowOwnedIdentity(owned);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      const after = await readPrestate({ apiToken });
+      if (after.absent !== true && after.workflow.id === owned.workflowId) {
+        const candidate = resolveAliceCandidateCodingWorkflowVersion({
+          previous: baseline, current: after,
+        });
+        if (candidate.id === owned.candidateVersionId) return owned;
       }
-      return verifyCodingWorkflowOwnedIdentity({
-        workflowId: after.workflow.id, candidateVersionId: candidate.id,
-      });
+    } catch (error) {
+      if (!(error instanceof Error) ||
+          !error.message.startsWith("ALICE_CLOUDFLARE_LIVE_READBACK_INVALID")) {
+        throw error;
+      }
     }
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250));
+    if (attempt < 19) await sleep(500);
   }
-  releaseInvalid("ALICE_CODING_WORKFLOW_REGISTRATION_INVALID");
+  releaseInvalid("ALICE_CODING_WORKFLOW_READBACK_UNSTABLE");
 }
 
 export function verifyAliceCodingContainerApplicationState({
@@ -2566,6 +2596,9 @@ async function main() {
   const readbackPath = process.env.ALICE_CLOUDFLARE_READBACK_PATH;
   const rollbackProofPath =
     process.env.ALICE_CLOUDFLARE_ROLLBACK_PROOF_PATH;
+  const codingWorkflowOwnerPath = rollbackProofPath
+    ? path.join(path.dirname(rollbackProofPath), "coding-workflow-owned-identity.json")
+    : undefined;
   const prepareEvidencePath =
     process.env.ALICE_CLOUDFLARE_PREPARE_EVIDENCE_PATH;
   const pauseEvidencePath =
@@ -2631,6 +2664,36 @@ async function main() {
       rollbackVersions,
       codingMode,
     });
+    const latestCodingOwner = codingMode && codingWorkflowOwnerPath &&
+      fs.existsSync(codingWorkflowOwnerPath)
+      ? readJson(codingWorkflowOwnerPath) : null;
+    if (latestCodingOwner && (
+      !exactKeys(latestCodingOwner, [
+        "schemaVersion", "sourceCommit", "deploymentManifestSha256",
+        "rollbackAnchorSha256", "ownedIdentity",
+      ]) ||
+      latestCodingOwner.schemaVersion !== "alice.coding-workflow-owner.v1" ||
+      latestCodingOwner.sourceCommit !== sourceCommit ||
+      latestCodingOwner.deploymentManifestSha256 !== release.deploymentManifestSha256 ||
+      latestCodingOwner.rollbackAnchorSha256 !== sha256File(rollbackAnchorPath)
+    )) releaseInvalid("ALICE_CODING_WORKFLOW_OWNERSHIP_INVALID");
+    const codingWorkflowOwnedIdentity = codingMode && fs.existsSync(prepareEvidencePath)
+      ? latestCodingOwner
+        ? verifyCodingWorkflowOwnedIdentity(latestCodingOwner.ownedIdentity)
+        : verifyAliceCloudflarePrepareEvidence(
+            readJson(prepareEvidencePath), { sourceCommit,
+              deploymentManifestSha256: release.deploymentManifestSha256 },
+          ).codingWorkflowOwnedIdentity
+      : undefined;
+    if (codingMode && rollbackAnchor.previous.codingWorkflow?.absent === true) {
+      const current = await fetchAliceCodingWorkflowPrestate({ apiToken });
+      if (current.absent !== true && (
+        !codingWorkflowOwnedIdentity ||
+        current.workflow.id !== codingWorkflowOwnedIdentity.workflowId ||
+        current.versions.length !== 1 ||
+        current.versions[0].id !== codingWorkflowOwnedIdentity.candidateVersionId
+      )) releaseInvalid("ALICE_CODING_WORKFLOW_OWNERSHIP_UNAVAILABLE");
+    }
     const rollbackEvidence = await executeRollbacks({
       wranglerBin,
       sourceRoot,
@@ -2641,12 +2704,7 @@ async function main() {
       expectedDurableObjectNamespaceIds,
       expectedContinuityDigest:
         release.manifest.cloudflare.continuityConfigSha256,
-      ...(codingMode && fs.existsSync(prepareEvidencePath) ? {
-        codingWorkflowOwnedIdentity: verifyAliceCloudflarePrepareEvidence(
-          readJson(prepareEvidencePath), { sourceCommit,
-            deploymentManifestSha256: release.deploymentManifestSha256 },
-        ).codingWorkflowOwnedIdentity,
-      } : {}),
+      ...(codingWorkflowOwnedIdentity ? { codingWorkflowOwnedIdentity } : {}),
     });
     writeReadonly(readbackPath, rollbackEvidence);
     return;
@@ -2893,6 +2951,7 @@ async function main() {
       if (codingMode) codingWorkflowOwnedIdentity = await registerCandidateCodingWorkflow({
         apiToken, baseline: anchor.previous.codingWorkflow,
         controlConfig: release.configs.control,
+        onOwned: (owned) => { codingWorkflowOwnedIdentity = owned; },
       });
       await applyAliceCandidateTrafficState({
         apiToken,
@@ -3137,6 +3196,16 @@ async function main() {
       if (codingMode) codingWorkflowOwnedIdentity = await registerCandidateCodingWorkflow({
         apiToken, baseline: rollbackEvidence.codingWorkflow,
         controlConfig: release.configs.control,
+        onOwned: (owned) => {
+          codingWorkflowOwnedIdentity = owned;
+          writeReadonly(codingWorkflowOwnerPath, {
+            schemaVersion: "alice.coding-workflow-owner.v1",
+            sourceCommit,
+            deploymentManifestSha256: release.deploymentManifestSha256,
+            rollbackAnchorSha256: sha256File(rollbackAnchorPath),
+            ownedIdentity: owned,
+          });
+        },
       });
       await transitionAliceContainerApplication({
         apiToken,
