@@ -18,6 +18,7 @@ import {
 import { captureAliceCloudflareWorkerRollbackState, normalizeAliceCloudflareVersionResources } from "./alice_cloudflare_worker_rollback.mjs";
 import { fetchAliceCloudflareTrafficState } from "./alice_cloudflare_traffic.mjs";
 import { validateAliceOwnerAuthorization } from "./alice_release_controller.mjs";
+import { assertAliceAcceptanceRecoveryPause, releaseExpected } from "./alice_production_acceptance";
 
 const roles = ["control", "statePlane", "aiGateway", "connectorPlane", "runtimeHost", "access"];
 const codingRole = "codingSandbox";
@@ -91,17 +92,21 @@ export function verifyAliceRetainedV4Candidate({ workers, application, continuit
   }
 }
 
-export function verifyAliceRecordedPause({ state, evidence, pauseId }: any) {
+export function verifyAliceRecordedPause({ state, evidence, pauseId, admission, ownerActor }: any) {
   const active = evidence.active;
   const authority = state.authority;
-  if (state.ok !== true || !active || !authority ||
-      !equal(authority.binding, active.binding) ||
-      authority.deploymentManifestSha256 !== active.deploymentManifestSha256 ||
-      authority.activeReleaseEpoch !== active.releaseEpoch ||
-      authority.rollbackBoundary !== active.rollbackBoundary ||
-      !equal(authority.pausedScopes, ["all"]) ||
-      evidence.result?.pause?.pauseId !== pauseId ||
-      !equal(authority.activePauses?.all, evidence.result.pause)) fail("OWNER_STATE_INVALID");
+  if (state.ok === true && active?.binding && authority &&
+      equal(authority.binding, active.binding) &&
+      authority.deploymentManifestSha256 === active.deploymentManifestSha256 &&
+      authority.activeReleaseEpoch === active.releaseEpoch &&
+      authority.rollbackBoundary === active.rollbackBoundary &&
+      equal(authority.pausedScopes, ["all"]) &&
+      evidence.result?.pause?.pauseId === pauseId &&
+      equal(authority.activePauses?.all, evidence.result.pause)) return;
+  if (!admission || !ownerActor || pauseId === evidence.result?.pause?.pauseId) fail("OWNER_STATE_INVALID");
+  try {
+    assertAliceAcceptanceRecoveryPause({ state, expected: releaseExpected(admission), pauseId, ownerActor });
+  } catch { fail("OWNER_STATE_INVALID"); }
 }
 
 function downloadArtifact(record: any, expectedDigest: string, destination: string) {
@@ -196,7 +201,7 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
   const vars = release.configs.control.vars;
   const namespaces = read(path.join(releaseRoot, "durable-object-namespace-ids.json"));
   const pauseEvidence = read(path.join(releaseRoot, "deployment-pause-evidence.json"));
-  await validateAliceOwnerAuthorization(process.env.ALICE_OWNER_AUTHORIZATION, {
+  const owner = await validateAliceOwnerAuthorization(process.env.ALICE_OWNER_AUTHORIZATION, {
     issuer: vars.ALICE_ACCESS_ISSUER, audience: vars.ALICE_ACCESS_AUDIENCE, ownerEmailSha256: vars.ALICE_OWNER_EMAIL_SHA256,
   });
   const checkPause = async () => {
@@ -204,7 +209,8 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
       signal: AbortSignal.timeout(30_000), headers: { cookie: `CF_Authorization=${process.env.ALICE_OWNER_AUTHORIZATION}`,
         origin: "https://alice.rndrntwrk.com", "sec-fetch-site": "same-origin", accept: "application/json", "cache-control": "no-store" } });
     if (!response.ok) fail("OWNER_STATE_INVALID");
-    verifyAliceRecordedPause({ state: await response.json(), evidence: pauseEvidence, pauseId: selection.ownerPauseId });
+    verifyAliceRecordedPause({ state: await response.json(), evidence: pauseEvidence,
+      pauseId: selection.ownerPauseId, admission, ownerActor: owner.actor });
   };
   await checkPause();
   const [workers, application, continuity, traffic] = await Promise.all([
