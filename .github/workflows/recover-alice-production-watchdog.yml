@@ -55,27 +55,20 @@ jobs:
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/release/alice-production-core-2026-08-22" --jq .object.sha)" = "$CONTROLLER_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
-      - name: Hydrate exact reviewed Eliza PR head
+      - name: Hydrate exact merged Eliza commit
         if: ${{ !inputs.diagnostic_only }}
         env:
-          EXPECTED_ELIZA_SHA: 7cdfca05b33038ec18ae5c8502df39c01d180090
+          EXPECTED_ELIZA_SHA: 1cc0cb85a9f11fe26e58e49b0dce064bf4803845
         run: |
           set -euo pipefail
           test "$(git config -f .gitmodules --get submodule.eliza.url)" = \
             "https://github.com/rndrntwrk/eliza.git"
           test "$(git config -f .gitmodules --get submodule.eliza.branch)" = \
             "alice/runtime-stable-2026-08-22"
-          reviewed_eliza_ref="refs/pull/8/head"
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "$eliza_sha" = "$EXPECTED_ELIZA_SHA"
           git clone --no-checkout --filter=blob:none \
             https://github.com/rndrntwrk/eliza.git eliza
-          git -C eliza fetch --depth=1 origin \
-            "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-8"
-          reviewed_eliza_sha="$(git -C eliza rev-parse \
-            refs/remotes/origin/alice-reviewed-pr-8)"
-          test "$reviewed_eliza_sha" = "$EXPECTED_ELIZA_SHA"
-          test "$eliza_sha" = "$reviewed_eliza_sha"
           git -C eliza fetch --depth=1 origin "$eliza_sha"
           git -C eliza checkout --detach "$eliza_sha"
           test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
