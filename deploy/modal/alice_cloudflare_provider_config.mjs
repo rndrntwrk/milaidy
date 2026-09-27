@@ -251,7 +251,7 @@ export async function buildAliceAccessPolicyProviderConfig(readback) {
       !Array.isArray(policy?.exclude) ||
       policy.exclude.length !== 0 ||
       !Array.isArray(policy?.require) ||
-      policy.require.length < 2
+      policy.require.length !== 1
     ) {
       accessInvalid();
     }
@@ -285,8 +285,7 @@ export async function buildAliceAccessPolicyProviderConfig(readback) {
     if (
       loginMethodIds.length !== 1 ||
       loginMethodIds[0] !== identityProviderId ||
-      postureIds.length < 1 ||
-      new Set(postureIds).size !== postureIds.length
+      postureIds.length !== 0
     ) {
       accessInvalid();
     }

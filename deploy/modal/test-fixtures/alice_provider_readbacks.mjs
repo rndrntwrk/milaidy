@@ -526,15 +526,12 @@ export function aliceTestProviderReadbacks({
       policies: [
         {
           id: "44444444-4444-4444-8444-444444444444",
-          name: "Alice owner on managed device",
+          name: "Alice owner one-time PIN",
           decision: "allow",
           precedence: 1,
           include: [{ email: { email: ownerEmail } }],
           exclude: [],
-          require: [
-            { login_method: { id: identityProviderId } },
-            { device_posture: { integration_uid: postureRuleId } },
-          ],
+          require: [{ login_method: { id: identityProviderId } }],
           session_duration: "24h",
         },
       ],
