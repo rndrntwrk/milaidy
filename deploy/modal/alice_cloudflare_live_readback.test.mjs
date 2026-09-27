@@ -997,6 +997,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     ]),
   );
   let includeExtraConsumer = false;
+  let activeVersionIdentityDrift = false;
   let includeShadowRoute = false;
   let includeCustomDomain = false;
   let includeReleaseShadowRoute = false;
@@ -1299,12 +1300,20 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
           },
         });
       }
-      if (pathname === `${root}/content/v2`) {
-        return new Response(`export default ${JSON.stringify(worker)};\n`, {
-          status: 200,
-          headers: {
-            "content-type": "application/javascript",
-            etag: `"etag-${worker}"`,
+      if (
+        pathname === `/accounts/${accountId}/workers/workers/${worker}/versions/${deploymentByWorker[worker].versions[0].version_id}` &&
+        parsed.searchParams.get("include") === "modules"
+      ) {
+        return json({
+          success: true,
+          result: {
+            id: activeVersionIdentityDrift ? "wrong-version" : deploymentByWorker[worker].versions[0].version_id,
+            main_module: "index.js",
+            modules: [{
+              name: "index.js",
+              content_type: "application/javascript+module",
+              content_base64: Buffer.from(`export default ${JSON.stringify(worker)};\n`).toString("base64"),
+            }],
           },
         });
       }
@@ -1451,6 +1460,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   for (const worker of Object.values(roles)) {
     const suffix = `/workers/scripts/${worker}/deployments`;
     assert.equal(calls.filter((call) => new URL(call.url).pathname.endsWith(suffix)).length, 3);
+    assert.equal(calls.filter((call) => new URL(call.url).pathname.includes(`/workers/workers/${worker}/versions/`) && new URL(call.url).searchParams.get("include") === "modules").length, 1);
   }
   assert.equal(evidence.durationMs < 60_000, true);
   assert.equal(evidence.workflowVersions[0].id, workflowVersionFixture[0].id);
@@ -1466,6 +1476,13 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   await fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput);
   assert.equal(instanceTelemetryTick, 4);
   includeBoundRuntimeHostInstance = false;
+
+  activeVersionIdentityDrift = true;
+  await assert.rejects(
+    () => fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput),
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
+  );
+  activeVersionIdentityDrift = false;
 
   ownerPolicyStableThrough = ownerPolicyReads + 1;
   await assert.rejects(

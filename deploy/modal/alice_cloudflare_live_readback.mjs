@@ -24,7 +24,6 @@ import {
   buildAliceCloudflareContinuityConfig,
 } from "./alice_cloudflare_continuity.mjs";
 import {
-  readAliceWorkerMainModule,
   normalizeAliceContainerInstanceReadback,
   verifyAliceProviderControlFingerprints,
   verifyAliceWorkerProviderReadback,
@@ -1062,6 +1061,27 @@ function latestDeployment(body) {
   return deployments[0];
 }
 
+function activeVersionMainModule(version, expectedVersionId) {
+  if (
+    version?.id !== expectedVersionId ||
+    typeof version.main_module !== "string" ||
+    !Array.isArray(version.modules)
+  ) readbackInvalid();
+  const modules = version.modules.filter((module) =>
+    module?.name === version.main_module);
+  if (
+    modules.length !== 1 ||
+    modules[0].content_type !== "application/javascript+module" ||
+    typeof modules[0].content_base64 !== "string"
+  ) readbackInvalid();
+  const encoded = modules[0].content_base64;
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.length === 0 || bytes.toString("base64") !== encoded) {
+    readbackInvalid();
+  }
+  return new Uint8Array(bytes);
+}
+
 export async function fetchAliceCloudflarePostDeploymentReadback({
   fetchImpl = globalThis.fetch,
   apiToken,
@@ -1233,20 +1253,20 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
           `${workerRoot}/versions/${deployment.versions[0].version_id}`,
         ),
       );
-      const contentResponse = await apiGetResponse(
-        client,
-        `${workerRoot}/content/v2`,
-      );
-      const contentEtag = contentResponse.headers.get("etag")?.replace(/^W\//, "").replaceAll('"', "");
       if (
         typeof version?.resources?.script?.etag !== "string" ||
-        version.resources.script.etag.length < 8 ||
-        contentEtag !== version.resources.script.etag
+        version.resources.script.etag.length < 8
       ) {
         readbackInvalid();
       }
-      const deployedMainModule = await readAliceWorkerMainModule(
-        contentResponse,
+      const activeVersion = result(await apiGetJson(
+        client,
+        `/accounts/${accountId}/workers/workers/${config.name}/versions/${version.id}`,
+        { include: "modules" },
+      ));
+      const deployedMainModule = activeVersionMainModule(
+        activeVersion,
+        version.id,
       );
       const scriptSettings = result(
         await apiGetJson(client, `${workerRoot}/script-settings`),
