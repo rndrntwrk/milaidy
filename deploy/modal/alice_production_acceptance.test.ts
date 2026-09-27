@@ -416,7 +416,7 @@ function mockRuntime(
         release: { ...data.expected.release, ...data.binding },
         controls: {
           highRiskActions: "disabled",
-          capabilityGrant: "disabled-pending-device-bound-webauthn",
+          capabilityGrant: "owner-access-plus-device-bound-webauthn-single-use-coding-grant",
         },
       });
     }
