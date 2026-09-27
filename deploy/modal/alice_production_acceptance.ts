@@ -85,7 +85,7 @@ function digestBytes(bytes: Uint8Array | string): string {
   return `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`;
 }
 
-function releaseExpected(admission: Record<string, any>) {
+export function releaseExpected(admission: Record<string, any>) {
   const containerMode = admission.schemaVersion === "alice.program-admission.v2";
   const binding = {
     programDigest: admission.programDigest,
@@ -1225,6 +1225,16 @@ async function main() {
   const programAdmission = readJson(
     process.env.ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH ?? "",
   );
+  const deploymentPauseEvidence = readJson(
+    process.env.ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH ?? "",
+  );
+  const reacceptSelection = process.env.ALICE_REACCEPT_CANDIDATE
+    ? JSON.parse(process.env.ALICE_REACCEPT_CANDIDATE)
+    : null;
+  const recoveryPauseId = process.env.ALICE_RECOVERY_PAUSE_ID ??
+    (reacceptSelection?.ownerPauseId !== deploymentPauseEvidence.result?.pause?.pauseId
+      ? reacceptSelection?.ownerPauseId
+      : undefined);
   const containerMode = programAdmission.schemaVersion ===
     "alice.program-admission.v2";
   const evidence = await runAliceProductionAcceptance({
@@ -1238,7 +1248,7 @@ async function main() {
     releaseAccessClientId: process.env.ALICE_RELEASE_ACCESS_CLIENT_ID,
     releaseAccessClientSecret: process.env.ALICE_RELEASE_ACCESS_CLIENT_SECRET,
     deploymentPauseToken: process.env.ALICE_DEPLOYMENT_PAUSE_TOKEN,
-    recoveryPauseId: process.env.ALICE_RECOVERY_PAUSE_ID,
+    recoveryPauseId,
     cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN,
     deploymentRunId: process.env.ALICE_DEPLOYMENT_RUN_ID,
     deploymentRunAttempt: Number(process.env.ALICE_DEPLOYMENT_RUN_ATTEMPT),
@@ -1250,9 +1260,7 @@ async function main() {
     expectedWorkflowConclusion: process.env.ALICE_EXPECTED_WORKFLOW_CONCLUSION,
     manifest: readJson(process.env.ALICE_DEPLOYMENT_MANIFEST_PATH ?? ""),
     programAdmission,
-    deploymentPauseEvidence: readJson(
-      process.env.ALICE_DEPLOYMENT_PAUSE_EVIDENCE_PATH ?? "",
-    ),
+    deploymentPauseEvidence,
     rollbackAnchor: readJson(
       process.env.ALICE_CLOUDFLARE_ROLLBACK_ANCHOR_PATH ?? "",
     ),

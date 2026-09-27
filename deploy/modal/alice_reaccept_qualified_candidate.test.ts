@@ -18,6 +18,34 @@ test("accepts only the original recorded machine pause before owner admission", 
   expect(() => verifyAliceRecordedPause({ state, evidence, pauseId: pause.pauseId })).toThrow("OWNER_STATE_INVALID");
 });
 
+test("accepts the exact owner pause left by failed candidate acceptance", () => {
+  const digest = (letter: string) => `sha256:${letter.repeat(64)}`;
+  const admission = {
+    schemaVersion: "alice.program-admission.v2", releaseEpoch: 16, runtimeRevision: 62,
+    rollbackBoundary: "container:alice-runtime:v62", programDigest: digest("a"),
+    releaseDigest: digest("b"), policyHash: digest("c"),
+    deploymentManifestSha256: digest("d"), runtimeBuildManifestSha256: digest("e"),
+    capabilityBomSha256: digest("f"), sourceCommit: "a".repeat(40),
+    deploymentControllerCommit: "b".repeat(40), elizaCommit: "c".repeat(40),
+    runtimeImage: `registry.cloudflare.com/example@${digest("a")}`,
+  };
+  const binding = { programDigest: admission.programDigest,
+    releaseDigest: admission.releaseDigest, policyHash: admission.policyHash };
+  const ownerActor = `owner:${digest("a")}`;
+  const pause = { pauseId: "pause-failed-acceptance", pausedBy: ownerActor,
+    binding, deploymentManifestSha256: admission.deploymentManifestSha256,
+    rollbackBoundary: admission.rollbackBoundary, pausedAt: 1790527824566, resumedAt: null };
+  const state = { ok: true, authority: { binding,
+    deploymentManifestSha256: admission.deploymentManifestSha256,
+    activeReleaseEpoch: 16, rollbackBoundary: admission.rollbackBoundary,
+    pausedScopes: ["all"], activePauses: { all: pause } } };
+  const evidence = { active: { releaseEpoch: 15 },
+    result: { pause: { pauseId: "pause-recorded-release" } } };
+  const input = { state, evidence, pauseId: pause.pauseId, admission, ownerActor };
+  expect(() => verifyAliceRecordedPause(input)).not.toThrow();
+  expect(() => verifyAliceRecordedPause({ ...input, ownerActor: "other-owner" })).toThrow("OWNER_STATE_INVALID");
+});
+
 test("requires an exact artifact and owner pause selection", () => {
   const value = { runId: "34031795256", artifactDigest: `sha256:${"a".repeat(64)}`,
     anchorDigest: `sha256:${"b".repeat(64)}`, ownerPauseId: "pause-exact-failed-acceptance" };
