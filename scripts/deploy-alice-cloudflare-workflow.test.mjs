@@ -66,7 +66,8 @@ test("read-only deploy-token proof uses the bootstrap account-token API", () => 
   assert.match(bootstrapSource, /`\/accounts\/\$\{ALICE_CLOUDFLARE_TARGET\.accountId\}\/tokens\/verify`/);
   assert.match(identityJob, /\/accounts\/036df6c823669b8fa2f66cf4c16eeb29\/tokens\/verify/);
   assert.match(policyJob, /`\/accounts\/\$\{accountId\}\/tokens\/\$\{id\}`/);
-  assert.match(policyJob, /`\/accounts\/\$\{accountId\}\/tokens\/permission_groups\?page=/);
+  assert.match(policyJob, /`\/accounts\/\$\{accountId\}\/tokens\/permission_groups`/);
+  assert.doesNotMatch(policyJob, /result_info|total_count|permission_groups\?page=/);
   assert.doesNotMatch(identityJob + policyJob, /\/user\/tokens\//);
 });
 
