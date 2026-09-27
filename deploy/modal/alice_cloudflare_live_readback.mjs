@@ -404,13 +404,17 @@ export async function fetchAliceCodingContainerState({
           `${base}/${application.id}/rollouts/${detailed.active_rollout_id}`))
       : null;
     const terminal = result(await apiGetJson(client, `${base}/${application.id}`));
+    const instanceType = detailed.configuration?.instance_type ??
+      (detailed.configuration?.vcpu === 0.0625 &&
+        detailed.configuration?.memory_mib === 256 &&
+        detailed.configuration?.disk?.size_mb === 2000 ? "lite" : undefined);
     if (!canonicalEqual(detailed, terminal) ||
         detailed?.id !== application.id ||
         detailed.account_id !== accountId ||
         detailed.name !== container.name ||
         detailed.durable_objects?.namespace_id !== binding.namespaceId ||
         detailed.configuration?.image !== container.image ||
-        detailed.configuration?.instance_type !== container.instance_type ||
+        instanceType !== container.instance_type ||
         detailed.max_instances !== container.max_instances ||
         (rollout !== null && (rollout.status !== "completed" ||
           rollout.target_version !== detailed.version))) readbackInvalid();
@@ -419,7 +423,7 @@ export async function fetchAliceCodingContainerState({
       version: detailed.version,
       namespaceId: binding.namespaceId,
       image: detailed.configuration.image,
-      instanceType: detailed.configuration.instance_type,
+      instanceType,
       maxInstances: detailed.max_instances,
     };
   } catch (error) {
