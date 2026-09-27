@@ -1415,7 +1415,10 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
       verifiedRoles.push(input.role);
       assert.equal(input.deployment.id, input.deploymentAfterContent.id);
       assert.equal(input.deploymentMainPath, input.materializedWranglerConfig.main);
-      assert.equal(input.deployedMainModule.byteLength > 0, true);
+      assert.equal(
+        Buffer.from(input.deployedMainModule).toString("utf8"),
+        `export default ${JSON.stringify(roles[input.role])};\n`,
+      );
       if (input.role === "runtimeHost") {
         assert.deepEqual(input.containerApplication, runtimeHostApplication);
         assert.deepEqual(input.containerApplicationInstances, includeBoundRuntimeHostInstance ? [normalizedBoundRuntimeInstance] : []);
