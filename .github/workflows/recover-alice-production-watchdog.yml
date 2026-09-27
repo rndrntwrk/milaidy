@@ -283,7 +283,8 @@ jobs:
           printf '%s' "$PARENT_RUN_ATTEMPT" | grep -Eq '^[1-9][0-9]*$'
           recovery_root="${RUNNER_TEMP}/alice-independent-cloudflare-recovery"
           terminal_root="${RUNNER_TEMP}/alice-independent-cloudflare-terminal"
-          mkdir -p "$recovery_root" "$terminal_root"
+          qualified_root="${RUNNER_TEMP}/alice-independent-cloudflare-qualified"
+          mkdir -p "$recovery_root" "$terminal_root" "$qualified_root"
           artifacts_json="$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${PARENT_RUN_ID}/artifacts?per_page=100")"
           download_optional() {
@@ -341,11 +342,25 @@ jobs:
           then
             exit 0
           fi
-          if test -s "$terminal_root/coding-workflow-owned-identity.json"
-          then
-            cp -- "$terminal_root/coding-workflow-owned-identity.json" \
-              "$recovery_root/alice-release/coding-workflow-owned-identity.json"
-          fi
+          download_optional \
+            "alice-qualified-candidate-${SOURCE_SHA}-${PARENT_RUN_ID}-${PARENT_RUN_ATTEMPT}" \
+            "$qualified_root"
+          adopt_owner() {
+            source="$1"
+            target="$recovery_root/alice-release/coding-workflow-owned-identity.json"
+            if test -s "$source"
+            then
+              test ! -L "$source"
+              if test -e "$target"
+              then
+                cmp -s "$source" "$target"
+              else
+                cp -- "$source" "$target"
+              fi
+            fi
+          }
+          adopt_owner "$qualified_root/coding-workflow-owned-identity.json"
+          adopt_owner "$terminal_root/coding-workflow-owned-identity.json"
           manifest="$recovery_root/alice-release/alice-deployment-manifest.json"
           manifest_sha256="sha256:$(sha256sum "$manifest" | cut -d' ' -f1)"
           export ALICE_SOURCE_ROOT="$GITHUB_WORKSPACE"

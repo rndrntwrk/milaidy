@@ -1551,6 +1551,7 @@ jobs:
             ${{ runner.temp }}/alice-release/deployment-pause-evidence.json
             ${{ runner.temp }}/alice-release/cloudflare-rollback-proof.json
             ${{ runner.temp }}/alice-release/live-readback.json
+            ${{ runner.temp }}/alice-release/coding-workflow-owned-identity.json
             ${{ runner.temp }}/alice-release/program-admission.json
             ${{ runner.temp }}/alice-release/container-image-evidence.json
             ${{ runner.temp }}/alice-release/watchdog-cloudflare-readiness.json
@@ -1661,7 +1662,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
+          fetch-depth: 8
           submodules: false
           persist-credentials: false
 
@@ -1694,17 +1695,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ALICE_OWNER_AUTHORIZATION: ${{ secrets.ALICE_OWNER_AUTHORIZATION }}
         run: bun deploy/modal/alice_reaccept_qualified_candidate.ts preflight
-
-      - name: Publish existing rollback journal before selecting candidate versions
-        if: ${{ inputs.reaccept_candidate != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: alice-cloudflare-anchor-${{ inputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/alice-reaccept-journal/
-          if-no-files-found: error
-          retention-days: 90
-          overwrite: false
-          include-hidden-files: false
 
       - name: Download exact qualified candidate evidence
         if: ${{ inputs.reaccept_candidate == '' }}
@@ -1790,6 +1780,7 @@ jobs:
             ${{ runner.temp }}/alice-release/program-admission.json
             ${{ runner.temp }}/alice-release/container-image-evidence.json
             ${{ runner.temp }}/alice-release/alice-production-acceptance.json
+            ${{ runner.temp }}/alice-release/coding-workflow-owned-identity.json
             ${{ runner.temp }}/alice-release/reaccept-selection.json
             ${{ runner.temp }}/alice-release/reaccept-live-readback.json
           if-no-files-found: error
@@ -1800,7 +1791,7 @@ jobs:
   recover-cloudflare:
     name: Independently restore Cloudflare after deploy-job loss
     needs: [deploy, accept]
-    if: ${{ always() && !inputs.read_status_only && !inputs.recover_owner_pause_only && ((!inputs.reaccept_candidate && needs.deploy.result != 'success') || needs.accept.result != 'success') }}
+    if: ${{ always() && !inputs.read_status_only && !inputs.recover_owner_pause_only && !inputs.reaccept_candidate && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: alice-production-cloudflare-recovery
@@ -1867,7 +1858,8 @@ jobs:
           set -euo pipefail
           recovery_root="${RUNNER_TEMP}/alice-independent-cloudflare-recovery"
           terminal_root="${RUNNER_TEMP}/alice-independent-cloudflare-terminal"
-          mkdir -p "$recovery_root" "$terminal_root"
+          qualified_root="${RUNNER_TEMP}/alice-independent-cloudflare-qualified"
+          mkdir -p "$recovery_root" "$terminal_root" "$qualified_root"
           artifacts_json="$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100")"
           download_optional() {
@@ -1925,11 +1917,25 @@ jobs:
           then
             exit 0
           fi
-          if test -s "$terminal_root/coding-workflow-owned-identity.json"
-          then
-            cp -- "$terminal_root/coding-workflow-owned-identity.json" \
-              "$recovery_root/alice-release/coding-workflow-owned-identity.json"
-          fi
+          download_optional \
+            "alice-qualified-candidate-${SOURCE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$qualified_root"
+          adopt_owner() {
+            source="$1"
+            target="$recovery_root/alice-release/coding-workflow-owned-identity.json"
+            if test -s "$source"
+            then
+              test ! -L "$source"
+              if test -e "$target"
+              then
+                cmp -s "$source" "$target"
+              else
+                cp -- "$source" "$target"
+              fi
+            fi
+          }
+          adopt_owner "$qualified_root/coding-workflow-owned-identity.json"
+          adopt_owner "$terminal_root/coding-workflow-owned-identity.json"
           manifest="$recovery_root/alice-release/alice-deployment-manifest.json"
           manifest_sha256="sha256:$(sha256sum "$manifest" | cut -d' ' -f1)"
           export ALICE_SOURCE_ROOT="$GITHUB_WORKSPACE"

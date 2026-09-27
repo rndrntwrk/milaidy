@@ -46,7 +46,7 @@ function namedWorkflowSteps(source) {
 
 test("status-only dispatch cannot start deployment or recovery and prints no credential headers", () => {
   assert.match(workflow, /name: Promote attested Alice Worker bytes\n    if: \$\{\{ !inputs\.read_status_only && !inputs\.recover_owner_pause_only && !inputs\.reaccept_candidate \}\}/);
-  assert.match(workflow, /if: \$\{\{ always\(\) && !inputs\.read_status_only && !inputs\.recover_owner_pause_only && \(\(!inputs\.reaccept_candidate && needs\.deploy\.result/);
+  assert.match(workflow, /if: \$\{\{ always\(\) && !inputs\.read_status_only && !inputs\.recover_owner_pause_only && !inputs\.reaccept_candidate && \(needs\.deploy\.result/);
   const statusJob = workflow.slice(workflow.indexOf("  read-status:"), workflow.indexOf("\n  recover-owner-pause:"));
   assert.match(statusJob, /test "\$REF_PROTECTED" = "true"/);
   assert.match(statusJob, /method: 'GET', redirect: 'manual'/);
@@ -579,6 +579,23 @@ test("both independent recovery lanes require every relocated Worker module", ()
   }
 });
 
+test("qualified coding ownership reaches both recovery lanes and acceptance fetch stays bounded", () => {
+  const qualified = workflow.match(
+    /- name: Persist qualified candidate evidence before terminal acceptance[\s\S]*?(?=\n      - name:)/,
+  )?.[0] ?? "";
+  const accept = workflow.match(/  accept:[\s\S]*?(?=\n  recover-cloudflare:)/)?.[0] ?? "";
+  assert.match(qualified, /alice-release\/coding-workflow-owned-identity\.json/);
+  assert.match(accept, /Checkout exact promoted release source[\s\S]*?fetch-depth: 8/);
+  for (const source of [workflow, watchdog]) {
+    const recovery = source.match(
+      /- name: Consume external journal and recover Cloudflare independently[\s\S]*?(?=\n      - name:)/,
+    )?.[0] ?? "";
+    assert.match(recovery, /alice-qualified-candidate-\$\{SOURCE_SHA\}-/);
+    assert.match(recovery, /adopt_owner "\$qualified_root\/coding-workflow-owned-identity\.json"/);
+    assert.match(recovery, /cmp -s "\$source" "\$target"/);
+  }
+});
+
 test("the independent terminal handoff requires container evidence, not provider bootstrap evidence", () => {
   const accept = workflow.match(/  accept:[\s\S]*?(?=\n  recover-cloudflare:)/)?.[0] ?? "";
   assert.match(accept, /container-image-evidence\.json/);
@@ -654,13 +671,15 @@ test("every direct gh boundary receives only a step-local GitHub token", () => {
 });
 
 
-test("acceptance retry skips promotion and journals existing versions before any restoration", () => {
+test("acceptance retry reads existing versions without publishing a rollback anchor", () => {
   const accept = workflow.slice(workflow.indexOf("\n  accept:"), workflow.indexOf("\n  recover-cloudflare:"));
   const prepare = accept.indexOf("alice_reaccept_qualified_candidate.ts prepare");
-  const journal = accept.indexOf("Publish existing rollback journal");
   const restore = accept.indexOf("alice_reaccept_qualified_candidate.ts restore");
   const prove = accept.indexOf("Prove terminal authenticated Alice production acceptance");
-  assert.ok(prepare >= 0 && prepare < journal && journal < restore && restore < prove);
+  assert.ok(prepare >= 0 && prepare < restore && restore < prove);
   assert.match(accept, /needs\.deploy\.result == 'success' \|\| inputs\.reaccept_candidate != ''/);
+  assert.doesNotMatch(accept, /Publish existing rollback journal/);
+  const recovery = workflow.slice(workflow.indexOf("\n  recover-cloudflare:"));
+  assert.match(recovery, /!inputs\.reaccept_candidate && \(needs\.deploy\.result != 'success'/);
   assert.doesNotMatch(accept, /docker (build|push)|wrangler versions upload|alice_cloudflare_release\.mjs/);
 });
