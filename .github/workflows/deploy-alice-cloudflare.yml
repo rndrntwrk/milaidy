@@ -747,6 +747,69 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/alice-preimport-evidence
 
+      - name: Preflight signed Program against exact preimport manifest
+        env:
+          PREIMPORT_ROOT: ${{ runner.temp }}/alice-preimport-evidence
+          EXPECTED_RELEASE_EPOCH: ${{ inputs.release_epoch }}
+          EXPECTED_RUNTIME_REVISION: ${{ inputs.runtime_revision }}
+          EXPECTED_POLICY_HASH: ${{ inputs.policy_hash }}
+          ALICE_ACCESS_AUDIENCE: ${{ secrets.ALICE_ACCESS_AUDIENCE }}
+          ALICE_OWNER_EMAIL_SHA256: ${{ secrets.ALICE_OWNER_EMAIL_SHA256 }}
+          ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
+          ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
+          ALICE_PROGRAM_ENVELOPE_B64: ${{ secrets.ALICE_PROGRAM_ENVELOPE_B64 }}
+          ALICE_PROGRAM_SIGNATURE_B64: ${{ secrets.ALICE_PROGRAM_SIGNATURE_B64 }}
+          ALICE_PROGRAM_PUBLIC_JWK_B64: ${{ secrets.ALICE_PROGRAM_PUBLIC_JWK_B64 }}
+        run: |
+          bun -e '
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          import path from "node:path";
+          import { verifyAliceDeploymentManifest } from "./deploy/modal/alice_deployment_manifest.mjs";
+          import { ALICE_PRODUCTION_TRUST_PINS, loadRuntimeConfig } from "./workers/alice-production-control/src/runtime-config.ts";
+
+          const root = process.env.PREIMPORT_ROOT;
+          const readFile = (name) => {
+            const filePath = path.join(root, name);
+            const stat = fs.lstatSync(filePath);
+            if (!stat.isFile() || stat.isSymbolicLink() || stat.size === 0) {
+              throw new Error("ALICE_PREIMPORT_MANIFEST_PREFLIGHT_INVALID");
+            }
+            return fs.readFileSync(filePath);
+          };
+          const manifestBytes = readFile("alice-deployment-manifest.json");
+          const output = JSON.parse(readFile("deployment-output-digests.json").toString("utf8"));
+          const manifestSha256 = "sha256:" + crypto.createHash("sha256").update(manifestBytes).digest("hex");
+          const manifest = verifyAliceDeploymentManifest(manifestBytes.toString("utf8"));
+          if (output.schemaVersion !== "alice.preimport-output-digests.v2" ||
+              output.deploymentManifestSha256 !== manifestSha256 ||
+              output.sourceSha !== process.env.SOURCE_SHA ||
+              output.runtimeImage !== manifest.source.runtimeImage ||
+              manifest.schemaVersion !== "alice.deployment-manifest.v4" ||
+              manifest.source.sourceCommit !== process.env.SOURCE_SHA ||
+              manifest.source.deploymentControllerCommit !== process.env.CONTROLLER_SHA ||
+              manifest.release.releaseEpoch !== Number(process.env.EXPECTED_RELEASE_EPOCH) ||
+              manifest.release.runtimeRevision !== Number(process.env.EXPECTED_RUNTIME_REVISION) ||
+              manifest.release.policyHash !== process.env.EXPECTED_POLICY_HASH ||
+              manifest.release.policyHash !== ALICE_PRODUCTION_TRUST_PINS.policyHash) {
+            throw new Error("ALICE_PREIMPORT_MANIFEST_PREFLIGHT_INVALID");
+          }
+          const config = await loadRuntimeConfig({
+            ...process.env,
+            ALICE_ACCESS_ISSUER: "https://rndrntwrk.cloudflareaccess.com",
+            ALICE_MODEL_DAILY_BUDGET_UNITS: "100000",
+            ALICE_CONTROL_RECOVERY_TOKEN: "preprovisioned-recovery-secret-not-readable-by-release",
+            ALICE_RUNTIME_REVISION: process.env.EXPECTED_RUNTIME_REVISION,
+            ALICE_DEPLOYMENT_MANIFEST_SHA256: manifestSha256,
+            ALICE_DEPLOYMENT_MANIFEST_B64: manifestBytes.toString("base64url"),
+          });
+          if (config.envelope.schemaVersion !== "alice.program-envelope.v2" ||
+              config.deploymentManifestSha256 !== manifestSha256) {
+            throw new Error("ALICE_SIGNED_PROGRAM_PREFLIGHT_INVALID");
+          }
+          console.log("ALICE_SIGNED_PROGRAM_PREFLIGHT_OK");
+          '
+
       - name: Verify exact source runtime image and derive immutable identities
         env:
           GH_TOKEN: ${{ github.token }}

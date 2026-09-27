@@ -147,6 +147,39 @@ test("protected deployment consumes one exact successful preimport artifact", ()
   assert.match(download, /merge-multiple: true/);
 });
 
+test("policy and signed manifest fail before image pulls and provider mutation", () => {
+  const preimport = fs.readFileSync(
+    path.join(repoRoot, ".github/workflows/alice-cloudflare-container-bringup.yml"),
+    "utf8",
+  );
+  const policy = namedWorkflowSteps(preimport).find(
+    (step) => step.name === "Verify policy hash against source and runtime trust pin",
+  );
+  assert.ok(policy);
+  assert.match(policy.run, /ALICE_PRODUCTION_TRUST_PINS\.policyHash/);
+  assert.match(policy.run, /policy\.v1\.json/);
+  assert.match(policy.run, /process\.env\.POLICY_HASH/);
+  assert.ok(preimport.indexOf(policy.block) < preimport.indexOf("  import_runtime:"));
+  assert.ok(preimport.indexOf(policy.block) < preimport.indexOf("docker pull --platform linux/amd64"));
+
+  const signed = namedWorkflowSteps(workflow).find(
+    (step) => step.name === "Preflight signed Program against exact preimport manifest",
+  );
+  assert.ok(signed);
+  assert.match(signed.run, /output\.deploymentManifestSha256 !== manifestSha256/);
+  assert.match(signed.run, /manifest\.source\.deploymentControllerCommit !== process\.env\.CONTROLLER_SHA/);
+  assert.match(signed.run, /manifest\.release\.policyHash !== process\.env\.EXPECTED_POLICY_HASH/);
+  assert.match(signed.run, /await loadRuntimeConfig\(/);
+  assert.match(signed.run, /ALICE_DEPLOYMENT_MANIFEST_B64: manifestBytes\.toString\("base64url"\)/);
+  assert.doesNotMatch(signed.run, /\bdocker\b|console\.log\((?:process\.env|config|manifest)/);
+  assert.ok(
+    workflow.indexOf("Download exact preimport evidence artifact") <
+      workflow.indexOf(signed.block) &&
+      workflow.indexOf(signed.block) <
+        workflow.indexOf("Verify exact source runtime image and derive immutable identities"),
+  );
+});
+
 test("source image provenance, build manifest, and capability BOM are verified before registry admission", () => {
   assert.match(
     workflow,
