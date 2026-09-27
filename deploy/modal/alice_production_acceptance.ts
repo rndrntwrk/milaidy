@@ -768,7 +768,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
           expected.release.deploymentManifestSha256 ||
         health.value.controls?.highRiskActions !== "disabled" ||
         health.value.controls?.capabilityGrant !==
-          "disabled-pending-device-bound-webauthn") invalid();
+          "owner-access-plus-device-bound-webauthn-single-use-coding-grant") invalid();
 
     const gateway = await ownerJson(
       fetchImpl,
