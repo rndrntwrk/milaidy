@@ -341,6 +341,11 @@ jobs:
           then
             exit 0
           fi
+          if test -s "$terminal_root/coding-workflow-owned-identity.json"
+          then
+            cp -- "$terminal_root/coding-workflow-owned-identity.json" \
+              "$recovery_root/alice-release/coding-workflow-owned-identity.json"
+          fi
           manifest="$recovery_root/alice-release/alice-deployment-manifest.json"
           manifest_sha256="sha256:$(sha256sum "$manifest" | cut -d' ' -f1)"
           export ALICE_SOURCE_ROOT="$GITHUB_WORKSPACE"

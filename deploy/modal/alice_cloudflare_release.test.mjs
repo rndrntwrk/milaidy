@@ -13,6 +13,7 @@ import {
   buildAliceEvidenceQueueUpdate,
   buildAliceProtectedCloudflareCommands,
   buildAliceCandidateContainerApplicationTarget,
+  confirmAliceCodingWorkflowRegistration,
   executeAliceCloudflareRollbacks,
   materializeAliceWorkerSecretFiles,
   normalizeAliceContainerApplicationRollbackState,
@@ -51,6 +52,44 @@ import {
 } from "./test-fixtures/alice_provider_readbacks.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+test("coding Workflow registration waits for exact post-PUT identity", async () => {
+  const owned = {
+    workflowId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    candidateVersionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  };
+  const workflow = {
+    id: owned.workflowId, name: "alice-production-coding",
+    scriptName: "alice-production-control", className: "AliceCodingWorkflow",
+    createdOn: "2026-08-22T12:00:00.000Z",
+    modifiedOn: "2026-08-22T12:00:01.000Z", scriptDeleted: false,
+  };
+  const version = {
+    id: owned.candidateVersionId, workflowId: owned.workflowId,
+    className: "AliceCodingWorkflow", createdOn: workflow.createdOn,
+    modifiedOn: workflow.modifiedOn, hasDag: true, language: "javascript",
+    defaultRetention: null, limits: { steps: 8 },
+  };
+  let reads = 0;
+  const sleeps = [];
+  assert.deepEqual(await confirmAliceCodingWorkflowRegistration({
+    apiToken: "read-only-token", baseline: { absent: true }, owned,
+    readPrestate: async () => {
+      reads += 1;
+      if (reads === 1) throw new Error("ALICE_CLOUDFLARE_LIVE_READBACK_INVALID");
+      if (reads === 2) return { absent: true };
+      return { workflow, versions: [version] };
+    },
+    sleep: async (ms) => { sleeps.push(ms); },
+  }), owned);
+  assert.equal(reads, 3);
+  assert.deepEqual(sleeps, [500, 500]);
+  await assert.rejects(confirmAliceCodingWorkflowRegistration({
+    apiToken: "read-only-token", baseline: { absent: true }, owned,
+    readPrestate: async () => { throw new Error("ALICE_CLOUDFLARE_LIVE_READBACK_INVALID"); },
+    sleep: async () => {},
+  }), /ALICE_CODING_WORKFLOW_READBACK_UNSTABLE/);
+});
 
 function aliceTestContainerApplicationState({
   imageDigit = "1",
