@@ -124,6 +124,7 @@ import {
 } from "../services/sandbox-manager.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import { createAliceFullRuntimeDatabaseAdapter } from "./alice-d1-database-adapter.js";
+import { repairAliceCorpusV4Fragment } from "./alice-corpus-v4-fragment-repair.js";
 import { seedBundledKnowledge } from "./default-knowledge.js";
 import discordLocalPlugin from "./discord-local-plugin.js";
 import { stampAliceProductionRuntimeBoundary } from "../api/alice-production-proof.js";
@@ -4280,6 +4281,9 @@ export async function startEliza(
         }
       },
     );
+    if (aliceFullProfile) {
+      await repairAliceCorpusV4Fragment(runtime);
+    }
 
     // 8a. Apply role gating to wallet plugins (EVM, Solana) — admin-only actions.
     try {
