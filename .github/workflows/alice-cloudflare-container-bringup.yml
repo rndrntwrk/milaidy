@@ -95,6 +95,33 @@ jobs:
       - name: Verify candidate Worker secret closure before provider mutation
         run: node --test --test-name-pattern='materializes Container runtime secrets' deploy/modal/alice_cloudflare_release.test.mjs
 
+      - name: Verify active Worker code is readable with the production read token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          const root = 'https://api.cloudflare.com/client/v4/accounts/036df6c823669b8fa2f66cf4c16eeb29/workers';
+          const worker = 'alice-access-gateway';
+          const get = async path => {
+            const response = await fetch(`${root}${path}`, {
+              headers: { authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` },
+              signal: AbortSignal.timeout(30_000),
+            });
+            if (!response.ok) throw new Error(`ALICE_ACTIVE_VERSION_PREFLIGHT_HTTP_${response.status}`);
+            const body = await response.json();
+            if (body?.success !== true) throw new Error('ALICE_ACTIVE_VERSION_PREFLIGHT_INVALID');
+            return body.result;
+          };
+          const deployments = await get(`/scripts/${worker}/deployments`);
+          const versionId = deployments?.deployments?.[0]?.versions?.[0]?.version_id;
+          if (typeof versionId !== 'string') throw new Error('ALICE_ACTIVE_VERSION_PREFLIGHT_INVALID');
+          const version = await get(`/workers/${worker}/versions/${versionId}?include=modules`);
+          if (version?.id !== versionId || !Array.isArray(version.modules) || version.modules.length === 0) {
+            throw new Error('ALICE_ACTIVE_VERSION_PREFLIGHT_INVALID');
+          }
+          console.log('ALICE_ACTIVE_VERSION_PREFLIGHT_OK');
+          NODE
+
       - name: Verify Access AI and memory provider state read-only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
