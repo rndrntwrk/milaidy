@@ -88,6 +88,7 @@ describe("Alice production runtime guard", () => {
       ["POST", "/api/emote"],
       ["GET", "/api/lifeops/overview"],
       ["GET", "/api/lifeops/activity-signals"],
+      ["POST", "/api/lifeops/activity-signals"],
       ["GET", "/api/lifeops/connectors/google/status"],
       ["GET", "/api/lifeops/definitions"],
       ["GET", "/api/lifeops/definitions/00000000-0000-4000-8000-000000000001"],
