@@ -60,15 +60,12 @@ function accessReadback() {
     policies: [
       {
         id: policyId,
-        name: "Alice owner on managed device",
+        name: "Alice owner one-time PIN",
         decision: "allow",
         precedence: 1,
         include: [{ email: { email: ownerEmail } }],
         exclude: [],
-        require: [
-          { login_method: { id: idpId } },
-          { device_posture: { integration_uid: postureId } },
-        ],
+        require: [{ login_method: { id: idpId } }],
         session_duration: "24h",
       },
     ],
@@ -247,7 +244,7 @@ test("rejects absent, mismatched, or schema-expanded Vectorize state", () => {
   }
 });
 
-test("normalizes exact owner-only One-time PIN and device-posture Access policy", async () => {
+test("normalizes exact owner-only One-time PIN Access policy", async () => {
   const canonical = await buildAliceAccessPolicyProviderConfig(accessReadback());
   assert.equal(canonical.schemaVersion, "alice.access-policy-config.v1");
   assert.deepEqual(canonical.application.allowedIdentityProviderIds, [idpId]);
@@ -259,9 +256,8 @@ test("normalizes exact owner-only One-time PIN and device-posture Access policy"
   );
   assert.equal("clientSecretState" in canonical.identityProvider, false);
   assert.equal(canonical.policies[0].ownerEmailSha256, ownerEmailSha256);
-  assert.deepEqual(canonical.policies[0].requiredDevicePostureRuleIds, [postureId]);
-  assert.equal(canonical.devicePostureRules[0].enabled, true);
-  assert.match(canonical.devicePostureRules[0].inputSha256, /^sha256:[a-f0-9]{64}$/);
+  assert.deepEqual(canonical.policies[0].requiredDevicePostureRuleIds, []);
+  assert.deepEqual(canonical.devicePostureRules, []);
   assert.equal(JSON.stringify(canonical).includes(ownerEmail), false);
   assert.equal(JSON.stringify(canonical).includes("sw4p.io"), false);
   assert.equal(JSON.stringify(canonical).includes(staleGoogleIdpId), false);
@@ -308,7 +304,7 @@ test("rejects substituted or expanded One-time PIN provider-owned config", async
   }
 });
 
-test("rejects missing, broad, unknown, or disabled Access controls", async () => {
+test("rejects missing, broad, unknown, or expanded Access controls", async () => {
   const missing = accessReadback();
   delete missing.application.session_duration;
   await assert.rejects(
@@ -330,10 +326,12 @@ test("rejects missing, broad, unknown, or disabled Access controls", async () =>
     /ALICE_ACCESS_POLICY_PROVIDER_CONFIG_INVALID/,
   );
 
-  const disabled = accessReadback();
-  disabled.postureRules[0].enabled = false;
+  const postureRequired = accessReadback();
+  postureRequired.policies[0].require.push({
+    device_posture: { integration_uid: postureId },
+  });
   await assert.rejects(
-    () => buildAliceAccessPolicyProviderConfig(disabled),
+    () => buildAliceAccessPolicyProviderConfig(postureRequired),
     /ALICE_ACCESS_POLICY_PROVIDER_CONFIG_INVALID/,
   );
 });

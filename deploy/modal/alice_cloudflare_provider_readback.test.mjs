@@ -1073,9 +1073,7 @@ test("binds exact Access and AI Gateway provider settings into the deployment ma
         ...accessPolicyReadback,
         policies: [{
           ...accessPolicyReadback.policies[0],
-          require: accessPolicyReadback.policies[0].require.filter(
-            (rule) => !("device_posture" in rule),
-          ),
+          session_duration: "12h",
         }],
       },
       aiGatewayProviderReadback,
