@@ -7,19 +7,21 @@ import { verifyAliceReleaseSource } from "../../scripts/verify-alice-release-sou
 import {
   buildAliceCandidateContainerApplicationTarget,
   fetchAliceContainerApplicationRollbackState,
-  restoreAliceContainerApplication,
-  restoreAliceCloudflareContinuityState,
   verifyReleaseArtifacts,
 } from "./alice_cloudflare_release.mjs";
 import {
   fetchAliceCloudflareContinuityState,
+  fetchAliceCodingContainerState,
+  fetchAliceCodingWorkflowPrestate,
+  resolveAliceCandidateCodingWorkflowVersion,
 } from "./alice_cloudflare_live_readback.mjs";
 import { captureAliceCloudflareWorkerRollbackState, normalizeAliceCloudflareVersionResources } from "./alice_cloudflare_worker_rollback.mjs";
 import { fetchAliceCloudflareTrafficState } from "./alice_cloudflare_traffic.mjs";
 import { validateAliceOwnerAuthorization } from "./alice_release_controller.mjs";
-import { assertAliceAcceptanceRecoveryPause } from "./alice_production_acceptance";
 
 const roles = ["control", "statePlane", "aiGateway", "connectorPlane", "runtimeHost", "access"];
+const codingRole = "codingSandbox";
+const v4Manifest = "alice.deployment-manifest.v4";
 const account = "036df6c823669b8fa2f66cf4c16eeb29";
 const repository = "rndrntwrk/milaidy";
 const branch = "release/alice-production-core-2026-08-22";
@@ -42,24 +44,64 @@ export function parseAliceReacceptSelection(serialized: string) {
   return value;
 }
 
-// Only a coherent recorded rollback target or the complete retained candidate is eligible.
-export function planAliceQualifiedRestoration({ workers, application, anchor, candidate, target }: any) {
-  // A first coding release creates a Worker that rollback removes. Reaccepting
-  // its old version ID after deletion cannot preserve the qualified identity.
-  if ([workers, anchor.previous.workers, candidate.workers].some(value =>
-    Object.hasOwn(value ?? {}, "codingSandbox"))) fail("CODING_RELEASE_UNSUPPORTED");
-  const prior = roles.every(role => workers[role]?.serving?.versionId === anchor.previous.workers[role]?.serving?.versionId);
-  const retained = roles.every(role => workers[role]?.serving?.versionId === candidate.workers[role]?.versionId);
-  if (!prior && !retained) fail("WORKER_STATE_DRIFTED");
+// Bind the coding Workflow created by the original promotion to its qualified readback.
+export function deriveAliceRetainedV4Owner({ anchor, candidate, rollbackProof, sourceCommit,
+  deploymentManifestSha256, rollbackAnchorSha256 }: any) {
+  if (anchor.schemaVersion !== "alice.cloudflare-rollback-anchor.v8" ||
+      anchor.previous?.codingWorkflow?.absent !== true ||
+      rollbackProof.schemaVersion !== "alice.cloudflare-rollback-evidence.v2" ||
+      rollbackProof.codingWorkflow?.absent !== true ||
+      candidate.schemaVersion !== "alice.cloudflare-live-readback.v2" ||
+      candidate.terminalSnapshotStable !== true ||
+      !/^sha256:[a-f0-9]{64}$/.test(rollbackAnchorSha256)) fail("CODING_OWNER_INVALID");
+  let version;
+  try {
+    version = resolveAliceCandidateCodingWorkflowVersion({
+      previous: rollbackProof.codingWorkflow,
+      current: { workflow: candidate.codingWorkflow, versions: candidate.codingWorkflowVersions },
+    });
+  } catch { fail("CODING_OWNER_INVALID"); }
+  if (version.id !== candidate.codingCandidateWorkflowVersionId) fail("CODING_OWNER_INVALID");
+  return {
+    schemaVersion: "alice.coding-workflow-owner.v1", sourceCommit,
+    deploymentManifestSha256, rollbackAnchorSha256,
+    ownedIdentity: { workflowId: candidate.codingWorkflow.id, candidateVersionId: version.id },
+  };
+}
+
+export function verifyAliceRetainedV4Candidate({ workers, application, continuity, traffic,
+  codingWorkflow, codingContainer, anchor, candidate, target, candidateResources, owner }: any) {
+  if (!equal(traffic, anchor.previous.trafficState) ||
+      !equal(continuity, candidate.provider.continuityConfig) ||
+      !equal(codingWorkflow, { workflow: candidate.codingWorkflow, versions: candidate.codingWorkflowVersions }) ||
+      !equal(codingContainer, candidate.codingContainer) ||
+      codingWorkflow.workflow?.id !== owner.ownedIdentity.workflowId ||
+      codingWorkflow.versions?.length !== 1 ||
+      codingWorkflow.versions[0]?.id !== owner.ownedIdentity.candidateVersionId) fail("RETAINED_STATE_INVALID");
   const withoutVersion = ({ applicationVersion: _, ...state }: any) => state;
-  const expectedApplication = { ...anchor.previous.containerApplication, ...(retained ? { target } : {}) };
-  if (!equal(withoutVersion(application), withoutVersion(expectedApplication))) fail("CONTAINER_STATE_DRIFTED");
-  for (const role of roles) {
-    const current = workers[role], previous = anchor.previous.workers[role];
-    if (!equal(current.scriptSettings, previous.scriptSettings) ||
-        (prior && !equal(current.versionResources, previous.versionResources))) fail("WORKER_SETTINGS_DRIFTED");
+  if (!equal(withoutVersion(application),
+    withoutVersion({ ...anchor.previous.containerApplication, target }))) fail("RETAINED_STATE_INVALID");
+  for (const role of [...roles, codingRole]) {
+    if (workers[role]?.worker !== candidate.workers[role]?.worker ||
+        workers[role]?.serving?.versionId !== candidate.workers[role]?.versionId ||
+        !equal(workers[role]?.versionResources, candidateResources[role]) ||
+        (anchor.previous.workers[role]?.absent !== true &&
+          !equal(workers[role]?.scriptSettings,
+            anchor.previous.workers[role]?.scriptSettings))) fail("RETAINED_STATE_INVALID");
   }
-  return retained ? [] : [...roles];
+}
+
+export function verifyAliceRecordedPause({ state, evidence, pauseId }: any) {
+  const active = evidence.active;
+  const authority = state.authority;
+  if (state.ok !== true || !active || !authority ||
+      !equal(authority.binding, active.binding) ||
+      authority.deploymentManifestSha256 !== active.deploymentManifestSha256 ||
+      authority.activeReleaseEpoch !== active.releaseEpoch ||
+      authority.rollbackBoundary !== active.rollbackBoundary ||
+      !equal(authority.pausedScopes, ["all"]) ||
+      evidence.result?.pause?.pauseId !== pauseId ||
+      !equal(authority.activePauses?.all, evidence.result.pause)) fail("OWNER_STATE_INVALID");
 }
 
 function downloadArtifact(record: any, expectedDigest: string, destination: string) {
@@ -86,24 +128,34 @@ export async function loadQualified(temp: string) {
     artifactPath: path.join(root, "alice-worker-bundles/alice-worker-bundles.json"),
     artifactRoot: path.join(root, "alice-worker-bundles"), configDir: path.join(root, "alice-release/wrangler"),
   });
-  if (release.manifest.schemaVersion === "alice.deployment-manifest.v4") {
-    fail("CODING_RELEASE_UNSUPPORTED");
-  }
+  if (release.manifest.schemaVersion !== v4Manifest) fail("MANIFEST_UNSUPPORTED");
   for (const file of ["rollback-anchor.json", "program-admission.json", "alice-deployment-manifest.json"]) {
     if (!equal(read(path.join(root, "alice-release", file)), read(path.join(releaseRoot, file)))) fail("JOURNAL_BINDING_INVALID");
   }
+  if (digest(fs.readFileSync(path.join(root, "alice-release/rollback-anchor.json"))) !==
+      digest(fs.readFileSync(path.join(releaseRoot, "rollback-anchor.json")))) fail("JOURNAL_BINDING_INVALID");
   if (admission.schemaVersion !== "alice.program-admission.v2" ||
       admission.deploymentManifestSha256 !== release.deploymentManifestSha256 ||
       anchor.candidate?.sourceCommit !== release.manifest.source.sourceCommit ||
       anchor.candidate?.deploymentManifestSha256 !== release.deploymentManifestSha256 ||
       candidate.terminalSnapshotStable !== true) fail("QUALIFIED_BINDING_INVALID");
-  for (const role of roles) {
+  for (const role of [...roles, codingRole]) {
     if (candidate.workers[role]?.deploymentManifestSha256 !== release.deploymentManifestSha256 ||
         candidate.workers[role]?.trafficPercentage !== 100 ||
         candidate.workers[role]?.worker !== release.configs[role].name ||
         !/^[a-f0-9-]{36}$/.test(candidate.workers[role]?.versionId ?? "")) fail("QUALIFIED_WORKER_INVALID");
   }
-  return { root, releaseRoot, anchor, candidate, admission, release };
+  const owner = deriveAliceRetainedV4Owner({
+    anchor, candidate, rollbackProof: read(path.join(releaseRoot, "cloudflare-rollback-proof.json")),
+    sourceCommit: release.manifest.source.sourceCommit,
+    deploymentManifestSha256: release.deploymentManifestSha256,
+    rollbackAnchorSha256: digest(fs.readFileSync(path.join(releaseRoot, "rollback-anchor.json"))),
+  });
+  for (const folder of [root, releaseRoot]) {
+    const ownerPath = path.join(folder, folder === root ? "alice-release/coding-workflow-owned-identity.json" : "coding-workflow-owned-identity.json");
+    if (fs.existsSync(ownerPath) && !equal(read(ownerPath), owner)) fail("CODING_OWNER_INVALID");
+  }
+  return { root, releaseRoot, anchor, candidate, admission, release, owner };
 }
 
 async function prepare(selection: any, temp: string) {
@@ -111,7 +163,7 @@ async function prepare(selection: any, temp: string) {
   const jobs = ghJson(`actions/runs/${selection.runId}/jobs?filter=all&per_page=100`).jobs;
   if (run.path !== ".github/workflows/deploy-alice-cloudflare.yml" || run.event !== "workflow_dispatch" ||
       run.head_branch !== branch || run.run_attempt !== 1 || run.status !== "completed" ||
-      run.conclusion !== "failure" ||
+      !["failure", "cancelled"].includes(run.conclusion) ||
       jobs.filter((j: any) => j.name === "Promote attested Alice Worker bytes" && j.run_attempt === 1 && j.conclusion === "success").length !== 1) fail("ORIGINAL_RUN_INVALID");
   const artifacts = ghJson(`actions/runs/${selection.runId}/artifacts?per_page=100`).artifacts;
   for (const [prefix, sha, folder] of [
@@ -125,50 +177,26 @@ async function prepare(selection: any, temp: string) {
   }
   const qualified = await loadQualified(temp);
   if (qualified.release.manifest.source.deploymentControllerCommit !== run.head_sha) fail("ORIGINAL_CONTROLLER_INVALID");
+  for (const file of [path.join(qualified.root, "alice-release/coding-workflow-owned-identity.json"),
+    path.join(qualified.releaseRoot, "coding-workflow-owned-identity.json")]) {
+    if (!fs.existsSync(file)) write(file, qualified.owner);
+  }
   write(path.join(qualified.releaseRoot, "reaccept-selection.json"), selection);
-  fs.appendFileSync(process.env.GITHUB_ENV!, `ALICE_DEPLOYMENT_RUN_ID=${selection.runId}\nALICE_RECOVERY_PAUSE_ID=${selection.ownerPauseId}\n`);
   console.log("ALICE_REACCEPT_IMMUTABLE_ARTIFACTS_VERIFIED");
 }
 
-async function waitForWatchdog(temp: string) {
-  const watchdog = process.env.RECOVERY_WATCHDOG_RUN_ID!;
-  if (!/^[1-9][0-9]*$/.test(watchdog ?? "")) fail("WATCHDOG_INVALID");
-  const name = `alice-watchdog-ready-cloudflare-${process.env.SOURCE_SHA}-${watchdog}-1-${process.env.GITHUB_RUN_ID}-1`;
-  for (let attempt = 0; attempt < 120; attempt++) {
-    const run = ghJson(`actions/runs/${watchdog}`);
-    if (run.head_sha !== process.env.CONTROLLER_SHA || run.status !== "in_progress" || run.conclusion !== null ||
-        run.path !== ".github/workflows/recover-alice-production-watchdog.yml" || run.run_attempt !== 1 ||
-        run.display_title !== `Alice production recovery ${process.env.SOURCE_SHA}`) fail("WATCHDOG_INVALID");
-    const matches = ghJson(`actions/runs/${watchdog}/artifacts?per_page=100`).artifacts.filter((a: any) => a.name === name && !a.expired);
-    if (matches.length > 1) fail("WATCHDOG_INVALID");
-    if (matches.length === 1) {
-      const dir = path.join(temp, "alice-reaccept-readiness");
-      downloadArtifact(matches[0], matches[0].digest, dir);
-      const value = read(path.join(dir, "readiness.json"));
-      if (value.schemaVersion !== 1 || value.sourceSha !== process.env.SOURCE_SHA ||
-          String(value.watchdogRunId) !== watchdog || value.watchdogRunAttempt !== 1 ||
-          String(value.parentRunId) !== process.env.GITHUB_RUN_ID || value.parentRunAttempt !== 1 ||
-          value.provider !== "cloudflare" || value.providerReadback !== "verified" ||
-          ![value.credentialIdSha256, value.credentialPolicySha256].every(v => /^sha256:[a-f0-9]{64}$/.test(v ?? ""))) fail("WATCHDOG_INVALID");
-      const jobs = ghJson(`actions/runs/${watchdog}/jobs?filter=all&per_page=100`).jobs;
-      if (jobs.filter((j: any) => j.name === "Prestarted independent Cloudflare recovery" && j.run_attempt === 1 && j.status === "in_progress" && j.conclusion === null).length !== 1) fail("WATCHDOG_INVALID");
-      return;
-    }
-    await new Promise(resolve => setTimeout(resolve, 5_000));
-  }
-  fail("WATCHDOG_TIMEOUT");
-}
-
 async function restore(selection: any, temp: string, verifyOnly = false) {
-  const { releaseRoot, anchor, candidate, admission, release } = await loadQualified(temp);
+  const { root, releaseRoot, anchor, candidate, admission, release, owner: codingOwner } = await loadQualified(temp);
   if (!equal(selection, read(path.join(releaseRoot, "reaccept-selection.json")))) fail("SELECTION_DRIFTED");
-  if (!verifyOnly) await waitForWatchdog(temp);
+  if (!fs.existsSync(path.join(root, "alice-release/coding-workflow-owned-identity.json"))) {
+    fail("CODING_OWNER_INVALID");
+  }
   if (ghJson(`git/ref/heads/${branch}`).object.sha !== process.env.CONTROLLER_SHA) fail("CONTROLLER_DRIFTED");
   const apiToken = process.env.CLOUDFLARE_API_TOKEN!;
   const vars = release.configs.control.vars;
   const namespaces = read(path.join(releaseRoot, "durable-object-namespace-ids.json"));
-  const expected = read(path.join(releaseRoot, "deployment-pause-evidence.json")).candidateExpected;
-  const owner = await validateAliceOwnerAuthorization(process.env.ALICE_OWNER_AUTHORIZATION, {
+  const pauseEvidence = read(path.join(releaseRoot, "deployment-pause-evidence.json"));
+  await validateAliceOwnerAuthorization(process.env.ALICE_OWNER_AUTHORIZATION, {
     issuer: vars.ALICE_ACCESS_ISSUER, audience: vars.ALICE_ACCESS_AUDIENCE, ownerEmailSha256: vars.ALICE_OWNER_EMAIL_SHA256,
   });
   const checkPause = async () => {
@@ -176,23 +204,21 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
       signal: AbortSignal.timeout(30_000), headers: { cookie: `CF_Authorization=${process.env.ALICE_OWNER_AUTHORIZATION}`,
         origin: "https://alice.rndrntwrk.com", "sec-fetch-site": "same-origin", accept: "application/json", "cache-control": "no-store" } });
     if (!response.ok) fail("OWNER_STATE_INVALID");
-    assertAliceAcceptanceRecoveryPause({ state: await response.json(), expected, pauseId: selection.ownerPauseId, ownerActor: owner.actor });
+    verifyAliceRecordedPause({ state: await response.json(), evidence: pauseEvidence, pauseId: selection.ownerPauseId });
   };
   await checkPause();
   const [workers, application, continuity, traffic] = await Promise.all([
-    captureAliceCloudflareWorkerRollbackState({ apiToken }), fetchAliceContainerApplicationRollbackState({ apiToken }),
+    captureAliceCloudflareWorkerRollbackState({ apiToken, includeCodingSandbox: true }), fetchAliceContainerApplicationRollbackState({ apiToken }),
     fetchAliceCloudflareContinuityState({ apiToken, expectedDurableObjectNamespaceIds: namespaces }),
     fetchAliceCloudflareTrafficState({ apiToken }),
   ]);
   if (!equal(traffic, anchor.previous.trafficState)) fail("TRAFFIC_DRIFTED");
-  if (![anchor.previous.continuityConfig, candidate.provider.continuityConfig].some(c => equal(c, continuity.sanitized))) fail("CONTINUITY_DRIFTED");
+  if (!equal(candidate.provider.continuityConfig, continuity.sanitized)) fail("CONTINUITY_DRIFTED");
   const target = buildAliceCandidateContainerApplicationTarget({ previous: anchor.previous.containerApplication, materializedWranglerConfig: release.configs.runtimeHost });
   if (target.configuration.image !== admission.runtimeImage) fail("IMAGE_BINDING_INVALID");
-  const restoreRoles = planAliceQualifiedRestoration({ workers, application, anchor, candidate, target });
-  const api = async (pathname: string, body?: any) => {
+  const api = async (pathname: string) => {
     const response = await fetch(`https://api.cloudflare.com/client/v4${pathname}`, { redirect: "error", signal: AbortSignal.timeout(30_000),
-      method: body ? "POST" : "GET", headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
-      ...(body ? { body: JSON.stringify(body) } : {}) });
+      method: "GET", headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" } });
     const value = await response.json();
     if (!response.ok || value.success !== true) fail("PROVIDER_REQUEST_FAILED");
     return value.result;
@@ -201,57 +227,37 @@ async function restore(selection: any, temp: string, verifyOnly = false) {
   // Their original qualification stays in live-readback.json; this retry verifies the
   // Worker, Container, traffic and queue state with the same scope as independent recovery.
   const candidateResources: Record<string, any> = {};
-  for (const role of roles) {
+  for (const role of [...roles, codingRole]) {
     const worker = candidate.workers[role];
     const version = await api(`/accounts/${account}/workers/scripts/${worker.worker}/versions/${worker.versionId}`);
     if (version.id !== worker.versionId || !version.resources?.bindings?.some((b: any) =>
       b.name === "ALICE_DEPLOYMENT_MANIFEST_SHA256" && b.text === release.deploymentManifestSha256)) fail("VERSION_BINDING_INVALID");
+    if (version.resources?.script?.etag !== worker.scriptEtag) fail("VERSION_BINDING_INVALID");
     candidateResources[role] = normalizeAliceCloudflareVersionResources(version.resources);
   }
+  const [codingWorkflow, codingContainer] = await Promise.all([
+    fetchAliceCodingWorkflowPrestate({ apiToken }),
+    fetchAliceCodingContainerState({ apiToken, config: release.configs[codingRole], namespaceIds: [{
+      className: "AliceCodingSandbox", name: "ALICE_CODING_SANDBOX",
+      namespaceId: candidate.codingContainer?.namespaceId, scriptName: null,
+    }] }),
+  ]);
+  verifyAliceRetainedV4Candidate({ workers, application, continuity: continuity.sanitized,
+    traffic, codingWorkflow, codingContainer, anchor, candidate, target, candidateResources, owner: codingOwner });
   await checkPause();
   if (verifyOnly) {
     console.log("ALICE_REACCEPT_READ_ONLY_PREFLIGHT_VERIFIED");
     return;
   }
-  for (const role of roles) {
-    if (role === "access") {
-      const host = candidate.workers.runtimeHost;
-      const deployments = await api(`/accounts/${account}/workers/scripts/${host.worker}/deployments`);
-      if (!equal(deployments.deployments?.[0]?.versions, [{ version_id: host.versionId, percentage: 100 }])) fail("RUNTIME_HOST_NOT_SELECTED");
-      // Reaccept also repairs a retained candidate whose process never restarted.
-      await restoreAliceContainerApplication({ apiToken, expected: { ...anchor.previous.containerApplication, target } });
-    }
-    if (!restoreRoles.includes(role)) continue;
-    const worker = candidate.workers[role];
-    await api(`/accounts/${account}/workers/scripts/${worker.worker}/deployments`, {
-      strategy: "percentage", versions: [{ version_id: worker.versionId, percentage: 100 }],
-      annotations: { "workers/message": `Reaccept qualified Alice candidate from run ${selection.runId}` },
-    });
-  }
-  await restoreAliceCloudflareContinuityState({ apiToken, expectedDurableObjectNamespaceIds: namespaces, expectedConfig: candidate.provider.continuityConfig });
-  const [restoredWorkers, restoredApplication, restoredTraffic, restoredContinuity] = await Promise.all([
-    captureAliceCloudflareWorkerRollbackState({ apiToken }), fetchAliceContainerApplicationRollbackState({ apiToken }),
-    fetchAliceCloudflareTrafficState({ apiToken }),
-    fetchAliceCloudflareContinuityState({ apiToken, expectedDurableObjectNamespaceIds: namespaces }),
-  ]);
-  for (const role of roles) {
-    const observed = restoredWorkers[role];
-    if (observed.serving.versionId !== candidate.workers[role].versionId ||
-        !equal(observed.versionResources, candidateResources[role]) ||
-        !equal(observed.scriptSettings, workers[role].scriptSettings)) fail("RESTORED_VERSION_INVALID");
-  }
-  if (planAliceQualifiedRestoration({ workers: restoredWorkers, application: restoredApplication, anchor, candidate, target }).length !== 0 ||
-      !equal(restoredTraffic, traffic) || !equal(restoredContinuity.sanitized, candidate.provider.continuityConfig)) fail("RESTORED_STATE_INVALID");
-  await checkPause();
   write(path.join(releaseRoot, "reaccept-live-readback.json"), {
     schemaVersion: "alice.reaccept-component-readback.v1", observedAt: new Date().toISOString(),
     originalRunId: selection.runId, deploymentManifestSha256: release.deploymentManifestSha256,
     originalFullReadbackSha256: digest(fs.readFileSync(path.join(releaseRoot, "live-readback.json"))),
-    workers: restoredWorkers, containerApplication: restoredApplication,
-    traffic: restoredTraffic, continuityConfig: restoredContinuity.sanitized,
+    workers, containerApplication: application, traffic, continuityConfig: continuity.sanitized,
+    codingWorkflow, codingContainer, codingWorkflowOwnedIdentity: codingOwner.ownedIdentity,
   });
   console.log(JSON.stringify({ code: "ALICE_REACCEPT_EXISTING_VERSIONS_VERIFIED", originalRunId: selection.runId,
-    selectedExistingWorkers: restoreRoles.length, runtimeImage: admission.runtimeImage }));
+    selectedExistingWorkers: 0, runtimeImage: admission.runtimeImage }));
 }
 
 if (import.meta.main) {
