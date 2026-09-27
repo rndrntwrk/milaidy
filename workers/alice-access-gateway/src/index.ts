@@ -1188,6 +1188,7 @@ const FULL_RUNTIME_WRITES = [
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/subscription\/openai\/(?:start|exchange)$/,
   /^\/api\/agent\/restart$/,
+  /^\/api\/lifeops\/activity-signals$/,
   /^\/api\/lifeops\/(?:definitions|goals)$/,
   /^\/api\/lifeops\/occurrences\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/(?:complete|skip|snooze)$/i,
 ];
