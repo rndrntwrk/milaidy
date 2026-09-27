@@ -1202,6 +1202,7 @@ function isFullRuntimeUiPath(pathname: string): boolean {
   if (
     pathname === "/" ||
     pathname === "/companion" ||
+    pathname === "/lifeops" ||
     /^\/broadcast\/[a-zA-Z0-9-]+$/.test(pathname)
   ) {
     return true;
@@ -1425,11 +1426,17 @@ export async function handleRequest(
       return jsonResponse(upstreamProof.proof);
     }
 
+    if (fullRuntime && path === "/lifeops" && requestUrl.pathname !== "/lifeops") {
+      const canonical = new URL(request.url);
+      canonical.pathname = "/lifeops";
+      return Response.redirect(canonical.toString(), 308);
+    }
+
     // Assign path and query components on a clone of the pinned upstream.
     // Resolving a user-controlled string beginning with `//` would otherwise
     // reinterpret it as a network-path reference and replace the Modal host.
     const target = new URL("https://alice-runtime.internal");
-    target.pathname = requestUrl.pathname;
+    target.pathname = fullRuntime && path === "/lifeops" ? "/" : requestUrl.pathname;
     target.search = requestUrl.search;
     const init: RequestInit = {
       method: request.method,

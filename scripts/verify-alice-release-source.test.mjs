@@ -77,6 +77,18 @@ test('host-only changes can reuse the image but dependency changes cannot', t =>
   assert.match(f.run(f.git('rev-parse', 'HEAD')).stderr, /ALICE_RELEASE_SOURCE_REBUILD_REQUIRED/);
 });
 
+test('access gateway changes can reuse the image but runtime changes cannot', t => {
+  const f = fixture(t);
+  const gatewayPath = path.join(f.root, 'workers/alice-access-gateway/src/index.ts');
+  fs.mkdirSync(path.dirname(gatewayPath), {recursive: true});
+  fs.writeFileSync(gatewayPath, 'export const lifeOpsPath = "/lifeops";\n');
+  f.git('add', '.'); f.git('commit', '-m', 'Admit Life Ops page');
+  assert.equal(f.run(f.git('rev-parse', 'HEAD')).status, 0);
+  fs.writeFileSync(path.join(f.root, 'runtime.js'), 'export const version = 2;\n');
+  f.git('add', '.'); f.git('commit', '-m', 'Changed runtime');
+  assert.match(f.run(f.git('rev-parse', 'HEAD')).stderr, /ALICE_RELEASE_SOURCE_REBUILD_REQUIRED/);
+});
+
 test('an unrelated source cannot be admitted as a reused build', t => {
   const f = fixture(t);
   f.git('checkout', '--orphan', 'unrelated-controller');

@@ -517,7 +517,7 @@ describe("Alice Access gateway", () => {
     expect(env.runtimeRequests[2]!.headers.get("upgrade")).toBeNull();
   });
 
-  test("proxies the complete full-gated root, Companion, broadcast, and asset surfaces", async () => {
+  test("proxies full-gated UI pages and assets, including the Life Ops deep link", async () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
     const ownerRequests: Request[] = [];
@@ -525,6 +525,7 @@ describe("Alice Access gateway", () => {
     for (const pathname of [
       "/",
       "/companion",
+      "/lifeops",
       "/broadcast/alice-cam",
       "/assets/main.js",
       "/animations/idle.glb.gz",
@@ -574,6 +575,7 @@ describe("Alice Access gateway", () => {
     expect(ownerRequests.map((request) => new URL(request.url).pathname)).toEqual([
       "/",
       "/companion",
+      "/",
       "/broadcast/alice-cam",
       "/assets/main.js",
       "/animations/idle.glb.gz",
@@ -584,6 +586,49 @@ describe("Alice Access gateway", () => {
       expect(request.headers.get("authorization")).toBeNull();
       expect(request.headers.get("cf-access-jwt-assertion")).toBeNull();
     }
+  });
+
+  test("canonicalizes the full-gated Life Ops trailing slash before loading relative assets", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+    const response = await invokeGateway(
+      new Request("https://alice.rndrntwrk.com/lifeops/", {
+        headers: { "cf-access-jwt-assertion": token },
+      }),
+      env,
+      async (request) => {
+        if (request.url === `${env.ALICE_ACCESS_ISSUER}/cdn-cgi/access/certs`) {
+          return Response.json(jwks);
+        }
+        if (new URL(request.url).pathname === "/api/alice-production/proof") {
+          return Response.json(fullRuntimeProof());
+        }
+        throw new Error("Life Ops trailing slash must redirect before proxying");
+      },
+      now,
+    );
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe("https://alice.rndrntwrk.com/lifeops");
+  });
+
+  test("keeps the Life Ops page unavailable to a response-only runtime", async () => {
+    const env = await environment();
+    const { token, jwks } = await accessFixture();
+    const response = await invokeGateway(
+      new Request("https://alice.rndrntwrk.com/lifeops", {
+        headers: { "cf-access-jwt-assertion": token },
+      }),
+      env,
+      authenticatedFetch(env, jwks, async () => {
+        throw new Error("response-only runtime must not receive Life Ops");
+      }),
+      now,
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "ALICE_PRODUCTION_MUTATION_DENIED",
+    });
   });
 
   test("preserves full-runtime health without applying the response-only plugin filter", async () => {
