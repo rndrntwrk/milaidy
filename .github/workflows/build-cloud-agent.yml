@@ -143,23 +143,18 @@ jobs:
         id: eliza_revision
         run: |
           # The parent gitlink is the release authority. Hydrate that exact
-          # commit from the independently reviewed PR head in the canonical
-          # organization fork; never float on either develop branch.
+          # merged commit from the canonical organization fork; never float
+          # on either develop branch.
           eliza_sha="$(git ls-tree HEAD eliza | awk '{print $3}')"
           test "${#eliza_sha}" -eq 40
-          expected_eliza_sha="7cdfca05b33038ec18ae5c8502df39c01d180090"
-          reviewed_eliza_ref="refs/pull/8/head"
+          expected_eliza_sha="1cc0cb85a9f11fe26e58e49b0dce064bf4803845"
+          test "$eliza_sha" = "$expected_eliza_sha"
           git clone --no-checkout --filter=blob:none https://github.com/rndrntwrk/eliza.git eliza
-          git -C eliza fetch --depth=1 origin "$reviewed_eliza_ref:refs/remotes/origin/alice-reviewed-pr-8"
-          reviewed_eliza_sha="$(git -C eliza rev-parse refs/remotes/origin/alice-reviewed-pr-8)"
-          test "$reviewed_eliza_sha" = "$expected_eliza_sha"
-          test "$eliza_sha" = "$reviewed_eliza_sha"
           git -C eliza fetch --depth=1 origin "$eliza_sha"
           git -C eliza checkout --detach "$eliza_sha"
           test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
           echo "sha=$eliza_sha" >> "$GITHUB_OUTPUT"
           test "$(git config -f .gitmodules --get submodule.eliza.branch)" = "alice/runtime-stable-2026-08-22"
-          git -C eliza apply ../deploy/patches/alice-runtime-sql.patch
           # Apply cloud runtime patches to eliza submodule
           if [ -f cloud/patches/cloud-runtime-patches.patch ]; then
             echo "Applying cloud runtime patches to eliza submodule..."

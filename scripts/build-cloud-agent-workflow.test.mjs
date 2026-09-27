@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -144,7 +145,26 @@ test("cloud builds hydrate and validate Alice's runtime avatar assets before Vit
   );
 });
 
-test("cloud builds hydrate the tracked Eliza commit from the exact reviewed PR head", () => {
+test("Alice release workflows pin the tracked merged Eliza commit", () => {
+  const trackedElizaSha = execFileSync("git", ["ls-tree", "HEAD", "eliza"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  }).trim().split(/\s+/)[2];
+  assert.match(trackedElizaSha, /^[a-f0-9]{40}$/);
+  for (const name of [
+    "build-cloud-agent.yml",
+    "alice-cloudflare-container-bringup.yml",
+    "deploy-alice-cloudflare.yml",
+    "recover-alice-production-watchdog.yml",
+  ]) {
+    const content = fs.readFileSync(path.join(repoRoot, ".github/workflows", name), "utf8");
+    assert.match(content, new RegExp(trackedElizaSha), name);
+    assert.doesNotMatch(content, /7cdfca05b33038ec18ae5c8502df39c01d180090/, name);
+    assert.doesNotMatch(content, /refs\/pull\/8\/head/, name);
+  }
+});
+
+test("cloud builds hydrate the tracked Eliza commit by immutable SHA", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -156,19 +176,11 @@ test("cloud builds hydrate the tracked Eliza commit from the exact reviewed PR h
     /git clone --no-checkout --filter=blob:none https:\/\/github\.com\/rndrntwrk\/eliza\.git eliza/,
   );
   assert.match(workflow, /git -C eliza fetch --depth=1 origin "\$eliza_sha"/);
-  assert.match(workflow, /expected_eliza_sha="7cdfca05b33038ec18ae5c8502df39c01d180090"/);
-  assert.match(
-    workflow,
-    /reviewed_eliza_ref="refs\/pull\/8\/head"/,
-  );
-  assert.match(
-    workflow,
-    /git -C eliza fetch --depth=1 origin "\$reviewed_eliza_ref:refs\/remotes\/origin\/alice-reviewed-pr-8"/,
-  );
-  assert.match(workflow, /test "\$reviewed_eliza_sha" = "\$expected_eliza_sha"/);
-  assert.match(workflow, /test "\$eliza_sha" = "\$reviewed_eliza_sha"/);
+  assert.match(workflow, /expected_eliza_sha="1cc0cb85a9f11fe26e58e49b0dce064bf4803845"/);
+  assert.match(workflow, /test "\$eliza_sha" = "\$expected_eliza_sha"/);
   assert.match(workflow, /git -C eliza checkout --detach "\$eliza_sha"/);
   assert.match(workflow, /test "\$\(git -C eliza rev-parse HEAD\)" = "\$eliza_sha"/);
+  assert.doesNotMatch(workflow, /alice-runtime-sql\.patch/);
   assert.match(workflow, /alice\/runtime-stable-2026-08-22/);
   assert.doesNotMatch(workflow, /MILADY_ELIZA_BRANCH/);
   assert.doesNotMatch(workflow, /eliza submodule init failed, continuing/);
@@ -220,7 +232,7 @@ test("Alice production base images are immutable reviewed manifests", () => {
   assert.doesNotMatch(dockerfile, /^FROM (?:node|oven\/bun):[^@\n]+$/m);
 });
 
-test("Alice materializes the real commands capability from the exact reviewed Eliza pin", () => {
+test("Alice materializes the real commands capability from the exact merged Eliza pin", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github/workflows/build-cloud-agent.yml"),
     "utf8",
@@ -229,7 +241,7 @@ test("Alice materializes the real commands capability from the exact reviewed El
     path.join(repoRoot, "deploy/Dockerfile.ci"),
     "utf8",
   );
-  assert.match(workflow, /7cdfca05b33038ec18ae5c8502df39c01d180090/);
+  assert.match(workflow, /1cc0cb85a9f11fe26e58e49b0dce064bf4803845/);
   assert.match(workflow, /cd eliza\/plugins\/plugin-commands[\s\S]*?bun run build/);
   assert.match(
     dockerfile,
