@@ -115,7 +115,6 @@ import {
   LifeOpsPageView,
   WebsiteBlockerSettingsCard,
 } from "@elizaos/app-lifeops/ui";
-import { LifeOpsActivitySignalsEffect } from "./lifeops/LifeOpsActivitySignalsEffect";
 import {
   ApprovalQueue,
   StewardLogo,
@@ -794,7 +793,6 @@ function mountReactApp(): void {
               <DesktopOnboardingRuntime />
               <DesktopSurfaceNavigationRuntime />
               <DesktopTrayRuntime />
-              <LifeOpsActivitySignalsEffect />
               {phoneCompanion ? <CompanionRouteTabSync /> : null}
               <App />
             </>

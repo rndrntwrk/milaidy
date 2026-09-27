@@ -265,18 +265,12 @@ describe("renderer boot guard", () => {
     );
   });
 
-  it("keeps LifeOps activity signals on the milaidy app context", () => {
+  it("mounts LifeOps activity capture only in the app core", () => {
     const source = readSource("../src/main.tsx");
-    const wrapper = readSource(
-      "../src/lifeops/LifeOpsActivitySignalsEffect.tsx",
-    );
+    const app = fs.readFileSync(path.join(APP_CORE_SRC_DIR, "App.tsx"), "utf-8");
 
-    expect(source).toContain('from "./lifeops/LifeOpsActivitySignalsEffect"');
-    expect(source).not.toContain(
-      'from "@elizaos/app-lifeops/components/LifeOpsActivitySignalsEffect"',
-    );
-    expect(wrapper).toContain('useApp } from "@miladyai/app-core/state"');
-    expect(wrapper).not.toContain('useApp } from "@elizaos/ui"');
+    expect(source).not.toContain("LifeOpsActivitySignalsEffect");
+    expect(app).toContain("useLifeOpsActivitySignals(lifeOpsSignalsEnabled)");
   });
 
   it("keeps cloud-hosted websocket upgrades available for post-open auth", () => {
