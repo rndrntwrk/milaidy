@@ -293,34 +293,20 @@ jobs:
             return envelope;
           };
           const readCatalog = async () => {
-            const catalog = [];
-            const seen = new Set();
-            let total = null;
-            for (let page = 1; page <= 50; page += 1) {
-              const envelope = await read(
-                `/accounts/${accountId}/tokens/permission_groups?page=${page}&per_page=100`);
-              const rows = envelope.result;
-              const info = envelope.result_info;
-              if (!Array.isArray(rows) || info?.page !== page ||
-                  !Number.isSafeInteger(info.total_count) ||
-                  info.total_count < 1 || info.total_count > 5000 ||
-                  (total !== null && info.total_count !== total)) {
-                throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
-              }
-              total = info.total_count;
-              for (const group of rows) {
-                if (!/^[a-f0-9]{32}$/.test(group?.id ?? '') || seen.has(group.id)) {
-                  throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
-                }
-                seen.add(group.id);
-                catalog.push(group);
-              }
-              if (catalog.length === total) return catalog;
-              if (rows.length === 0 || catalog.length > total) {
-                throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
-              }
+            const envelope = await read(
+              `/accounts/${accountId}/tokens/permission_groups`);
+            const catalog = envelope.result;
+            if (!Array.isArray(catalog) || catalog.length < 1 || catalog.length > 5000) {
+              throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
             }
-            throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
+            const seen = new Set();
+            for (const group of catalog) {
+              if (!/^[a-f0-9]{32}$/.test(group?.id ?? '') || seen.has(group.id)) {
+                throw new Error('ALICE_DEPLOY_TOKEN_POLICY_CATALOG_INVALID');
+              }
+              seen.add(group.id);
+            }
+            return catalog;
           };
           const [tokenEnvelope, catalog] = await Promise.all([
             read(`/accounts/${accountId}/tokens/${id}`), readCatalog(),
