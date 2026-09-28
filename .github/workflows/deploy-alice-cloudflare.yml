@@ -462,9 +462,9 @@ jobs:
           import crypto from 'node:crypto';
           import {signRecoveryReceipt} from './workers/alice-production-control/src/recovery.ts';
           const origin = 'https://alice.rndrntwrk.com';
-          const pauseId = 'pause-3262bd60-3e57-47f0-b4b1-eccf527372d0';
-          const manifest = 'sha256:a22166173a86887b99d526229394e3c51aa22045ae02941340df0e71009dac37';
-          const workerVersion = '7a69b4c1-30a5-455c-9b49-eb6e6ba4baca';
+          const pauseId = 'pause-03f7947a-adac-4b42-bff2-fb1b1f46de6b';
+          const manifest = 'sha256:df2201701e8842aaf8ea52586ce79622caed43d1414c7b7243dccda00aee82bc';
+          const workerVersion = 'e2003f25-73e5-4adf-b177-7e071ed087bd';
           const owner = 'owner:sha256:622fc274c3ca129a051721c9d7301b8525c7177e782e3c13ded1f483697d7e10';
           const call = async (path, method = 'GET', extraHeaders = {}) => {
             const response = await fetch(origin + path, {
@@ -483,29 +483,34 @@ jobs:
             assert.equal(r.status, 200); assert.equal(r.value.ok, true);
             return r.value.authority;
           };
-          const verifyDenied = async () => {
+          const verifyRestored = async () => {
             const r = await call('/control/health');
-            assert.equal(r.status, 503); assert.equal(r.value.releaseAdmission, 'denied');
+            assert.equal(r.status, 200); assert.equal(r.value.releaseAdmission, 'admitted');
+            assert.equal(r.value.status, 'ready');
+            assert.equal(r.value.release?.deploymentManifestSha256, manifest);
+            assert.equal(r.value.release?.deploymentControllerCommit, '45a0e43317fb1de2b0b3eef4d13ddce5b7a68b80');
+            assert.equal(r.value.release?.runtimeRevision, 64);
             assert.equal(r.value.release?.workerVersion?.id, workerVersion);
-            assert.equal(r.value.release?.releaseEpoch, 1);
+            assert.equal(r.value.release?.releaseEpoch, 18);
             assert.equal(r.value.authentication?.actor, owner);
             assert.equal(r.value.authentication?.exactOwnerBound, true);
           };
           const before = await readAuthority();
           assert.equal(before.deploymentManifestSha256, manifest);
-          assert.equal(before.activeReleaseEpoch, 5); assert.equal(before.highestReleaseEpoch, 5);
-          assert.deepEqual(before.pausedScopes, ['all']); assert.equal(before.budget.usedUnits, 0);
+          assert.equal(before.activeReleaseEpoch, 18); assert.equal(before.highestReleaseEpoch, 18);
+          assert.deepEqual(before.pausedScopes, ['all']); assert.equal(before.budget.usedUnits, 13656);
+          assert.equal(before.rollbackBoundary, 'container:alice-runtime:v64');
           const pause = before.activePauses.all;
-          assert.equal(pause.pauseId, pauseId); assert.equal(pause.pausedBy, owner);
+          assert.equal(pause.pauseId, pauseId); assert.equal(pause.pausedBy, 'deployment-controller:pause-only');
           assert.equal(pause.resumedAt, null); assert.deepEqual(pause.binding, before.binding);
           assert.equal(pause.deploymentManifestSha256, manifest);
-          await verifyDenied();
+          await verifyRestored();
           const sign = async (issuedAt, expiresAt) => signRecoveryReceipt({
             schemaVersion: 'alice.recovery-receipt.v3', action: 'control.resume', scope: 'all',
             pauseId, pausedAt: pause.pausedAt, subject: owner, pauseBinding: pause.binding,
             pauseDeploymentManifestSha256: manifest, pauseRollbackBoundary: pause.rollbackBoundary,
             currentBinding: before.binding, currentDeploymentManifestSha256: manifest,
-            currentReleaseEpoch: 5, currentRollbackBoundary: before.rollbackBoundary,
+            currentReleaseEpoch: 18, currentRollbackBoundary: before.rollbackBoundary,
             issuedAt, expiresAt, nonce: 'owner-recovery-' + crypto.randomUUID(),
           }, process.env.ALICE_CONTROL_RECOVERY_TOKEN);
           const checkTime = Date.now();
@@ -522,13 +527,13 @@ jobs:
             assert.equal(resumed.value.evidenceQueued, true);
             const after = await readAuthority();
             assert.deepEqual(after.binding, before.binding); assert.equal(after.deploymentManifestSha256, manifest);
-            assert.equal(after.activeReleaseEpoch, 5); assert.equal(after.highestReleaseEpoch, 5);
-            assert.deepEqual(after.pausedScopes, []); assert.equal(after.budget.usedUnits, 0);
+            assert.equal(after.activeReleaseEpoch, 18); assert.equal(after.highestReleaseEpoch, 18);
+            assert.deepEqual(after.pausedScopes, []); assert.equal(after.budget.usedUnits, before.budget.usedUnits);
             assert.equal(after.admissionGeneration, before.admissionGeneration + 1);
-            await verifyDenied();
+            await verifyRestored();
             console.log(JSON.stringify({code: 'OWNER_PAUSE_RECOVERED', pauseId,
-              releaseEpoch: 5, admissionGeneration: after.admissionGeneration, pausedScopes: [],
-              runtimeAdmission: 'denied', budgetUsedUnits: 0, providerMutationPerformed: false,
+              releaseEpoch: 18, admissionGeneration: after.admissionGeneration, pausedScopes: [],
+              runtimeAdmission: 'admitted', budgetUsedUnits: after.budget.usedUnits, providerMutationPerformed: false,
               receiptSha256: 'sha256:' + crypto.createHash('sha256').update(receipt).digest('hex')}));
           } catch {
             const paused = await call('/control/api/v1/pauses/all', 'POST');
