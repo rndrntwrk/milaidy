@@ -122,4 +122,25 @@ describe("Alice WebAuthn authority", () => {
       .toBe("CAPABILITY_MISMATCH");
     expect(ledger.authorize(intent, now + 5, owner).code).toBe("CAPABILITY_AUTHORIZED");
   });
+
+  test("persists an owner-only high-risk merge grant and denies replay, expiry and coding pause", () => {
+    const ledger = registeredLedger();
+    expect(ledger.beginWebAuthnApproval(owner, challenge, target, argumentHash,
+      "cap-merge-1", "nonce-merge-1", now + 2, "repository.merge").ok).toBe(true);
+    const pending = AuthorityLedger.restore(ledger.exportState(), binding, 100);
+    expect(pending.completeWebAuthnApproval(owner, challenge, credential.id, 1, now + 3))
+      .toMatchObject({ ok: true, grant: { scope: "repository.merge" } });
+    const grant = pending.exportState().capabilities["cap-merge-1"]!;
+    const intent = { intentId: "intent-merge-1", action: "repository.merge", target,
+      argumentHash, nonce: grant.nonce, expiresAt: now + 60_000,
+      capabilityId: grant.capabilityId, ...binding };
+    expect(pending.authorize(intent, now + 4, otherOwner).code).toBe("CAPABILITY_MISMATCH");
+    expect(pending.authorize(intent, now + 5, owner))
+      .toEqual({ allowed: true, code: "CAPABILITY_AUTHORIZED", risk: "high" });
+    expect(pending.authorize({ ...intent, intentId: "intent-merge-replay" }, now + 6, owner).code)
+      .toBe("NONCE_REPLAY");
+    expect(pending.authorize(intent, now + 60_000, owner).code).toBe("INTENT_EXPIRED");
+    pending.pause("coding", now + 7, owner);
+    expect(pending.authorize(intent, now + 8, owner).code).toBe("PAUSED_CODING");
+  });
 });

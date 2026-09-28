@@ -6,6 +6,20 @@ const COMMIT = /^[a-f0-9]{40}$/;
 // Runtime image inputs remain frozen. Control and both host modules are rebuilt
 // and attested; the other three Worker bytes must match the original build.
 const CONTROLLER_PATHS = new Set([
+  'workers/alice-production-control/src/coding-task.ts',
+  'workers/alice-production-control/src/coding-merge.ts',
+  'workers/alice-production-control/src/policy.ts',
+  'workers/alice-production-control/src/index.ts',
+  'workers/alice-production-control/src/coding-page.ts',
+  'workers/alice-access-gateway/src/alice-coding-archive.ts',
+  'workers/alice-access-gateway/src/alice-coding-publish.ts',
+  'workers/alice-access-gateway/src/runtime-host.ts',
+  'workers/alice-production-control/test/coding-task.test.ts',
+  'workers/alice-production-control/test/policy.test.ts',
+  'workers/alice-production-control/test/program.test.ts',
+  'workers/alice-production-control/test/webauthn-authority.test.ts',
+  'workers/alice-access-gateway/test/alice-coding-publish.test.ts',
+
   '.github/workflows/recover-alice-production-watchdog.yml',
   '.github/workflows/alice-cloudflare-container-bringup.yml',
   '.github/workflows/deploy-alice-cloudflare.yml',

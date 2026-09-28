@@ -22,10 +22,13 @@ import { validateAliceOwnerOrigin } from "./owner-origin";
 import {
   aliceCodingAction,
   aliceCodingArgumentHash,
+  aliceCodingMergeArgumentHash,
   parseAliceCodingRequest,
+  parseAliceCodingMergeRequest,
   prepareAliceCodingTask,
 } from "./coding-task";
 import { codingPageResponse } from "./coding-page";
+import { executeAliceCodingMerge } from "./coding-merge";
 import { aliceCodingResultSha256, signAliceCodingPublish } from "./coding-publish-signature";
 import { authorityDurableName } from "./durable-names";
 import type { ActionIntent, CapabilityGrant, ModelBudgetRequest, ReleaseBinding } from "./policy";
@@ -642,7 +645,7 @@ async function handleInternal(
   return jsonResponse({ ok: false, code: "NOT_FOUND" }, 404);
 }
 
-async function handleOwnerApi(
+export async function handleOwnerApi(
   request: Request,
   env: AliceWorkerEnv,
   actor: string,
@@ -698,7 +701,7 @@ async function handleOwnerApi(
       authority: value.authority,
       controls: {
         capabilityGrant: "owner-access-plus-device-bound-webauthn-single-use-coding-grant",
-        highRiskActions: "disabled",
+        highRiskActions: "disabled-except-exact-owner-webauthn-repository-merge",
         pauseScopes: [
           "all",
           "social",
@@ -791,12 +794,17 @@ async function handleOwnerApi(
     let approvalBinding: Record<string, unknown> = {};
     if (webauthnRoute === "/webauthn/approve/options") {
       try {
-        const coding = parseAliceCodingRequest((body as Record<string, unknown>).request);
-        approvalBinding = {
-          target: coding.repository,
-          argumentHash: await aliceCodingArgumentHash(coding),
-          scope: aliceCodingAction(coding),
-        };
+        const input = body as Record<string, unknown>;
+        if (input.operation === "repository.merge") {
+          const merge = parseAliceCodingMergeRequest(input.request);
+          approvalBinding = { target: merge.repository,
+            argumentHash: await aliceCodingMergeArgumentHash(merge), scope: "repository.merge" };
+        } else {
+          if (input.operation !== undefined) throw new Error("CODING_REQUEST_INVALID");
+          const coding = parseAliceCodingRequest(input.request);
+          approvalBinding = { target: coding.repository,
+            argumentHash: await aliceCodingArgumentHash(coding), scope: aliceCodingAction(coding) };
+        }
       } catch {
         return jsonResponse({ ok: false, code: "CODING_REQUEST_INVALID" }, 400);
       }
@@ -820,7 +828,11 @@ async function handleOwnerApi(
         env.ALICE_STATE_PLANE,
         env.ALICE_STATE_PLANE_SERVICE_TOKEN,
       );
-      const work = await state.getRecord("work", `work-${taskId.slice(5)}`, actor);
+      let work = await state.getRecord("work", `work-${taskId.slice(5)}`, actor);
+      if ((work?.payload as Record<string, unknown> | undefined)?.action === "repository.merge") {
+        const receipt = await state.getRecord("approvalReceipt", `merge-receipt-${taskId.slice(5)}`, actor);
+        if (receipt) work = receipt;
+      }
       let workflow: unknown = null;
       try {
         workflow = await (await env.ALICE_CODING_WORKFLOW.get(taskId)).status();
@@ -901,6 +913,14 @@ async function handleOwnerApi(
       }
     }
     return jsonResponse({ ok: true, taskId, status: "queued" }, 202);
+  }
+
+  if (path === "/control/api/v1/coding/merge" && request.method === "POST") {
+    const body = await readBoundedJson(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return jsonResponse({ ok: false, code: "CODING_MERGE_REQUEST_INVALID" }, 400);
+    }
+    return executeAliceCodingMerge(body as Record<string, unknown>, actor, env, authority);
   }
 
   if (path === "/control/api/v1/capabilities/grant" && request.method === "POST") {

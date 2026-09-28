@@ -7,6 +7,7 @@ import {
   type ReleaseBinding,
 } from "./policy";
 import { validateEvidenceRecord, type EvidenceRecord } from "./evidence";
+import { canonicalJson } from "./program";
 
 export const ALICE_PAUSE_SCOPES = Object.freeze([
   "all",
@@ -68,7 +69,7 @@ export type DeviceBoundCredential = {
 
 export type PendingWebAuthnChallenge = {
   kind: "register" | "approve";
-  scope?: "coding.patch.sandbox" | "coding.pr.create";
+  scope?: "coding.patch.sandbox" | "coding.pr.create" | "repository.merge";
   challenge: string;
   owner: string;
   expiresAt: number;
@@ -314,7 +315,7 @@ function validState(value: unknown): value is AuthorityLedgerState {
     }
     return stored.kind === "approve" &&
       (stored.scope === undefined || stored.scope === "coding.patch.sandbox" ||
-        stored.scope === "coding.pr.create") &&
+        stored.scope === "coding.pr.create" || stored.scope === "repository.merge") &&
       typeof stored.capabilityId === "string" &&
       /^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(stored.capabilityId) &&
       validAliceCodingRepositoryTarget(stored.target) &&
@@ -887,14 +888,15 @@ export class AuthorityLedger {
   stageEvidence(
     record: EvidenceRecord,
     maxRecords: number = AUTHORITY_PERSISTENCE_LIMITS.operationalOutboxRecords,
+    verifiedBinding: ReleaseBinding = this.state.binding,
   ) {
     const validation = validateEvidenceRecord(record);
-    if (!validation.ok || !bindingMatches(record.binding, this.state.binding)) {
+    if (!validation.ok || !bindingMatches(record.binding, verifiedBinding)) {
       return { ok: false, code: "EVIDENCE_RECORD_INVALID" } as const;
     }
     const existing = this.state.evidenceOutbox[record.eventId];
     if (existing) {
-      return JSON.stringify(existing) === JSON.stringify(record)
+      return canonicalJson(existing) === canonicalJson(record)
         ? ({ ok: true, code: "EVIDENCE_ALREADY_STAGED" } as const)
         : ({ ok: false, code: "EVIDENCE_ID_COLLISION" } as const);
     }
@@ -1022,7 +1024,7 @@ export class AuthorityLedger {
     capabilityId: string,
     nonce: string,
     now: number,
-    scope: "coding.patch.sandbox" | "coding.pr.create" = "coding.patch.sandbox",
+    scope: "coding.patch.sandbox" | "coding.pr.create" | "repository.merge" = "coding.patch.sandbox",
   ) {
     const gate = this.webauthnGate(owner, now);
     if (gate) return { ok: false, code: gate } as const;
@@ -1035,7 +1037,7 @@ export class AuthorityLedger {
       !validDigest(argumentHash) ||
       !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$/.test(capabilityId) ||
       !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/.test(nonce) ||
-      (scope !== "coding.patch.sandbox" && scope !== "coding.pr.create") ||
+      (scope !== "coding.patch.sandbox" && scope !== "coding.pr.create" && scope !== "repository.merge") ||
       this.state.capabilities[capabilityId]
     ) {
       return { ok: false, code: "WEBAUTHN_APPROVAL_INVALID" } as const;
@@ -1132,7 +1134,7 @@ export class AuthorityLedger {
       }
       if (
         (intent.action === "sandbox.execute" || intent.action === "coding.patch.sandbox" ||
-          intent.action === "coding.pr.create") &&
+          intent.action === "coding.pr.create" || intent.action === "repository.merge") &&
         pausedScopes.includes("coding")
       ) {
         return { allowed: false, code: "PAUSED_CODING", risk: existingDecision.decision.risk } as const;

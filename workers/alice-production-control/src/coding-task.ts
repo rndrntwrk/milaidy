@@ -86,3 +86,50 @@ export async function prepareAliceCodingTask(
     },
   };
 }
+
+export type AliceCodingMergeRequest = {
+  repository: string;
+  sourceTaskId: string;
+  pullRequestNumber: number;
+  headCommit: string;
+};
+
+export function parseAliceCodingMergeRequest(value: unknown): AliceCodingMergeRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("CODING_MERGE_REQUEST_INVALID");
+  }
+  const request = value as AliceCodingMergeRequest;
+  if (Object.keys(request).sort().join(",") !==
+      "headCommit,pullRequestNumber,repository,sourceTaskId" ||
+    !validAliceCodingRepositoryTarget(request.repository) ||
+    typeof request.sourceTaskId !== "string" ||
+    !/^task-cap-[a-f0-9-]{36}$/.test(request.sourceTaskId) ||
+    !Number.isSafeInteger(request.pullRequestNumber) || request.pullRequestNumber < 1 ||
+    typeof request.headCommit !== "string" || !/^[a-f0-9]{40}$/.test(request.headCommit)) {
+    throw new Error("CODING_MERGE_REQUEST_INVALID");
+  }
+  return request;
+}
+
+export async function aliceCodingMergeArgumentHash(value: unknown): Promise<string> {
+  const request = parseAliceCodingMergeRequest(value);
+  const digest = await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode(canonicalJson(request)));
+  return `sha256:${Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+export async function prepareAliceCodingMerge(value: unknown, grant: CapabilityGrant) {
+  const request = parseAliceCodingMergeRequest(value);
+  const argumentHash = await aliceCodingMergeArgumentHash(request);
+  if (grant.scope !== "repository.merge" || grant.target !== request.repository ||
+    grant.argumentHash !== argumentHash || !/^cap-[a-f0-9-]{36}$/.test(grant.capabilityId)) {
+    throw new Error("CODING_GRANT_MISMATCH");
+  }
+  return { taskId: `task-${grant.capabilityId}`, request, argumentHash,
+    intent: { intentId: `intent-${grant.capabilityId}`, action: "repository.merge",
+      target: request.repository, argumentHash, nonce: grant.nonce,
+      expiresAt: grant.expiresAt, capabilityId: grant.capabilityId,
+      programDigest: grant.programDigest, releaseDigest: grant.releaseDigest,
+      policyHash: grant.policyHash } satisfies ActionIntent };
+}

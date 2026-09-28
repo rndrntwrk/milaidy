@@ -14,7 +14,7 @@ const page = `<!doctype html>
 <h2>Recent coding tasks</h2><ul id="history"></ul>
 <script src="/control/coding.js" defer></script></html>`;
 
-const script = `const form = document.getElementById('task');
+const script = String.raw`const form = document.getElementById('task');
 const status = document.getElementById('status');
 const result = document.getElementById('result');
 const history = document.getElementById('history');
@@ -23,7 +23,10 @@ let selectedTaskId = null;
 async function post(path, body) {
   const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const value = await response.json();
-  if (!response.ok || value.ok !== true) throw new Error(value.code || 'REQUEST_FAILED');
+  const blockedMergeTask = path === '/control/api/v1/coding/merge' && response.status === 409 &&
+    value.ok === false && value.status === 'blocked' &&
+    typeof value.taskId === 'string' && /^task-cap-[a-f0-9-]{36}$/.test(value.taskId);
+  if (!blockedMergeTask && (!response.ok || value.ok !== true)) throw new Error(value.code || 'REQUEST_FAILED');
   return value;
 }
 function passkeyApi() {
@@ -31,6 +34,29 @@ function passkeyApi() {
       !window.PublicKeyCredential?.parseRequestOptionsFromJSON) {
     throw new Error('This browser cannot use the required device passkey API.');
   }
+}
+function mergeButton(request, label = 'Approve squash merge') {
+  const approve = document.createElement('button');
+  approve.type = 'button';
+  approve.textContent = label;
+  approve.addEventListener('click', async () => {
+    approve.disabled = true;
+    try {
+      passkeyApi();
+      status.textContent = 'Approve PR #' + request.pullRequestNumber + ' at head ' + request.headCommit + ' with your device passkey…';
+      const challenge = await post('/control/api/v1/webauthn/approve/options', { operation: 'repository.merge', request });
+      const credential = await navigator.credentials.get({
+        publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(challenge.options),
+      });
+      if (!credential) throw new Error('PASSKEY_CANCELLED');
+      const approval = await post('/control/api/v1/webauthn/approve/verify', { response: credential.toJSON() });
+      const task = await post('/control/api/v1/coding/merge', { request, grant: approval.grant });
+      await watchTask(task.taskId);
+      if (task.status === 'pending') status.textContent = 'Merge pending: ' + task.code + '. Check GitHub before approving a retry.';
+    } catch (error) { status.textContent = error.message; }
+    finally { approve.disabled = false; }
+  });
+  return approve;
 }
 async function loadTasks() {
   const response = await fetch('/control/api/v1/coding/tasks');
@@ -61,16 +87,43 @@ async function watchTask(taskId) {
       if (selectedTaskId !== taskId) return;
       if (!response.ok || current.ok !== true) throw new Error(current.code || 'TASK_STATUS_UNAVAILABLE');
       const work = current.work;
+      if (work?.action === 'repository.merge' && (work.state === 'pending' || work.state === 'blocked')) {
+        status.textContent = work.state === 'blocked' ? 'Merge blocked: ' + work.code : 'Merge has no verified completion yet. Check the PR before approving a retry.';
+        result.append(document.createTextNode('PR #' + work.request.pullRequestNumber + '\nHead: ' + work.request.headCommit + '\n'),
+          mergeButton(work.request, 'Approve retry for this exact PR'));
+        const reconcile = document.createElement('button');
+        reconcile.type = 'button';
+        reconcile.textContent = 'Check merge result';
+        reconcile.addEventListener('click', async () => {
+          try {
+            await post('/control/api/v1/coding/merge', { taskId, reconcileOnly: true });
+            await watchTask(taskId);
+          } catch (error) { status.textContent = error.message; }
+        });
+        result.append(reconcile);
+        await loadTasks();
+        return;
+      }
       if (work?.state === 'completed') {
         const pr = work.result?.pullRequestUrl;
         if (typeof pr === 'string' && /^https:\/\/github\.com\/(?:rndrntwrk|Render-Network-OS)\/[A-Za-z0-9_.-]+\/pull\/[1-9][0-9]*$/.test(pr)) {
-          status.textContent = 'Draft pull request ready for review: ' + taskId;
+          status.textContent = work.action === 'repository.merge'
+            ? 'Squash merge verified: ' + taskId
+            : 'Draft pull request ready for review: ' + taskId;
           const link = document.createElement('a');
           link.href = pr;
           link.target = '_blank';
           link.rel = 'noopener noreferrer';
           link.textContent = pr;
           result.append(link, document.createTextNode('\n' + (work.result.summary || '')));
+          if (work.action === 'repository.merge') {
+            result.append(document.createTextNode('\nMerged by ' + work.result.mergedBy + '\nMerge commit: ' + work.result.mergeCommit));
+          } else if (work.action === 'coding.pr.create' && /^[a-f0-9]{40}$/.test(work.result.commitSha || '')) {
+            const parts = new URL(pr).pathname.split('/');
+            const request = { repository: parts[1] + '/' + parts[2], sourceTaskId: taskId,
+              pullRequestNumber: Number(parts[4]), headCommit: work.result.commitSha };
+            result.append(document.createTextNode('\nHead: ' + request.headCommit + '\n'), mergeButton(request));
+          }
         } else {
           status.textContent = 'Patch ready for review: ' + taskId;
           result.textContent = work.result?.patch || 'No patch was produced.';
