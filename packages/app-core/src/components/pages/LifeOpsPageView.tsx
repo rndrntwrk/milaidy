@@ -11,7 +11,12 @@ import {
   Target,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { client, type CloudOAuthConnection } from "../../api";
+import {
+  client,
+  type AliceGithubCodingStatus,
+  type CloudOAuthConnection,
+  type RuntimeProfile,
+} from "../../api";
 import {
   LIFEOPS_GITHUB_CALLBACK_EVENT,
   type LifeOpsGithubCallbackDetail,
@@ -115,6 +120,10 @@ export function LifeOpsPageView() {
     setTab,
     startupCoordinator,
   } = useApp();
+  const [runtimeProfile, setRuntimeProfile] = useState<RuntimeProfile | null>(
+    null,
+  );
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [overview, setOverview] = useState<LifeOpsOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -124,6 +133,8 @@ export function LifeOpsPageView() {
   const [agentGithubEntries, setAgentGithubEntries] = useState<
     ManagedAgentGithubEntry[]
   >([]);
+  const [aliceGithub, setAliceGithub] =
+    useState<AliceGithubCodingStatus | null>(null);
   const [githubLoading, setGithubLoading] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
   const [ownerGithubBusy, setOwnerGithubBusy] = useState(false);
@@ -137,6 +148,29 @@ export function LifeOpsPageView() {
     startupCoordinator.phase === "ready" &&
     agentStatus?.state === "running" &&
     backendConnection?.state === "connected";
+
+  const aliceProduction = runtimeProfile === "alice-full-gated";
+  const standardRuntime = runtimeProfile === "standard";
+
+  const loadRuntimeProfile = useCallback(async () => {
+    if (!runtimeReady) {
+      setRuntimeProfile(null);
+      return;
+    }
+    setProfileError(null);
+    try {
+      setRuntimeProfile(await client.getRuntimeProfile());
+    } catch {
+      setRuntimeProfile(null);
+      setProfileError(
+        "Life Ops connection status could not be loaded. Refresh to try again.",
+      );
+    }
+  }, [runtimeReady]);
+
+  useEffect(() => {
+    void loadRuntimeProfile();
+  }, [loadRuntimeProfile]);
 
   const loadOverview = useCallback(async () => {
     if (!runtimeReady) {
@@ -159,7 +193,7 @@ export function LifeOpsPageView() {
   }, [runtimeReady]);
 
   const loadGithub = useCallback(async () => {
-    if (!elizaCloudConnected) {
+    if (!standardRuntime || !elizaCloudConnected) {
       setGithubError(null);
       setOwnerGithubConnections([]);
       setAgentGithubEntries([]);
@@ -200,7 +234,28 @@ export function LifeOpsPageView() {
     } finally {
       setGithubLoading(false);
     }
-  }, [elizaCloudConnected]);
+  }, [elizaCloudConnected, standardRuntime]);
+
+  const loadAliceGithub = useCallback(async () => {
+    if (!aliceProduction || !runtimeReady) return;
+    setGithubLoading(true);
+    setGithubError(null);
+    try {
+      const capabilities = await client.getAliceProductionCapabilities();
+      setAliceGithub(capabilities.githubCoding);
+    } catch {
+      setAliceGithub(null);
+      setGithubError(
+        "Alice’s GitHub connection could not be verified. Refresh to try again.",
+      );
+    } finally {
+      setGithubLoading(false);
+    }
+  }, [aliceProduction, runtimeReady]);
+
+  useEffect(() => {
+    void loadAliceGithub();
+  }, [loadAliceGithub]);
 
   useEffect(() => {
     void loadOverview();
@@ -211,8 +266,9 @@ export function LifeOpsPageView() {
   }, [loadGithub]);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadOverview(), loadGithub()]);
-  }, [loadGithub, loadOverview]);
+    await loadRuntimeProfile();
+    await Promise.all([loadOverview(), loadGithub(), loadAliceGithub()]);
+  }, [loadGithub, loadOverview, loadAliceGithub, loadRuntimeProfile]);
 
   const handleGithubCallback = useCallback(
     (detail: LifeOpsGithubCallbackDetail) => {
@@ -477,7 +533,11 @@ export function LifeOpsPageView() {
         <PagePanel.Header
           eyebrow="LifeOps"
           heading="Personal Operations"
-          description="Tasks, goals, reminders, connected identities, calendar, and inbox in one operational tab."
+          description={
+            aliceProduction
+              ? "Your goals, reminders, and Alice’s active work."
+              : "Tasks, goals, reminders, connected identities, calendar, and inbox in one operational tab."
+          }
           actions={
             <div className="flex flex-wrap gap-2">
               <Button
@@ -500,6 +560,12 @@ export function LifeOpsPageView() {
             className="mt-4"
             heading="Waiting for LifeOps runtime"
           />
+        ) : null}
+
+        {profileError ? (
+          <PagePanel.Notice tone="danger" className="mt-4">
+            {profileError}
+          </PagePanel.Notice>
         ) : null}
 
         {overviewError ? (
@@ -570,115 +636,173 @@ export function LifeOpsPageView() {
         ) : null}
       </PagePanel>
 
-      <LifeOpsSettingsSection />
-
-      <PagePanel variant="section" className="p-4 lg:p-5">
-        <PagePanel.Header
-          eyebrow="GitHub"
-          heading="LifeOps and Agent GitHub"
-          description="Keep the owner’s LifeOps GitHub separate from the cloud agent’s GitHub identity. Both authorization flows run through Eliza Cloud, and repo access depends on the GitHub account or app installation behind each connection."
-          actions={
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full px-4 text-[11px] font-semibold"
-              onClick={openCloudAgents}
-            >
-              Open Cloud
-            </Button>
-          }
-        />
-
-        {!elizaCloudConnected ? (
-          <PagePanel.Empty
-            variant="surface"
-            className="mt-4 min-h-[12rem] rounded-[1.5rem]"
-            title="Connect Eliza Cloud first"
-            description="GitHub authorization runs through Eliza Cloud. Connect Cloud, then come back here to manage both accounts."
+      {aliceProduction ? (
+        <PagePanel variant="section" className="p-4 lg:p-5">
+          <PagePanel.Header
+            eyebrow="GitHub"
+            heading="Alice’s GitHub"
+            description="Repository access through Alice’s GitHub App. Coding writes require your approval."
           />
-        ) : (
-          <>
-            {githubError ? (
-              <PagePanel.Notice tone="danger" className="mt-4">
-                {githubError}
-              </PagePanel.Notice>
-            ) : null}
-            {githubLoading &&
-            ownerGithubConnections.length === 0 &&
-            agentGithubEntries.length === 0 ? (
-              <PagePanel.Loading
+          {githubError ? (
+            <PagePanel.Notice tone="danger" className="mt-4">
+              {githubError}
+            </PagePanel.Notice>
+          ) : githubLoading && !aliceGithub ? (
+            <PagePanel.Loading
+              variant="surface"
+              className="mt-4"
+              heading="Checking GitHub connection"
+            />
+          ) : aliceGithub?.verification === "verified" ? (
+            aliceGithub.installations.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {aliceGithub.installations.map((installation) => (
+                  <div
+                    key={installation.installationId}
+                    className="rounded-2xl border border-border/45 bg-bg/55 p-4 text-[12px]"
+                  >
+                    <strong>Connected to @{installation.accountLogin}</strong>
+                    <div className="mt-1 text-muted">
+                      {installation.repositorySelection === "all"
+                        ? "All repositories"
+                        : "Selected repositories"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <PagePanel.Empty
                 variant="surface"
                 className="mt-4"
-                heading="Loading GitHub identities"
+                title="No active GitHub installation found"
+                description="Install Alice’s GitHub App on the account whose repositories she should use."
               />
-            ) : null}
+            )
+          ) : aliceGithub ? (
+            <PagePanel.Notice tone="danger" className="mt-4">
+              {aliceGithub.configured
+                ? "Alice’s GitHub App is configured, but access could not be verified."
+                : "Alice’s GitHub connection is unavailable."}
+            </PagePanel.Notice>
+          ) : null}
+        </PagePanel>
+      ) : null}
 
-            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(20rem,0.95fr)_minmax(22rem,1.05fr)]">
-              <SectionSurface
-                title="LifeOps GitHub"
-                icon={<Github className="h-4 w-4" />}
-                subtitle="Use this account for the owner’s LifeOps repos, issues, and planning context."
-              >
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="rounded-full px-4 text-[11px] font-semibold"
-                    disabled={ownerGithubBusy}
-                    onClick={() => void handleConnectOwnerGithub()}
+      {standardRuntime ? (
+        <>
+          <LifeOpsSettingsSection />
+
+          <PagePanel variant="section" className="p-4 lg:p-5">
+            <PagePanel.Header
+              eyebrow="GitHub"
+              heading="LifeOps and Agent GitHub"
+              description="Keep the owner’s LifeOps GitHub separate from the cloud agent’s GitHub identity. Both authorization flows run through Eliza Cloud, and repo access depends on the GitHub account or app installation behind each connection."
+              actions={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full px-4 text-[11px] font-semibold"
+                  onClick={openCloudAgents}
+                >
+                  Open Cloud
+                </Button>
+              }
+            />
+
+            {!elizaCloudConnected ? (
+              <PagePanel.Empty
+                variant="surface"
+                className="mt-4 min-h-[12rem] rounded-[1.5rem]"
+                title="Connect Eliza Cloud first"
+                description="GitHub authorization runs through Eliza Cloud. Connect Cloud, then come back here to manage both accounts."
+              />
+            ) : (
+              <>
+                {githubError ? (
+                  <PagePanel.Notice tone="danger" className="mt-4">
+                    {githubError}
+                  </PagePanel.Notice>
+                ) : null}
+                {githubLoading &&
+                ownerGithubConnections.length === 0 &&
+                agentGithubEntries.length === 0 ? (
+                  <PagePanel.Loading
+                    variant="surface"
+                    className="mt-4"
+                    heading="Loading GitHub identities"
+                  />
+                ) : null}
+
+                <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(20rem,0.95fr)_minmax(22rem,1.05fr)]">
+                  <SectionSurface
+                    title="LifeOps GitHub"
+                    icon={<Github className="h-4 w-4" />}
+                    subtitle="Use this account for the owner’s LifeOps repos, issues, and planning context."
                   >
-                    <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                    {ownerGithubConnections.length > 0
-                      ? "Reconnect / add account"
-                      : "Connect LifeOps GitHub"}
-                  </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="rounded-full px-4 text-[11px] font-semibold"
+                        disabled={ownerGithubBusy}
+                        onClick={() => void handleConnectOwnerGithub()}
+                      >
+                        <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                        {ownerGithubConnections.length > 0
+                          ? "Reconnect / add account"
+                          : "Connect LifeOps GitHub"}
+                      </Button>
+                    </div>
+                    {ownerGithubConnections.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-[12px] text-muted">
+                        No owner GitHub account linked yet.
+                      </div>
+                    ) : (
+                      ownerGithubConnections.map((connection) => (
+                        <OwnerGithubConnectionCard
+                          key={connection.id}
+                          connection={connection}
+                          busy={
+                            disconnectingOwnerConnectionId === connection.id
+                          }
+                          onDisconnect={handleDisconnectOwnerGithub}
+                        />
+                      ))
+                    )}
+                  </SectionSurface>
+
+                  <SectionSurface
+                    title="Agent GitHub"
+                    icon={<Shield className="h-4 w-4" />}
+                    subtitle="Bind GitHub per cloud agent so coding work can use a separate identity from the owner account. Access may be read-only or write-enabled depending on the connected account or installation."
+                  >
+                    {agentGithubEntries.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-[12px] text-muted">
+                        No cloud agents found yet. Create or connect a cloud
+                        agent to give it its own GitHub identity.
+                      </div>
+                    ) : (
+                      agentGithubEntries.map((entry) => (
+                        <AgentGithubCard
+                          key={entry.agent.agent_id}
+                          entry={entry}
+                          ownerConnections={ownerGithubConnections}
+                          busyAgentId={busyAgentGithubId}
+                          onConnect={handleConnectAgentGithub}
+                          onDisconnect={handleDisconnectAgentGithub}
+                          onUseOwnerConnection={handleUseOwnerGithub}
+                        />
+                      ))
+                    )}
+                  </SectionSurface>
                 </div>
-                {ownerGithubConnections.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-[12px] text-muted">
-                    No owner GitHub account linked yet.
-                  </div>
-                ) : (
-                  ownerGithubConnections.map((connection) => (
-                    <OwnerGithubConnectionCard
-                      key={connection.id}
-                      connection={connection}
-                      busy={disconnectingOwnerConnectionId === connection.id}
-                      onDisconnect={handleDisconnectOwnerGithub}
-                    />
-                  ))
-                )}
-              </SectionSurface>
+              </>
+            )}
+          </PagePanel>
 
-              <SectionSurface
-                title="Agent GitHub"
-                icon={<Shield className="h-4 w-4" />}
-                subtitle="Bind GitHub per cloud agent so coding work can use a separate identity from the owner account. Access may be read-only or write-enabled depending on the connected account or installation."
-              >
-                {agentGithubEntries.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-[12px] text-muted">
-                    No cloud agents found yet. Create or connect a cloud agent
-                    to give it its own GitHub identity.
-                  </div>
-                ) : (
-                  agentGithubEntries.map((entry) => (
-                    <AgentGithubCard
-                      key={entry.agent.agent_id}
-                      entry={entry}
-                      ownerConnections={ownerGithubConnections}
-                      busyAgentId={busyAgentGithubId}
-                      onConnect={handleConnectAgentGithub}
-                      onDisconnect={handleDisconnectAgentGithub}
-                      onUseOwnerConnection={handleUseOwnerGithub}
-                    />
-                  ))
-                )}
-              </SectionSurface>
-            </div>
-          </>
-        )}
-      </PagePanel>
-
-      <LifeOpsWorkspaceView />
+          <LifeOpsWorkspaceView />
+        </>
+      ) : null}
     </div>
   );
 }

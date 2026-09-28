@@ -214,6 +214,7 @@ function runtimeHealth(overrides: Record<string, unknown> = {}) {
   return {
     ready: true,
     runtime: "ok",
+    runtimeProfile: "alice-response-only",
     database: "ok",
     plugins: { loaded: 3, failed: 0 },
     coordinator: "not_wired",
@@ -575,7 +576,7 @@ describe("Alice Access gateway", () => {
     expect(ownerRequests.map((request) => new URL(request.url).pathname)).toEqual([
       "/",
       "/companion",
-      "/",
+      "/lifeops",
       "/broadcast/alice-cam",
       "/assets/main.js",
       "/animations/idle.glb.gz",
@@ -635,6 +636,7 @@ describe("Alice Access gateway", () => {
     const env = await environment();
     const { token, jwks } = await accessFixture();
     const health = runtimeHealth({
+      runtimeProfile: "alice-full-gated",
       plugins: { loaded: fullRuntimeProof().requiredRuntimePluginNames.length, failed: 0 },
       startup: { phase: "running", attempt: 1 },
     });
@@ -1066,6 +1068,7 @@ describe("Alice Access gateway", () => {
       ready: true,
       agentState: "running",
       runtime: "ok",
+      runtimeProfile: "alice-response-only",
       release: { ...binding, ...release },
     });
   });

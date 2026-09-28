@@ -656,11 +656,13 @@ async function canonicalSafeRuntimeResponse(
         "plugins",
         "ready",
         "runtime",
+        "runtimeProfile",
         "startup",
         "uptime",
       ]) ||
       value.ready !== true ||
       value.agentState !== "running" ||
+      value.runtimeProfile !== "alice-response-only" ||
       value.runtime !== "ok" ||
       value.database !== "ok" ||
       !isNonNegativeSafeInteger(value.uptime) ||
@@ -682,6 +684,7 @@ async function canonicalSafeRuntimeResponse(
       ready: true,
       agentState: "running",
       runtime: "ok",
+      runtimeProfile: "alice-response-only",
       release: value.aliceRelease,
     });
   }
@@ -1436,7 +1439,7 @@ export async function handleRequest(
     // Resolving a user-controlled string beginning with `//` would otherwise
     // reinterpret it as a network-path reference and replace the Modal host.
     const target = new URL("https://alice-runtime.internal");
-    target.pathname = fullRuntime && path === "/lifeops" ? "/" : requestUrl.pathname;
+    target.pathname = requestUrl.pathname;
     target.search = requestUrl.search;
     const init: RequestInit = {
       method: request.method,

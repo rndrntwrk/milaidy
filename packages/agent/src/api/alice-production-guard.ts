@@ -36,6 +36,7 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/api\/knowledge(?:\/(?:stats|search|documents(?:\/[^/]+)?|fragments\/[^/]+))?$/,
   /^\/$/,
   /^\/companion$/,
+  /^\/lifeops$/,
   /^\/broadcast\/[a-zA-Z0-9-]+$/,
   /^\/(?:assets|animations|vrms|models|fonts|icons|images|sounds|audio)\/[a-zA-Z0-9._/-]+$/,
   /^\/(?:favicon\.ico|manifest\.webmanifest)$/,

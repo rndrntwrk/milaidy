@@ -47,6 +47,8 @@ describe("Alice production runtime guard", () => {
     for (const [method, pathname] of [
       ["GET", "/"],
       ["GET", "/companion"],
+      ["GET", "/lifeops"],
+      ["HEAD", "/lifeops"],
       ["GET", "/animations/idle.glb.gz"],
       ["HEAD", "/animations/idle.glb.gz"],
       ["GET", "/animations/emotes/talk.glb.gz"],

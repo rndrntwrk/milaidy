@@ -12,6 +12,7 @@ import {
 } from "./alice-production-guard.js";
 import { buildAliceProductionCapabilities } from "./alice-production-capabilities.js";
 import { readAliceCapabilityBom } from "../runtime/alice-capability-inventory.js";
+import type { AliceGitHubInstallationService } from "../services/alice-github-installation.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -460,6 +461,11 @@ export async function handleHealthRoutes(
 
     const payload = {
       ready,
+      runtimeProfile: isAliceProductionRuntime()
+        ? isAliceFullRuntimeProfile()
+          ? "alice-full-gated"
+          : "alice-response-only"
+        : "standard",
       runtime: runtime ? "ok" : "not_initialized",
       database: runtime ? "ok" : "unknown",
       plugins: {
@@ -540,6 +546,10 @@ export async function handleHealthRoutes(
     }
     try {
       const { bom, bomSha256 } = readAliceCapabilityBom(process.env);
+      const githubService =
+        state.runtime.getService<AliceGitHubInstallationService>(
+          "ALICE_GITHUB_INSTALLATION",
+        );
       json(
         res,
         buildAliceProductionCapabilities({
@@ -548,6 +558,7 @@ export async function handleHealthRoutes(
           environment: process.env,
           runtimePlugins: state.runtime.plugins,
           documentsService: state.runtime.getService("documents"),
+          githubCoding: await githubService?.readCodingStatus(),
         }),
       );
     } catch {

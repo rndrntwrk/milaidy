@@ -276,6 +276,18 @@ export interface AgentStartupDiagnostics {
   embeddingProgressPct?: number;
 }
 
+export type RuntimeProfile = "standard" | "alice-response-only" | "alice-full-gated";
+
+export interface AliceGithubCodingStatus {
+  configured: boolean;
+  verification: "verified" | "configured" | "unavailable";
+  installations: Array<{
+    installationId: number;
+    accountLogin: string;
+    repositorySelection: "all" | "selected";
+  }>;
+}
+
 export interface AgentStatus {
   state: AgentState;
   agentName: string;
@@ -4586,6 +4598,17 @@ export class MiladyClient {
     }
   > {
     return this.fetch("/api/workbench/overview");
+  }
+
+  async getRuntimeProfile(): Promise<RuntimeProfile> {
+    const health = await this.fetch<{ runtimeProfile: RuntimeProfile }>("/api/health");
+    return health.runtimeProfile;
+  }
+
+  async getAliceProductionCapabilities(): Promise<{
+    githubCoding: AliceGithubCodingStatus;
+  }> {
+    return this.fetch("/api/alice-production/capabilities");
   }
 
   async getLifeOpsOverview(): Promise<LifeOpsOverview> {
