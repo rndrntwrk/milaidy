@@ -14,7 +14,13 @@ const MAX_PATCH_BYTES = 128_000;
 const MAX_CHANGE_BYTES = 110_000;
 const MAX_CHANGED_FILES = 25;
 
-type CodingChange = { path: string; mode: "100644" | "100755"; contentB64: string | null };
+type CodingChange = {
+  path: string;
+  mode: "100644" | "100755";
+  originalSha: string | null;
+  resultSha: string | null;
+  replacement: { offset: number; deleteBytes: number; insertB64: string };
+};
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
@@ -29,7 +35,7 @@ function validChangedPath(path: string): boolean {
 
 async function collectChanges(sandbox: ReturnType<typeof getSandbox>): Promise<CodingChange[]> {
   const listing = await sandbox.exec(
-    "cd /workspace/repo && git -c diff.renames=false diff --cached --raw -z HEAD | base64 > /workspace/changes.b64",
+    "cd /workspace/repo && git -c diff.renames=false diff --cached --raw --abbrev=40 -z HEAD | base64 > /workspace/changes.b64",
     { timeout: 30_000 },
   );
   if (!listing.success) throw new Error("CODING_CHANGE_LIST_FAILED");
@@ -45,28 +51,44 @@ async function collectChanges(sandbox: ReturnType<typeof getSandbox>): Promise<C
     fields.length / 2 > MAX_CHANGED_FILES) throw new Error("CODING_CHANGE_LIST_INVALID");
   const changes: CodingChange[] = [];
   for (let index = 0; index < fields.length; index += 2) {
-    const metadata = /^:(\d{6}) (\d{6}) [a-f0-9]+ [a-f0-9]+ ([AMD])$/.exec(fields[index]!);
+    const metadata = /^:(\d{6}) (\d{6}) ([a-f0-9]{40}) ([a-f0-9]{40}) ([AMD])$/.exec(fields[index]!);
     const path = fields[index + 1]!;
     if (!metadata || !validChangedPath(path) ||
-      !["100644", "100755"].includes(metadata[3] === "D" ? metadata[1]! : metadata[2]!)) {
+      !["100644", "100755"].includes(metadata[5] === "D" ? metadata[1]! : metadata[2]!) ||
+      (metadata[5] !== "A" && !["100644", "100755"].includes(metadata[1]!))) {
       throw new Error("CODING_CHANGE_LIST_INVALID");
     }
-    const mode = (metadata[3] === "D" ? metadata[1] : metadata[2]) as CodingChange["mode"];
-    let contentB64: string | null = null;
-    if (metadata[3] !== "D") {
-      const output = `/workspace/change-${index / 2}.b64`;
+    const mode = (metadata[5] === "D" ? metadata[1] : metadata[2]) as CodingChange["mode"];
+    const originalSha = metadata[5] === "A" ? null : metadata[3]!;
+    const resultSha = metadata[5] === "D" ? null : metadata[4]!;
+    const readBlob = async (object: string, label: string): Promise<Uint8Array> => {
+      const output = `/workspace/change-${index / 2}-${label}`;
       const blob = await sandbox.exec(
-        `cd /workspace/repo && git show ${shellQuote(`:${path}`)} | base64 > ${output}`,
+        `cd /workspace/repo && git show ${shellQuote(object)} > ${output} && base64 < ${output} > ${output}.b64`,
         { timeout: 30_000 },
       );
       if (!blob.success) throw new Error("CODING_CHANGE_READ_FAILED");
-      const encodedBlob = (await sandbox.readFile(output)).content.replace(/\s/g, "");
+      const encodedBlob = (await sandbox.readFile(`${output}.b64`)).content.replace(/\s/g, "");
       if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encodedBlob)) {
         throw new Error("CODING_CHANGE_READ_FAILED");
       }
-      contentB64 = encodedBlob;
+      return Uint8Array.from(atob(encodedBlob), (character) => character.charCodeAt(0));
+    };
+    const original = originalSha === null ? new Uint8Array() : await readBlob(`HEAD:${path}`, "original");
+    const result = resultSha === null ? new Uint8Array() : await readBlob(`:${path}`, "result");
+    let offset = 0;
+    while (offset < Math.min(original.length, result.length) && original[offset] === result[offset]) offset += 1;
+    let suffix = 0;
+    while (suffix < Math.min(original.length, result.length) - offset &&
+      original[original.length - suffix - 1] === result[result.length - suffix - 1]) suffix += 1;
+    const inserted = result.subarray(offset, result.length - suffix);
+    let insertedBinary = "";
+    for (let start = 0; start < inserted.length; start += 8_192) {
+      insertedBinary += String.fromCharCode(...inserted.subarray(start, start + 8_192));
     }
-    changes.push({ path, mode, contentB64 });
+    changes.push({ path, mode, originalSha, resultSha,
+      replacement: { offset, deleteBytes: original.length - offset - suffix,
+        insertB64: btoa(insertedBinary) } });
     if (new TextEncoder().encode(JSON.stringify(changes)).byteLength > MAX_CHANGE_BYTES) {
       throw new Error("CODING_CHANGE_SET_TOO_LARGE");
     }

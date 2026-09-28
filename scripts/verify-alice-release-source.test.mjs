@@ -94,6 +94,21 @@ test('an unrelated source cannot be admitted as a reused build', t => {
   assert.match(result.stderr, /ALICE_RELEASE_SOURCE_ANCESTRY_INVALID/);
 });
 
+test('coding Sandbox edits can retain the image but unrelated Sandbox inputs cannot', t => {
+  const f = fixture(t);
+  const sandboxDirectory = path.join(f.root, 'workers/alice-coding-sandbox/src');
+  fs.mkdirSync(sandboxDirectory, {recursive: true});
+  for (const file of ['index.ts', 'lease.ts']) {
+    fs.writeFileSync(path.join(sandboxDirectory, file), 'export const boundedEdits = true;\n');
+  }
+  f.git('add', '.'); f.git('commit', '-m', 'Bounded coding publication');
+  const sandbox = f.run(f.git('rev-parse', 'HEAD'));
+  assert.equal(sandbox.status, 0, sandbox.stderr);
+  fs.writeFileSync(path.join(f.root, 'workers/alice-coding-sandbox/package.json'), '{"dependencies":{"@cloudflare/sandbox":"changed"}}\n');
+  f.git('add', '.'); f.git('commit', '-m', 'Unqualified Sandbox dependency change');
+  assert.match(f.run(f.git('rev-parse', 'HEAD')).stderr, /ALICE_RELEASE_SOURCE_REBUILD_REQUIRED/);
+});
+
 test('renaming runtime code into a controller path still requires a rebuild', t => {
   const f = fixture(t);
   fs.mkdirSync(path.join(f.root, 'scripts'));

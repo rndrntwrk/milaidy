@@ -12,9 +12,38 @@ type AliceRuntimeContainerEnv = AliceRuntimeContainerEnvironmentSource & {
   ALICE_STATE_PLANE: Fetcher;
 };
 
+async function forwardToDiscordGateway(request: Request): Promise<Response> {
+  const response = await fetch(request);
+  const clientKey = request.headers.get("sec-websocket-key");
+  if (response.status !== 101 || !response.webSocket || !clientKey) {
+    return response;
+  }
+  // Workers creates its own upstream handshake key. The container's HTTP
+  // client must receive the acceptance value for its original key instead.
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(
+      `${clientKey}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`,
+    ),
+  );
+  const headers = new Headers(response.headers);
+  headers.set(
+    "sec-websocket-accept",
+    btoa(String.fromCharCode(...new Uint8Array(digest))),
+  );
+  return new Response(null, {
+    status: 101,
+    headers,
+    webSocket: response.webSocket,
+  });
+}
+
 const ALICE_RUNTIME_OUTBOUND_BY_HOST = {
   "alice-ai-gateway.internal": forwardToAliceAiGateway,
   "alice-state-plane.internal": forwardToAliceStatePlane,
+  "gateway.discord.gg": forwardToDiscordGateway,
+  // Discord's Ready event supplies a regional gateway for session resumption.
+  "gateway-*.discord.gg": forwardToDiscordGateway,
 };
 
 const ALICE_RUNTIME_ALLOWED_HOSTS = [
@@ -26,9 +55,6 @@ const ALICE_RUNTIME_ALLOWED_HOSTS = [
   "api.github.com",
   "github.com",
   "discord.com",
-  "gateway.discord.gg",
-  // Discord's Ready event supplies a regional gateway for session resumption.
-  "gateway-*.discord.gg",
 ];
 
 export class AliceRuntimeContainer extends Container<AliceRuntimeContainerEnv> {

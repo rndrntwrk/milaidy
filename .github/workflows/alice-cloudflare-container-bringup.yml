@@ -762,6 +762,14 @@ jobs:
           bun install --frozen-lockfile --ignore-scripts
           test "$(node -p 'require("./node_modules/@simplewebauthn/server/package.json").version')" = "13.3.0"
 
+      - name: Install pinned coding Sandbox dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd workers/alice-coding-sandbox
+          bun install --frozen-lockfile --ignore-scripts
+          test "$(node -p 'require("./node_modules/@cloudflare/sandbox/package.json").version')" = "0.12.10"
+
       - name: Build exact host Workers while preserving the qualified runtime image
         env:
           ALICE_SOURCE_COMMIT: ${{ inputs.source_sha }}

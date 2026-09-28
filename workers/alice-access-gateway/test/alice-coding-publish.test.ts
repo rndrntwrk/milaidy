@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { expect, test } from "bun:test";
 import { aliceCodingArgumentHash } from "../../alice-production-control/src/coding-task";
 import {
@@ -22,6 +22,11 @@ const admission = {
 const taskId = "task-cap-00000000-0000-4000-8000-000000000001";
 const actor = `owner:sha256:${"5".repeat(64)}`;
 const branch = `alice/${taskId}`;
+const originalContent = Buffer.from("export const enabled = false;\n");
+
+function blobSha(content: Uint8Array): string {
+  return createHash("sha1").update(`blob ${content.length}\0`).update(content).digest("hex");
+}
 
 async function input() {
   const requestedAt = Date.now() - 1_000;
@@ -31,7 +36,9 @@ async function input() {
   };
   const result = {
     summary: "Repair command parsing and add focused coverage.",
-    changes: [{ path: "src/telegram.ts", mode: "100644", contentB64: "ZXhwb3J0IHt9Owo=" }],
+    changes: [{ path: "src/telegram.ts", mode: "100644", originalSha: blobSha(originalContent),
+      resultSha: blobSha(Buffer.from("export const enabled = true;\n")),
+      replacement: { offset: 23, deleteBytes: 5, insertB64: Buffer.from("true").toString("base64") } }],
   };
   return {
     schemaVersion: "alice.coding-publish.v1",
@@ -48,12 +55,23 @@ async function input() {
   };
 }
 
-function fixture(authorized = true) {
+function fixture(authorized = true, source = originalContent, filePath = "src/telegram.ts") {
   let branchSha: string | null = null;
   let pull: Record<string, unknown> | null = null;
   let branchCreates = 0;
   let pullCreates = 0;
   let githubCalls = 0;
+  let blobWrites = 0;
+  let publishedContent: Buffer | null = null;
+  const trees = new Map<string, Record<string, unknown>>();
+  const parts = filePath.split("/");
+  for (let index = 0; index < parts.length; index += 1) {
+    const sha = index === 0 ? "b".repeat(40) : String(index).padStart(40, "0");
+    const leaf = index === parts.length - 1;
+    trees.set(sha, { sha, truncated: false, tree: [{ path: parts[index],
+      mode: leaf ? "100644" : "040000", type: leaf ? "blob" : "tree",
+      sha: leaf ? blobSha(source) : String(index + 1).padStart(40, "0") }] });
+  }
   const env = {
     ALICE_CODING_PUBLISH_TOKEN: token,
     ALICE_GITHUB_APP_ID: "5052363",
@@ -104,7 +122,20 @@ function fixture(authorized = true) {
       ? Response.json({ object: { sha: branchSha } })
       : Response.json({ message: "Not found" }, { status: 404 });
     if (path === `/repos/${repository}/branches/main`) return Response.json({ commit: { sha: baseCommit } });
-    if (path === `/repos/${repository}/git/blobs` && method === "POST") return Response.json({ sha: "c".repeat(40) });
+    if (path.startsWith(`/repos/${repository}/git/trees/`) && method === "GET") {
+      const tree = trees.get(path.split("/").at(-1)!);
+      if (tree) return Response.json(tree);
+    }
+    if (path === `/repos/${repository}/git/blobs/${blobSha(source)}` && method === "GET") {
+      return Response.json({ sha: blobSha(source), encoding: "base64", content: source.toString("base64") });
+    }
+    if (path === `/repos/${repository}/git/blobs` && method === "POST") {
+      blobWrites += 1;
+      const body = JSON.parse(String(init?.body));
+      expect(body.encoding).toBe("base64");
+      publishedContent = Buffer.from(body.content, "base64");
+      return Response.json({ sha: blobSha(publishedContent) });
+    }
     if (path === `/repos/${repository}/git/trees` && method === "POST") return Response.json({ sha: "d".repeat(40) });
     if (path === `/repos/${repository}/git/commits` && method === "POST") return Response.json({ sha: "e".repeat(40) });
     if (path === `/repos/${repository}/git/refs` && method === "POST") {
@@ -127,7 +158,8 @@ function fixture(authorized = true) {
     }
     throw new Error(`unexpected GitHub call ${method} ${url}`);
   }) as typeof fetch;
-  return { env, fetcher, counts: () => ({ branchCreates, pullCreates, githubCalls }) };
+  return { env, fetcher, published: () => publishedContent,
+    counts: () => ({ branchCreates, pullCreates, githubCalls, blobWrites }) };
 }
 
 async function request(value: unknown, signingToken = token): Promise<Request> {
@@ -162,7 +194,7 @@ test("wrong, expired, patch-only and altered task authority cannot publish", asy
   for (const changed of [
     { ...value, intent: { ...value.intent, expiresAt: Date.now() - 1 } },
     { ...value, intent: { ...value.intent, action: "coding.patch.sandbox" } },
-    { ...value, result: { ...value.result, changes: [{ ...value.result.changes[0], contentB64: "YQ==" }] } },
+    { ...value, result: { ...value.result, changes: [{ ...value.result.changes[0], resultSha: "f".repeat(40) }] } },
   ]) {
     const response = await publishAliceCodingTask(await request(changed), fixture().env as any, state.fetcher);
     expect((await response.json() as any).code).toBe("CODING_PUBLISH_REQUEST_INVALID");
@@ -171,6 +203,54 @@ test("wrong, expired, patch-only and altered task authority cannot publish", asy
   const wrongSignature = await publishAliceCodingTask(await request(value, "wrong-secret-with-at-least-32-characters"),
     fixture().env as any, state.fetcher);
   expect(wrongSignature.status).toBe(403);
+});
+
+test("a small approved edit publishes a 559KB source file without transmitting unchanged bytes", async () => {
+  const prefix = Buffer.from("// Alice — credential refresh\r\n");
+  const suffix = Buffer.from("\nconst token = oldToken;");
+  const source = Buffer.concat([prefix, Buffer.alloc(559_000 - prefix.length - suffix.length, " "), suffix]);
+  const offset = source.indexOf("oldToken");
+  const inserted = Buffer.from("runtimeToken");
+  const expected = Buffer.concat([source.subarray(0, offset), inserted, source.subarray(offset + 8)]);
+  const value = await input();
+  const path = "packages/autonomous/src/api/server.ts";
+  value.result.changes = [{ path, mode: "100644", originalSha: blobSha(source), resultSha: blobSha(expected),
+    replacement: { offset, deleteBytes: 8, insertB64: inserted.toString("base64") } }];
+  value.resultSha256 = await aliceCodingResultSha256(value.result);
+  expect(source.length).toBe(559_000);
+  expect(source.toString("base64").length).toBeGreaterThan(110_000);
+  expect(Buffer.byteLength(JSON.stringify(value.result.changes))).toBeLessThan(1_000);
+  const state = fixture(true, source, path);
+  const response = await publishAliceCodingTask(await request(value), state.env as any, state.fetcher);
+  expect(response.status).toBe(200);
+  expect(state.published()).toEqual(expected);
+  expect(state.counts()).toMatchObject({ blobWrites: 1, branchCreates: 1, pullCreates: 1 });
+});
+
+test("source/result mismatch, invalid byte bounds and a wrong provider blob SHA cannot publish a PR", async () => {
+  const value = await input();
+  for (const [change, code] of [
+    [{ ...value.result.changes[0], originalSha: "f".repeat(40) }, "CODING_SOURCE_BLOB_MISMATCH"],
+    [{ ...value.result.changes[0], resultSha: "f".repeat(40) }, "CODING_RESULT_BLOB_MISMATCH"],
+    [{ ...value.result.changes[0], replacement: { offset: originalContent.length + 1, deleteBytes: 0, insertB64: "" } },
+      "CODING_PUBLISH_REQUEST_INVALID"],
+  ] as const) {
+    const result = { ...value.result, changes: [change] };
+    const changed = { ...value, result, resultSha256: await aliceCodingResultSha256(result) };
+    const state = fixture();
+    const response = await publishAliceCodingTask(await request(changed), state.env as any, state.fetcher);
+    expect(await response.json()).toMatchObject({ ok: false, code });
+    expect(state.counts()).toMatchObject({ blobWrites: 0, branchCreates: 0, pullCreates: 0 });
+  }
+  const state = fixture();
+  const wrongProviderSha = (async (url: string | URL | Request, init?: RequestInit) => {
+    const response = await state.fetcher(url, init);
+    return init?.method === "POST" && new URL(String(url)).pathname.endsWith("/git/blobs")
+      ? Response.json({ sha: "f".repeat(40) }) : response;
+  }) as typeof fetch;
+  const response = await publishAliceCodingTask(await request(value), state.env as any, wrongProviderSha);
+  expect(await response.json()).toMatchObject({ ok: false, code: "CODING_RESULT_BLOB_MISMATCH" });
+  expect(state.counts()).toMatchObject({ blobWrites: 1, branchCreates: 0, pullCreates: 0 });
 });
 
 async function mergeInput() {

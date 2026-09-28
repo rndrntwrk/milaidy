@@ -19,7 +19,13 @@ type LeaseState = {
   result: {
     patch: string;
     summary: string;
-    changes?: Array<{ path: string; mode: "100644" | "100755"; contentB64: string | null }>;
+    changes?: Array<{
+      path: string;
+      mode: "100644" | "100755";
+      originalSha: string | null;
+      resultSha: string | null;
+      replacement: { offset: number; deleteBytes: number; insertB64: string };
+    }>;
   } | null;
 };
 

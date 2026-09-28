@@ -11,7 +11,7 @@ import {
   verifyAliceWorkerBundleArtifact,
 } from '../deploy/modal/alice_worker_bundle_artifact.mjs';
 
-// Control and both container host Workers may change. Recompile every role to
+// Control, both container hosts and the coding Sandbox may change. Recompile every role to
 // prove shared-source changes preserve the remaining signed bytes and migrations.
 export function buildAliceHostWorkerArtifact({
   sourceRoot, sourceCommit, deploymentControllerCommit, baseRoot, outputRoot,
@@ -38,9 +38,7 @@ export function buildAliceHostWorkerArtifact({
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(path.join(baseRoot, member.path), destination, fs.constants.COPYFILE_EXCL);
   }
-  const stableRoles = Object.hasOwn(base.bundles, 'codingSandbox')
-    ? ['aiGateway', 'statePlane', 'connectorPlane', 'codingSandbox']
-    : ['aiGateway', 'statePlane', 'connectorPlane'];
+  const stableRoles = ['aiGateway', 'statePlane', 'connectorPlane'];
   for (const role of stableRoles) {
     const relative = `${base.bundles[role].path}.map`;
     const sourceMap = path.join(baseRoot, relative);
@@ -62,12 +60,6 @@ export function buildAliceHostWorkerArtifact({
   ]) {
     const destination = path.join(outputRoot, base.bundles[role].path);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
-    if (role === 'codingSandbox') {
-      // Controller-only releases cannot change this Worker's source. Keep the
-      // already-attested bytes instead of rebundling from a different install layout.
-      fs.copyFileSync(path.join(baseRoot, base.bundles[role].path), destination, fs.constants.COPYFILE_EXCL);
-      continue;
-    }
     execFileSync(wranglerBin, [
       'deploy', '--dry-run', '--outdir', path.dirname(destination),
       '--config', path.join(sourceRoot, 'workers', configName),
