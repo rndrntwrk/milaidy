@@ -316,11 +316,9 @@ describe("AppContext autonomy replay", () => {
 
   beforeEach(() => {
     localStorage.setItem(
-      "milady:active-server",
+      "eliza:onboarding:connection-mode",
       JSON.stringify({
-        id: "local:embedded",
-        kind: "local",
-        label: "This device",
+        runMode: "local",
       }),
     );
     localStorage.setItem("eliza:onboarding-complete", "1");
@@ -591,6 +589,10 @@ describe("AppContext autonomy replay", () => {
       expect(wsHandlers.has("agent_event")).toBe(true);
     });
 
+    const authChecks = mockClient.getAuthStatus.mock.calls.length;
+    const connections = mockClient.connectWs.mock.calls.length;
+    const disconnections = mockClient.disconnectWs.mock.calls.length;
+
     await act(async () => {
       emitWs("agent_event", makeWsEvent("evt-1", "run-1", 1));
       emitWs("agent_event", makeWsEvent("evt-3", "run-1", 3));
@@ -611,6 +613,12 @@ describe("AppContext autonomy replay", () => {
         expect.arrayContaining(["evt-1", "evt-2", "evt-3"]),
       );
     });
+
+    await drainAsync();
+    expect(probe?.snapshot().startupPhase).toBe("ready");
+    expect(mockClient.getAuthStatus).toHaveBeenCalledTimes(authChecks);
+    expect(mockClient.connectWs).toHaveBeenCalledTimes(connections);
+    expect(mockClient.disconnectWs).toHaveBeenCalledTimes(disconnections);
 
     await act(async () => {
       renderer.unmount();

@@ -2066,7 +2066,7 @@ function AppProviderInner({
     applyAutonomyEventMerge,
     autonomousReplayInFlightRef,
     autonomousRunHealthByRunIdRef,
-    autonomousStoreRef.current,
+    autonomousStoreRef,
     setAutonomousRunHealthByRunId,
   ]);
 
