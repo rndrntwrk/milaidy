@@ -997,7 +997,8 @@ export async function handleOwnerApi(
         "repository.merge", "MERGE_VERIFIED", taskId, { ...receipt,
           capabilityId: grant.capabilityId, intentId: work.intent.intentId,
           admission: work.admission }),
-        eventId: `evt-${grant.capabilityId.slice(4)}`, occurredAt: receipt.mergedAt };
+        eventId: `evt-${grant.capabilityId.slice(4)}`,
+        occurredAt: new Date(receipt.mergedAt).toISOString() };
       const payload = { ...work, state: "completed", code: "MERGE_VERIFIED",
         result: receipt, evidence };
       const updatedAt = Math.max(work.requestedAt + 2, Date.parse(receipt.mergedAt));

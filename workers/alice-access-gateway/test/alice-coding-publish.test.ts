@@ -190,18 +190,20 @@ async function mergeInput() {
 }
 
 function mergeFixture(options: { authorized?: boolean; merged?: boolean; head?: string;
-  author?: string; mergeState?: string; loseResponse?: boolean; settingsChanged?: boolean } = {}) {
+  author?: string; mergeState?: string; loseResponse?: boolean; settingsChanged?: boolean;
+  retargetBeforeMerge?: boolean } = {}) {
   const env = fixture(options.authorized ?? true).env;
   const bot = "alice-rndrntwrk-coding[bot]";
   let merged = options.merged ?? false;
   let draft = !merged;
   let puts = 0;
   let ready = 0;
+  let baseRef = "main";
   const pull = () => ({ number: 17, node_id: "PR_node_17", state: merged ? "closed" : "open",
     html_url: `https://github.com/${repository}/pull/17`, draft, merged,
     user: { login: options.author ?? bot, type: "Bot" },
     head: { ref: branch, sha: options.head ?? "e".repeat(40), repo: { full_name: repository } },
-    base: { ref: "main", repo: { full_name: repository } },
+    base: { ref: baseRef, repo: { full_name: repository } },
     ...(merged ? { merge_commit_sha: "f".repeat(40), merged_at: "2026-09-28T12:30:00Z",
       merged_by: { login: bot, type: "Bot" } } : {}) });
   const fetcher = (async (request: string | URL | Request, init?: RequestInit) => {
@@ -224,6 +226,7 @@ function mergeFixture(options: { authorized?: boolean; merged?: boolean; head?: 
         draft = false;
         return Response.json({ data: { markPullRequestReadyForReview: { pullRequest: { id: "PR_node_17" } } } });
       }
+      if (!draft && options.retargetBeforeMerge) baseRef = "other-branch";
       return Response.json({ data: { node: { id: "PR_node_17", headRefOid: "e".repeat(40),
         isDraft: draft, mergeStateStatus: draft ? "DRAFT" : options.mergeState ?? "CLEAN" } } });
     }
@@ -273,7 +276,7 @@ test("wrong head or App author, required checks and stale authority block merge"
   const { mergeAliceCodingPullRequest } = await import("../src/alice-coding-publish");
   const value = await mergeInput();
   for (const options of [{ head: "a".repeat(40) }, { author: "other-app[bot]" },
-    { mergeState: "BLOCKED" }, { authorized: false }]) {
+    { mergeState: "BLOCKED" }, { authorized: false }, { retargetBeforeMerge: true }]) {
     const state = mergeFixture(options);
     const response = await mergeAliceCodingPullRequest(await request(value), state.env as any, state.fetcher);
     expect(await response.json()).toMatchObject({ ok: false, outcome: "not-merged" });

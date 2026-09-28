@@ -380,6 +380,12 @@ export async function mergeAliceCodingPullRequest(
     }
     if (input.intent.expiresAt <= Date.now()) throw new Error("CODING_MERGE_APPROVAL_EXPIRED");
     await checkAuthority(input, env);
+    // GitHub's merge API binds the head SHA; check the PR target immediately before submission.
+    pull = await readPull();
+    if (pull.merged === true) return Response.json({ ok: true, reconciled: true,
+      result: mergedReceipt(pull, input, botLogin) });
+    if (pull.state !== "open" || pull.draft !== false) throw new Error("CODING_MERGE_BLOCKED");
+    if (input.intent.expiresAt <= Date.now()) throw new Error("CODING_MERGE_APPROVAL_EXPIRED");
     mergeAttempted = true;
     const merged = await githubRequest(fetcher, token, repo, `${path}/merge`, "PUT", {
       sha: input.request.headCommit, merge_method: "squash",

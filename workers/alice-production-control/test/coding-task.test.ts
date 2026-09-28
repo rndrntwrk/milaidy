@@ -96,6 +96,7 @@ test("owner task-ID reconciliation persists original proof after expiry and cann
   const taskId = "task-cap-00000000-0000-4000-8000-000000000003";
   const sourceTaskId = "task-cap-00000000-0000-4000-8000-000000000001";
   const requestedAt = Date.now() - 900_000;
+  const mergedAt = new Date(requestedAt + 20_000).toISOString().replace(/\.\d{3}Z$/, "Z");
   const merge = { repository: request.repository, sourceTaskId, pullRequestNumber: 17,
     headCommit: "e".repeat(40) };
   const binding = { programDigest: digest("2"), releaseDigest: digest("3"), policyHash: digest("4") };
@@ -144,7 +145,7 @@ test("owner task-ID reconciliation persists original proof after expiry and cann
       expect(body.intent).toEqual(intent);
       return Response.json({ ok: true, reconciled: true, result: { ...merge,
         pullRequestUrl: `https://github.com/${merge.repository}/pull/17`,
-        mergeCommit: "f".repeat(40), mergedAt: new Date(requestedAt + 20_000).toISOString(),
+        mergeCommit: "f".repeat(40), mergedAt,
         mergedBy: "alice-rndrntwrk-coding[bot]", mergeMethod: "squash" } });
     } },
     ALICE_EVIDENCE_QUEUE: { async send() { throw new Error("queue temporarily unavailable"); } },
@@ -158,6 +159,11 @@ test("owner task-ID reconciliation persists original proof after expiry and cann
   expect(await response.json()).toMatchObject({ ok: true, status: "completed", evidencePending: true });
   expect(authorityCalls).toBe(0);
   expect(hostCalls).toBe(1);
+  const proof = records.get(`approvalReceipt:merge-receipt-${intent.capabilityId}`).payload;
+  expect(proof.result.mergedAt).toBe(mergedAt);
+  expect(proof.evidence.occurredAt).toBe(new Date(mergedAt).toISOString());
+  const { validateEvidenceRecord } = await import("../src/evidence");
+  expect(validateEvidenceRecord(proof.evidence)).toEqual({ ok: true });
   records.set(`work:${work.workId}`, { payload: { ...work, state: "blocked", code: "CODING_MERGE_BLOCKED" } });
   const taskPath = `/control/api/v1/coding/tasks/${taskId}`;
   const readback = await handleOwnerApi(new Request(`https://alice.rndrntwrk.com${taskPath}`),
