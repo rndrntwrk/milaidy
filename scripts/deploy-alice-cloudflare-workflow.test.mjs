@@ -438,6 +438,7 @@ test("preimport verifies the original build then attests host bytes before boots
   assert.doesNotMatch(providerPreflight.run, /console\.log\((provider|response|process\.env)/);
   const ordered = [
     'Verify imported image evidence and immutable Worker identities',
+    'Install pinned coding Sandbox dependency',
     'Build exact host Workers while preserving the qualified runtime image',
     'Attest exact controller host Worker artifact',
     'Upload immutable controller host Worker artifact',
@@ -448,6 +449,11 @@ test("preimport verifies the original build then attests host bytes before boots
   const original = namedWorkflowSteps(preimport).find(step => step.name === 'Verify imported image evidence and immutable Worker identities').block;
   assert.match(original, /build-cloud-agent\.yml/);
   assert.match(original, /--source-digest "\$SOURCE_SHA"/);
+  const sandboxDependency = namedWorkflowSteps(preimport).find(step => step.name === 'Install pinned coding Sandbox dependency').run;
+  assert.match(sandboxDependency, /cd workers\/alice-coding-sandbox/);
+  assert.match(sandboxDependency, /bun install --frozen-lockfile --ignore-scripts/);
+  assert.ok(sandboxDependency.includes('require("./node_modules/@cloudflare/sandbox/package.json").version'));
+  assert.match(sandboxDependency, /= "0\.12\.10"/);
   const build = namedWorkflowSteps(preimport).find(step => step.name === 'Build exact host Workers while preserving the qualified runtime image').block;
   assert.match(build, /ALICE_DEPLOYMENT_CONTROLLER_COMMIT:/);
   assert.doesNotMatch(build, /docker|push_image/);
