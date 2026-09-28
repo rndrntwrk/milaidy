@@ -49,6 +49,19 @@ export async function githubJsonResponse(
   return value as Record<string, unknown>;
 }
 
+export async function codingAppBotLogin(
+  env: GitHubAppEnvironment, fetcher: typeof fetch,
+): Promise<string> {
+  const app = await githubJsonResponse(await fetcher("https://api.github.com/app", {
+    headers: githubHeaders(appJwt(env)),
+  }));
+  if (String(app.id) !== env.ALICE_GITHUB_APP_ID?.trim() ||
+    typeof app.slug !== "string" || !/^[a-z0-9-]{1,100}$/.test(app.slug)) {
+    throw new Error("CODING_GITHUB_APP_INVALID");
+  }
+  return `${app.slug}[bot]`;
+}
+
 export async function codingRepositoryToken(
   repository: string,
   permissions: { contents: "read" | "write"; metadata: "read"; pull_requests?: "write" },

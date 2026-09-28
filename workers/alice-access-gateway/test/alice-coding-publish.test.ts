@@ -172,3 +172,111 @@ test("wrong, expired, patch-only and altered task authority cannot publish", asy
     fixture().env as any, state.fetcher);
   expect(wrongSignature.status).toBe(403);
 });
+
+async function mergeInput() {
+  const { aliceCodingMergeArgumentHash } = await import("../../alice-production-control/src/coding-task");
+  const requestedAt = Date.now() - 1_000;
+  const request = { repository, sourceTaskId: taskId, pullRequestNumber: 17,
+    headCommit: "e".repeat(40) };
+  const mergeTaskId = "task-cap-00000000-0000-4000-8000-000000000002";
+  return { schemaVersion: "alice.coding-merge.v1", reconcileOnly: false,
+    taskId: mergeTaskId, actor, admission, request, requestedAt,
+    sourceResult: { branch, commitSha: request.headCommit, baseCommit,
+      pullRequestUrl: `https://github.com/${repository}/pull/17` },
+    intent: { intentId: `intent-${mergeTaskId.slice(5)}`, action: "repository.merge",
+      target: repository, argumentHash: await aliceCodingMergeArgumentHash(request),
+      nonce: "nonce-owner-merge-test", expiresAt: requestedAt + 600_000,
+      capabilityId: mergeTaskId.slice(5), ...binding } };
+}
+
+function mergeFixture(options: { authorized?: boolean; merged?: boolean; head?: string;
+  author?: string; mergeState?: string; loseResponse?: boolean; settingsChanged?: boolean } = {}) {
+  const env = fixture(options.authorized ?? true).env;
+  const bot = "alice-rndrntwrk-coding[bot]";
+  let merged = options.merged ?? false;
+  let draft = !merged;
+  let puts = 0;
+  let ready = 0;
+  const pull = () => ({ number: 17, node_id: "PR_node_17", state: merged ? "closed" : "open",
+    html_url: `https://github.com/${repository}/pull/17`, draft, merged,
+    user: { login: options.author ?? bot, type: "Bot" },
+    head: { ref: branch, sha: options.head ?? "e".repeat(40), repo: { full_name: repository } },
+    base: { ref: "main", repo: { full_name: repository } },
+    ...(merged ? { merge_commit_sha: "f".repeat(40), merged_at: "2026-09-28T12:30:00Z",
+      merged_by: { login: bot, type: "Bot" } } : {}) });
+  const fetcher = (async (request: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(request));
+    const method = init?.method ?? "GET";
+    const path = url.pathname;
+    if (path === "/app") return Response.json({ id: 5052363, slug: "alice-rndrntwrk-coding" });
+    if (path === `/repos/${repository}/installation`) return Response.json({ id: 164209774,
+      app_id: 5052363, account: { login: "Render-Network-OS" }, suspended_at: null });
+    if (path === "/app/installations/164209774/access_tokens") return Response.json({
+      token: "ghs_one-repository-write-token" });
+    if (path === `/repos/${repository}`) return Response.json({
+      default_branch: options.settingsChanged ? "renamed-main" : "main",
+      archived: options.settingsChanged ?? false, allow_squash_merge: !options.settingsChanged });
+    if (path === `/repos/${repository}/pulls/17` && method === "GET") return Response.json(pull());
+    if (path === "/graphql") {
+      const query = JSON.parse(String(init?.body)).query;
+      if (query.startsWith("mutation")) {
+        ready += 1;
+        draft = false;
+        return Response.json({ data: { markPullRequestReadyForReview: { pullRequest: { id: "PR_node_17" } } } });
+      }
+      return Response.json({ data: { node: { id: "PR_node_17", headRefOid: "e".repeat(40),
+        isDraft: draft, mergeStateStatus: draft ? "DRAFT" : options.mergeState ?? "CLEAN" } } });
+    }
+    if (path === `/repos/${repository}/pulls/17/merge` && method === "PUT") {
+      puts += 1;
+      expect(JSON.parse(String(init?.body))).toEqual({ sha: "e".repeat(40), merge_method: "squash" });
+      merged = true;
+      if (options.loseResponse) throw new Error("provider response lost");
+      return Response.json({ merged: true, sha: "f".repeat(40) });
+    }
+    throw new Error(`unexpected merge call ${method} ${url}`);
+  }) as typeof fetch;
+  return { env, fetcher, counts: () => ({ puts, ready }) };
+}
+
+test("exact owner approval merges Alice's draft once and reconciles a lost provider response", async () => {
+  const { mergeAliceCodingPullRequest } = await import("../src/alice-coding-publish");
+  const value = await mergeInput();
+  const state = mergeFixture({ loseResponse: true });
+  const first = await mergeAliceCodingPullRequest(await request(value), state.env as any, state.fetcher);
+  expect(await first.json()).toMatchObject({ ok: false, outcome: "unknown" });
+  const retry = await mergeAliceCodingPullRequest(await request({ ...value, reconcileOnly: true }),
+    state.env as any, state.fetcher);
+  expect(await retry.json()).toMatchObject({ ok: true, reconciled: true, result: {
+    repository, sourceTaskId: taskId, headCommit: "e".repeat(40), mergeCommit: "f".repeat(40),
+    mergedBy: "alice-rndrntwrk-coding[bot]", mergeMethod: "squash" } });
+  expect(state.counts()).toEqual({ puts: 1, ready: 1 });
+});
+
+test("merged exact PR reconciles after expiry and authority denial, but unmerged PR cannot write", async () => {
+  const { mergeAliceCodingPullRequest } = await import("../src/alice-coding-publish");
+  const input = await mergeInput();
+  const requestedAt = Date.now() - 900_000;
+  const value = { ...input, reconcileOnly: true, requestedAt,
+    intent: { ...input.intent, expiresAt: requestedAt + 600_000 } };
+  const state = mergeFixture({ merged: true, authorized: false, settingsChanged: true });
+  expect((await (await mergeAliceCodingPullRequest(await request(value), state.env as any,
+    state.fetcher)).json())).toMatchObject({ ok: true, reconciled: true });
+  expect(state.counts()).toEqual({ puts: 0, ready: 0 });
+  const unmerged = mergeFixture({ authorized: false });
+  expect(await (await mergeAliceCodingPullRequest(await request(value), unmerged.env as any,
+    unmerged.fetcher)).json()).toMatchObject({ ok: false, code: "CODING_MERGE_NOT_MERGED" });
+  expect(unmerged.counts()).toEqual({ puts: 0, ready: 0 });
+});
+
+test("wrong head or App author, required checks and stale authority block merge", async () => {
+  const { mergeAliceCodingPullRequest } = await import("../src/alice-coding-publish");
+  const value = await mergeInput();
+  for (const options of [{ head: "a".repeat(40) }, { author: "other-app[bot]" },
+    { mergeState: "BLOCKED" }, { authorized: false }]) {
+    const state = mergeFixture(options);
+    const response = await mergeAliceCodingPullRequest(await request(value), state.env as any, state.fetcher);
+    expect(await response.json()).toMatchObject({ ok: false, outcome: "not-merged" });
+    expect(state.counts().puts).toBe(0);
+  }
+});

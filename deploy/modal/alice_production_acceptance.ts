@@ -766,7 +766,8 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         health.value.release?.runtimeImage !== expected.release.runtimeImage ||
         health.value.release?.deploymentManifestSha256 !==
           expected.release.deploymentManifestSha256 ||
-        health.value.controls?.highRiskActions !== "disabled" ||
+        health.value.controls?.highRiskActions !==
+          "disabled-except-exact-owner-webauthn-repository-merge" ||
         health.value.controls?.capabilityGrant !==
           "owner-access-plus-device-bound-webauthn-single-use-coding-grant") invalid();
 

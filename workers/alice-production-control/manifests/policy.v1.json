@@ -18,13 +18,13 @@
   "capabilityActions": [
     "sandbox.execute",
     "coding.patch.sandbox",
-    "coding.pr.create"
+    "coding.pr.create",
+    "repository.merge"
   ],
   "disabledActions": [
     "social.post",
     "social.message",
     "production.deploy",
-    "repository.merge",
     "trade.execute",
     "funds.withdraw",
     "funds.bridge",
@@ -63,7 +63,7 @@
     "stream": "installed-but-disabled",
     "social": "native owner conversations only; connector plane inert",
     "trading": "installed-but-disabled",
-    "codingExecution": "owner-passkey-approved isolated sandbox tasks; draft pull requests require exact task approval",
+    "codingExecution": "owner-passkey-approved isolated sandbox tasks; draft pull requests require exact task approval; high-risk App squash merges require fresh owner passkey approval of the exact source task, PR and head commit with repository protections enforced",
     "signing": "not-present"
   },
   "nativeOwnerConversations": {

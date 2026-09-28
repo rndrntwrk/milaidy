@@ -46,7 +46,6 @@ export const ALICE_DISABLED_ACTIONS = Object.freeze([
   "social.post",
   "social.message",
   "production.deploy",
-  "repository.merge",
   "trade.execute",
   "funds.withdraw",
   "funds.bridge",
@@ -81,6 +80,7 @@ export const ALICE_CAPABILITY_ACTIONS = Object.freeze([
   "sandbox.execute",
   "coding.patch.sandbox",
   "coding.pr.create",
+  "repository.merge",
 ]);
 
 const DISABLED_ACTIONS = new Set(ALICE_DISABLED_ACTIONS);
@@ -114,7 +114,7 @@ export function authorizeIntent(
   ) {
     return { allowed: false, code: "INTENT_INVALID", risk: "unknown" };
   }
-  const risk = DISABLED_ACTIONS.has(intent.action)
+  const risk = intent.action === "repository.merge" || DISABLED_ACTIONS.has(intent.action)
     ? "high"
     : LOW_RISK_ACTIONS.has(intent.action)
       ? "low"
@@ -136,7 +136,7 @@ export function authorizeIntent(
   }
   if (
     (intent.action === "sandbox.execute" || intent.action === "coding.patch.sandbox" ||
-      intent.action === "coding.pr.create") &&
+      intent.action === "coding.pr.create" || intent.action === "repository.merge") &&
     context.pausedScopes.includes("coding")
   ) {
     return { allowed: false, code: "PAUSED_CODING", risk };
@@ -148,18 +148,18 @@ export function authorizeIntent(
     return { allowed: true, code: "AUTONOMOUS_LOW_RISK", risk: "low" };
   }
   if (CAPABILITY_ACTIONS.has(intent.action) && !context.capability) {
-    return { allowed: false, code: "CAPABILITY_REQUIRED", risk: "low" };
+    return { allowed: false, code: "CAPABILITY_REQUIRED", risk };
   }
   if (CAPABILITY_ACTIONS.has(intent.action) && context.capability) {
     const capability = context.capability;
     if (!Number.isFinite(capability.expiresAt) || capability.expiresAt <= context.now) {
-      return { allowed: false, code: "CAPABILITY_EXPIRED", risk: "low" };
+      return { allowed: false, code: "CAPABILITY_EXPIRED", risk };
     }
     if (capability.revokedAt !== null) {
-      return { allowed: false, code: "CAPABILITY_REVOKED", risk: "low" };
+      return { allowed: false, code: "CAPABILITY_REVOKED", risk };
     }
     if (capability.usedAt !== null) {
-      return { allowed: false, code: "CAPABILITY_CONSUMED", risk: "low" };
+      return { allowed: false, code: "CAPABILITY_CONSUMED", risk };
     }
     if (
       !bindingsMatch(capability, context.binding) ||
@@ -173,9 +173,9 @@ export function authorizeIntent(
       capability.rollbackBoundary.trim().length === 0 ||
       capability.nonce.trim().length === 0
     ) {
-      return { allowed: false, code: "CAPABILITY_MISMATCH", risk: "low" };
+      return { allowed: false, code: "CAPABILITY_MISMATCH", risk };
     }
-    return { allowed: true, code: "CAPABILITY_AUTHORIZED", risk: "low" };
+    return { allowed: true, code: "CAPABILITY_AUTHORIZED", risk };
   }
   return { allowed: false, code: "ACTION_NOT_ADMITTED", risk };
 }

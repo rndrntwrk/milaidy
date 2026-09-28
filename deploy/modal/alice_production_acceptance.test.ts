@@ -415,7 +415,7 @@ function mockRuntime(
         authority: authority(),
         release: { ...data.expected.release, ...data.binding },
         controls: {
-          highRiskActions: "disabled",
+          highRiskActions: "disabled-except-exact-owner-webauthn-repository-merge",
           capabilityGrant: "owner-access-plus-device-bound-webauthn-single-use-coding-grant",
         },
       });
@@ -591,6 +591,23 @@ function acceptanceInput(data: ReturnType<typeof fixture>, runtime: ReturnType<t
 }
 
 describe("Alice terminal production acceptance", () => {
+  test("rejects a serving high-risk policy outside exact owner-approved merges", async () => {
+    const data = containerFixture();
+    const runtime = mockRuntime(data);
+    const input = acceptanceInput(data, runtime);
+    input.fetchImpl = async (url, init) => {
+      const response = await runtime.fetchImpl(url, init);
+      if (new URL(String(url)).pathname !== "/control/health") return response;
+      const health = await response.json();
+      health.controls.highRiskActions = "unrestricted";
+      return Response.json(health);
+    };
+    await expect(runAliceProductionAcceptance(input)).rejects.toThrow(
+      "ALICE_PRODUCTION_ACCEPTANCE_INVALID",
+    );
+    expect(runtime.paused).toBe(true);
+  });
+
   test("accepts Container Program v2 with exact Cloudflare image provenance", async () => {
     const data = containerFixture();
     const runtime = mockRuntime(data);

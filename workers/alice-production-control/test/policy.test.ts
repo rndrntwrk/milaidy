@@ -12,6 +12,22 @@ const alternateArgumentHash = `sha256:${"b".repeat(64)}`;
 const owner = `owner:sha256:${"c".repeat(64)}`;
 
 describe("Alice production policy", () => {
+  test("merge stays high risk and never runs autonomously or with a publication grant", () => {
+    const now = 1_787_400_000_000;
+    const intent = { intentId: "intent-owner-merge", action: "repository.merge",
+      capabilityId: "cap-owner-merge", target: "rndrntwrk/milaidy", argumentHash,
+      nonce: "nonce-owner-merge", expiresAt: now + 60_000, ...binding };
+    const context = { now, actor: owner, binding, pausedScopes: [], consumedNonces: [] };
+    expect(authorizeIntent(intent, { ...context, capability: null }))
+      .toEqual({ allowed: false, code: "CAPABILITY_REQUIRED", risk: "high" });
+    const grant = { capabilityId: intent.capabilityId, owner, scope: "repository.merge",
+      target: intent.target, argumentHash, nonce: intent.nonce, expiresAt: now + 60_000,
+      rollbackBoundary: "release:owner-merge", revokedAt: null, usedAt: null, ...binding };
+    expect(authorizeIntent(intent, { ...context, capability: grant }))
+      .toEqual({ allowed: true, code: "CAPABILITY_AUTHORIZED", risk: "high" });
+    expect(authorizeIntent(intent, { ...context, capability: { ...grant, scope: "coding.pr.create" } }))
+      .toEqual({ allowed: false, code: "CAPABILITY_MISMATCH", risk: "high" });
+  });
   test("denies high-risk actions even when release bindings are exact", () => {
     const now = 1_787_400_000_000;
     const decision = authorizeIntent(

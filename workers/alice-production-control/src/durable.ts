@@ -607,6 +607,11 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
         if (!credential || credential.owner !== actor) {
           return jsonResponse({ ok: false, code: "WEBAUTHN_CREDENTIAL_REQUIRED" }, 403);
         }
+        const scope = body.scope;
+        if (scope !== "coding.patch.sandbox" && scope !== "coding.pr.create" &&
+          scope !== "repository.merge") {
+          return jsonResponse({ ok: false, code: "WEBAUTHN_APPROVAL_INVALID" }, 400);
+        }
         const options = await approvalOptions(credential);
         const capabilityId = `cap-${crypto.randomUUID()}`;
         const nonce = `nonce-${crypto.randomUUID()}`;
@@ -619,7 +624,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
             capabilityId,
             nonce,
             Date.now(),
-            body.scope === "coding.pr.create" ? "coding.pr.create" : "coding.patch.sandbox",
+            scope,
           ),
           (result) => result.ok,
         );
@@ -628,7 +633,7 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
               ok: true,
               options,
               approval: {
-                action: body.scope === "coding.pr.create" ? "coding.pr.create" : "coding.patch.sandbox",
+                action: scope,
                 target: String(body.target),
                 argumentHash: String(body.argumentHash),
                 expiresAt: Date.now() + 300_000,

@@ -1,7 +1,7 @@
 export { ContainerProxy } from "@cloudflare/containers";
 export { AliceRuntimeContainer } from "./alice-runtime-container";
 import { fetchAliceCodingArchive } from "./alice-coding-archive";
-import { publishAliceCodingTask, type AliceCodingPublishEnv } from "./alice-coding-publish";
+import { mergeAliceCodingPullRequest, publishAliceCodingTask, type AliceCodingPublishEnv } from "./alice-coding-publish";
 import {
   forwardToAliceAiGateway,
   type AliceRuntimeContainerEnvironmentSource,
@@ -16,6 +16,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/internal/v1/coding/publish") {
       return publishAliceCodingTask(request, env);
+    }
+    if (url.pathname === "/internal/v1/coding/merge") {
+      return mergeAliceCodingPullRequest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/internal/v1/coding/archive") {
       try {
