@@ -16,6 +16,8 @@ const { mockClient, mockOpenExternalUrl, mockUseApp, mockPopupClose } =
       getCloudCompatAgentManagedGithub: vi.fn(),
       getCloudCompatAgents: vi.fn(),
       getLifeOpsOverview: vi.fn(),
+      getRuntimeProfile: vi.fn(),
+      getAliceProductionCapabilities: vi.fn(),
       initiateCloudOauth: vi.fn(),
       linkCloudCompatAgentManagedGithub: vi.fn(),
       listCloudOauthConnections: vi.fn(),
@@ -34,6 +36,11 @@ let previousWindow: Window | undefined;
 
 vi.mock("../../api", () => ({
   client: mockClient,
+}));
+
+vi.mock("../../platform", async () => ({
+  ...(await import("../../platform/lifeops-github")),
+  isWebPlatform: () => true,
 }));
 
 vi.mock("../../state", () => ({
@@ -308,6 +315,8 @@ describe("LifeOpsPageView", () => {
     mockClient.getCloudCompatAgentManagedGithub.mockReset();
     mockClient.getCloudCompatAgents.mockReset();
     mockClient.getLifeOpsOverview.mockReset();
+    mockClient.getRuntimeProfile.mockReset().mockResolvedValue("standard");
+    mockClient.getAliceProductionCapabilities.mockReset();
     mockClient.initiateCloudOauth.mockReset();
     mockClient.linkCloudCompatAgentManagedGithub.mockReset();
     mockClient.listCloudOauthConnections.mockReset();
@@ -565,5 +574,72 @@ describe("LifeOpsPageView", () => {
 
     expect(hasText(renderer!.root, "Connect Eliza Cloud first")).toBe(true);
     expect(mockClient.listCloudOauthConnections).not.toHaveBeenCalled();
+  });
+  it("uses verified Alice App access without mounting unsupported setup panels", async () => {
+    mockClient.getRuntimeProfile.mockResolvedValue("alice-full-gated");
+    mockClient.getAliceProductionCapabilities.mockResolvedValue({
+      githubCoding: {
+        configured: true,
+        verification: "verified",
+        installations: [
+          {
+            installationId: 164209371,
+            accountLogin: "rndrntwrk",
+            repositorySelection: "all",
+          },
+        ],
+      },
+    });
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(LifeOpsPageView));
+      await flush();
+    });
+    expect(hasText(renderer!.root, "Connected to @rndrntwrk")).toBe(true);
+    expect(hasText(renderer!.root, "All repositories")).toBe(true);
+    expect(hasText(renderer!.root, "Sleep better")).toBe(true);
+    expect(
+      renderer!.root.findAllByProps({ "data-testid": "lifeops-settings-stub" }),
+    ).toHaveLength(0);
+    expect(
+      renderer!.root.findAllByProps({
+        "data-testid": "lifeops-workspace-stub",
+      }),
+    ).toHaveLength(0);
+    expect(mockClient.listCloudOauthConnections).not.toHaveBeenCalled();
+    expect(mockClient.getCloudCompatAgents).not.toHaveBeenCalled();
+  });
+
+  it("does not claim a configured App is connected or mount setup before profile is known", async () => {
+    let resolveProfile: (value: string) => void;
+    mockClient.getRuntimeProfile.mockReturnValue(
+      new Promise((resolve) => {
+        resolveProfile = resolve;
+      }),
+    );
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(LifeOpsPageView));
+      await flush();
+    });
+    expect(
+      renderer!.root.findAllByProps({ "data-testid": "lifeops-settings-stub" }),
+    ).toHaveLength(0);
+    expect(mockClient.listCloudOauthConnections).not.toHaveBeenCalled();
+    mockClient.getAliceProductionCapabilities.mockResolvedValue({
+      githubCoding: {
+        configured: true,
+        verification: "unavailable",
+        installations: [],
+      },
+    });
+    await act(async () => {
+      resolveProfile!("alice-full-gated");
+      await flush();
+    });
+    expect(
+      hasText(renderer!.root, "configured, but access could not be verified"),
+    ).toBe(true);
+    expect(hasText(renderer!.root, "Connected to @")).toBe(false);
   });
 });

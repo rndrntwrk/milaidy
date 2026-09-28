@@ -43,6 +43,25 @@ async function invoke(pathname: string, state: HealthRouteState) {
 describe("Alice production health truth", () => {
   afterEach(() => vi.unstubAllEnvs());
 
+  it.each([
+    [undefined, "full-gated", "standard"],
+    ["proposer-only", undefined, "alice-response-only"],
+    ["proposer-only", "full-gated", "alice-full-gated"],
+  ])(
+    "reports the authoritative health runtime profile as %s / %s => %s",
+    async (authorityMode, profile, runtimeProfile) => {
+      vi.stubEnv("ALICE_RUNTIME_AUTHORITY_MODE", authorityMode);
+      vi.stubEnv("ALICE_RUNTIME_PROFILE", profile);
+
+      await expect(
+        invoke("/api/health", productionState("running", null)),
+      ).resolves.toMatchObject({
+        status: 200,
+        data: { runtimeProfile },
+      });
+    },
+  );
+
   it.each(["stopped", "error"])(
     "keeps a retained runtime out of readiness and proof while %s",
     async (agentState) => {
@@ -126,10 +145,27 @@ describe("Alice production health truth", () => {
       };
       for (const [key, value] of Object.entries(releaseEnv)) vi.stubEnv(key, value);
 
+      const githubCoding = {
+        configured: true,
+        verification: "verified",
+        installations: [
+          {
+            installationId: 456,
+            accountLogin: "rndrntwrk",
+            repositorySelection: "selected",
+          },
+        ],
+      };
       await expect(
         invoke(
           "/api/alice-production/capabilities",
-          productionState("running", { plugins: [] }),
+          productionState("running", {
+            plugins: [],
+            getService: (type: string) =>
+              type === "ALICE_GITHUB_INSTALLATION"
+                ? { readCodingStatus: async () => githubCoding }
+                : null,
+          }),
         ),
       ).resolves.toMatchObject({
         status: 200,
@@ -137,6 +173,7 @@ describe("Alice production health truth", () => {
           schemaVersion: "alice.production-capabilities.v1",
           capabilityBomSha256: digest,
           entries: [{ id: "internal:alice-full-runtime", callable: true }],
+          githubCoding,
         },
       });
       await expect(

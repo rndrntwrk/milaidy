@@ -51,6 +51,11 @@ describe("Alice authenticated owner capability readback", () => {
       capabilityBomSha256: digest,
       counts: { core: 1 },
       release: { sourceCommit: "4".repeat(40), capabilityBomSha256: digest },
+      githubCoding: {
+        configured: false,
+        verification: "unavailable",
+        installations: [],
+      },
       entries: [
         {
           id: "package:@fixture/plugin-core",

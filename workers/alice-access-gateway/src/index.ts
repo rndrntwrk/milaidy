@@ -656,11 +656,13 @@ async function canonicalSafeRuntimeResponse(
         "plugins",
         "ready",
         "runtime",
+        "runtimeProfile",
         "startup",
         "uptime",
       ]) ||
       value.ready !== true ||
       value.agentState !== "running" ||
+      value.runtimeProfile !== "alice-response-only" ||
       value.runtime !== "ok" ||
       value.database !== "ok" ||
       !isNonNegativeSafeInteger(value.uptime) ||
@@ -682,6 +684,7 @@ async function canonicalSafeRuntimeResponse(
       ready: true,
       agentState: "running",
       runtime: "ok",
+      runtimeProfile: "alice-response-only",
       release: value.aliceRelease,
     });
   }
@@ -1202,6 +1205,7 @@ function isFullRuntimeUiPath(pathname: string): boolean {
   if (
     pathname === "/" ||
     pathname === "/companion" ||
+    pathname === "/lifeops" ||
     /^\/broadcast\/[a-zA-Z0-9-]+$/.test(pathname)
   ) {
     return true;
@@ -1423,6 +1427,12 @@ export async function handleRequest(
 
     if (path === "/api/alice-production/proof" && request.method === "GET") {
       return jsonResponse(upstreamProof.proof);
+    }
+
+    if (fullRuntime && path === "/lifeops" && requestUrl.pathname !== "/lifeops") {
+      const canonical = new URL(request.url);
+      canonical.pathname = "/lifeops";
+      return Response.redirect(canonical.toString(), 308);
     }
 
     // Assign path and query components on a clone of the pinned upstream.
