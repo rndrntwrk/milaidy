@@ -10,7 +10,13 @@ import {
   type GitHubAppEnvironment,
 } from "./alice-coding-archive";
 
-type Change = { path: string; mode: "100644" | "100755"; contentB64: string | null };
+type Change = {
+  path: string;
+  mode: "100644" | "100755";
+  originalSha: string | null;
+  resultSha: string | null;
+  replacement: { offset: number; deleteBytes: number; insertB64: string };
+};
 type PublishInput = {
   schemaVersion: "alice.coding-publish.v1";
   taskId: string;
@@ -70,11 +76,21 @@ async function validateInput(value: unknown): Promise<PublishInput> {
     new TextEncoder().encode(JSON.stringify(input.result.changes)).byteLength > 110_000) invalid();
   const paths = new Set<string>();
   for (const change of input.result.changes) {
-    if (!change || typeof change !== "object" || !validPath(change.path) ||
+    if (!change || typeof change !== "object" || Array.isArray(change) ||
+      Object.keys(change).sort().join(",") !== "mode,originalSha,path,replacement,resultSha" ||
+      typeof change.path !== "string" || !validPath(change.path) ||
       paths.has(change.path) || !["100644", "100755"].includes(change.mode) ||
-      (change.contentB64 !== null &&
-        (typeof change.contentB64 !== "string" ||
-          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(change.contentB64)))) invalid();
+      (change.originalSha !== null && (typeof change.originalSha !== "string" || !SHA.test(change.originalSha))) ||
+      (change.resultSha !== null && (typeof change.resultSha !== "string" || !SHA.test(change.resultSha))) ||
+      (change.originalSha === null && change.resultSha === null) ||
+      !change.replacement || typeof change.replacement !== "object" || Array.isArray(change.replacement) ||
+      Object.keys(change.replacement).sort().join(",") !== "deleteBytes,insertB64,offset" ||
+      !Number.isSafeInteger(change.replacement.offset) || change.replacement.offset < 0 ||
+      !Number.isSafeInteger(change.replacement.deleteBytes) || change.replacement.deleteBytes < 0 ||
+      typeof change.replacement.insertB64 !== "string" ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(change.replacement.insertB64) ||
+      (change.originalSha === null && (change.replacement.offset !== 0 || change.replacement.deleteBytes !== 0)) ||
+      (change.resultSha === null && change.replacement.insertB64 !== "")) invalid();
     paths.add(change.path);
   }
   if (await aliceCodingResultSha256(input.result) !== input.resultSha256) invalid();
@@ -121,6 +137,29 @@ async function githubRequest(
 function requireSha(value: unknown): string {
   if (typeof value !== "string" || !SHA.test(value)) invalid();
   return value;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 8_192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8_192));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(encoded: string): Uint8Array {
+  const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+  if (bytesToBase64(bytes) !== encoded) invalid();
+  return bytes;
+}
+
+async function gitBlobSha(bytes: Uint8Array): Promise<string> {
+  const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
+  const payload = new Uint8Array(header.length + bytes.length);
+  payload.set(header);
+  payload.set(bytes, header.length);
+  const digest = await crypto.subtle.digest("SHA-1", payload);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function prResult(value: Record<string, unknown>, input: PublishInput, commitSha: string,
@@ -170,13 +209,68 @@ export async function publishAliceCodingTask(
         throw new Error("CODING_BASE_MOVED");
       }
     } else if (!branchRef.ok) throw new Error("CODING_GITHUB_UNAVAILABLE");
+    const baseTrees = new Map<string, Record<string, unknown>[]>();
     const treeChanges: Array<{ path: string; mode: string; type: "blob"; sha: string | null }> = [];
     for (const change of input.result.changes) {
-      let blobSha: string | null = null;
-      if (change.contentB64 !== null) {
+      // Resolve the original path from the immutable approved commit, never an arbitrary blob SHA.
+      let originalEntry: Record<string, unknown> | undefined;
+      let parentTree = baseTree;
+      const parts = change.path.split("/");
+      for (let index = 0; index < parts.length; index += 1) {
+        let entries = baseTrees.get(parentTree);
+        if (!entries) {
+          const tree = await githubJsonResponse(await githubRequest(fetcher, token, repo,
+            `/git/trees/${parentTree}`));
+          if (tree.sha !== parentTree || tree.truncated === true || !Array.isArray(tree.tree)) {
+            throw new Error("CODING_SOURCE_BLOB_MISMATCH");
+          }
+          entries = tree.tree as Record<string, unknown>[];
+          baseTrees.set(parentTree, entries);
+        }
+        const entry = entries.find((candidate) => candidate?.path === parts[index]);
+        if (!entry) break;
+        if (index === parts.length - 1) originalEntry = entry;
+        else {
+          if (entry.type !== "tree" || entry.mode !== "040000") {
+            throw new Error("CODING_SOURCE_BLOB_MISMATCH");
+          }
+          parentTree = requireSha(entry.sha);
+        }
+      }
+      let original = new Uint8Array();
+      if (change.originalSha === null) {
+        if (originalEntry) throw new Error("CODING_SOURCE_BLOB_MISMATCH");
+      } else {
+        if (!originalEntry || originalEntry.type !== "blob" || typeof originalEntry.mode !== "string" ||
+          !["100644", "100755"].includes(originalEntry.mode) ||
+          originalEntry.sha !== change.originalSha ||
+          (change.resultSha === null && originalEntry.mode !== change.mode)) {
+          throw new Error("CODING_SOURCE_BLOB_MISMATCH");
+        }
         const blob = await githubJsonResponse(await githubRequest(fetcher, token, repo,
-          "/git/blobs", "POST", { content: change.contentB64, encoding: "base64" }));
+          `/git/blobs/${change.originalSha}`));
+        if (blob.sha !== change.originalSha || blob.encoding !== "base64" || typeof blob.content !== "string") {
+          throw new Error("CODING_SOURCE_BLOB_MISMATCH");
+        }
+        original = base64ToBytes(blob.content.replace(/\s/g, ""));
+        if (await gitBlobSha(original) !== change.originalSha) throw new Error("CODING_SOURCE_BLOB_MISMATCH");
+      }
+      const { offset, deleteBytes, insertB64 } = change.replacement;
+      if (offset > original.length || deleteBytes > original.length - offset) invalid();
+      const inserted = base64ToBytes(insertB64);
+      const reconstructed = new Uint8Array(original.length - deleteBytes + inserted.length);
+      reconstructed.set(original.subarray(0, offset));
+      reconstructed.set(inserted, offset);
+      reconstructed.set(original.subarray(offset + deleteBytes), offset + inserted.length);
+      let blobSha: string | null = null;
+      if (change.resultSha === null) {
+        if (reconstructed.length !== 0) invalid();
+      } else {
+        if (await gitBlobSha(reconstructed) !== change.resultSha) throw new Error("CODING_RESULT_BLOB_MISMATCH");
+        const blob = await githubJsonResponse(await githubRequest(fetcher, token, repo,
+          "/git/blobs", "POST", { content: bytesToBase64(reconstructed), encoding: "base64" }));
         blobSha = requireSha(blob.sha);
+        if (blobSha !== change.resultSha) throw new Error("CODING_RESULT_BLOB_MISMATCH");
       }
       treeChanges.push({ path: change.path, mode: change.mode, type: "blob", sha: blobSha });
     }

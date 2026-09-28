@@ -3,8 +3,8 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
 const COMMIT = /^[a-f0-9]{40}$/;
-// Runtime image inputs remain frozen. Control and both host modules are rebuilt
-// and attested; the other three Worker bytes must match the original build.
+// Runtime image inputs remain frozen. Control, both host modules and the coding
+// Sandbox are rebuilt and attested; the other Worker bytes retain their hashes.
 const CONTROLLER_PATHS = new Set([
   'workers/alice-production-control/src/coding-task.ts',
   'workers/alice-production-control/src/coding-merge.ts',
@@ -13,6 +13,8 @@ const CONTROLLER_PATHS = new Set([
   'workers/alice-production-control/src/coding-page.ts',
   'workers/alice-access-gateway/src/alice-coding-archive.ts',
   'workers/alice-access-gateway/src/alice-coding-publish.ts',
+  'workers/alice-coding-sandbox/src/index.ts',
+  'workers/alice-coding-sandbox/src/lease.ts',
   'workers/alice-access-gateway/src/runtime-host.ts',
   'workers/alice-production-control/test/coding-task.test.ts',
   'workers/alice-production-control/test/policy.test.ts',

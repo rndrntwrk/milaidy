@@ -7,7 +7,7 @@ import test from 'node:test';
 import { buildAliceHostWorkerArtifact } from './build-alice-host-worker-artifact.mjs';
 import { buildAliceWorkerBundleArtifact, serializeAliceWorkerBundleArtifact } from '../deploy/modal/alice_worker_bundle_artifact.mjs';
 
-test('rebuilds Control and both hosts while preserving stable Worker bytes and migrations', t => {
+test('rebuilds Control, both hosts and Sandbox while preserving stable Worker bytes and migrations', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alice-host-build-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   const sourceRoot = path.join(root, 'source');
@@ -52,7 +52,6 @@ if (process.argv[2] === 'versions' && process.argv[3] === 'upload') {
 }
 if (process.argv[2] !== 'deploy') process.exit(9);
 const worker = path.basename(path.dirname(config));
-if (worker === 'alice-coding-sandbox') process.exit(12);
 const unchanged = ['alice-ai-gateway', 'alice-state-plane', 'alice-connector-plane'].includes(worker);
 const emitted = worker === 'alice-access-gateway' ? (config.endsWith('wrangler.runtime-host.jsonc') ? 'runtime-host.js' : 'worker.js') : 'index.js';
 const content = unchanged ? 'original ' + worker + '\\n//# sourceMappingURL=index.js.map\\n' : 'rebuilt reviewed ' + worker + path.basename(config);
@@ -61,8 +60,8 @@ fs.writeFileSync(path.join(out, emitted), content);
   const options = {sourceRoot, sourceCommit, deploymentControllerCommit, baseRoot, wranglerBin};
   const result = buildAliceHostWorkerArtifact({...options, outputRoot: path.join(root, 'output')});
   assert.equal(result.sourceCommit, deploymentControllerCommit);
-  for (const role of ['control', 'access', 'runtimeHost']) assert.notEqual(result.bundles[role].sha256, base.bundles[role].sha256);
-  for (const role of ['aiGateway', 'statePlane', 'connectorPlane', 'codingSandbox']) {
+  for (const role of ['control', 'access', 'runtimeHost', 'codingSandbox']) assert.notEqual(result.bundles[role].sha256, base.bundles[role].sha256);
+  for (const role of ['aiGateway', 'statePlane', 'connectorPlane']) {
     assert.deepEqual(result.bundles[role], base.bundles[role]);
     const relative = `${base.bundles[role].path}.map`;
     assert.deepEqual(fs.readFileSync(path.join(root, 'output', relative)), fs.readFileSync(path.join(baseRoot, relative)));
