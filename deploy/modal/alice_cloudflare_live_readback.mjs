@@ -55,6 +55,13 @@ function readbackInvalid(context) {
   throw error;
 }
 
+async function readAll(promises) {
+  const results = await Promise.allSettled(promises);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+  return results.map((result) => result.value);
+}
+
 function validInputs({ apiToken, accountId, zoneId, baseUrl, fetchImpl }) {
   try {
     const url = new URL(baseUrl);
@@ -1122,26 +1129,28 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
   }
   const startedAt = now();
   try {
-    const providerState = await fetchAliceCloudflareProviderState({
-      fetchImpl,
-      apiToken,
-      ownerEmailSha256,
-      accessAudience,
-      releaseAccessAudience,
-      releaseServiceTokenIdSha256,
-      accountId,
-      zoneId,
-      baseUrl,
-      now,
-    });
-    const continuityState = await fetchAliceCloudflareContinuityState({
-      fetchImpl,
-      apiToken,
-      expectedDurableObjectNamespaceIds,
-      accountId,
-      zoneId,
-      baseUrl,
-    });
+    const [providerState, continuityState] = await readAll([
+      fetchAliceCloudflareProviderState({
+        fetchImpl,
+        apiToken,
+        ownerEmailSha256,
+        accessAudience,
+        releaseAccessAudience,
+        releaseServiceTokenIdSha256,
+        accountId,
+        zoneId,
+        baseUrl,
+        now,
+      }),
+      fetchAliceCloudflareContinuityState({
+        fetchImpl,
+        apiToken,
+        expectedDurableObjectNamespaceIds,
+        accountId,
+        zoneId,
+        baseUrl,
+      }),
+    ]);
     const workflowVersions =
       await fetchAliceCloudflareWorkflowVersionState({
         fetchImpl,
@@ -1234,7 +1243,7 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         }) : null;
     const workers = {};
     const workerTerminalAnchors = {};
-    for (const role of roles) {
+    await readAll(roles.map(async (role) => {
       const config = materializedWranglerConfigs[role];
       const expectedEffectiveConfig = expectedEffectiveConfigs[role];
       if (!config || config.name !== expectedWorkerName(role)) {
@@ -1322,28 +1331,30 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         scriptAndVersionSettings,
         subdomain,
       };
-    }
+    }));
 
-    const terminalProviderState = await fetchAliceCloudflareProviderState({
-      fetchImpl,
-      apiToken,
-      ownerEmailSha256,
-      accessAudience,
-      releaseAccessAudience,
-      releaseServiceTokenIdSha256,
-      accountId,
-      zoneId,
-      baseUrl,
-      now,
-    });
-    const terminalContinuityState = await fetchAliceCloudflareContinuityState({
-      fetchImpl,
-      apiToken,
-      expectedDurableObjectNamespaceIds,
-      accountId,
-      zoneId,
-      baseUrl,
-    });
+    const [terminalProviderState, terminalContinuityState] = await readAll([
+      fetchAliceCloudflareProviderState({
+        fetchImpl,
+        apiToken,
+        ownerEmailSha256,
+        accessAudience,
+        releaseAccessAudience,
+        releaseServiceTokenIdSha256,
+        accountId,
+        zoneId,
+        baseUrl,
+        now,
+      }),
+      fetchAliceCloudflareContinuityState({
+        fetchImpl,
+        apiToken,
+        expectedDurableObjectNamespaceIds,
+        accountId,
+        zoneId,
+        baseUrl,
+      }),
+    ]);
     const terminalWorkflowVersions =
       await fetchAliceCloudflareWorkflowVersionState({
         fetchImpl,
@@ -1435,7 +1446,7 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
         `/accounts/${accountId}/workers/durable_objects/namespaces`),
       expectedDurableObjectNamespaceIds.control,
     ))) readbackInvalid();
-    for (const role of roles) {
+    await readAll(roles.map(async (role) => {
       const config = materializedWranglerConfigs[role];
       const workerRoot = `/accounts/${accountId}/workers/scripts/${config.name}`;
       const terminalDeployment = latestDeployment(
@@ -1462,7 +1473,7 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       ) {
         readbackInvalid();
       }
-    }
+    }));
     const completedAt = now();
     const durationMs = completedAt - startedAt;
     if (
@@ -1471,7 +1482,7 @@ export async function fetchAliceCloudflarePostDeploymentReadback({
       durationMs < 0 ||
       durationMs >= 60_000
     ) {
-      readbackInvalid();
+      readbackInvalid({ stage: "post_deploy", category: "duration", durationMs });
     }
     return {
       schemaVersion: "alice.cloudflare-live-readback.v2",

@@ -1314,7 +1314,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
         return json({
           success: true,
           result: {
-            id: activeVersionIdentityDrift ? "wrong-version" : deploymentByWorker[worker].versions[0].version_id,
+            id: activeVersionIdentityDrift && worker === roles.access ? "wrong-version" : deploymentByWorker[worker].versions[0].version_id,
             main_module: "index.js",
             modules: [{
               name: "index.js",
@@ -1349,8 +1349,20 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
   };
 
   const verifiedRoles = [];
+  let activeDeploymentReads = 0;
+  let maxActiveDeploymentReads = 0;
   const postDeploymentInput = {
-    fetchImpl,
+    fetchImpl: async (url, options) => {
+      if (!new URL(url).pathname.endsWith("/deployments")) return fetchImpl(url, options);
+      activeDeploymentReads += 1;
+      maxActiveDeploymentReads = Math.max(maxActiveDeploymentReads, activeDeploymentReads);
+      try {
+        await new Promise((resolve) => setImmediate(resolve));
+        return await fetchImpl(url, options);
+      } finally {
+        activeDeploymentReads -= 1;
+      }
+    },
     apiToken: "read-only-token",
     ownerEmailSha256: fixtures.accessPolicyReadback.ownerEmailSha256,
     accessAudience,
@@ -1458,6 +1470,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     postDeploymentInput,
   );
   assert.equal(evidence.schemaVersion, "alice.cloudflare-live-readback.v2");
+  assert.ok(maxActiveDeploymentReads > 1, "independent Worker reads must overlap");
   assert.deepEqual(verifiedRoles.sort(), [
     "access",
     "aiGateway",
@@ -1482,6 +1495,15 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     );
   }
 
+  let slowClock = Date.parse("2026-08-22T12:00:00.000Z");
+  await assert.rejects(
+    () => fetchAliceCloudflarePostDeploymentReadback({
+      ...postDeploymentInput,
+      now: () => (slowClock += 60_000),
+    }),
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID.*"category":"duration"/,
+  );
+
   includeBoundRuntimeHostInstance = true;
   await fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput);
   assert.equal(instanceTelemetryTick, 4);
@@ -1492,6 +1514,7 @@ test("post-deploy readback fetches every Worker surface and brackets content wit
     () => fetchAliceCloudflarePostDeploymentReadback(postDeploymentInput),
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/,
   );
+  assert.equal(activeDeploymentReads, 0, "failed checks must finish their concurrent reads");
   activeVersionIdentityDrift = false;
 
   ownerPolicyStableThrough = ownerPolicyReads + 1;
