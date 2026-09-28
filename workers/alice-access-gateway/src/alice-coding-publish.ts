@@ -237,7 +237,7 @@ export async function publishAliceCodingTask(
           parentTree = requireSha(entry.sha);
         }
       }
-      let original = new Uint8Array();
+      let original: Uint8Array = new Uint8Array();
       if (change.originalSha === null) {
         if (originalEntry) throw new Error("CODING_SOURCE_BLOB_MISMATCH");
       } else {

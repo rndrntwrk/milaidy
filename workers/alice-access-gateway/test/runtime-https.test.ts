@@ -27,6 +27,68 @@ test("idle expiry does not stop native bot connections when the owner UI closes"
   expect(container.stop).not.toHaveBeenCalled();
 });
 
+test("Discord upgrades accept the container's key while retaining the upstream socket", async () => {
+  const originalFetch = globalThis.fetch;
+  const OriginalResponse = globalThis.Response;
+  const socket = {};
+  // Bun's Response has no Workers WebSocket extension.
+  class WorkerResponse extends OriginalResponse {
+    webSocket: unknown;
+    constructor(
+      body: BodyInit | null,
+      init: ResponseInit & { webSocket?: unknown },
+    ) {
+      super(body, init);
+      this.webSocket = init.webSocket ?? null;
+    }
+  }
+  globalThis.Response = WorkerResponse as typeof Response;
+  const upstream = new WorkerResponse(null, {
+    status: 101,
+    headers: {
+      upgrade: "websocket",
+      connection: "Upgrade",
+      "sec-websocket-accept": "XMQNELQ1vlcNTcFvxFddQaIfIAQ=",
+    },
+    webSocket: socket,
+  });
+  globalThis.fetch = mock(async () => upstream) as typeof fetch;
+  try {
+    const forward = AliceRuntimeContainer.outboundByHost!["gateway.discord.gg"];
+    const result = await forward(
+      new Request("https://gateway.discord.gg/?v=10&encoding=json", {
+        headers: {
+          upgrade: "websocket",
+          "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+        },
+      }),
+      {} as any,
+      { className: "AliceRuntimeContainer", containerId: "test-container" },
+    );
+    expect(result.status).toBe(101);
+    expect((result as WorkerResponse).webSocket).toBe(socket);
+    expect(result.headers.get("sec-websocket-accept")).toBe(
+      "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+    );
+    expect(upstream.headers.get("sec-websocket-accept")).toBe(
+      "XMQNELQ1vlcNTcFvxFddQaIfIAQ=",
+    );
+    const unavailable = new OriginalResponse("upstream unavailable", {
+      status: 503,
+    });
+    globalThis.fetch = mock(async () => unavailable) as typeof fetch;
+    expect(
+      await forward(new Request("https://gateway.discord.gg/"), {} as any, {
+        className: "AliceRuntimeContainer",
+        containerId: "test-container",
+      }),
+    ).toBe(unavailable);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.Response = OriginalResponse;
+  }
+});
+
 test("allowed HTTPS and Discord gateway upgrades reach the proxy while other hosts stay denied", async () => {
   const env = Object.fromEntries([
     ...[
