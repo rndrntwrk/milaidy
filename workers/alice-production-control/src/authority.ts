@@ -7,6 +7,7 @@ import {
   type ReleaseBinding,
 } from "./policy";
 import { validateEvidenceRecord, type EvidenceRecord } from "./evidence";
+import { canonicalJson } from "./program";
 
 export const ALICE_PAUSE_SCOPES = Object.freeze([
   "all",
@@ -887,14 +888,15 @@ export class AuthorityLedger {
   stageEvidence(
     record: EvidenceRecord,
     maxRecords: number = AUTHORITY_PERSISTENCE_LIMITS.operationalOutboxRecords,
+    verifiedBinding: ReleaseBinding = this.state.binding,
   ) {
     const validation = validateEvidenceRecord(record);
-    if (!validation.ok || !bindingMatches(record.binding, this.state.binding)) {
+    if (!validation.ok || !bindingMatches(record.binding, verifiedBinding)) {
       return { ok: false, code: "EVIDENCE_RECORD_INVALID" } as const;
     }
     const existing = this.state.evidenceOutbox[record.eventId];
     if (existing) {
-      return JSON.stringify(existing) === JSON.stringify(record)
+      return canonicalJson(existing) === canonicalJson(record)
         ? ({ ok: true, code: "EVIDENCE_ALREADY_STAGED" } as const)
         : ({ ok: false, code: "EVIDENCE_ID_COLLISION" } as const);
     }

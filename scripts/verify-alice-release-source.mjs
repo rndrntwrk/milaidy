@@ -7,6 +7,7 @@ const COMMIT = /^[a-f0-9]{40}$/;
 // and attested; the other three Worker bytes must match the original build.
 const CONTROLLER_PATHS = new Set([
   'workers/alice-production-control/src/coding-task.ts',
+  'workers/alice-production-control/src/coding-merge.ts',
   'workers/alice-production-control/src/policy.ts',
   'workers/alice-production-control/src/index.ts',
   'workers/alice-production-control/src/coding-page.ts',

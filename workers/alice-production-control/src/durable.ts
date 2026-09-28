@@ -11,6 +11,8 @@ import {
 import { commitCopyOnWrite } from "./durable-transaction";
 import type { AliceWorkerEnv } from "./env";
 import { jsonResponse, readBoundedJson } from "./http";
+import { createAliceStatePlaneClient } from "./state-plane-client";
+import { canonicalJson } from "./program";
 import {
   loadRuntimeConfig,
   loadAuthoritySafetyConfig,
@@ -33,6 +35,7 @@ import type {
 import {
   createEvidenceQueueEnvelope,
   createEvidenceRecord,
+  validateEvidenceRecord,
   type EvidenceRecord,
 } from "./evidence";
 import {
@@ -272,6 +275,42 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
       }
       if (request.method !== "POST") return jsonResponse({ ok: false, code: "METHOD_NOT_ALLOWED" }, 405);
       const body = (await readBoundedJson(request)) as Record<string, unknown>;
+      if (url.pathname === "/coding/merge/evidence") {
+        const { actor, taskId, record } = body;
+        if (Object.keys(body).sort().join(",") !== "actor,record,taskId" ||
+          typeof actor !== "string" || !/^owner:sha256:[a-f0-9]{64}$/.test(actor) ||
+          typeof taskId !== "string" || !/^task-cap-[a-f0-9-]{36}$/.test(taskId) ||
+          !validateEvidenceRecord(record).ok) {
+          return jsonResponse({ ok: false, code: "EVIDENCE_RECORD_INVALID" }, 400);
+        }
+        const state = createAliceStatePlaneClient(this.aliceEnv.ALICE_STATE_PLANE,
+          this.aliceEnv.ALICE_STATE_PLANE_SERVICE_TOKEN);
+        const work = (await state.getRecord("work", `work-${taskId.slice(5)}`, actor))?.payload as
+          Record<string, any> | undefined;
+        const evidence = record as EvidenceRecord;
+        const details = evidence.details;
+        if (work?.action !== "repository.merge" || !validReleaseAdmission(work.admission) ||
+          evidence.actor !== actor || evidence.subjectId !== taskId ||
+          evidence.kind !== "repository.merge" || evidence.outcome !== "MERGE_VERIFIED" ||
+          evidence.eventId !== `evt-${taskId.slice(9)}` ||
+          !bindingMatches(evidence.binding, work.admission.binding) ||
+          details.capabilityId !== taskId.slice(5) || details.intentId !== work.intent?.intentId ||
+          details.repository !== work.request?.repository ||
+          details.sourceTaskId !== work.request?.sourceTaskId ||
+          details.pullRequestNumber !== work.request?.pullRequestNumber ||
+          details.headCommit !== work.request?.headCommit ||
+          canonicalJson(details.admission) !== canonicalJson(work.admission)) {
+          return jsonResponse({ ok: false, code: "CODING_MERGE_EVIDENCE_MISMATCH" }, 409);
+        }
+        // The original owner-bound work pins a past admission after an irreversible merge.
+        const committed = await this.commit(
+          ledger => ledger.stageEvidence(evidence,
+            AUTHORITY_PERSISTENCE_LIMITS.operationalOutboxRecords, work.admission.binding),
+          result => result.ok,
+        );
+        return jsonResponse({ ...committed.result, evidenceQueued: committed.evidenceQueued },
+          committed.result.ok ? 200 : 503);
+      }
       if (url.pathname === "/session/task/terminal") {
         if (!validReleaseAdmission(body.expectedAdmission)) {
           return jsonResponse(

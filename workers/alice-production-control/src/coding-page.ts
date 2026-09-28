@@ -23,7 +23,10 @@ let selectedTaskId = null;
 async function post(path, body) {
   const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const value = await response.json();
-  if (!response.ok || value.ok !== true) throw new Error(value.code || 'REQUEST_FAILED');
+  const blockedMergeTask = path === '/control/api/v1/coding/merge' && response.status === 409 &&
+    value.ok === false && value.status === 'blocked' &&
+    typeof value.taskId === 'string' && /^task-cap-[a-f0-9-]{36}$/.test(value.taskId);
+  if (!blockedMergeTask && (!response.ok || value.ok !== true)) throw new Error(value.code || 'REQUEST_FAILED');
   return value;
 }
 function passkeyApi() {
