@@ -592,6 +592,9 @@ test("qualified coding ownership reaches both recovery lanes and acceptance fetc
   const accept = workflow.match(/  accept:[\s\S]*?(?=\n  recover-cloudflare:)/)?.[0] ?? "";
   assert.match(qualified, /alice-release\/coding-workflow-owned-identity\.json/);
   assert.match(accept, /Checkout exact promoted release source[\s\S]*?fetch-depth: 0/);
+  assert.match(accept, /Checkout exact promoted release source[\s\S]*?filter: blob:none/);
+  const ownerRecovery = workflow.slice(workflow.indexOf("\n  recover-owner-pause:"), workflow.indexOf("\n  deploy:"));
+  assert.match(ownerRecovery, /Checkout protected recovery controller[\s\S]*?filter: blob:none/);
   for (const source of [workflow, watchdog]) {
     const recovery = source.match(
       /- name: Consume external journal and recover Cloudflare independently[\s\S]*?(?=\n      - name:)/,
