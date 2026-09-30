@@ -7,7 +7,7 @@ export type GitHubAppEnvironment = {
 
 const REPOSITORY = /^(rndrntwrk|Render-Network-OS)\/([A-Za-z0-9_.-]+)$/;
 const COMMIT = /^[a-f0-9]{40}$/;
-const MAX_ARCHIVE_BYTES = 100_000_000;
+const MAX_ARCHIVE_BYTES = 300_000_000;
 
 function base64Url(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -135,7 +135,7 @@ export async function fetchAliceCodingArchive(
   ) {
     throw new Error("CODING_ARCHIVE_REDIRECT_INVALID");
   }
-  const source = await fetcher(destination, { redirect: "error" });
+  const source = await fetcher(destination, { redirect: "manual" });
   if (!source.ok || !source.body) throw new Error("CODING_ARCHIVE_UNAVAILABLE");
   const declared = Number(source.headers.get("content-length") ?? "0");
   if (!Number.isSafeInteger(declared) || declared < 0 || declared > MAX_ARCHIVE_BYTES) {

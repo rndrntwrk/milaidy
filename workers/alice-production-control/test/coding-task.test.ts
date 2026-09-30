@@ -227,9 +227,19 @@ test("coding page serves valid JavaScript with exact merge and read-only reconci
   expect(() => new Function(script)).not.toThrow();
   expect(script).toContain("operation: 'repository.merge'");
   expect(script).toContain("{ taskId, reconcileOnly: true }");
+  const page = codingPageResponse("/control/coding")!;
+  const html = await page.text();
+  expect(html).toContain('href="/control/coding.css"');
+  expect(html).toContain('name="pullRequest" checked');
+  expect(html).toContain('Register a device passkey before approving a task.');
+  expect(page.headers.get("content-security-policy")).toBe(
+    "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  );
+  const stylesheet = codingPageResponse("/control/coding.css")!;
+  expect(stylesheet.headers.get("content-type")).toBe("text/css; charset=utf-8");
 });
 
-test("blocked merge response opens its saved task without a second approval and ordinary failures still reject", async () => {
+test("blocked merge opens its saved task, ordinary failures reject, and missing passkeys focus registration", async () => {
   const { codingPageResponse } = await import("../src/coding-page");
   const script = await codingPageResponse("/control/coding.js")!.text();
   const taskId = "task-cap-00000000-0000-4000-8000-000000000003";
@@ -237,6 +247,11 @@ test("blocked merge response opens its saved task without a second approval and 
     sourceTaskId: "task-cap-00000000-0000-4000-8000-000000000001",
     pullRequestNumber: 17, headCommit: "e".repeat(40) };
   const element = () => ({ textContent: "", disabled: false, children: [] as any[],
+    focused: false,
+    classList: { values: new Set<string>(),
+      add(value: string) { this.values.add(value); },
+      remove(value: string) { this.values.delete(value); } },
+    focus() { this.focused = true; },
     listeners: {} as Record<string, (...args: any[]) => any>,
     append(...children: any[]) { this.children.push(...children); },
     replaceChildren() { this.children = []; },
@@ -253,10 +268,14 @@ test("blocked merge response opens its saved task without a second approval and 
     parseRequestOptionsFromJSON: (value: any) => value };
   const calls: string[] = [];
   let ordinaryFailure = false;
+  let missingCredential = false;
+  let credentialCalls = 0;
   const fetcher = async (path: string) => {
     calls.push(path);
     if (path === "/control/api/v1/coding/tasks") return Response.json({ ok: true, tasks: [] });
-    if (path === "/control/api/v1/webauthn/approve/options") return Response.json({ ok: true, options: {} });
+    if (path === "/control/api/v1/webauthn/approve/options") return missingCredential
+      ? Response.json({ ok: false, code: "WEBAUTHN_CREDENTIAL_REQUIRED" }, { status: 403 })
+      : Response.json({ ok: true, options: {} });
     if (path === "/control/api/v1/webauthn/approve/verify") return Response.json({ ok: true, grant: {} });
     if (path === "/control/api/v1/coding/merge") return ordinaryFailure
       ? Response.json({ ok: false, code: "CODING_MERGE_UNAVAILABLE" }, { status: 503 })
@@ -267,7 +286,7 @@ test("blocked merge response opens its saved task without a second approval and 
   };
   const api = new Function("document", "fetch", "window", "navigator", "localStorage", "PublicKeyCredential",
     script + "\nreturn { post, mergeButton };")(document, fetcher,
-    { PublicKeyCredential: publicKey }, { credentials: { async get() { return { toJSON: () => ({}) }; } } },
+    { PublicKeyCredential: publicKey }, { credentials: { async get() { credentialCalls++; return { toJSON: () => ({}) }; } } },
     localStorage, publicKey);
   await api.mergeButton(merge).listeners.click();
   expect(storage.get("alice-coding-last-task")).toBe(taskId);
@@ -278,4 +297,10 @@ test("blocked merge response opens its saved task without a second approval and 
   ordinaryFailure = true;
   await expect(api.post("/control/api/v1/coding/merge", {})).rejects.toThrow("CODING_MERGE_UNAVAILABLE");
   await expect(api.post("/other", {})).rejects.toThrow("ORDINARY_FAILURE");
+  missingCredential = true;
+  await api.mergeButton(merge).listeners.click();
+  expect(nodes.status!.textContent).toBe("Register a device passkey first, then approve this task again. Your task details are still here.");
+  expect(nodes.register!.classList.values.has("needs-registration")).toBe(true);
+  expect(nodes.register!.focused).toBe(true);
+  expect(credentialCalls).toBe(1);
 });
