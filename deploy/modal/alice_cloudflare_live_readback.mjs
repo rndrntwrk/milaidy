@@ -414,7 +414,10 @@ export async function fetchAliceCodingContainerState({
     const instanceType = detailed.configuration?.instance_type ??
       (detailed.configuration?.vcpu === 0.0625 &&
         detailed.configuration?.memory_mib === 256 &&
-        detailed.configuration?.disk?.size_mb === 2000 ? "lite" : undefined);
+        detailed.configuration?.disk?.size_mb === 2000 ? "lite" :
+        detailed.configuration?.vcpu === 0.25 &&
+        detailed.configuration?.memory_mib === 1024 &&
+        detailed.configuration?.disk?.size_mb === 4000 ? "basic" : undefined);
     if (!canonicalEqual(detailed, terminal) ||
         detailed?.id !== application.id ||
         detailed.account_id !== accountId ||
