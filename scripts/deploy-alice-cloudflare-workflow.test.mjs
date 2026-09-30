@@ -595,8 +595,7 @@ test("qualified coding ownership reaches both recovery lanes and acceptance fetc
   assert.match(accept, /Checkout exact promoted release source[\s\S]*?filter: blob:none/);
   const ownerRecovery = workflow.slice(workflow.indexOf("\n  recover-owner-pause:"), workflow.indexOf("\n  deploy:"));
   assert.match(ownerRecovery, /Checkout protected recovery controller[\s\S]*?filter: blob:none/);
-  assert.match(ownerRecovery, /trap 'rm -f -- "\$recovery_script"' EXIT/);
-  assert.match(ownerRecovery, /bun "\$recovery_script"/);
+  assert.match(ownerRecovery, /Verify recovery key and resume only the selected owner pause\n        shell: \/bin\/bash -e \{0\}/);
   for (const source of [workflow, watchdog]) {
     const recovery = source.match(
       /- name: Consume external journal and recover Cloudflare independently[\s\S]*?(?=\n      - name:)/,
