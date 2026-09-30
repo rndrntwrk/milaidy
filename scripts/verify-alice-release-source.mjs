@@ -20,6 +20,7 @@ const CONTROLLER_PATHS = new Set([
   'workers/alice-production-control/test/policy.test.ts',
   'workers/alice-production-control/test/program.test.ts',
   'workers/alice-production-control/test/webauthn-authority.test.ts',
+  'workers/alice-access-gateway/test/alice-coding-archive.test.ts',
   'workers/alice-access-gateway/test/alice-coding-publish.test.ts',
 
   '.github/workflows/recover-alice-production-watchdog.yml',
