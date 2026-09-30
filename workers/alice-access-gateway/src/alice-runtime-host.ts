@@ -131,6 +131,8 @@ export function buildAliceRuntimeContainerEnv(
     ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
     ENABLE_AUTONOMY: "false",
     ELIZA_TRIGGERS_ENABLED: "false",
+    // Discord reports gateway disconnect codes at warn, not error.
+    LOG_LEVEL: "warn",
     ALICE_PROGRAM_DIGEST: env.ALICE_PROGRAM_DIGEST,
     ALICE_RELEASE_DIGEST: env.ALICE_RELEASE_DIGEST,
     ALICE_POLICY_HASH: env.ALICE_POLICY_HASH,
