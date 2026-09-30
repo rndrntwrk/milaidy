@@ -62,6 +62,7 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     CODEX_CLI_SMALL_MODEL: "gpt-6-luna",
     CODEX_CLI_LARGE_MODEL: "gpt-6-sol",
     CODEX_REASONING_EFFORT: "max",
+    LOG_LEVEL: "warn",
     ELIZA_ACP_DEFAULT_AGENT: "codex",
     ELIZA_CODEX_MODEL_POWERFUL: "gpt-6-sol",
     ELIZA_CODEX_MODEL_FAST: "gpt-6-sol",
