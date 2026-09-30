@@ -26,7 +26,7 @@ jobs:
   recover-cloudflare:
     name: Prestarted independent Cloudflare recovery
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 360
     environment: alice-production-cloudflare-recovery
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
@@ -239,7 +239,7 @@ jobs:
           PARENT_RUN_ID: ${{ steps.parent.outputs.parent_run_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 480)
+          for attempt in $(seq 1 1200)
           do
             parent_json="$(gh api \
               "repos/${GITHUB_REPOSITORY}/actions/runs/${PARENT_RUN_ID}")"
@@ -381,7 +381,7 @@ jobs:
           export ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH="$recovery_root/alice-release/program-admission.json"
           export ALICE_CLOUDFLARE_RELEASE_PHASE=rollback
           export ALICE_PRODUCTION_RELEASE_CONFIRM="${SOURCE_SHA}:${manifest_sha256}"
-          timeout --signal=TERM --kill-after=30s 900s \
+          timeout --signal=TERM --kill-after=30s 2700s \
             node deploy/modal/alice_cloudflare_release.mjs
 
       - name: Preserve watchdog Cloudflare evidence

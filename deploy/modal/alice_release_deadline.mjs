@@ -1,8 +1,13 @@
 import { pathToFileURL } from "node:url";
 
-const MUTATION_WINDOW_SECONDS = 75 * 60;
-const RECOVERY_RESERVE_SECONDS = 30 * 60;
+// Six serial runtime/coding rollouts can each drain for twenty minutes.
+// Allow thirty minutes for provider requests and the preceding admission work.
+const MUTATION_WINDOW_SECONDS = 150 * 60;
+// Production is Cloudflare-only; the two-app restoration has its own reserve.
+const RECOVERY_RESERVE_SECONDS = 45 * 60;
 const COMPONENT_RECOVERY_SECONDS = 15 * 60;
+// Cloudflare restores two applications, plus Worker/queue/readback operations.
+const CLOUDFLARE_RECOVERY_SECONDS = 45 * 60;
 const MINIMUM_PHASE_SECONDS = 60;
 const MAXIMUM_PHASE_SECONDS = 30 * 60;
 
@@ -51,7 +56,9 @@ export function aliceReleasePhaseBudget({
     // Promotion includes candidate, rollback and forward restoration. All three
     // transitions share the original cutoff and cannot consume its recovery reserve.
     phase === "cloudflare-promotion" ? MUTATION_WINDOW_SECONDS
-      : phase === "mutation" ? MAXIMUM_PHASE_SECONDS : COMPONENT_RECOVERY_SECONDS,
+      : phase === "mutation" ? MAXIMUM_PHASE_SECONDS
+      : phase === "cloudflare-recovery" ? CLOUDFLARE_RECOVERY_SECONDS
+      : COMPONENT_RECOVERY_SECONDS,
   );
 }
 

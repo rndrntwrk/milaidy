@@ -639,6 +639,14 @@ test("every provider mutation remains bounded by the shared recovery reserve", (
     "Verify Cloudflare recovery readiness before first mutation",
   );
   assert.ok(readiness >= 0 && readiness < firstMutation);
+  assert.match(workflow, /watchdog_deadline_epoch="\$\(\(watchdog_started_epoch \+ 360 \* 60\)\)"/);
+  assert.match(workflow, /required_watchdog_deadline_epoch="\$\(\(parent_started_epoch \+ \(210 \+ 60 \+ 45 \+ 15\) \* 60\)\)"/);
+  assert.match(workflow, /test "\$watchdog_deadline_epoch" -ge "\$required_watchdog_deadline_epoch"/);
+  assert.match(workflow, /name: Promote attested Alice Worker bytes[\s\S]*?timeout-minutes: 210/);
+  assert.match(workflow, /name: Independently restore Cloudflare after deploy-job loss[\s\S]*?timeout-minutes: 60/);
+  for (const source of [workflow, watchdog]) assert.match(source, /timeout --signal=TERM --kill-after=30s 2700s/);
+  assert.match(watchdog, /timeout-minutes: 360/);
+  assert.match(watchdog, /Monitor the selected parent deployment[\s\S]*?seq 1 1200/);
   for (const name of [
     "Prepare service-authenticated fail-closed control route",
     "Commit first-release PAUSE_ALL before runtime mutation",

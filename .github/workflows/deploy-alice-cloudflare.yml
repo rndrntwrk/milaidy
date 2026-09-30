@@ -547,7 +547,7 @@ jobs:
     name: Promote attested Alice Worker bytes
     if: ${{ !inputs.read_status_only && !inputs.recover_owner_pause_only && !inputs.reaccept_candidate }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 210
     environment: alice-production
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
@@ -562,6 +562,11 @@ jobs:
           fetch-depth: 0
           submodules: false
           persist-credentials: false
+
+      - name: Establish global mutation cutoff and recovery reserve
+        run: |
+          set -euo pipefail
+          node deploy/modal/alice_release_deadline.mjs initialize >> "$GITHUB_ENV"
 
       - name: Enforce protected source and build identity
         env:
@@ -710,11 +715,6 @@ jobs:
           git -C eliza checkout --detach "$eliza_sha"
           test "$(git -C eliza rev-parse HEAD)" = "$eliza_sha"
           test -f eliza/package.json
-
-      - name: Establish global mutation cutoff and recovery reserve
-        run: |
-          set -euo pipefail
-          node deploy/modal/alice_release_deadline.mjs initialize >> "$GITHUB_ENV"
 
       - name: Setup Node.js 24.19.0
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -1099,6 +1099,13 @@ jobs:
             '[.jobs[] | select(.name == $name and .run_attempt == 1 and
               .status == "in_progress" and .conclusion == null)]')"
           test "$(printf '%s' "$job_matches" | jq 'length')" = "1"
+          # Reserve the parent cutoff, independent restore, and watchdog restore.
+          watchdog_started_epoch="$(printf '%s' "$job_matches" | jq -r '.[0].started_at | fromdateiso8601')"
+          watchdog_deadline_epoch="$((watchdog_started_epoch + 360 * 60))"
+          parent_jobs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=all&per_page=100")"
+          parent_started_epoch="$(printf '%s' "$parent_jobs_json" | jq -er '[.jobs[] | select(.name == "Promote attested Alice Worker bytes" and .run_attempt == 1 and .status == "in_progress")] | if length == 1 then .[0].started_at | fromdateiso8601 else error("ALICE_PARENT_JOB_IDENTITY_INVALID") end')"
+          required_watchdog_deadline_epoch="$((parent_started_epoch + (210 + 60 + 45 + 15) * 60))"
+          test "$watchdog_deadline_epoch" -ge "$required_watchdog_deadline_epoch"
 
       - name: Admit exact preimported Cloudflare registry digest
         env:
@@ -1798,7 +1805,7 @@ jobs:
     needs: [deploy, accept]
     if: ${{ always() && !inputs.read_status_only && !inputs.recover_owner_pause_only && !inputs.reaccept_candidate && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 60
     environment: alice-production-cloudflare-recovery
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
@@ -1961,7 +1968,7 @@ jobs:
           export ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH="$recovery_root/alice-release/program-admission.json"
           export ALICE_CLOUDFLARE_RELEASE_PHASE=rollback
           export ALICE_PRODUCTION_RELEASE_CONFIRM="${SOURCE_SHA}:${manifest_sha256}"
-          timeout --signal=TERM --kill-after=30s 900s \
+          timeout --signal=TERM --kill-after=30s 2700s \
             node deploy/modal/alice_cloudflare_release.mjs
 
       - name: Preserve independent Cloudflare recovery evidence
