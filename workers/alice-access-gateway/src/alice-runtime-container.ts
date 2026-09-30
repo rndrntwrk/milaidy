@@ -27,6 +27,8 @@ async function forwardToDiscordGateway(request: Request): Promise<Response> {
     ),
   );
   const headers = new Headers(response.headers);
+  headers.set("upgrade", "websocket");
+  headers.set("connection", "Upgrade");
   headers.set(
     "sec-websocket-accept",
     btoa(String.fromCharCode(...new Uint8Array(digest))),
