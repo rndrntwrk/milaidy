@@ -547,7 +547,7 @@ jobs:
     name: Promote attested Alice Worker bytes
     if: ${{ !inputs.read_status_only && !inputs.recover_owner_pause_only && !inputs.reaccept_candidate }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 240
     environment: alice-production
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
@@ -1099,6 +1099,11 @@ jobs:
             '[.jobs[] | select(.name == $name and .run_attempt == 1 and
               .status == "in_progress" and .conclusion == null)]')"
           test "$(printf '%s' "$job_matches" | jq 'length')" = "1"
+          # Reserve the parent cutoff, independent restore, and watchdog restore.
+          watchdog_started_epoch="$(printf '%s' "$job_matches" | jq -r '.[0].started_at | fromdateiso8601')"
+          watchdog_deadline_epoch="$((watchdog_started_epoch + 360 * 60))"
+          required_watchdog_deadline_epoch="$((ALICE_RELEASE_RECOVERY_DEADLINE_EPOCH + (60 + 45 + 15) * 60))"
+          test "$watchdog_deadline_epoch" -ge "$required_watchdog_deadline_epoch"
 
       - name: Admit exact preimported Cloudflare registry digest
         env:
@@ -1798,7 +1803,7 @@ jobs:
     needs: [deploy, accept]
     if: ${{ always() && !inputs.read_status_only && !inputs.recover_owner_pause_only && !inputs.reaccept_candidate && (needs.deploy.result != 'success' || needs.accept.result != 'success') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 60
     environment: alice-production-cloudflare-recovery
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
@@ -1961,7 +1966,7 @@ jobs:
           export ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH="$recovery_root/alice-release/program-admission.json"
           export ALICE_CLOUDFLARE_RELEASE_PHASE=rollback
           export ALICE_PRODUCTION_RELEASE_CONFIRM="${SOURCE_SHA}:${manifest_sha256}"
-          timeout --signal=TERM --kill-after=30s 900s \
+          timeout --signal=TERM --kill-after=30s 2700s \
             node deploy/modal/alice_cloudflare_release.mjs
 
       - name: Preserve independent Cloudflare recovery evidence
