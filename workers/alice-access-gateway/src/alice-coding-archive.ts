@@ -135,7 +135,7 @@ export async function fetchAliceCodingArchive(
   ) {
     throw new Error("CODING_ARCHIVE_REDIRECT_INVALID");
   }
-  const source = await fetcher(destination, { redirect: "error" });
+  const source = await fetcher(destination, { redirect: "manual" });
   if (!source.ok || !source.body) throw new Error("CODING_ARCHIVE_UNAVAILABLE");
   const declared = Number(source.headers.get("content-length") ?? "0");
   if (!Number.isSafeInteger(declared) || declared < 0 || declared > MAX_ARCHIVE_BYTES) {

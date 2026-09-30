@@ -42,6 +42,7 @@ test("trusted host fetches exact SHA with a one-repository read token", async ()
       } });
     }
     expect((init?.headers as Record<string, string> | undefined)?.authorization).toBeUndefined();
+    expect(init?.redirect).toBe("manual");
     return new Response("archive bytes", { status: 200 });
   }) as typeof fetch;
   const response = await fetchAliceCodingArchive(repository, baseCommit, env, fetcher);
@@ -49,6 +50,30 @@ test("trusted host fetches exact SHA with a one-repository read token", async ()
   expect(await response.text()).toBe("archive bytes");
   expect(calls).toHaveLength(4);
   expect(calls[3]?.url).toBe(`https://codeload.github.com/${repository}/legacy.tar.gz/${baseCommit}`);
+});
+
+test("archive download rejects a further redirect without following it", async () => {
+  const responses = [
+    Response.json({ id: 164209774, app_id: 5052363,
+      account: { login: "Render-Network-OS" }, suspended_at: null }),
+    Response.json({ token: "ghs_test-repository-scoped-token" }),
+    new Response(null, { status: 302, headers: {
+      location: `https://codeload.github.com/${repository}/legacy.tar.gz/${baseCommit}`,
+    } }),
+    new Response(null, { status: 302, headers: {
+      location: "https://other.example/archive",
+    } }),
+  ];
+  let calls = 0;
+  const fetcher = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const response = responses[calls++];
+    if (!response) throw new Error("unexpected redirect follow");
+    expect(init?.redirect === "follow").toBe(false);
+    return response;
+  }) as typeof fetch;
+  await expect(fetchAliceCodingArchive(repository, baseCommit, env, fetcher))
+    .rejects.toThrow("CODING_ARCHIVE_UNAVAILABLE");
+  expect(calls).toBe(4);
 });
 
 test("archive source rejects unauthorized targets before GitHub", async () => {
