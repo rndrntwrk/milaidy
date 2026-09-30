@@ -7,7 +7,7 @@ export type GitHubAppEnvironment = {
 
 const REPOSITORY = /^(rndrntwrk|Render-Network-OS)\/([A-Za-z0-9_.-]+)$/;
 const COMMIT = /^[a-f0-9]{40}$/;
-const MAX_ARCHIVE_BYTES = 100_000_000;
+const MAX_ARCHIVE_BYTES = 300_000_000;
 
 function base64Url(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString("base64url");

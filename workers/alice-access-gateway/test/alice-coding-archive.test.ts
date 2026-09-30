@@ -43,7 +43,8 @@ test("trusted host fetches exact SHA with a one-repository read token", async ()
     }
     expect((init?.headers as Record<string, string> | undefined)?.authorization).toBeUndefined();
     expect(init?.redirect).toBe("manual");
-    return new Response("archive bytes", { status: 200 });
+    return new Response("archive bytes", { status: 200,
+      headers: { "content-length": "282698666" } });
   }) as typeof fetch;
   const response = await fetchAliceCodingArchive(repository, baseCommit, env, fetcher);
   expect(response.status).toBe(200);
