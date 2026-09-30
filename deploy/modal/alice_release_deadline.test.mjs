@@ -6,15 +6,15 @@ import {
   initializeAliceReleaseDeadlines,
 } from "./alice_release_deadline.mjs";
 
-test("reserves an exact sixty-minute provider recovery window before cleanup", () => {
+test("reserves an exact forty-five-minute provider recovery window before cleanup", () => {
   const deadlines = initializeAliceReleaseDeadlines(1_800_000_000);
   assert.deepEqual(deadlines, {
     mutationCutoffEpoch: 1_800_009_000,
-    recoveryDeadlineEpoch: 1_800_012_600,
+    recoveryDeadlineEpoch: 1_800_011_700,
   });
   assert.equal(
     deadlines.recoveryDeadlineEpoch - deadlines.mutationCutoffEpoch,
-    60 * 60,
+    45 * 60,
   );
 });
 
@@ -50,7 +50,7 @@ test("budgets six application rollouts without consuming recovery", () => {
   /ALICE_RELEASE_DEADLINE_EXHAUSTED/);
 });
 
-test("partitions rollback into independent Modal and Cloudflare windows", () => {
+test("reserves the full two-application Cloudflare recovery window", () => {
   const deadlines = initializeAliceReleaseDeadlines(1_800_000_000);
   assert.equal(aliceReleasePhaseBudget({
     phase: "modal-recovery",
@@ -64,7 +64,7 @@ test("partitions rollback into independent Modal and Cloudflare windows", () => 
   }), /ALICE_RELEASE_DEADLINE_EXHAUSTED/);
   assert.equal(aliceReleasePhaseBudget({
     phase: "cloudflare-recovery",
-    nowSeconds: deadlines.mutationCutoffEpoch + 900,
+    nowSeconds: deadlines.mutationCutoffEpoch,
     ...deadlines,
   }), 2_700);
   assert.throws(() => aliceReleasePhaseBudget({

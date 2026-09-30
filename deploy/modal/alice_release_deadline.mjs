@@ -3,7 +3,8 @@ import { pathToFileURL } from "node:url";
 // Six serial runtime/coding rollouts can each drain for twenty minutes.
 // Allow thirty minutes for provider requests and the preceding admission work.
 const MUTATION_WINDOW_SECONDS = 150 * 60;
-const RECOVERY_RESERVE_SECONDS = 60 * 60;
+// Production is Cloudflare-only; the two-app restoration has its own reserve.
+const RECOVERY_RESERVE_SECONDS = 45 * 60;
 const COMPONENT_RECOVERY_SECONDS = 15 * 60;
 // Cloudflare restores two applications, plus Worker/queue/readback operations.
 const CLOUDFLARE_RECOVERY_SECONDS = 45 * 60;
