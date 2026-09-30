@@ -575,7 +575,7 @@ export function buildAliceCodingSandboxEffectiveConfig() {
         className: "AliceCodingSandbox",
         name: ALICE_CODING_TARGET.codingContainerApplication,
         image: "docker.io/cloudflare/sandbox:0.12.10-opencode@sha256:37d70eb910c3b9d5d71639a14e91571327c343fc8e59bfbc6b54cc5fed5b036c",
-        instanceType: "lite",
+        instanceType: "basic",
         maxInstances: 4,
       }],
       durableObjects: [

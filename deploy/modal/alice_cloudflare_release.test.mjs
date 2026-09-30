@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { canonicalAliceJson as canonical } from "../../workers/alice-effective-config.js";
+import { buildAliceCodingSandboxEffectiveConfig, canonicalAliceJson as canonical } from "../../workers/alice-effective-config.js";
 
 import {
   aliceCloudflareCommandEnv,
@@ -152,7 +152,7 @@ test("coding rollback read uses the default fetch for absent and present applica
   }
 });
 
-test("first coding create waits for the exact rollout and accepts Cloudflare's lite resource shape", () => {
+test("coding create waits for the exact rollout and accepts Cloudflare's lite and basic resource shapes", () => {
   const namespaceId = "5".repeat(32);
   const expected = { image: `docker.io/cloudflare/sandbox@sha256:${"a".repeat(64)}`,
     instance_type: "lite", max_instances: 4 };
@@ -173,6 +173,15 @@ test("first coding create waits for the exact rollout and accepts Cloudflare's l
   container.version = 2;
   assert.equal(verifyAliceCodingContainerApplicationState(input), "ready");
   rollout.target_configuration = { ...configuration, image: "wrong-image" };
+  assert.throws(() => verifyAliceCodingContainerApplicationState(input),
+    /ALICE_CODING_CONTAINER_ROLLOUT_TARGET_INVALID/);
+  expected.instance_type = "basic";
+  const basic = { image: expected.image, vcpu: 0.25,
+    memory_mib: 1024, disk: { size_mb: 4000 } };
+  container.configuration = basic;
+  rollout.target_configuration = basic;
+  assert.equal(verifyAliceCodingContainerApplicationState(input), "ready");
+  rollout.target_configuration = { ...basic, disk: { size_mb: 2000 } };
   assert.throws(() => verifyAliceCodingContainerApplicationState(input),
     /ALICE_CODING_CONTAINER_ROLLOUT_TARGET_INVALID/);
 });
@@ -576,6 +585,64 @@ test("promotes and restores one exact captured Container application target", as
     expected: previous, apiToken: "a".repeat(32), fetchImpl,
   }), /ALICE_CONTAINER_APPLICATION_DRIFTED/);
   assert.equal(requests.length, 3, "recovery cannot revert a rollout from a different source image");
+});
+
+test("resizes the existing coding application by rollout and restores its captured size", async () => {
+  const image = buildAliceCodingSandboxEffectiveConfig().bindings.containers[0].image;
+  const configuration = { image, vcpu: 0.0625, memory_mib: 256,
+    disk: { size_mb: 2000 }, observability: { logs: { enabled: true } } };
+  const app = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    account_id: "036df6c823669b8fa2f66cf4c16eeb29", name: "alice-coding-sandbox",
+    version: 1, scheduling_policy: "default", max_instances: 4,
+    rollout_active_grace_period: 0, durable_objects: { namespace_id: "5".repeat(32) },
+    configuration, health: { instances: { failed: 0, active: 0 } } };
+  const previous = normalizeAliceContainerApplicationRollbackState({ application: app,
+    applicationVersions: [{ version: 1, percentage: 100, configuration }],
+    applicationInstances: [] });
+  const target = { configuration: { image, instance_type: "basic",
+    observability: { logs: { enabled: true } } } };
+  let rollout;
+  const mutations = [];
+  const fetchImpl = async (url, init) => {
+    const parsed = new URL(url);
+    let result;
+    if (init.method === "POST") {
+      assert.ok(parsed.pathname.endsWith(`/applications/${app.id}/rollouts`));
+      const body = JSON.parse(init.body);
+      mutations.push(body.target_configuration.instance_type);
+      rollout = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        current_version: app.version, target_version: app.version + 1,
+        current_configuration: app.configuration,
+        target_configuration: body.target_configuration, status: "completed" };
+      app.version += 1;
+      app.configuration = body.target_configuration;
+      app.active_rollout_id = rollout.id;
+      result = rollout;
+    } else if (parsed.pathname.endsWith("/applications")) {
+      assert.equal(parsed.searchParams.get("name"), "alice-coding-sandbox");
+      result = [app];
+    } else if (parsed.pathname.endsWith("/versions")) {
+      result = [{ version: app.version, percentage: 100, configuration: app.configuration }];
+    } else if (parsed.pathname.endsWith("/instances")) result = { instances: [] };
+    else if (parsed.pathname.includes("/rollouts/")) result = rollout;
+    else result = app;
+    return Response.json({ success: true, result });
+  };
+  const promoted = await transitionAliceContainerApplication({ expectedCurrent: previous,
+    target, apiToken: "a".repeat(32), fetchImpl });
+  assert.deepEqual(promoted.current.target, target);
+  assert.equal(promoted.current.namespaceId, previous.namespaceId);
+  const restored = await restoreAliceContainerApplication({ expected: previous,
+    apiToken: "a".repeat(32), fetchImpl });
+  assert.deepEqual(restored.current.target, previous.target);
+  assert.deepEqual(mutations, ["basic", "lite"]);
+  assert.equal((await restoreAliceContainerApplication({ expected: previous,
+    apiToken: "a".repeat(32), fetchImpl })).changed, false);
+  app.health.instances.active = 1;
+  await assert.rejects(() => transitionAliceContainerApplication({
+    expectedCurrent: restored.current, target, apiToken: "a".repeat(32), fetchImpl }),
+  /ALICE_CONTAINER_APPLICATION_INVALID/);
+  assert.deepEqual(mutations, ["basic", "lite"]);
 });
 
 test("materializes Container runtime secrets only for the separate runtime host", () => {
@@ -1368,7 +1435,7 @@ test("the protected command requires attested bundles and terminal live readback
   assert.match(source, /alice\.cloudflare-rollback-evidence\.v2/);
   assert.match(source, /transitionAliceContainerApplication/);
   const imageTransitions = [...source.matchAll(/await transitionAliceContainerApplication\(\{/g)];
-  assert.equal(imageTransitions.length, 2);
+  assert.equal(imageTransitions.length, 4);
   for (const transition of imageTransitions) {
     const promotion = source.slice(source.lastIndexOf("promoteWorkers(", transition.index), transition.index);
     assert.match(promotion, /"runtimeHost"/, "the candidate host must supply startup settings before each image transition");
@@ -1571,7 +1638,31 @@ test("accepts only a complete exact manifest-bound rollback anchor", () => {
   assert.deepEqual(verifyAliceCloudflareRollbackAnchor(codingAnchor, {
     sourceCommit, deploymentManifestSha256,
   }), codingAnchor);
+  codingAnchor.previous.codingContainerApplication = null;
+  assert.deepEqual(verifyAliceCloudflareRollbackAnchor(codingAnchor, {
+    sourceCommit, deploymentManifestSha256,
+  }), codingAnchor);
   codingAnchor.previous.codingContainerApplicationAbsent = false;
+  assert.throws(() => verifyAliceCloudflareRollbackAnchor(codingAnchor, {
+    sourceCommit, deploymentManifestSha256,
+  }), /ALICE_ROLLBACK_ANCHOR_INVALID/);
+  codingAnchor.previous.workers.codingSandbox = worker("alice-coding-sandbox",
+    "77777777-7777-4777-8777-777777777771", "77777777-7777-4777-8777-777777777772");
+  codingAnchor.previous.workers.codingSandbox.versionResources.bindings = [{
+    type: "durable_object_namespace", name: "ALICE_CODING_SANDBOX",
+    class_name: "AliceCodingSandbox", namespace_id: "5".repeat(32),
+  }];
+  codingAnchor.previous.codingContainerApplication = {
+    ...aliceTestContainerApplicationState(), applicationName: "alice-coding-sandbox",
+    maxInstances: 4, target: { configuration: {
+      image: buildAliceCodingSandboxEffectiveConfig().bindings.containers[0].image,
+      instance_type: "lite", observability: { logs: { enabled: true } },
+    } },
+  };
+  assert.deepEqual(verifyAliceCloudflareRollbackAnchor(codingAnchor, {
+    sourceCommit, deploymentManifestSha256,
+  }), codingAnchor);
+  codingAnchor.previous.codingContainerApplication.namespaceId = "6".repeat(32);
   assert.throws(() => verifyAliceCloudflareRollbackAnchor(codingAnchor, {
     sourceCommit, deploymentManifestSha256,
   }), /ALICE_ROLLBACK_ANCHOR_INVALID/);
@@ -1970,6 +2061,13 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
     statePlane: {},
     connectorPlane: {},
   };
+  const previousCoding = {
+    ...aliceTestContainerApplicationState(), applicationName: "alice-coding-sandbox",
+    maxInstances: 4, target: { configuration: {
+      image: buildAliceCodingSandboxEffectiveConfig().bindings.containers[0].image,
+      instance_type: "lite", observability: { logs: { enabled: true } },
+    } },
+  };
   const mutations = [];
   let workflowRead = 0;
   const evidence = await executeAliceCloudflareRollbacks({
@@ -1994,6 +2092,7 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
         trafficState,
         workflowVersions: [previousWorkflowVersion],
         workers: workerState,
+        codingContainerApplication: previousCoding,
       },
     },
     expectedDurableObjectNamespaceIds: {},
@@ -2019,6 +2118,11 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
         mutations.push("traffic-restored");
         return { after: trafficState };
       },
+      restoreCodingContainer: async ({ expected }) => {
+        assert.deepEqual(expected, previousCoding);
+        mutations.push("coding-capacity-restored");
+        return { current: previousCoding };
+      },
       restoreWorkers: async () => {
         mutations.push("workers-verified");
         return { deployments: {}, restored: workerState };
@@ -2039,10 +2143,12 @@ test("restores an exact unpaused pre-release continuity state after candidate ro
     "worker:control",
     "worker:statePlane",
     "traffic-restored",
+    "coding-capacity-restored",
     "workers-verified",
     "continuity-unpaused",
   ]);
   assert.equal(workflowRead, 2);
+  assert.deepEqual(evidence.codingContainerApplication, previousCoding);
   assert.deepEqual(evidence.continuityConfig, continuityConfig);
   assert.deepEqual(
     evidence.containerApplication,

@@ -15,6 +15,7 @@ const CONTROLLER_PATHS = new Set([
   'workers/alice-access-gateway/src/alice-coding-publish.ts',
   'workers/alice-coding-sandbox/src/index.ts',
   'workers/alice-coding-sandbox/src/lease.ts',
+  'workers/alice-coding-sandbox/wrangler.jsonc',
   'workers/alice-access-gateway/src/runtime-host.ts',
   'workers/alice-production-control/test/coding-task.test.ts',
   'workers/alice-production-control/test/policy.test.ts',

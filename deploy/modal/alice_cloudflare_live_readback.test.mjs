@@ -860,10 +860,14 @@ test("coding Container readback binds the exact private namespace and image", as
   application.configuration = { image: application.configuration.image,
     vcpu: 0.0625, memory_mib: 256, disk: { size_mb: 2000 } };
   assert.equal((await fetchAliceCodingContainerState(options)).instanceType, "lite");
+  application.configuration = { image: application.configuration.image,
+    vcpu: 0.25, memory_mib: 1024, disk: { size_mb: 4000 } };
+  options.config.containers[0].instance_type = "basic";
+  assert.equal((await fetchAliceCodingContainerState(options)).instanceType, "basic");
   application.configuration.vcpu = 0.125;
   await assert.rejects(() => fetchAliceCodingContainerState(options),
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
-  application.configuration.vcpu = 0.0625;
+  application.configuration.vcpu = 0.25;
   application.durable_objects.namespace_id = "c".repeat(32);
   await assert.rejects(() => fetchAliceCodingContainerState(options),
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);

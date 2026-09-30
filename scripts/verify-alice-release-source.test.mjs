@@ -107,6 +107,11 @@ test('coding Sandbox edits can retain the image but unrelated Sandbox inputs can
   f.git('add', '.'); f.git('commit', '-m', 'Bounded coding publication');
   const sandbox = f.run(f.git('rev-parse', 'HEAD'));
   assert.equal(sandbox.status, 0, sandbox.stderr);
+  fs.writeFileSync(path.join(f.root, 'workers/alice-coding-sandbox/wrangler.jsonc'),
+    '{"containers":[{"class_name":"AliceCodingSandbox","instance_type":"basic"}]}\n');
+  f.git('add', '.'); f.git('commit', '-m', 'Size the separate coding Sandbox');
+  const sandboxConfig = f.run(f.git('rev-parse', 'HEAD'));
+  assert.equal(sandboxConfig.status, 0, sandboxConfig.stderr);
   fs.writeFileSync(path.join(f.root, 'workers/alice-coding-sandbox/package.json'), '{"dependencies":{"@cloudflare/sandbox":"changed"}}\n');
   f.git('add', '.'); f.git('commit', '-m', 'Unqualified Sandbox dependency change');
   assert.match(f.run(f.git('rev-parse', 'HEAD')).stderr, /ALICE_RELEASE_SOURCE_REBUILD_REQUIRED/);

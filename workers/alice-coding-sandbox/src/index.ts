@@ -222,7 +222,14 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
       "tar -xzf /workspace/source.tar.gz -C /workspace/repo --strip-components=1 && cd /workspace/repo && git init -q && git add -A && git -c user.name=Alice -c user.email=alice@rndrntwrk.com commit -qm base",
       { timeout: 120_000 },
     );
-    if (!unpack.success) throw new Error("CODING_SOURCE_PREPARATION_FAILED");
+    if (!unpack.success) {
+      console.error("Alice repository preparation failed", {
+        taskId: input.taskId,
+        exitCode: unpack.exitCode,
+        stderr: unpack.stderr.slice(-2_000),
+      });
+      throw new Error("CODING_SOURCE_PREPARATION_FAILED");
+    }
     await sandbox.writeFile("/workspace/prompt.txt", input.request.prompt);
     await sandbox.writeFile("/workspace/opencode.json", JSON.stringify({
       provider: {
