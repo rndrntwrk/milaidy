@@ -200,7 +200,10 @@ async function runCodingTask(input: Awaited<ReturnType<typeof parseInput>>,
   if (!start.ok || typeof state.token !== "string") {
     return Response.json({ ok: false, code: state.code }, { status: start.status });
   }
-  const sandbox = getSandbox(env.ALICE_CODING_SANDBOX, input.taskId, { transport: "rpc" });
+  // Commands specify their own cwd/env; use process exit status, not a shared shell session.
+  const sandbox = getSandbox(env.ALICE_CODING_SANDBOX, input.taskId, {
+    transport: "rpc", enableDefaultSession: false,
+  });
   let result: { patch: string; summary: string; changes?: CodingChange[] } | null = null;
   let failure: unknown = null;
   let destroyed = false;
