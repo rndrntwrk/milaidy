@@ -585,13 +585,13 @@ test("both independent recovery lanes require every relocated Worker module", ()
   }
 });
 
-test("qualified coding ownership reaches both recovery lanes and acceptance fetch stays bounded", () => {
+test("qualified coding ownership reaches both recovery lanes and acceptance fetch includes retained source ancestry", () => {
   const qualified = workflow.match(
     /- name: Persist qualified candidate evidence before terminal acceptance[\s\S]*?(?=\n      - name:)/,
   )?.[0] ?? "";
   const accept = workflow.match(/  accept:[\s\S]*?(?=\n  recover-cloudflare:)/)?.[0] ?? "";
   assert.match(qualified, /alice-release\/coding-workflow-owned-identity\.json/);
-  assert.match(accept, /Checkout exact promoted release source[\s\S]*?fetch-depth: 8/);
+  assert.match(accept, /Checkout exact promoted release source[\s\S]*?fetch-depth: 0/);
   for (const source of [workflow, watchdog]) {
     const recovery = source.match(
       /- name: Consume external journal and recover Cloudflare independently[\s\S]*?(?=\n      - name:)/,
