@@ -472,27 +472,43 @@ async function aliceContainerApiJson({
   ) {
     releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
   }
-  const response = await fetchImpl(`${API_BASE}${pathname}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      accept: "application/json",
-      "cache-control": "no-cache",
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  if (!(response instanceof Response) || !response.ok) {
-    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
-  }
+  let response;
   let envelope;
+  const fail = (reason) => {
+    // Report only fixed request metadata and numeric codes, never credentials,
+    // request bodies, provider messages, or query-string values.
+    const safePath = pathname.split("?")[0].replace(/[^a-zA-Z0-9/_-]/g, "_");
+    const codes = Array.isArray(envelope?.errors)
+      ? envelope.errors.map(error => error?.code).filter(Number.isSafeInteger).slice(0, 10)
+      : [];
+    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID " +
+      `method=${["GET", "POST"].includes(method) ? method : "UNKNOWN"} ` +
+      `path=${safePath} status=${response instanceof Response ? response.status : "none"} ` +
+      `codes=${codes.join(",")} reason=${reason}`);
+  };
+  try {
+    response = await fetchImpl(`${API_BASE}${pathname}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        accept: "application/json",
+        "cache-control": "no-cache",
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  } catch {
+    fail("transport");
+  }
+  if (!(response instanceof Response)) fail("response");
   try {
     envelope = await response.json();
   } catch {
-    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
+    fail("json");
   }
+  if (!response.ok) fail("http");
   if (envelope?.success !== true || !("result" in envelope)) {
-    releaseInvalid("ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID");
+    fail("envelope");
   }
   return envelope.result;
 }
@@ -3391,7 +3407,17 @@ const invokedPath = process.argv[1]
 if (invokedPath === import.meta.url) {
   main().catch((error) => {
     const report = value => {
-      process.stderr.write(`${value instanceof Error ? value.message.split("\n")[0] : "ALICE_RELEASE_FAILED"}\n`);
+      const lines = value instanceof Error ? value.message.split("\n") : ["ALICE_RELEASE_FAILED"];
+      process.stderr.write(`${lines[0]}\n`);
+      // Rollback collects nested failures. Keep their safe codes instead of
+      // hiding them, without exposing arbitrary child-process output.
+      for (const line of lines.slice(1)) {
+        if (/^ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID method=(GET|POST|UNKNOWN) path=\/accounts\/[a-f0-9]{32}\/containers\/[a-zA-Z0-9/_-]+ status=(none|\d{3}) codes=[\d,-]* reason=(transport|response|json|http|envelope)$/.test(line) ||
+            /^ALICE_[A-Z0-9_]+$/.test(line) ||
+            /^failClosedQueueSafetyVerified=(true|false)$/.test(line)) {
+          process.stderr.write(`${line}\n`);
+        }
+      }
       if (value instanceof AggregateError) value.errors.forEach(report);
     };
     report(error);

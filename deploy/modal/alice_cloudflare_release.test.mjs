@@ -147,6 +147,24 @@ test("coding rollback read uses the default fetch for absent and present applica
       () => readCodingContainerApplication({ apiToken }),
       /ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID/,
     );
+    await assert.rejects(
+      () => aliceCloudflareRelease.fetchAliceContainerApplicationRollbackState({
+        apiToken,
+        applicationName: "alice-coding-sandbox",
+        fetchImpl: async () => Response.json({
+          success: false, errors: [{ code: 1001, message: apiToken }],
+        }, { status: 503 }),
+      }),
+      (error) => {
+        assert.match(error.message, /ALICE_CONTAINER_APPLICATION_PROVIDER_INVALID/);
+        assert.match(error.message, /method=GET/);
+        assert.match(error.message, /path=\/accounts\/[a-f0-9]+\/containers\/applications/);
+        assert.match(error.message, /status=503/);
+        assert.match(error.message, /codes=1001/);
+        assert.ok(!error.message.includes(apiToken));
+        return true;
+      },
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
