@@ -458,7 +458,10 @@ jobs:
           ALICE_OWNER_AUTHORIZATION: ${{ secrets.ALICE_OWNER_AUTHORIZATION }}
           ALICE_CONTROL_RECOVERY_TOKEN: ${{ secrets.ALICE_CONTROL_RECOVERY_TOKEN }}
         run: |
-          bun - <<'BUN'
+          recovery_script="${GITHUB_WORKSPACE}/.alice-owner-recovery-${GITHUB_RUN_ID}.ts"
+          test ! -e "$recovery_script"
+          trap 'rm -f -- "$recovery_script"' EXIT
+          cat > "$recovery_script" <<'BUN'
           import assert from 'node:assert/strict';
           import crypto from 'node:crypto';
           import {signRecoveryReceipt} from './workers/alice-production-control/src/recovery.ts';
@@ -543,6 +546,8 @@ jobs:
             throw new Error('OWNER_RECOVERY_FAILED_AND_PAUSE_RESTORED');
           }
           BUN
+
+          bun "$recovery_script"
 
   deploy:
     name: Promote attested Alice Worker bytes
