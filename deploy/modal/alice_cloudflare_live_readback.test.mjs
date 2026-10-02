@@ -778,6 +778,46 @@ test("coding Workflow readback binds its live owner and exact deployed version",
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
 });
 
+test("coding Workflow readback accepts 21 versions and rejects mismatched version ownership", async () => {
+  const workflow = {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    name: "alice-production-coding",
+    script_name: "alice-production-control",
+    class_name: "AliceCodingWorkflow",
+    created_on: "2026-08-22T12:00:00.000Z",
+    modified_on: "2026-08-22T12:00:01.000Z",
+  };
+  const versions = Array.from({ length: 21 }, (_, index) => ({
+    ...workflowVersionFixture[0],
+    id: `${(index + 1).toString(16).padStart(8, "0")}-bbbb-4bbb-8bbb-bbbbbbbbbbbb`,
+    workflow_id: workflow.id,
+    class_name: workflow.class_name,
+    limits: { steps: 8 },
+  }));
+  const root = `/accounts/${accountId}/workflows/${workflow.name}`;
+  let mismatchedOwnership = false;
+  const options = { apiToken: "read-only-token", accountId, zoneId, baseUrl,
+    fetchImpl: async (url) => {
+      const pathname = new URL(url).pathname.replace("/client/v4", "");
+      if (pathname === root) return json({ success: true, result: workflow });
+      if (pathname === `${root}/versions`) return json({ success: true, result: versions });
+      const version = versions.find((item) => pathname === `${root}/versions/${item.id}`);
+      if (version) return json({ success: true, result:
+        mismatchedOwnership && version.id === versions.at(-1).id
+          ? { ...version, workflow_id: "ffffffff-ffff-4fff-8fff-ffffffffffff" }
+          : version });
+      throw new Error(`unexpected ${pathname}`);
+    } };
+  const state = await fetchAliceCodingWorkflowState(options);
+  assert.equal(state.versions.length, 21);
+  assert.deepEqual(verifyAliceCodingWorkflowStateSnapshot(state), {
+    workflow: state.workflow, versions: state.versions,
+  });
+  mismatchedOwnership = true;
+  await assert.rejects(() => fetchAliceCodingWorkflowState(options),
+    /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
+});
+
 test("coding Workflow candidate version is new relative to the anchored baseline", async () => {
   const workflow = {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
