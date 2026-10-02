@@ -815,7 +815,6 @@ export function verifyAliceCloudflareWorkflowVersionSnapshot(
   if (
     !Array.isArray(snapshot) ||
     snapshot.length < 1 ||
-    snapshot.length > 20 ||
     !UUID.test(expectedWorkflowId ?? "")
   ) {
     readbackInvalid();
@@ -876,7 +875,7 @@ export async function fetchAliceCloudflareWorkflowVersionState({
     const steps = coding ? 8 : 16;
     const root = `/accounts/${accountId}/workflows/${workflowName}/versions`;
     const listed = await apiGetAllResults(client, root);
-    if (listed.length < 1 || listed.length > 20) readbackInvalid();
+    if (listed.length < 1) readbackInvalid();
     const identities = [];
     for (const listedVersion of listed) {
       const listedIdentity = workflowVersionIdentity(
