@@ -71,3 +71,13 @@ Cancels a specific coding agent task by its session ID.
 ```
 
 **Errors:** `503` if the orchestrator service is unavailable; `500` on cancellation failure.
+
+## Alice production acceptance
+
+Record these acceptance checks independently for Alice's owner-controlled production workflow:
+
+1. Observe a reply from Alice in the user's existing private Discord conversation. Configured connectors alone do not prove message delivery.
+2. Approve the exact repository task and base commit through `/control/coding` using the owner's existing device passkey. Discord chat pairing is separate from repository task approval.
+3. Verify that Alice's configured GitHub App created the draft pull request. Record the Alice task ID, approved base commit, PR URL, and exact head commit.
+4. Independently review the diff and run the relevant checks against that exact head before the separate approval to squash merge. Repeat review and checks if the head changes, and record each result; absent or skipped checks are not passing checks.
+5. Verify the actual GitHub merge and retain its merge commit and Alice's merge receipt. Writing this checklist does not establish that any acceptance check has passed.
