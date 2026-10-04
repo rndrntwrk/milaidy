@@ -46,6 +46,8 @@ test("Discord upgrades accept the container's key while retaining the upstream s
   const upstream = new WorkerResponse(null, {
     status: 101,
     headers: {
+      upgrade: "websocket",
+      connection: "Upgrade",
       "sec-websocket-accept": "XMQNELQ1vlcNTcFvxFddQaIfIAQ=",
     },
     webSocket: socket,
@@ -65,8 +67,8 @@ test("Discord upgrades accept the container's key while retaining the upstream s
     );
     expect(result.status).toBe(101);
     expect((result as WorkerResponse).webSocket).toBe(socket);
-    expect(result.headers.get("upgrade")).toBe("websocket");
-    expect(result.headers.get("connection")).toBe("Upgrade");
+    expect(result.headers.get("upgrade")).toBeNull();
+    expect(result.headers.get("connection")).toBeNull();
     expect(result.headers.get("sec-websocket-accept")).toBe(
       "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
     );
