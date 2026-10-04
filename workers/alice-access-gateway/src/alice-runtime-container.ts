@@ -27,8 +27,10 @@ async function forwardToDiscordGateway(request: Request): Promise<Response> {
     ),
   );
   const headers = new Headers(response.headers);
-  headers.set("upgrade", "websocket");
-  headers.set("connection", "Upgrade");
+  // Cloudflare adds these when serializing a WebSocket response to the
+  // container. Keeping them here duplicates their values on the wire.
+  headers.delete("upgrade");
+  headers.delete("connection");
   headers.set(
     "sec-websocket-accept",
     btoa(String.fromCharCode(...new Uint8Array(digest))),
