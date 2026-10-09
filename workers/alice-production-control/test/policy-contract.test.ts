@@ -26,13 +26,15 @@ describe("Alice source-owned production policy contract", () => {
     expect(policy.pauseScopes).toEqual([...ALICE_PAUSE_SCOPES]);
     expect(policy.modelRouting.models).toEqual([...ALICE_ALLOWED_MODELS]);
     expect(policy.modelRouting.dailySynchronousUnitCeiling).toBe(100_000);
-    expect(policy.nativeOwnerConversations.platform).toBe("telegram");
+    expect(policy.nativeOwnerConversations.platforms).toEqual(["telegram", "discord"]);
+    expect(policy.authority.privilegedCapabilityGrant).toBe("verified-native-owner-single-use-draft-pr; owner-access-plus-device-bound-webauthn-merge");
     expect(policy.nativeOwnerConversations.ownerBindingSha256).toBe(
       "sha256:f8b1566829c84cf5f91109d41177fa87ef28e1ab5b5fa0bf2a5642267fca05d5",
     );
     expect(policy.nativeOwnerConversations.operations).toEqual([
       "reply to incoming owner messages",
       "verify owner self-pairing",
+      "start isolated coding and create draft PRs from verified owner messages",
     ]);
     expect(policy.nativeOwnerConversations.autonomousSocialOperations).toBe("disabled");
     expect(policy.nativeOwnerConversations.connectorPlane).toBe("inert");

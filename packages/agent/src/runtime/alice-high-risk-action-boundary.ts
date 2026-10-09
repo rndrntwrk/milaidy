@@ -1,4 +1,5 @@
 import type { Action, AgentRuntime, Content } from "@elizaos/core";
+import { aliceChatCodingAction } from "./alice-chat-coding.js";
 
 import {
   type AliceRuntimeProfileEnv,
@@ -15,10 +16,9 @@ type GuardableRuntime = Pick<AgentRuntime, "actions" | "logger"> & {
 };
 
 /**
- * Task 1 has no independently verified capability-grant verifier at the
- * action-handler boundary. Keep execution fail-closed and admit only these
- * reviewed response, read-only, presentation, and native owner-checked pairing
- * actions by exact name.
+ * Admit reviewed response, read-only, presentation, and native owner-checked
+ * pairing actions by exact name. Coding has a separate concrete native handler
+ * below; all other execution requires an independently verified grant.
  */
 export const ALICE_FULL_GATED_SAFE_ACTION_NAMES = Object.freeze([
   "REPLY",
@@ -49,6 +49,10 @@ export function enforceAliceActionExecutionBoundary<T extends Action>(
   environment: AliceRuntimeProfileEnv = process.env,
 ): T {
   if (!isAliceFullRuntimeProfile(environment)) return action;
+
+  // This concrete native handler verifies the incoming owner message. A same-name
+  // desktop executor stays denied; the controller admits only an exact draft PR grant.
+  if (action === aliceChatCodingAction) return action;
 
   const marked = action as T & { [ACTION_GUARDED]?: true };
   if (marked[ACTION_GUARDED] || isAliceFullGatedSafeActionName(action.name)) {
@@ -84,10 +88,10 @@ export function installAliceHighRiskActionBoundary(
 ): void {
   if (!isAliceFullRuntimeProfile(environment)) return;
   for (let index = 0; index < runtime.actions.length; index += 1) {
-    runtime.actions[index] = enforceAliceActionExecutionBoundary(
-      runtime.actions[index],
-      environment,
-    );
+    runtime.actions[index] =
+      runtime.actions[index].name === "CREATE_TASK"
+        ? aliceChatCodingAction
+        : enforceAliceActionExecutionBoundary(runtime.actions[index], environment);
   }
 
   const marked = runtime as GuardableRuntime & {
@@ -101,8 +105,15 @@ export function installAliceHighRiskActionBoundary(
   }
   const registerAction = runtime.registerAction.bind(runtime);
   runtime.registerAction = (action: Action): void => {
-    registerAction(enforceAliceActionExecutionBoundary(action, environment));
+    registerAction(
+      action.name === "CREATE_TASK"
+        ? aliceChatCodingAction
+        : enforceAliceActionExecutionBoundary(action, environment),
+    );
   };
+  // Core plugins register before the application plugin. Reserve the native
+  // handler here so the desktop orchestrator cannot win that name collision.
+  runtime.registerAction(aliceChatCodingAction);
   Object.defineProperty(marked, RUNTIME_GUARD_INSTALLED, {
     value: true,
     enumerable: false,

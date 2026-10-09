@@ -769,7 +769,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         health.value.controls?.highRiskActions !==
           "disabled-except-exact-owner-webauthn-repository-merge" ||
         health.value.controls?.capabilityGrant !==
-          "owner-access-plus-device-bound-webauthn-single-use-coding-grant") invalid();
+          "verified-native-owner-single-use-draft-pr; owner-access-plus-device-bound-webauthn-merge") invalid();
 
     const gateway = await ownerJson(
       fetchImpl,

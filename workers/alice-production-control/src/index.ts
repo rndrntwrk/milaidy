@@ -700,7 +700,7 @@ export async function handleOwnerApi(
       },
       authority: value.authority,
       controls: {
-        capabilityGrant: "owner-access-plus-device-bound-webauthn-single-use-coding-grant",
+        capabilityGrant: "verified-native-owner-single-use-draft-pr; owner-access-plus-device-bound-webauthn-merge",
         highRiskActions: "disabled-except-exact-owner-webauthn-repository-merge",
         pauseScopes: [
           "all",

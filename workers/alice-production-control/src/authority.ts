@@ -1111,6 +1111,39 @@ export class AuthorityLedger {
     return { ok: true, code: "CAPABILITY_GRANTED", grant: structuredClone(grant) } as const;
   }
 
+  /** Called only after the native owner service has authenticated the incoming message. */
+  issueNativeOwnerCodingGrant(requestId: string, target: string, argumentHash: string, now: number) {
+    const owner = this.state.webauthn.credential?.owner;
+    if (!owner) return { ok: false, code: "NATIVE_CODING_OWNER_UNCONFIGURED" } as const;
+    const gate = this.webauthnGate(owner, now);
+    if (gate) return { ok: false,
+      code: gate === "WEBAUTHN_PAUSED" ? "NATIVE_CODING_PAUSED" : gate } as const;
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(requestId) ||
+      !validAliceCodingRepositoryTarget(target) || !validDigest(argumentHash)) {
+      return { ok: false, code: "NATIVE_CODING_REQUEST_INVALID" } as const;
+    }
+    const capabilityId = `cap-${requestId}`;
+    const nonce = `native-coding:${requestId}`;
+    const existing = this.state.capabilities[capabilityId];
+    if (existing) {
+      if (existing.owner !== owner || existing.scope !== "coding.pr.create" ||
+        existing.target !== target || existing.argumentHash !== argumentHash || existing.nonce !== nonce ||
+        !bindingMatches(existing, this.state.binding)) {
+        return { ok: false, code: "NATIVE_CODING_GRANT_CONFLICT" } as const;
+      }
+      if (existing.expiresAt <= now || existing.revokedAt !== null) {
+        return { ok: false, code: "NATIVE_CODING_GRANT_EXPIRED_OR_REVOKED" } as const;
+      }
+      return { ok: true, code: "CAPABILITY_ALREADY_GRANTED", grant: structuredClone(existing) } as const;
+    }
+    const grant: CapabilityGrant = { capabilityId, owner, scope: "coding.pr.create", target, argumentHash,
+      nonce, expiresAt: now + 600_000, rollbackBoundary: this.state.rollbackBoundary,
+      revokedAt: null, usedAt: null, ...structuredClone(this.state.binding) };
+    this.state.capabilities[capabilityId] = grant;
+    this.state.sequence += 1;
+    return { ok: true, code: "CAPABILITY_GRANTED", grant: structuredClone(grant) } as const;
+  }
+
   authorize(intent: ActionIntent, now: number, actor = "") {
     const fingerprint = intentFingerprint(intent);
     const existingDecision = this.state.intentDecisions[intent.intentId];

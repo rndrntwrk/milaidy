@@ -9,6 +9,7 @@ import {
   type VerifiedReleaseRollbackAuthorization,
 } from "./authority";
 import { commitCopyOnWrite } from "./durable-transaction";
+import { handleNativeCodingChat } from "./coding-chat";
 import type { AliceWorkerEnv } from "./env";
 import { jsonResponse, readBoundedJson } from "./http";
 import { createAliceStatePlaneClient } from "./state-plane-client";
@@ -248,6 +249,28 @@ export class AliceAuthority extends DurableObject<AliceWorkerEnv> {
     await this.ready;
     const url = new URL(request.url);
     try {
+      const nativeCoding = await handleNativeCodingChat(request, this.ctx.storage, this.aliceEnv,
+        async (input, argumentHash, priorGrant) => {
+          const committed = await this.commitAdmitted((ledger, config) => {
+            if (priorGrant && !ledger.exportState().capabilities[priorGrant.capabilityId]) {
+              return { ok: false, code: "NATIVE_CODING_GRANT_UNAVAILABLE" } as const;
+            }
+            const result = ledger.issueNativeOwnerCodingGrant(input.requestId,
+              input.request.repository, argumentHash, Date.now());
+            return result.ok ? { ...result, admission: { binding: config.binding,
+              deploymentManifestSha256: config.deploymentManifestSha256,
+              admissionGeneration: ledger.snapshot().admissionGeneration } } : result;
+          }, (result) => result.ok && result.code === "CAPABILITY_GRANTED",
+          (result, config) => {
+            if (!result.ok) throw new Error(result.code);
+            return createEvidenceRecord({ kind: "capability.grant", actor: result.grant.owner,
+              outcome: result.code, binding: config.binding, subjectId: result.grant.capabilityId,
+              details: { action: "coding.pr.create", target: input.request.repository, argumentHash,
+                requestId: input.requestId, nativeMessage: input.message } });
+          });
+          return committed.result;
+        });
+      if (nativeCoding) return nativeCoding;
       if (request.method === "GET" && url.pathname === "/snapshot") {
         return jsonResponse({ ok: true, authority: this.ledger.snapshot() });
       }
