@@ -12,7 +12,15 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
   */
  import {
    ChannelType,
-@@ -62,6 +62,7 @@
+@@ -17,6 +17,7 @@
+   ElizaError,
+   type Entity,
+   EventType,
++  getConfiguredOwnerEntityIds,
+   type IAgentRuntime,
+   logger,
+   type Memory,
+@@ -62,6 +63,7 @@
  import { checkTelegramDmAccess, resolveTelegramDmPolicy } from "./dm-policy";
  import { resolveTelegramRuntimeEntityId } from "./identity";
  import { MessageManager } from "./messageManager";
@@ -20,7 +28,7 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
  import {
    claimTelegramPollerToken,
    ensureTelegramPollerTokenAvailable,
-@@ -605,8 +606,18 @@
+@@ -605,8 +607,18 @@
        return service;
      }
  
@@ -39,7 +47,7 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
        let retryCount = 0;
        let lastError: Error | null = null;
  
-@@ -622,8 +633,6 @@
+@@ -622,8 +634,6 @@
              "Starting Telegram bot",
            );
            await service.initializeBot(state);
@@ -48,7 +56,7 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
            await state.bot.telegram.getMe();
  
            logger.success(
-@@ -810,52 +819,6 @@
+@@ -810,52 +820,6 @@
            },
          });
        }
@@ -101,7 +109,7 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
      }
  
      // Telegraf v4's `bot.launch()` resolves only when polling STOPS — it awaits
-@@ -1245,6 +1208,60 @@
+@@ -1245,6 +1209,60 @@
      const bot = state?.bot ?? this.bot;
      const messageManager = state?.messageManager ?? this.messageManager;
      const accountId = state?.accountId ?? this.defaultAccountId;
@@ -162,6 +170,37 @@ diff --git a/plugins/plugin-telegram/src/service.ts b/plugins/plugin-telegram/sr
      // Regular message handler
      bot?.on("message", async (ctx) => {
        try {
+@@ -1484,9 +1502,12 @@
+         entityId,
+         roomId,
+         roomName: getTelegramChatDisplayName(ctx.chat, chatId),
+-        userName: ctx.from.username,
+-        userId: telegramId as UUID,
+-        name: ctx.from.first_name || ctx.from.username || "Unknown User",
++        // Pairing owns canonical identity fields; a retained account must not replace them.
++        ...(getConfiguredOwnerEntityIds(this.runtime).includes(entityId) ? {} : {
++          userName: ctx.from.username,
++          userId: telegramId as UUID,
++          name: ctx.from.first_name || ctx.from.username || "Unknown User",
++        }),
+         source: "telegram",
+         channelId: chatId,
+         type: ChannelType.GROUP,
+@@ -1533,9 +1554,11 @@
+           entityId,
+           roomId,
+           roomName: getTelegramChatDisplayName(ctx.chat, chatId),
+-          userName: newMember.username,
+-          userId: telegramId as UUID,
+-          name: newMember.first_name || newMember.username || "Unknown User",
++          ...(getConfiguredOwnerEntityIds(this.runtime).includes(entityId) ? {} : {
++            userName: newMember.username,
++            userId: telegramId as UUID,
++            name: newMember.first_name || newMember.username || "Unknown User",
++          }),
+           source: "telegram",
+           channelId: chatId,
+           type: ChannelType.GROUP,
 diff --git a/plugins/plugin-telegram/src/owner-pairing-service.ts b/plugins/plugin-telegram/src/owner-pairing-service.ts
 --- a/plugins/plugin-telegram/src/owner-pairing-service.ts
 +++ b/plugins/plugin-telegram/src/owner-pairing-service.ts
@@ -245,3 +284,99 @@ diff --git a/plugins/plugin-telegram/src/owner-pairing-service.ts b/plugins/plug
    }
  
    async sendOwnerLoginDmLink(params: {
+diff --git a/plugins/plugin-telegram/src/identity.ts b/plugins/plugin-telegram/src/identity.ts
+--- a/plugins/plugin-telegram/src/identity.ts
++++ b/plugins/plugin-telegram/src/identity.ts
+@@ -88,6 +88,35 @@
+     }
+   }
+
++  // Only explicit owner-pairing retention can alias another Telegram account.
++  // Read the durable link and verified identity before granting canonical access.
++  for (const ownerId of ownerIds) {
++    const relationships = await runtime.getRelationships({
++      entityIds: [ownerId as UUID],
++      tags: ["identity_link"],
++    });
++    for (const relationship of relationships) {
++      const metadata = relationship.metadata;
++      if (
++        relationship.targetEntityId !== ownerId ||
++        relationship.sourceEntityId === ownerId ||
++        !Array.isArray(relationship.tags) ||
++        !relationship.tags.includes("identity_link") ||
++        metadata?.status !== "confirmed" ||
++        metadata.source !== "owner_pairing" ||
++        metadata.connector !== "telegram"
++      ) continue;
++      const retained = await runtime.getEntityById(relationship.sourceEntityId);
++      const verifiedAt = connectorRecord(retained)?.ownerBindVerifiedAt;
++      if (
++        typeof verifiedAt === "number" &&
++        Number.isFinite(verifiedAt) &&
++        verifiedAt > 0 &&
++        telegramOwnerMatches(retained, telegramUserId)
++      ) return ownerId as UUID;
++    }
++  }
++
+   // `getEntityById` throws on storage failure; a null owner here means the
+   // configured owner is not paired to this Telegram user yet, not that the row
+   // failed to load.
+diff --git a/plugins/plugin-telegram/src/messageManager.ts b/plugins/plugin-telegram/src/messageManager.ts
+--- a/plugins/plugin-telegram/src/messageManager.ts
++++ b/plugins/plugin-telegram/src/messageManager.ts
+@@ -22,6 +22,7 @@
+   decodeCallback,
+   ElizaError,
+   EventType,
++  getConfiguredOwnerEntityIds,
+   type HandlerCallback,
+   type IAgentRuntime,
+   lifeOpsPassiveConnectorsEnabled,
+@@ -1577,9 +1578,12 @@
+             typeof chat.username === "string" &&
+             chat.username) ||
+           telegramRoomid,
+-        userName: ctx.from.username,
+-        name: ctx.from.first_name,
+-        userId: telegramUserId as UUID,
++        // Keep the paired primary identity; Memory below retains the actual sender.
++        ...(getConfiguredOwnerEntityIds(this.runtime).includes(entityId) ? {} : {
++          userName: ctx.from.username,
++          name: ctx.from.first_name,
++          userId: telegramUserId as UUID,
++        }),
+         source: "telegram",
+         channelId: telegramRoomid,
+         type: channelType,
+@@ -1895,10 +1899,11 @@
+     const sourceMessage = query.message;
+     const chat = sourceMessage.chat as Chat;
+     const telegramUserId = ctx.from.id.toString();
+-    const entityId = createUniqueUuid(
++    const entityId = await resolveTelegramRuntimeEntityId(
+       this.runtime,
+-      this.scopedTelegramKey(telegramUserId),
+-    ) as UUID;
++      this.accountId,
++      telegramUserId,
++    );
+
+     const threadId =
+       "is_topic_message" in sourceMessage && sourceMessage.is_topic_message
+@@ -1954,9 +1959,11 @@
+       entityId,
+       roomId,
+       roomName: telegramRoomid,
+-      userName: ctx.from.username,
+-      name: ctx.from.first_name,
+-      userId: telegramUserId as UUID,
++      ...(getConfiguredOwnerEntityIds(this.runtime).includes(entityId) ? {} : {
++        userName: ctx.from.username,
++        name: ctx.from.first_name,
++        userId: telegramUserId as UUID,
++      }),
+       source: "telegram",
+       channelId: telegramRoomid,
+       type: channelType,

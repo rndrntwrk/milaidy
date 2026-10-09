@@ -121,7 +121,9 @@ export const pairOwnerAccountAction: Action = {
     "Link the app owner's Discord or Telegram account to their owner " +
     "identity. Issues a one-time pairing code and tells the owner which " +
     "command to run on the platform; once verified, messages from that " +
-    "platform account are recognized as the owner. Owner-only.",
+    "platform account are recognized as the owner. Owner-only. " +
+    "For Telegram, an explicit request to keep both accounts retains the " +
+    "previously verified account as an alternate.",
   validate: async (
     _runtime: IAgentRuntime,
     message: Memory,
@@ -175,8 +177,21 @@ export const pairOwnerAccountAction: Action = {
     }
 
     let issued: ReturnType<typeof service.beginOwnerBind>;
+    // Retention changes who remains an owner. Derive consent from the owner's
+    // request, never from an extra parameter inferred by the planner.
+    const retainExistingAccount =
+      target.connector === "telegram" &&
+      /\b(?:keep|retain|preserve)\s+(?:(?:both|all)\s+(?:telegram\s+)?accounts|(?:(?:the|my)\s+)?(?:existing|current|previous|old|alternate|other)\s+(?:telegram\s+)?account)\b/i.test(
+        messageText,
+      ) &&
+      !/\b(?:not|don't|dont|never|without|stop)\s+(?:keep|retain|preserve)\b/i.test(
+        messageText,
+      );
     try {
-      issued = service.beginOwnerBind({ connector: target.connector });
+      issued = service.beginOwnerBind({
+        connector: target.connector,
+        retainExistingAccount,
+      });
     } catch (err) {
       // error-policy:J4 explicit user-facing degrade — the one expected
       // failure is "no canonical owner configured", surfaced as a designed
@@ -200,7 +215,10 @@ export const pairOwnerAccountAction: Action = {
           ? "in any server or DM with me on Discord"
           : "in your Telegram chat with me"
       }. The code is single-use and expires in ${minutes > 0 ? minutes : 5} minutes. ` +
-      "Don't share it — whoever redeems it is recognized as the owner.";
+      "Don't share it — whoever redeems it is recognized as the owner." +
+      (retainExistingAccount
+        ? " Your currently paired Telegram account will keep its owner access as an alternate."
+        : " This replaces the current primary account for this platform.");
 
     if (callback) {
       await callback({ text: replyText, action: PAIR_OWNER_ACCOUNT });

@@ -7226,11 +7226,15 @@ export function applyAliceTelegramOwnerPairingPatch({
   const commandPath = path.join(
     elizaRoot, "plugins/plugin-telegram/src/command-registration.ts",
   );
-  if (!existsSync(servicePath) && !existsSync(pairingPath) && !existsSync(commandPath)) return "skipped";
+  const identityPath = path.join(elizaRoot, "plugins/plugin-telegram/src/identity.ts");
+  const messagePath = path.join(elizaRoot, "plugins/plugin-telegram/src/messageManager.ts");
+  if ([servicePath, pairingPath, commandPath, identityPath, messagePath].every((file) => !existsSync(file))) return "skipped";
   const isApplied = () => {
     const service = readFileSync(servicePath, "utf8");
     const pairing = readFileSync(pairingPath, "utf8");
     const commands = readFileSync(commandPath, "utf8");
+    const identity = readFileSync(identityPath, "utf8");
+    const messages = readFileSync(messagePath, "utf8");
     const setup = service.indexOf("service.setupMessageHandlers(state);");
     return (
       service.includes('await runtime.getServiceLoadPromise("OWNER_BIND_VERIFY");') &&
@@ -7238,7 +7242,13 @@ export function applyAliceTelegramOwnerPairingPatch({
       setup >= 0 && setup < service.indexOf("while (retryCount < maxRetries)") &&
       pairing.includes("return new TelegramOwnerPairingServiceImpl(runtime);") &&
       !pairing.includes("registerPairCommand") &&
-      commands.split("const entityId = await resolveTelegramRuntimeEntityId(").length === 3
+      commands.split("const entityId = await resolveTelegramRuntimeEntityId(").length === 3 &&
+      identity.includes('metadata.source !== "owner_pairing"') &&
+      identity.includes('metadata.connector !== "telegram"') &&
+      identity.includes("Number.isFinite(verifiedAt)") &&
+      service.split("getConfiguredOwnerEntityIds(this.runtime).includes(entityId)").length === 3 &&
+      messages.split("getConfiguredOwnerEntityIds(this.runtime).includes(entityId)").length === 3 &&
+      messages.split("const entityId = await resolveTelegramRuntimeEntityId(").length === 3
     );
   };
   if (isApplied()) return "already-applied";
