@@ -4,9 +4,9 @@
   "authority": {
     "canonicalTaskState": "cloudflare-durable-objects",
     "ownerAuthentication": "cloudflare-access-exact-owner-jwt",
-    "privilegedCapabilityGrant": "owner-access-plus-device-bound-webauthn-single-use-coding-grant",
+    "privilegedCapabilityGrant": "verified-native-owner-single-use-draft-pr; owner-access-plus-device-bound-webauthn-merge",
     "economicSigner": "renclave-external-only",
-    "runtimeAuthority": "proposer-only"
+    "runtimeAuthority": "model-proposer-only; trusted-native-owner-draft-pr-admission"
   },
   "autonomousActions": [
     "research.read",
@@ -63,27 +63,32 @@
     "stream": "installed-but-disabled",
     "social": "native owner conversations only; connector plane inert",
     "trading": "installed-but-disabled",
-    "codingExecution": "owner-passkey-approved isolated sandbox tasks; draft pull requests require exact task approval; high-risk App squash merges require fresh owner passkey approval of the exact source task, PR and head commit with repository protections enforced",
+    "codingExecution": "Verified owner requests in native Discord or Telegram conversation start exact-request isolated sandbox work and produce a draft PR without a separate task approval. Merging requires fresh owner passkey approval of the exact source task, PR and head commit with repository protections enforced.",
     "signing": "not-present"
   },
   "nativeOwnerConversations": {
-    "scope": "owner-directed private conversations",
-    "discord": "disabled pending owner configuration and policy amendment",
+    "scope": "verified owner conversations and mentions in admitted native rooms",
+    "discord": "verified native owner messages admitted for replies, pairing and draft PR requests",
     "operations": [
       "reply to incoming owner messages",
-      "verify owner self-pairing"
+      "verify owner self-pairing",
+      "start isolated coding and create draft PRs from verified owner messages"
     ],
     "controls": [
       "authenticated owner configuration",
       "native private chat allowlist before message and command handling",
       "owner-only pairing issuance and expiring single-use verification",
-      "persistent canonical owner identity"
+      "persistent canonical owner identity",
+      "native owner handler signs immutable incoming message provenance and exact request for private host admission; coding.pr.create only; merge approval remains separate"
     ],
     "credentials": "encrypted Alice configuration loaded by the native runtime",
     "activation": "require verified configuration matching this owner, bot and private chat",
     "autonomousSocialOperations": "disabled",
     "connectorPlane": "inert",
-    "platform": "telegram",
-    "ownerBindingSha256": "sha256:f8b1566829c84cf5f91109d41177fa87ef28e1ab5b5fa0bf2a5642267fca05d5"
+    "ownerBindingSha256": "sha256:f8b1566829c84cf5f91109d41177fa87ef28e1ab5b5fa0bf2a5642267fca05d5",
+    "platforms": [
+      "telegram",
+      "discord"
+    ]
   }
 }

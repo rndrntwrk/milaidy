@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAliceDiscordOwnerCommandsPatch,
   applyAliceAppCoreAgentStatusAuthBridgePatch,
   applyAliceAppCoreCodingAgentsFallbackPatch,
   applyAliceAppCoreCompanionStagePatch,
@@ -73,6 +74,20 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(dirname, "..");
 
 describe("Alice Eliza runtime patch contract", () => {
+  it("fails closed on an incomplete Discord source bundle", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "alice-discord-patch-"));
+    try {
+      expect(applyAliceDiscordOwnerCommandsPatch({ elizaRoot: tempDir })).toBe("skipped");
+      const pluginDir = path.join(tempDir, "plugins/plugin-discord");
+      mkdirSync(pluginDir, { recursive: true });
+      writeFileSync(path.join(pluginDir, "catalog-commands.ts"), "");
+      expect(() => applyAliceDiscordOwnerCommandsPatch({ elizaRoot: tempDir }))
+        .toThrow("Alice native Discord owner-command source incomplete");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("carries the server-only early API bind and startup contract", () => {
     const patch = readFileSync(
       path.join(repoRoot, aliceElizaRuntimePatchRelativePath),

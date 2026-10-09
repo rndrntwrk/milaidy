@@ -131,9 +131,11 @@ import { stampAliceProductionRuntimeBoundary } from "../api/alice-production-pro
 import {
   ALICE_PRODUCTION_PLUGIN_ALLOWLIST,
   constrainAliceProductionPluginSurface,
+  selectAliceSqlPluginServices,
 } from "./alice-production-plugin-policy.js";
 import { createAliceProductionRuntimePlugin } from "./alice-production-runtime-plugin.js";
 import { installAliceHighRiskActionBoundary } from "./alice-high-risk-action-boundary.js";
+import { installAliceChatCoding } from "./alice-chat-coding.js";
 import {
   isAliceFullRuntimeProfile,
   isAliceResponseOnlyRuntime,
@@ -2938,11 +2940,16 @@ async function registerSqlPluginWithRecovery(
   runtime: AgentRuntime,
   sqlPlugin: ResolvedPlugin,
   config: ElizaConfig,
+  usesAliceD1Adapter: boolean,
 ): Promise<void> {
+  const plugin = selectAliceSqlPluginServices(
+    sqlPlugin.plugin,
+    usesAliceD1Adapter,
+  );
   let registerError: unknown = null;
 
   try {
-    await runtime.registerPlugin(sqlPlugin.plugin);
+    await runtime.registerPlugin(plugin);
   } catch (err) {
     registerError = err;
   }
@@ -2972,7 +2979,7 @@ async function registerSqlPluginWithRecovery(
     );
 
     try {
-      await runtime.registerPlugin(sqlPlugin.plugin);
+      await runtime.registerPlugin(plugin);
     } catch (retryErr) {
       if (!isPluginAlreadyRegisteredError(retryErr)) {
         throw retryErr;
@@ -3676,6 +3683,7 @@ export async function startEliza(
   const elizaPlugin = aliceResponseOnly
     ? createAliceProductionRuntimePlugin()
     : createElizaPlugin({ workspaceDir, agentId });
+  installAliceChatCoding(elizaPlugin, process.env);
 
   // 6. Resolve and load plugins
   // In headless (GUI) mode before onboarding, the user hasn't configured a
@@ -4088,7 +4096,13 @@ export async function startEliza(
         includesPgliteStartup:
           (config.database?.provider ?? "pglite") === "pglite",
       },
-      () => registerSqlPluginWithRecovery(runtime, sqlPlugin, config),
+      () =>
+        registerSqlPluginWithRecovery(
+          runtime,
+          sqlPlugin,
+          config,
+          aliceD1Adapter !== undefined,
+        ),
     );
   } else {
     const loadedNames = resolvedPlugins.map((p) => p.name).join(", ");
@@ -4522,6 +4536,7 @@ export async function startEliza(
                 freshCharacter.name?.toLowerCase().replace(/\s+/g, "-") ??
                 "main",
             });
+            installAliceChatCoding(freshElizaPlugin, process.env);
 
             // Create new runtime with updated plugins.
             // Filter out pre-registered plugins so they aren't double-loaded
@@ -4579,6 +4594,7 @@ export async function startEliza(
               },
             });
             installRuntimeMethodBindings(newRuntime);
+            installAliceHighRiskActionBoundary(newRuntime, process.env);
 
             // Pre-register plugin-sql + local-embedding before initialize()
             // to avoid the same race condition as the initial startup.
@@ -4595,6 +4611,7 @@ export async function startEliza(
                 newRuntime,
                 freshSqlPlugin,
                 freshConfig,
+                freshAliceD1Adapter !== undefined,
               );
             }
             if (freshLocalEmbeddingPlugin) {

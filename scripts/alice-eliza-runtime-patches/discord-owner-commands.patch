@@ -1,0 +1,531 @@
+diff --git a/plugins/plugin-discord/catalog-commands.ts b/plugins/plugin-discord/catalog-commands.ts
+--- a/plugins/plugin-discord/catalog-commands.ts
++++ b/plugins/plugin-discord/catalog-commands.ts
+@@ -79,7 +79,7 @@
+ 	const chunks = splitMessage(text, 1_900);
+ 	const first = chunks.shift() ?? " ";
+ 	await safeInteractionCall(() =>
+-		interaction.reply({ content: first, ephemeral: true }),
++		interaction.editReply({ content: first }),
+ 	);
+ 	for (const chunk of chunks) {
+ 		await safeInteractionCall(() =>
+@@ -180,13 +180,13 @@
+ 		name: DISCORD_EMBED_COMMAND,
+ 		description: "Open the Eliza app from Discord.",
+ 		execute: async (interaction, runtime) => {
++			await interaction.deferReply({ ephemeral: true });
+ 			const sender = await resolveDiscordSenderAuth(interaction, runtime);
+ 			if (!sender.isAuthorized && !sender.isElevated) {
+ 				await safeInteractionCall(() =>
+-					interaction.reply({
++					interaction.editReply({
+ 						content:
+ 							"Opening the Eliza app from Discord requires OWNER or ADMIN access.",
+-						ephemeral: true,
+ 					}),
+ 				);
+ 				return;
+@@ -195,18 +195,16 @@
+ 			const embedUrl = resolveDiscordEmbedUrl(runtime);
+ 			if (!embedUrl) {
+ 				await safeInteractionCall(() =>
+-					interaction.reply({
++					interaction.editReply({
+ 						content: "The Eliza embedded app URL is not configured.",
+-						ephemeral: true,
+ 					}),
+ 				);
+ 				return;
+ 			}
+ 
+ 			await safeInteractionCall(() =>
+-				interaction.reply({
++				interaction.editReply({
+ 					content: `Open the Eliza app: ${embedUrl}`,
+-					ephemeral: true,
+ 				}),
+ 			);
+ 		},
+@@ -250,8 +248,6 @@
+ 	runtime: IAgentRuntime,
+ 	message: Memory,
+ ): Promise<void> {
+-	await safeInteractionCall(() => interaction.deferReply({ ephemeral: true }));
+-
+ 	const commandText = message.content.text ?? "";
+ 
+ 	let replied = "";
+@@ -361,9 +357,8 @@
+ 		if (raw) sectionLabel = resolveSettingsSection(raw) ?? raw;
+ 	}
+ 	await safeInteractionCall(() =>
+-		interaction.reply({
++		interaction.editReply({
+ 			content: describeNavigation(command, sectionLabel),
+-			ephemeral: true,
+ 		}),
+ 	);
+ }
+@@ -375,9 +370,8 @@
+ 	// Local-client behaviors are filtered out of the discord surface, so this
+ 	// branch should not be reached. Handle defensively rather than crash.
+ 	await safeInteractionCall(() =>
+-		interaction.reply({
++		interaction.editReply({
+ 			content: `\`/${command.name}\` is only available in the Eliza app.`,
+-			ephemeral: true,
+ 		}),
+ 	);
+ }
+@@ -390,6 +384,7 @@
+  */
+ function buildExecute(command: ConnectorCommand): SlashCommand["execute"] {
+ 	return async (interaction, runtime) => {
++		await interaction.deferReply({ ephemeral: true });
+ 		const sender = await resolveDiscordSenderAuth(interaction, runtime);
+ 		const gate = gateConnectorCommandByName(
+ 			runtime.agentId,
+@@ -398,7 +393,7 @@
+ 		);
+ 		if (!gate.allowed) {
+ 			await safeInteractionCall(() =>
+-				interaction.reply({ content: gate.reply, ephemeral: true }),
++				interaction.editReply({ content: gate.reply }),
+ 			);
+ 			return;
+ 		}
+diff --git a/plugins/plugin-discord/owner-pairing-service.ts b/plugins/plugin-discord/owner-pairing-service.ts
+--- a/plugins/plugin-discord/owner-pairing-service.ts
++++ b/plugins/plugin-discord/owner-pairing-service.ts
+@@ -141,6 +141,7 @@
+ 	interaction: ChatInputCommandInteraction,
+ 	runtime: IAgentRuntime,
+ ): Promise<void> {
++	await interaction.deferReply({ ephemeral: true });
+ 	const userId = interaction.user.id;
+ 	const displayHandle =
+ 		interaction.user.discriminator && interaction.user.discriminator !== "0"
+@@ -161,30 +162,27 @@
+ 				externalId: userId,
+ 			},
+ 		);
+-		await interaction.reply({
++		await interaction.editReply({
+ 			content:
+ 				"Too many pairing attempts. Please wait a moment before trying again.",
+-			ephemeral: true,
+ 		});
+ 		return;
+ 	}
+ 
+ 	const rawCode = interaction.options.getString("code");
+ 	if (!rawCode?.trim()) {
+-		await interaction.reply({
++		await interaction.editReply({
+ 			content:
+ 				"Usage: `/eliza-pair <code>` — enter the 6-digit code shown in the Eliza dashboard.",
+-			ephemeral: true,
+ 		});
+ 		return;
+ 	}
+ 
+ 	const code = rawCode.trim();
+ 	if (!isValidPairCode(code)) {
+-		await interaction.reply({
++		await interaction.editReply({
+ 			content:
+ 				"The pairing code must be exactly 6 digits. Check the Eliza dashboard and try again.",
+-			ephemeral: true,
+ 		});
+ 		return;
+ 	}
+@@ -201,10 +199,9 @@
+ 			"failure",
+ 			{ externalId: userId },
+ 		);
+-		await interaction.reply({
++		await interaction.editReply({
+ 			content:
+ 				"Eliza could not reach the pairing service right now. Please try again in a moment.",
+-			ephemeral: true,
+ 		});
+ 		return;
+ 	}
+@@ -232,10 +229,9 @@
+ 			"failure",
+ 			{ externalId: userId },
+ 		);
+-		await interaction.reply({
++		await interaction.editReply({
+ 			content:
+ 				"Something went wrong while verifying the pairing code. Please try again.",
+-			ephemeral: true,
+ 		});
+ 		return;
+ 	}
+@@ -249,9 +245,8 @@
+ 			externalId: userId,
+ 			displayHandle,
+ 		});
+-		await interaction.reply({
++		await interaction.editReply({
+ 			content: "Paired with Eliza. You can now log in via Discord.",
+-			ephemeral: true,
+ 		});
+ 	} else {
+ 		logger.warn(
+@@ -265,10 +260,9 @@
+ 		await auditEmit(runtime, "auth.owner.pair.discord.failure", "failure", {
+ 			externalId: userId,
+ 		});
+-		await interaction.reply({
++		await interaction.editReply({
+ 			content:
+ 				"Pair code invalid or expired. Check the Eliza dashboard for a fresh code.",
+-			ephemeral: true,
+ 		});
+ 	}
+ }
+@@ -303,6 +297,10 @@
+ 		"Handles Discord-side owner pairing (slash-command code verification) and DM login-link delivery for Eliza remote auth";
+ 
+ 	static async start(runtime: IAgentRuntime): Promise<Service> {
++		// Sibling services start concurrently; wait only for a registered verifier.
++		if (runtime.hasService("OWNER_BIND_VERIFY")) {
++			await runtime.getServiceLoadPromise("OWNER_BIND_VERIFY");
++		}
+ 		const service = new DiscordOwnerPairingServiceImpl(runtime);
+ 		if (resolveVerifyService(runtime)) {
+ 			service.registerPairCommand(runtime);
+diff --git a/plugins/plugin-discord/discord-interactions.ts b/plugins/plugin-discord/discord-interactions.ts
+--- a/plugins/plugin-discord/discord-interactions.ts
++++ b/plugins/plugin-discord/discord-interactions.ts
+@@ -597,6 +597,10 @@
+ 			await service.registerSlashCommands(params.commands);
+ 		},
+ 	);
++	// Pairing registers its command after the owner verifier has loaded.
++	if (service.runtime.hasService("OWNER_PAIRING_DISCORD")) {
++		await service.runtime.getServiceLoadPromise("OWNER_PAIRING_DISCORD");
++	}
+ 	// Seed the universal command catalog into the in-process registry before the
+ 	// built-in registration reads it, so catalog + built-in commands ship in a
+ 	// single DISCORD_REGISTER_COMMANDS emission. Built-in names always win the
+diff --git a/plugins/plugin-discord/__tests__/catalog-commands.test.ts b/plugins/plugin-discord/__tests__/catalog-commands.test.ts
+--- a/plugins/plugin-discord/__tests__/catalog-commands.test.ts
++++ b/plugins/plugin-discord/__tests__/catalog-commands.test.ts
+@@ -217,14 +217,13 @@
+ 		const interaction = makeInteraction();
+ 		await orchestrator.execute(interaction as never, makeRuntime());
+ 
+-		expect(interaction.reply).toHaveBeenCalledTimes(1);
+-		const arg = interaction.reply.mock.calls[0][0] as {
++		expect(interaction.editReply).toHaveBeenCalledTimes(1);
++		const arg = interaction.editReply.mock.calls[0][0] as {
+ 			content: string;
+-			ephemeral: boolean;
+ 		};
+-		expect(arg.ephemeral).toBe(true);
+ 		expect(arg.content).toContain("orchestrator");
+-		expect(interaction.deferReply).not.toHaveBeenCalled();
++		expect(interaction.deferReply).toHaveBeenCalledTimes(1);
++		expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
+ 	});
+ 
+ 	it("navigate: resolves the /settings section alias to its canonical id (defensive)", async () => {
+@@ -244,7 +243,7 @@
+ 		const interaction = makeInteraction({ section: "providers" });
+ 		await settings.execute(interaction as never, makeRuntime());
+ 
+-		const arg = interaction.reply.mock.calls[0][0] as { content: string };
++		const arg = interaction.editReply.mock.calls[0][0] as { content: string };
+ 		// "providers" is an alias for the "ai-model" section.
+ 		expect(arg.content).toContain("ai-model");
+ 	});
+@@ -259,14 +258,13 @@
+ 
+ 		await think.execute(interaction as never, runtime);
+ 
+-		expect(interaction.deferReply).not.toHaveBeenCalled();
++		expect(interaction.deferReply).toHaveBeenCalledTimes(1);
++		expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
+ 		expect(handleMessage).not.toHaveBeenCalled();
+-		expect(interaction.reply).toHaveBeenCalledTimes(1);
+-		const replyArg = interaction.reply.mock.calls[0][0] as {
++		expect(interaction.editReply).toHaveBeenCalledTimes(1);
++		const replyArg = interaction.editReply.mock.calls[0][0] as {
+ 			content: string;
+-			ephemeral: boolean;
+ 		};
+-		expect(replyArg.ephemeral).toBe(true);
+ 		expect(replyArg.content).toBe("Thinking set to high.");
+ 	});
+ 
+@@ -320,6 +318,42 @@
+ });
+ 
+ describe("auth gating", () => {
++	it("acknowledges while asynchronous owner checks are pending", async () => {
++		const interaction = makeInteraction();
++		let finishRoleCheck!: (allowed: boolean) => void;
++		const roleCheck = new Promise<boolean>((resolve) => {
++			finishRoleCheck = resolve;
++		});
++		hasRoleAccess.mockImplementation(() => roleCheck);
++		const runtime = makeRuntime();
++		const execution = findCatalog("restart").execute(
++			interaction as never,
++			runtime,
++		);
++
++		await Promise.resolve();
++		expect(interaction.deferReply).toHaveBeenCalledTimes(1);
++		expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
++		expect(hasRoleAccess).toHaveBeenCalledTimes(2);
++		expect(interaction.editReply).not.toHaveBeenCalled();
++		finishRoleCheck(false);
++		await execution;
++		expect(interaction.reply).not.toHaveBeenCalled();
++		expect(interaction.editReply).toHaveBeenCalledWith({
++			content: expect.stringContaining("requires authorization"),
++		});
++	});
++
++	it("does not resolve auth or dispatch when acknowledgment fails", async () => {
++		const interaction = makeInteraction();
++		interaction.deferReply.mockRejectedValue(new Error("Unknown interaction"));
++		await expect(
++			findCatalog("restart").execute(interaction as never, makeRuntime()),
++		).rejects.toThrow("Unknown interaction");
++		expect(hasRoleAccess).not.toHaveBeenCalled();
++		expect(interaction.editReply).not.toHaveBeenCalled();
++	});
++
+ 	it("refuses a requiresAuth command when the sender is not an owner", async () => {
+ 		// `restart` requires auth and is pipeline-owned. Deny both roles.
+ 		hasRoleAccess.mockResolvedValue(false);
+@@ -332,15 +366,14 @@
+ 
+ 		await restart.execute(interaction as never, runtime);
+ 
+-		// Refused before any dispatch: no pipeline call, no defer — just a reply.
++		// Acknowledge first, but refuse before any pipeline dispatch.
+ 		expect(handleMessage).not.toHaveBeenCalled();
+-		expect(interaction.deferReply).not.toHaveBeenCalled();
+-		expect(interaction.reply).toHaveBeenCalledTimes(1);
+-		const arg = interaction.reply.mock.calls[0][0] as {
++		expect(interaction.deferReply).toHaveBeenCalledTimes(1);
++		expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
++		expect(interaction.editReply).toHaveBeenCalledTimes(1);
++		const arg = interaction.editReply.mock.calls[0][0] as {
+ 			content: string;
+-			ephemeral: boolean;
+ 		};
+-		expect(arg.ephemeral).toBe(true);
+ 		expect(arg.content).toContain("requires authorization");
+ 	});
+ 
+@@ -426,9 +459,8 @@
+ 				getSetting: vi.fn(() => "https://app.elizacloud.ai/embed"),
+ 			}),
+ 		);
+-		expect(denied.reply.mock.calls[0]?.[0]).toMatchObject({
++		expect(denied.editReply.mock.calls[0]?.[0]).toMatchObject({
+ 			content: expect.stringContaining("OWNER or ADMIN"),
+-			ephemeral: true,
+ 		});
+ 
+ 		hasRoleAccess.mockReset();
+@@ -440,10 +472,9 @@
+ 				getSetting: vi.fn(() => "https://app.elizacloud.ai/embed"),
+ 			}),
+ 		);
+-		expect(allowed.reply.mock.calls[0]?.[0]).toMatchObject({
++		expect(allowed.editReply.mock.calls[0]?.[0]).toMatchObject({
+ 			content:
+ 				"Open the Eliza app: https://app.elizacloud.ai/embed?platform=discord",
+-			ephemeral: true,
+ 		});
+ 	});
+ });
+@@ -585,12 +616,11 @@
+ 			const runtime = makePipelineRuntime();
+ 			const mapped = mapCatalogCommand(command);
+ 			await mapped.execute(interaction as never, runtime);
+-			expect(interaction.reply).toHaveBeenCalledTimes(1);
+-			const arg = interaction.reply.mock.calls[0][0] as {
++			expect(interaction.editReply).toHaveBeenCalledTimes(1);
++			const arg = interaction.editReply.mock.calls[0][0] as {
+ 				content: string;
+-				ephemeral: boolean;
+ 			};
+-			expect(arg.ephemeral).toBe(true);
++			expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
+ 			expect(arg.content).toMatch(/authorization|elevated/);
+ 			expect(fetchMock).not.toHaveBeenCalled();
+ 			expect(
+diff --git a/plugins/plugin-discord/__tests__/owner-pairing-service.test.ts b/plugins/plugin-discord/__tests__/owner-pairing-service.test.ts
+--- a/plugins/plugin-discord/__tests__/owner-pairing-service.test.ts
++++ b/plugins/plugin-discord/__tests__/owner-pairing-service.test.ts
+@@ -10,12 +10,15 @@
+ 	DiscordOwnerPairingServiceImpl,
+ 	handleElizaPairCommand,
+ } from "../owner-pairing-service";
++import { getRegisteredCommands, removeCommand } from "../slash-commands";
+ 
+ function makeRuntime(overrides: Partial<IAgentRuntime> = {}): IAgentRuntime {
+ 	return {
+ 		agentId: "11111111-1111-1111-1111-111111111111",
+ 		emitEvent: vi.fn(),
+ 		getService: vi.fn(() => null),
++		hasService: vi.fn(() => false),
++		getServiceLoadPromise: vi.fn(),
+ 		logger: {
+ 			debug: vi.fn(),
+ 			error: vi.fn(),
+@@ -37,6 +40,8 @@
+ 			getString: vi.fn(() => code),
+ 		},
+ 		reply: vi.fn(async () => undefined),
++		deferReply: vi.fn(async () => undefined),
++		editReply: vi.fn(async () => undefined),
+ 	};
+ }
+ 
+@@ -45,6 +50,48 @@
+ 		_resetRateLimitStateForTesting();
+ 	});
+ 
++	it("acknowledges before awaiting pairing verification", async () => {
++		let finishVerification!: (result: { success: boolean }) => void;
++		const verification = new Promise<{ success: boolean }>((resolve) => {
++			finishVerification = resolve;
++		});
++		const verify = vi.fn(() => verification);
++		const runtime = makeRuntime({
++			getService: vi.fn(() => ({
++				verifyOwnerBindFromConnector: verify,
++			})) as IAgentRuntime["getService"],
++		});
++		const interaction = makeInteraction("123456");
++		const execution = handleElizaPairCommand(interaction as never, runtime);
++		await Promise.resolve();
++		expect(interaction.deferReply).toHaveBeenCalledTimes(1);
++		expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
++		expect(verify).toHaveBeenCalledWith({
++			connector: "discord",
++			externalId: interaction.user.id,
++			displayHandle: "owner",
++			code: "123456",
++		});
++		expect(interaction.editReply).not.toHaveBeenCalled();
++		finishVerification({ success: true });
++		await execution;
++		expect(interaction.reply).not.toHaveBeenCalled();
++		expect(interaction.editReply).toHaveBeenCalledWith({
++			content: "Paired with Eliza. You can now log in via Discord.",
++		});
++	});
++
++	it("does not verify or audit when acknowledgment fails", async () => {
++		const runtime = makeRuntime();
++		const interaction = makeInteraction("123456");
++		interaction.deferReply.mockRejectedValue(new Error("Unknown interaction"));
++		await expect(
++			handleElizaPairCommand(interaction as never, runtime),
++		).rejects.toThrow("Unknown interaction");
++		expect(runtime.getService).not.toHaveBeenCalled();
++		expect(runtime.emitEvent).not.toHaveBeenCalled();
++	});
++
+ 	it("rejects malformed pair codes without calling backend verification", async () => {
+ 		const verify = vi.fn();
+ 		const runtime = makeRuntime({
+@@ -59,10 +106,9 @@
+ 		await handleElizaPairCommand(interaction as never, runtime);
+ 
+ 		expect(verify).not.toHaveBeenCalled();
+-		expect(interaction.reply).toHaveBeenCalledWith({
++		expect(interaction.editReply).toHaveBeenCalledWith({
+ 			content:
+ 				"The pairing code must be exactly 6 digits. Check the Eliza dashboard and try again.",
+-			ephemeral: true,
+ 		});
+ 	});
+ 
+@@ -72,10 +118,9 @@
+ 
+ 		await handleElizaPairCommand(interaction as never, runtime);
+ 
+-		expect(interaction.reply).toHaveBeenCalledWith({
++		expect(interaction.editReply).toHaveBeenCalledWith({
+ 			content:
+ 				"Eliza could not reach the pairing service right now. Please try again in a moment.",
+-			ephemeral: true,
+ 		});
+ 		expect(runtime.emitEvent).toHaveBeenCalledWith(
+ 			["AUTH_AUDIT"],
+@@ -102,12 +147,11 @@
+ 
+ 		await handleElizaPairCommand(interaction as never, runtime);
+ 
+-		expect(interaction.reply).toHaveBeenCalledWith({
++		expect(interaction.editReply).toHaveBeenCalledWith({
+ 			content:
+ 				"Something went wrong while verifying the pairing code. Please try again.",
+-			ephemeral: true,
+-		});
+-		expect(JSON.stringify(interaction.reply.mock.calls)).not.toContain(
++		});
++		expect(JSON.stringify(interaction.editReply.mock.calls)).not.toContain(
+ 			"database password leaked",
+ 		);
+ 	});
+@@ -131,15 +175,44 @@
+ 		const limited = makeInteraction("123456");
+ 		await handleElizaPairCommand(limited as never, runtime);
+ 
+-		expect(limited.reply).toHaveBeenCalledWith({
++		expect(limited.editReply).toHaveBeenCalledWith({
+ 			content:
+ 				"Too many pairing attempts. Please wait a moment before trying again.",
+-			ephemeral: true,
+ 		});
+ 	});
+ });
+ 
+ describe("DiscordOwnerPairingServiceImpl", () => {
++	it("registers pairing after the registered verifier finishes loading", async () => {
++		removeCommand("eliza-pair");
++		let finishLoading!: () => void;
++		const loading = new Promise<void>((resolve) => {
++			finishLoading = resolve;
++		});
++		const verify = vi.fn(async () => ({ success: true }));
++		const getService = vi.fn(() => null as unknown);
++		const runtime = makeRuntime({
++			hasService: vi.fn((name) => name === "OWNER_BIND_VERIFY"),
++			getServiceLoadPromise: vi.fn(
++				() => loading,
++			) as unknown as IAgentRuntime["getServiceLoadPromise"],
++			getService: getService as IAgentRuntime["getService"],
++		});
++		try {
++			const starting = DiscordOwnerPairingServiceImpl.start(runtime);
++			expect(runtime.getServiceLoadPromise).toHaveBeenCalledWith(
++				"OWNER_BIND_VERIFY",
++			);
++			expect(getRegisteredCommands().has("eliza-pair")).toBe(false);
++			getService.mockReturnValue({ verifyOwnerBindFromConnector: verify });
++			finishLoading();
++			await starting;
++			expect(getRegisteredCommands().has("eliza-pair")).toBe(true);
++		} finally {
++			removeCommand("eliza-pair");
++		}
++	});
++
+ 	it("rejects malformed Discord external IDs before fetching a DM user", async () => {
+ 		const fetch = vi.fn();
+ 		const runtime = makeRuntime({

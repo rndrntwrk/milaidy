@@ -416,7 +416,7 @@ function mockRuntime(
         release: { ...data.expected.release, ...data.binding },
         controls: {
           highRiskActions: "disabled-except-exact-owner-webauthn-repository-merge",
-          capabilityGrant: "owner-access-plus-device-bound-webauthn-single-use-coding-grant",
+          capabilityGrant: "verified-native-owner-single-use-draft-pr; owner-access-plus-device-bound-webauthn-merge",
         },
       });
     }

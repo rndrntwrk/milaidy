@@ -1,4 +1,5 @@
 import { Container } from "@cloudflare/containers";
+import { forwardAliceChatCoding } from "./alice-coding-chat";
 import {
   ALICE_RUNTIME_CONTAINER_PORT,
   type AliceRuntimeContainerEnvironmentSource,
@@ -45,6 +46,7 @@ async function forwardToDiscordGateway(request: Request): Promise<Response> {
 const ALICE_RUNTIME_OUTBOUND_BY_HOST = {
   "alice-ai-gateway.internal": forwardToAliceAiGateway,
   "alice-state-plane.internal": forwardToAliceStatePlane,
+  "alice-coding.internal": forwardAliceChatCoding,
   "gateway.discord.gg": forwardToDiscordGateway,
   // Discord's Ready event supplies a regional gateway for session resumption.
   "gateway-*.discord.gg": forwardToDiscordGateway,
