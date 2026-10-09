@@ -284,7 +284,7 @@ export class AliceChatCodingService extends Service {
         task.startAttempts += 1;
         await this.save(tasks);
         const result = await this.request("/v1/tasks", task.native);
-        task.created = true;
+        task.created = result.status !== "unavailable";
         // A reconciled start can already be terminal. Leave that status for
         // polling to deliver before recording it as reported to the owner.
         if (typeof result.status === "string" && !TERMINAL.has(result.status))

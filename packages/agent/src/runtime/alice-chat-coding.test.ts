@@ -142,6 +142,28 @@ test("unpaired actors and agent self cannot start coding", async () => {
     ).rejects.toThrow("CODING_OWNER_REQUIRED");
   }
 });
+test("an uncertain start is read back before one exact retry", async () => {
+  const { runtime } = fixture();
+  const bodies: string[] = [];
+  let readbacks = 0;
+  const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).includes("/repository"))
+      return Response.json({ ok: true, baseCommit: "a".repeat(40) });
+    if (init?.method === "POST") {
+      bodies.push(String(init.body));
+      return Response.json({ ok: true, status: bodies.length === 1 ? "unavailable" : "queued" });
+    }
+    readbacks++;
+    return Response.json({ ok: false, code: "CODING_TASK_NOT_FOUND" }, { status: 404 });
+  }) as typeof fetch;
+  await new AliceChatCodingService(runtime, fetcher, token).startTask(
+    message, "rndrntwrk/milaidy", "Fix the greeting bug",
+  );
+  await new AliceChatCodingService(runtime, fetcher, token).poll();
+  expect(readbacks).toBe(1);
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1]).toBe(bodies[0]);
+});
 test("a completed start response still delivers its PR after restart", async () => {
   const { runtime, deliveries } = fixture();
   const completed = {
