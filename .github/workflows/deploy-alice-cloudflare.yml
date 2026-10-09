@@ -464,9 +464,9 @@ jobs:
           import crypto from 'node:crypto';
           import {signRecoveryReceipt} from './workers/alice-production-control/src/recovery.ts';
           const origin = 'https://alice.rndrntwrk.com';
-          const pauseId = 'pause-90575c93-12e5-47b9-8035-3aac329e40d1';
-          const manifest = 'sha256:c2158d5452c8c26ea5ff7770c782d0c3707d656b50718d5b9cef4e6451a7bb7a';
-          const workerVersion = '52a772b4-4375-4863-8cbc-95e45ae82b39';
+          const pauseId = 'pause-6cc7e3c4-325f-43e9-9843-a8f6176532d3';
+          const manifest = 'sha256:2acade7291ca11a480597cb8e2b66b86c31262fd17dd0b8ee350bb36371e69a0';
+          const workerVersion = '78f35897-773d-4534-bc4b-c67cca7de43b';
           const owner = 'owner:sha256:622fc274c3ca129a051721c9d7301b8525c7177e782e3c13ded1f483697d7e10';
           const call = async (path, method = 'GET', extraHeaders = {}) => {
             const response = await fetch(origin + path, {
@@ -490,18 +490,18 @@ jobs:
             assert.equal(r.status, 200); assert.equal(r.value.releaseAdmission, 'admitted');
             assert.equal(r.value.status, 'ready');
             assert.equal(r.value.release?.deploymentManifestSha256, manifest);
-            assert.equal(r.value.release?.deploymentControllerCommit, '13078cb8e2964307bb27998903ad46d3b01eed3f');
-            assert.equal(r.value.release?.runtimeRevision, 67);
+            assert.equal(r.value.release?.deploymentControllerCommit, '00119126c48a2324e0d69c5d7ea016a85f2d3755');
+            assert.equal(r.value.release?.runtimeRevision, 72);
             assert.equal(r.value.release?.workerVersion?.id, workerVersion);
-            assert.equal(r.value.release?.releaseEpoch, 21);
+            assert.equal(r.value.release?.releaseEpoch, 26);
             assert.equal(r.value.authentication?.actor, owner);
             assert.equal(r.value.authentication?.exactOwnerBound, true);
           };
           const before = await readAuthority();
           assert.equal(before.deploymentManifestSha256, manifest);
-          assert.equal(before.activeReleaseEpoch, 21); assert.equal(before.highestReleaseEpoch, 21);
-          assert.deepEqual(before.pausedScopes, ['all']); assert.equal(before.budget.usedUnits, 13424);
-          assert.equal(before.rollbackBoundary, 'container:alice-runtime:v67');
+          assert.equal(before.activeReleaseEpoch, 26); assert.equal(before.highestReleaseEpoch, 26);
+          assert.deepEqual(before.pausedScopes, ['all']); assert.equal(before.budget.usedUnits, 0);
+          assert.equal(before.rollbackBoundary, 'container:alice-runtime:v72');
           const pause = before.activePauses.all;
           assert.equal(pause.pauseId, pauseId); assert.equal(pause.pausedBy, 'deployment-controller:pause-only');
           assert.equal(pause.resumedAt, null); assert.deepEqual(pause.binding, before.binding);
@@ -512,7 +512,7 @@ jobs:
             pauseId, pausedAt: pause.pausedAt, subject: owner, pauseBinding: pause.binding,
             pauseDeploymentManifestSha256: manifest, pauseRollbackBoundary: pause.rollbackBoundary,
             currentBinding: before.binding, currentDeploymentManifestSha256: manifest,
-            currentReleaseEpoch: 21, currentRollbackBoundary: before.rollbackBoundary,
+            currentReleaseEpoch: 26, currentRollbackBoundary: before.rollbackBoundary,
             issuedAt, expiresAt, nonce: 'owner-recovery-' + crypto.randomUUID(),
           }, process.env.ALICE_CONTROL_RECOVERY_TOKEN);
           const checkTime = Date.now();
@@ -529,12 +529,12 @@ jobs:
             assert.equal(resumed.value.evidenceQueued, true);
             const after = await readAuthority();
             assert.deepEqual(after.binding, before.binding); assert.equal(after.deploymentManifestSha256, manifest);
-            assert.equal(after.activeReleaseEpoch, 21); assert.equal(after.highestReleaseEpoch, 21);
+            assert.equal(after.activeReleaseEpoch, 26); assert.equal(after.highestReleaseEpoch, 26);
             assert.deepEqual(after.pausedScopes, []); assert.equal(after.budget.usedUnits, before.budget.usedUnits);
             assert.equal(after.admissionGeneration, before.admissionGeneration + 1);
             await verifyRestored();
             console.log(JSON.stringify({code: 'OWNER_PAUSE_RECOVERED', pauseId,
-              releaseEpoch: 21, admissionGeneration: after.admissionGeneration, pausedScopes: [],
+              releaseEpoch: 26, admissionGeneration: after.admissionGeneration, pausedScopes: [],
               runtimeAdmission: 'admitted', budgetUsedUnits: after.budget.usedUnits, providerMutationPerformed: false,
               receiptSha256: 'sha256:' + crypto.createHash('sha256').update(receipt).digest('hex')}));
           } catch {
