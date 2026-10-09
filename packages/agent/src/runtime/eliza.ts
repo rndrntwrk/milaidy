@@ -131,6 +131,7 @@ import { stampAliceProductionRuntimeBoundary } from "../api/alice-production-pro
 import {
   ALICE_PRODUCTION_PLUGIN_ALLOWLIST,
   constrainAliceProductionPluginSurface,
+  selectAliceSqlPluginServices,
 } from "./alice-production-plugin-policy.js";
 import { createAliceProductionRuntimePlugin } from "./alice-production-runtime-plugin.js";
 import { installAliceHighRiskActionBoundary } from "./alice-high-risk-action-boundary.js";
@@ -2938,11 +2939,16 @@ async function registerSqlPluginWithRecovery(
   runtime: AgentRuntime,
   sqlPlugin: ResolvedPlugin,
   config: ElizaConfig,
+  usesAliceD1Adapter: boolean,
 ): Promise<void> {
+  const plugin = selectAliceSqlPluginServices(
+    sqlPlugin.plugin,
+    usesAliceD1Adapter,
+  );
   let registerError: unknown = null;
 
   try {
-    await runtime.registerPlugin(sqlPlugin.plugin);
+    await runtime.registerPlugin(plugin);
   } catch (err) {
     registerError = err;
   }
@@ -2972,7 +2978,7 @@ async function registerSqlPluginWithRecovery(
     );
 
     try {
-      await runtime.registerPlugin(sqlPlugin.plugin);
+      await runtime.registerPlugin(plugin);
     } catch (retryErr) {
       if (!isPluginAlreadyRegisteredError(retryErr)) {
         throw retryErr;
@@ -4088,7 +4094,13 @@ export async function startEliza(
         includesPgliteStartup:
           (config.database?.provider ?? "pglite") === "pglite",
       },
-      () => registerSqlPluginWithRecovery(runtime, sqlPlugin, config),
+      () =>
+        registerSqlPluginWithRecovery(
+          runtime,
+          sqlPlugin,
+          config,
+          aliceD1Adapter !== undefined,
+        ),
     );
   } else {
     const loadedNames = resolvedPlugins.map((p) => p.name).join(", ");
@@ -4595,6 +4607,7 @@ export async function startEliza(
                 newRuntime,
                 freshSqlPlugin,
                 freshConfig,
+                freshAliceD1Adapter !== undefined,
               );
             }
             if (freshLocalEmbeddingPlugin) {

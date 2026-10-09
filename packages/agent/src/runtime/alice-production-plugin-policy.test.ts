@@ -1,8 +1,10 @@
+import type { Plugin } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
 import {
   ALICE_PRODUCTION_PLUGIN_ALLOWLIST,
   constrainAliceProductionPluginSurface,
   enforceAliceProductionPluginPolicy,
+  selectAliceSqlPluginServices,
 } from "./alice-production-plugin-policy";
 
 describe("Alice production plugin policy", () => {
@@ -97,5 +99,35 @@ describe("Alice production plugin policy", () => {
         { ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only" },
       ),
     ).toBe(openaiPlugin);
+  });
+});
+
+describe("Alice SQL services on the native D1 adapter", () => {
+  it("omits only relational identity resolution and preserves the resolved plugin", () => {
+    const identity = { serviceType: "identity_resolution" };
+    const memory = { serviceType: "memoryStorage" };
+    const sqlPlugin = {
+      name: "@elizaos/plugin-sql",
+      description: "Service-selection fixture",
+      services: [memory, identity],
+      routes: [{ path: "/identity/person-link" }],
+      schema: { memories: {} },
+      init: () => undefined,
+    } as unknown as Plugin;
+    const selected = selectAliceSqlPluginServices(sqlPlugin, true);
+    expect(selected.services).toEqual([memory]);
+    expect(selected.init).toBe(sqlPlugin.init);
+    expect(selected.schema).toBe(sqlPlugin.schema);
+    expect(selected.routes).toBe(sqlPlugin.routes);
+    expect(sqlPlugin.services).toEqual([memory, identity]);
+  });
+
+  it("preserves SQL identity authority when no Alice adapter was created", () => {
+    const sqlPlugin = {
+      name: "@elizaos/plugin-sql",
+      description: "Service-selection fixture",
+      services: [{ serviceType: "identity_resolution" }],
+    } as unknown as Plugin;
+    expect(selectAliceSqlPluginServices(sqlPlugin, false)).toBe(sqlPlugin);
   });
 });

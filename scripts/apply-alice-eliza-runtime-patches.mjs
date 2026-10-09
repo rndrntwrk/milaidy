@@ -20,6 +20,8 @@ export const aliceCompanionOperatorPatchRelativePath =
   "scripts/alice-eliza-runtime-patches/alice-companion-operator.patch";
 export const aliceTelegramOwnerPairingPatchRelativePath =
   "scripts/alice-eliza-runtime-patches/telegram-owner-pairing.patch";
+export const aliceDiscordOwnerCommandsPatchRelativePath =
+  "scripts/alice-eliza-runtime-patches/discord-owner-commands.patch";
 
 const runtimeRelativePath = "packages/app-core/src/runtime/eliza.ts";
 const appCoreApiServerRelativePath = "packages/app-core/src/api/server.ts";
@@ -7255,6 +7257,46 @@ export function applyAliceTelegramOwnerPairingPatch({
   return "applied";
 }
 
+// Acknowledge native Discord commands before owner/DB work, and publish pairing
+// only after the registered verifier and pairing service have finished starting.
+export function applyAliceDiscordOwnerCommandsPatch({
+  rootDir = repoRoot,
+  elizaRoot,
+  log = console.log,
+} = {}) {
+  const paths = [
+    "catalog-commands.ts", "owner-pairing-service.ts", "discord-interactions.ts",
+  ].map((file) => path.join(elizaRoot, "plugins/plugin-discord", file));
+  if (paths.every((file) => !existsSync(file))) return "skipped";
+  if (paths.some((file) => !existsSync(file))) {
+    throw new Error("Alice native Discord owner-command source incomplete");
+  }
+  const isApplied = () => {
+    const [catalog, pairing, interactions] = paths.map((file) => readFileSync(file, "utf8"));
+    return (
+      catalog.includes('await interaction.deferReply({ ephemeral: true });\n\t\tconst sender') &&
+      catalog.includes('await interaction.deferReply({ ephemeral: true });\n\t\t\tconst sender') &&
+      !catalog.includes("interaction.reply(") &&
+      pairing.includes('await runtime.getServiceLoadPromise("OWNER_BIND_VERIFY");') &&
+      pairing.includes('await interaction.deferReply({ ephemeral: true });') &&
+      !pairing.includes("interaction.reply(") &&
+      interactions.includes('await service.runtime.getServiceLoadPromise("OWNER_PAIRING_DISCORD");')
+    );
+  };
+  if (isApplied()) return "already-applied";
+  applyPatchWithGitFallback({
+    patchPath: path.join(rootDir, aliceDiscordOwnerCommandsPatchRelativePath),
+    targetRoot: elizaRoot,
+    driftMessage: "Alice native Discord owner-command patch drifted",
+    log,
+  });
+  if (!isApplied()) {
+    throw new Error("Alice native Discord owner-command contract absent after patch");
+  }
+  log("[alice-eliza-runtime-patches] applied native Discord owner-command correction");
+  return "applied";
+}
+
 export function applyAliceCompanionOperatorPatch({
   rootDir,
   elizaRoot,
@@ -7410,6 +7452,7 @@ export function applyAliceElizaRuntimePatches({
     applyAliceAppPluginRegisterExportPatch({ elizaRoot, log }),
     applyAliceTelegramSourcePackageJsonExportPatch({ elizaRoot, log }),
     applyAliceTelegramOwnerPairingPatch({ rootDir, elizaRoot, log }),
+    applyAliceDiscordOwnerCommandsPatch({ rootDir, elizaRoot, log }),
     applyAliceStream555RuntimePluginAutoloadPatch({ elizaRoot, log }),
     applyAliceTelegramAccountAuthResolverPatch({ elizaRoot, log }),
     applyAliceElizacloudReexportPatch({ elizaRoot, log }),

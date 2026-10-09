@@ -91,3 +91,22 @@ export function constrainAliceProductionPluginSurface(
     dispose: undefined,
   };
 }
+
+/**
+ * Alice persists native core entities through its D1 snapshot adapter, whose
+ * `db` is not the relational schema required by SQL identity resolution. Keep
+ * native connector ownership on that adapter; ordinary SQL runtimes retain
+ * their identity service and all its authority checks.
+ */
+export function selectAliceSqlPluginServices(
+  plugin: Plugin,
+  usesAliceD1Adapter: boolean,
+): Plugin {
+  if (!usesAliceD1Adapter) return plugin;
+  return {
+    ...plugin,
+    services: plugin.services?.filter(
+      (service) => service.serviceType !== "identity_resolution",
+    ),
+  };
+}

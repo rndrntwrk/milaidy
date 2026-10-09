@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { Agent, Memory, Room, Task, UUID, World } from "@elizaos/core";
-import { factsProvider, RelationshipsService } from "@elizaos/core";
+import { factsProvider, RelationshipsService, hasRoleAccess, type IAgentRuntime } from "@elizaos/core";
 import { sql } from "drizzle-orm";
 
 import {
@@ -13,6 +13,7 @@ import {
   createAliceFullRuntimeDatabaseAdapter,
 } from "./alice-d1-database-adapter";
 import { createAliceRuntimeSql } from "./alice-runtime-sql";
+import { OwnerBindingService } from "../services/owner-binding";
 
 const OWNER_ID = "alice-owner-production";
 const AGENT_ID = "00000000-0000-4000-8000-000000000001" as UUID;
@@ -620,4 +621,57 @@ describe("Alice D1-backed Eliza database adapter", () => {
     expect(result.text).toContain("Durable fact from Alice");
     sqlite.close();
   });
+});
+
+// Exercise native owner authorization with the durable adapter rather than a
+// mocked role decision: pairing must survive replacement and reject lookalikes.
+test("Discord owner pairing authorizes only the verified stable ID after rehydration", async () => {
+  const transport = new MemoryTransport();
+  const canonicalOwner = "00000000-0000-4000-8000-000000000007" as UUID;
+  const strangerId = "00000000-0000-4000-8000-000000000008" as UUID;
+  const first = createAliceD1DatabaseAdapter({ ownerId: OWNER_ID, transport });
+  await first.initialize();
+  await first.createAgents([agent()]);
+  await first.createWorlds([world()]);
+  await first.createRooms([{ ...room(), source: "discord" }]);
+  await first.createEntities([
+    { id: canonicalOwner, agentId: AGENT_ID, names: ["owner"], metadata: {} },
+    { id: ENTITY_ID, agentId: AGENT_ID, names: ["owner_handle"],
+      metadata: { discord: { id: "100000000000000001", username: "owner_handle" } } },
+    { id: strangerId, agentId: AGENT_ID, names: ["owner_handle"],
+      metadata: { discord: { id: "100000000000000002", username: "owner_handle" } } },
+  ]);
+  const runtimeFor = (adapter: typeof first) => ({
+    agentId: AGENT_ID,
+    character: { name: "Alice" },
+    getSetting: (key: string) => key === "ELIZA_ADMIN_ENTITY_ID" ? canonicalOwner : undefined,
+    getService: () => null,
+    getRoom: async (id: UUID) => (await adapter.getRoomsByIds([id]))?.[0] ?? null,
+    getWorld: async (id: UUID) => (await adapter.getWorldsByIds([id]))?.[0] ?? null,
+    getEntityById: async (id: UUID) => (await adapter.getEntitiesByIds([id]))?.[0] ?? null,
+    getRelationships: adapter.getRelationships.bind(adapter),
+    updateEntity: async (entity: Parameters<typeof adapter.updateEntities>[0][number]) =>
+      adapter.updateEntities([entity]),
+    reportError: (_source: string, error: unknown) => { throw error; },
+  }) as unknown as IAgentRuntime;
+  const request = { ...memory(), content: { text: "whoami", source: "discord" } };
+  const runtime = runtimeFor(first);
+  expect(await hasRoleAccess(runtime, request, "OWNER")).toBe(false);
+  expect(await hasRoleAccess(runtime, request, "ADMIN")).toBe(false);
+  const service = new OwnerBindingService(runtime);
+  const { code } = service.beginOwnerBind({ connector: "discord" });
+  expect(await service.verifyOwnerBindFromConnector({ connector: "discord",
+    externalId: "100000000000000001", displayHandle: "owner_handle", code,
+  })).toEqual({ success: true });
+  expect(await hasRoleAccess(runtime, request, "OWNER")).toBe(true);
+  expect(await hasRoleAccess(runtime, request, "ADMIN")).toBe(true);
+  const replacement = createAliceD1DatabaseAdapter({ ownerId: OWNER_ID, transport });
+  await replacement.initialize();
+  const restored = runtimeFor(replacement);
+  expect(await hasRoleAccess(restored, request, "OWNER")).toBe(true);
+  expect(await hasRoleAccess(restored, { ...request, entityId: strangerId }, "OWNER")).toBe(false);
+  expect(await hasRoleAccess(restored, { ...request, entityId: strangerId }, "ADMIN")).toBe(false);
+  expect(await service.verifyOwnerBindFromConnector({ connector: "discord",
+    externalId: "100000000000000002", displayHandle: "owner_handle", code,
+  })).toEqual({ success: false, error: "no_pending_bind" });
 });
