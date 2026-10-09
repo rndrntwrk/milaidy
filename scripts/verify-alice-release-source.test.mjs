@@ -37,6 +37,8 @@ test('recovery and acceptance corrections can reuse an unchanged runtime build',
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_cloudflare_worker_rollback.test.mjs'), 'test("readback", () => {});\n');
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_release_deadline.mjs'), 'export const phase = "cloudflare-promotion";\n');
   fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_release_deadline.test.mjs'), 'test("deadline", () => {});\n');
+  fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_release_controller.mjs'), 'export const readinessAttempts = 60;\n');
+  fs.writeFileSync(path.join(f.root, 'deploy/modal/alice_release_controller.test.mjs'), 'test("candidate readiness before pause", () => {});\n');
   for (const [file, contents] of [
     ['workers/alice-production-control/src/authority.ts', 'export const activationBudget = 100000;\n'],
     ['workers/alice-production-control/src/durable.ts', 'export const budgetEvidence = true;\n'],

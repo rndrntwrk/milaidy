@@ -407,6 +407,103 @@ test("refuses a stale edge status before any PAUSE_ALL mutation", async () => {
   assert.deepEqual(methods, ["GET"]);
 });
 
+test("waits for a stale admitted Durable Object before PAUSE_ALL, then fails closed if it persists", async () => {
+  const nextBinding = { ...binding, releaseDigest: `sha256:${"b".repeat(64)}` };
+  const nextRelease = { ...release, releaseEpoch: 2, modalRevision: 50 };
+  const nextCandidate = {
+    binding: nextBinding,
+    release: nextRelease,
+    rollbackBoundary: "modal:alice-runtime:v50",
+  };
+  const pause = {
+    pauseId: "pause-stale-do-12345678",
+    pausedAt: 1_787_400_000_000,
+    binding,
+    deploymentManifestSha256: release.deploymentManifestSha256,
+    rollbackBoundary: "modal:alice-runtime:v49",
+  };
+  for (const staleReads of [2, 3]) {
+    let reads = 0;
+    let posts = 0;
+    const run = () => pauseAliceReleaseMachine({
+      fetchImpl: async (_url, init) => {
+        if (init.method === "POST") {
+          posts += 1;
+          return Response.json({
+            ok: true,
+            result: { ok: true, code: "SCOPE_PAUSED", pause },
+            evidenceQueued: true,
+          });
+        }
+        reads += 1;
+        const paused = posts > 0;
+        const candidateAdmission = paused
+          ? {
+              ok: false, allowed: false, code: "RUNTIME_PAUSED",
+              blockingScopes: ["all"], binding: nextBinding, release: nextRelease,
+            }
+          : reads <= staleReads
+            ? {
+                ok: true, allowed: true, code: "RUNTIME_ADMITTED",
+                blockingScopes: [], binding, release,
+              }
+            : {
+                ok: false, allowed: false, code: "RELEASE_NOT_ADMITTED",
+                blockingScopes: [], binding: null, release: null,
+              };
+        return Response.json({
+          ok: true,
+          code: "DEPLOYMENT_STATUS_READ",
+          authority: {
+            binding,
+            deploymentManifestSha256: release.deploymentManifestSha256,
+            admissionGeneration: paused ? 4 : 3,
+            activeReleaseEpoch: 1,
+            highestReleaseEpoch: 1,
+            rollbackBoundary: "modal:alice-runtime:v49",
+            pausedScopes: paused ? ["all"] : [],
+            activePauses: paused ? { all: pause } : {},
+          },
+          candidateAdmission,
+          edgeReadiness: edgeReadiness(
+            init.headers["x-alice-deployment-edge-nonce"],
+            { servingCandidate: nextCandidate },
+          ),
+        });
+      },
+      serviceClientId: "release-client-id",
+      serviceClientSecret: "release-client-secret-at-least-32-bytes",
+      deploymentPauseToken: "deployment-pause-token-at-least-32-bytes",
+      active: {
+        binding,
+        deploymentManifestSha256: release.deploymentManifestSha256,
+        releaseEpoch: 1,
+        rollbackBoundary: "modal:alice-runtime:v49",
+      },
+      candidateExpected: nextCandidate,
+      expectedControlVersionId: controlVersionId,
+      readinessAttempts: 3,
+      readinessDelayMs: 0,
+      nonceFactory: () => "n".repeat(43),
+      sleepImpl: async () => {},
+    });
+    if (staleReads === 2) {
+      const result = await run();
+      assert.equal(result.confirmedByStatusRead, true);
+      assert.equal(reads, 4);
+      assert.equal(posts, 1);
+    } else {
+      await assert.rejects(run, (error) => {
+        assert.equal(error.message, "ALICE_DEPLOYMENT_PAUSE_INVALID");
+        assert.equal(error.diagnostic.phase, "pre-pause");
+        return true;
+      });
+      assert.equal(reads, 3);
+      assert.equal(posts, 0);
+    }
+  }
+});
+
 test("status retry exhaustion reports a sanitized pre-pause HTTP and transport diagnostic", async () => {
   let attempts = 0;
   const secret = "do-not-print-this-transport-message";
