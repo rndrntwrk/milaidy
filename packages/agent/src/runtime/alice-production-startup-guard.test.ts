@@ -46,7 +46,7 @@ describe("Alice proposer-only startup wiring", () => {
 
   it("constrains admitted plugin surfaces before SQL pre-registration", () => {
     const constraint = source.indexOf("constrainAliceProductionPluginSurface(");
-    const sqlRegistration = source.indexOf("() => registerSqlPluginWithRecovery(");
+    const sqlRegistration = source.search(/\(\)\s*=>\s*registerSqlPluginWithRecovery\(/);
     expect(constraint).toBeGreaterThan(0);
     expect(sqlRegistration).toBeGreaterThan(constraint);
   });
