@@ -276,6 +276,10 @@ if (invokedPath === import.meta.url) {
     process.stderr.write(
       `${error instanceof Error ? error.message : String(error)}\n`,
     );
+    if (error instanceof Error && error.message === "ALICE_DEPLOYMENT_PAUSE_INVALID" &&
+      error.diagnostic) {
+      process.stderr.write(`${JSON.stringify(error.diagnostic)}\n`);
+    }
     process.exitCode = 1;
   });
 }

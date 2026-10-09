@@ -277,6 +277,7 @@ test("machine PAUSE_ALL rejects a mismatch in the shared pause identity", async 
         return Response.json({
           ok: true,
           code: "DEPLOYMENT_STATUS_READ",
+          ignoredSecret: "do-not-print-this-response-field",
           authority: {
             binding,
             deploymentManifestSha256: release.deploymentManifestSha256,
@@ -325,7 +326,26 @@ test("machine PAUSE_ALL rejects a mismatch in the shared pause identity", async 
       nonceFactory: () => nonces.shift(),
       sleepImpl: async () => {},
     }),
-    /ALICE_DEPLOYMENT_PAUSE_INVALID/,
+    (error) => {
+      assert.equal(error.message, "ALICE_DEPLOYMENT_PAUSE_INVALID");
+      assert.equal(error.diagnostic.phase, "post-pause");
+      assert.equal(error.diagnostic.lastStatus.httpStatus, 200);
+      assert.equal(error.diagnostic.lastStatus.authorityTuple, true);
+      assert.equal(error.diagnostic.lastStatus.authorityGeneration, true);
+      assert.equal(error.diagnostic.lastStatus.pauseAllScope, true);
+      assert.equal(error.diagnostic.lastStatus.pauseIdentity, false);
+      assert.equal(error.diagnostic.lastStatus.candidateDenied, true);
+      assert.equal(error.diagnostic.lastStatus.candidateCode, true);
+      assert.equal(error.diagnostic.lastStatus.candidateScopes, true);
+      assert.equal(error.diagnostic.lastStatus.candidateBinding, true);
+      assert.equal(error.diagnostic.lastStatus.candidateRelease, true);
+      assert.equal(error.diagnostic.lastStatus.edgeNonce, true);
+      assert.equal(error.diagnostic.lastStatus.edgeVersion, true);
+      assert.equal(error.diagnostic.lastStatus.edgeCandidate, true);
+      assert.equal(error.diagnostic.lastReadError, null);
+      assert.doesNotMatch(JSON.stringify(error.diagnostic), /do-not-print-this-response-field/);
+      return true;
+    },
   );
 });
 
@@ -385,6 +405,56 @@ test("refuses a stale edge status before any PAUSE_ALL mutation", async () => {
   );
   assert.equal(pauseMutations, 0);
   assert.deepEqual(methods, ["GET"]);
+});
+
+test("status retry exhaustion reports a sanitized pre-pause HTTP and transport diagnostic", async () => {
+  let attempts = 0;
+  const secret = "do-not-print-this-transport-message";
+  await assert.rejects(
+    () => pauseAliceReleaseMachine({
+      fetchImpl: async (_url, init) => {
+        assert.equal(init.method, "GET");
+        attempts += 1;
+        if (attempts === 2) throw new TypeError(secret);
+        return Response.json({ ok: false, code: "TEMPORARILY_UNAVAILABLE" }, { status: 503 });
+      },
+      serviceClientId: "release-client-id",
+      serviceClientSecret: "release-client-secret-at-least-32-bytes",
+      deploymentPauseToken: "deployment-pause-token-at-least-32-bytes",
+      active: {
+        binding,
+        deploymentManifestSha256: release.deploymentManifestSha256,
+        releaseEpoch: release.releaseEpoch,
+        rollbackBoundary: "modal:alice-runtime:v49",
+      },
+      candidateExpected,
+      expectedControlVersionId: controlVersionId,
+      readinessAttempts: 2,
+      readinessDelayMs: 0,
+      nonceFactory: () => "n".repeat(43),
+      sleepImpl: async () => {},
+    }),
+    (error) => {
+      assert.equal(error.message, "ALICE_DEPLOYMENT_PAUSE_INVALID");
+      assert.equal(error.diagnostic.phase, "pre-pause");
+      assert.equal(error.diagnostic.attempts, 2);
+      assert.equal(error.diagnostic.lastStatus.httpStatus, 503);
+      assert.equal(error.diagnostic.lastStatus.statusOk, false);
+      assert.equal(error.diagnostic.lastStatus.authorityTuple, false);
+      assert.equal(error.diagnostic.lastStatus.authorityGeneration, false);
+      assert.equal(error.diagnostic.lastStatus.pauseIdentity, null);
+      assert.equal(error.diagnostic.lastStatus.edgeNonce, false);
+      assert.deepEqual(error.diagnostic.lastReadError, {
+        attempt: 2,
+        httpStatus: null,
+        stage: "transport",
+        errorClass: "TypeError",
+      });
+      assert.doesNotMatch(JSON.stringify(error.diagnostic), new RegExp(secret));
+      return true;
+    },
+  );
+  assert.equal(attempts, 2);
 });
 
 test("first release pauses the exact unadmitted tuple while checking the signed candidate", async () => {
