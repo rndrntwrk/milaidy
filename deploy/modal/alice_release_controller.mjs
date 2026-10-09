@@ -418,30 +418,73 @@ export async function pauseAliceReleaseMachine({
     status.edgeReadiness.servingCandidate.rollbackBoundary ===
       candidateExpected.rollbackBoundary
   );
-  const readStatus = async (nonce) => {
-    const response = await fetchImpl(
-      `${RELEASE_ORIGIN}${DEPLOYMENT_STATUS_PATH}`,
-      {
-        method: "GET",
-        headers: {
-          ...headers,
-          "x-alice-deployment-edge-nonce": nonce,
-        },
-        redirect: "manual",
-      },
-    );
-    const status = await boundedJson(
-      response,
-      "ALICE_DEPLOYMENT_PAUSE_INVALID",
-    );
-    return { response, status };
-  };
-  const awaitStatus = async (verify) => {
+  const awaitStatus = async (phase, verify, expectedPause = null) => {
+    let lastStatus = null;
+    let lastReadError = null;
     for (let attempt = 0; attempt < readinessAttempts; attempt += 1) {
       const nonce = nonceFactory();
       if (!EDGE_NONCE.test(nonce ?? "")) invalid();
+      let response;
       try {
-        const observed = await readStatus(nonce);
+        response = await fetchImpl(
+          `${RELEASE_ORIGIN}${DEPLOYMENT_STATUS_PATH}`,
+          {
+            method: "GET",
+            headers: {
+              ...headers,
+              "x-alice-deployment-edge-nonce": nonce,
+            },
+            redirect: "manual",
+          },
+        );
+        const status = await boundedJson(
+          response,
+          "ALICE_DEPLOYMENT_PAUSE_INVALID",
+        );
+        const authority = status?.authority;
+        const candidate = status?.candidateAdmission;
+        const edge = status?.edgeReadiness;
+        const servingCandidate = edge?.servingCandidate;
+        lastStatus = {
+          attempt: attempt + 1,
+          httpStatus: Number.isInteger(response.status) ? response.status : null,
+          statusOk: status?.ok === true,
+          statusCode: status?.code === "DEPLOYMENT_STATUS_READ",
+          authorityTuple: Boolean(
+            object(authority) &&
+            exactBinding(authority.binding, active.binding) &&
+            authority.deploymentManifestSha256 === active.deploymentManifestSha256 &&
+            authority.activeReleaseEpoch === active.releaseEpoch &&
+            authority.rollbackBoundary === active.rollbackBoundary
+          ),
+          authorityGeneration: validAdmissionGeneration(
+            active,
+            authority?.admissionGeneration,
+          ),
+          pauseAllScope: Array.isArray(authority?.pausedScopes) &&
+            authority.pausedScopes.includes("all"),
+          pauseIdentity: expectedPause === null
+            ? null
+            : pauseMatches(authority?.activePauses?.all, expectedPause),
+          candidateDenied: candidate?.ok === false && candidate?.allowed === false,
+          candidateCode: candidate?.code === "RUNTIME_PAUSED",
+          candidateScopes: canonical(candidate?.blockingScopes) === canonical(["all"]),
+          candidateBinding: exactBinding(candidate?.binding, candidateExpected.binding),
+          candidateRelease: exactRelease(candidate?.release, candidateExpected.release),
+          edgeShape: exactKeys(edge, [
+            "nonce", "schemaVersion", "servingCandidate", "workerVersionId",
+          ]),
+          edgeSchema: edge?.schemaVersion === "alice.deployment-edge-readiness.v1",
+          edgeNonce: edge?.nonce === nonce,
+          edgeVersion: edge?.workerVersionId === expectedControlVersionId,
+          edgeCandidate: Boolean(
+            object(servingCandidate) &&
+            exactBinding(servingCandidate.binding, candidateExpected.binding) &&
+            exactRelease(servingCandidate.release, candidateExpected.release) &&
+            servingCandidate.rollbackBoundary === candidateExpected.rollbackBoundary
+          ),
+        };
+        const observed = { response, status };
         if (
           observed.response.ok &&
           observed.status.ok === true &&
@@ -452,17 +495,27 @@ export async function pauseAliceReleaseMachine({
         ) {
           return { ...observed, nonce };
         }
-      } catch {
+      } catch (error) {
         // A not-yet-propagated route may fail as an HTTP response or a
         // transport error. Both remain mutation-free and are bounded by the
         // same readiness-attempt ceiling.
+        const name = error instanceof Error ? error.name : "";
+        lastReadError = {
+          attempt: attempt + 1,
+          httpStatus: Number.isInteger(response?.status) ? response.status : null,
+          stage: response ? "response" : "transport",
+          errorClass: ["AbortError", "TimeoutError", "TypeError", "SyntaxError", "RangeError"]
+            .includes(name) ? name : "Error",
+        };
       }
       if (attempt + 1 < readinessAttempts) await sleepImpl(readinessDelayMs);
     }
-    invalid("ALICE_DEPLOYMENT_PAUSE_INVALID");
+    const error = new Error("ALICE_DEPLOYMENT_PAUSE_INVALID");
+    error.diagnostic = { phase, attempts: readinessAttempts, lastStatus, lastReadError };
+    throw error;
   };
 
-  const ready = await awaitStatus(() => true);
+  const ready = await awaitStatus("pre-pause", () => true);
   const pauseResponse = await fetchImpl(
     `${RELEASE_ORIGIN}${DEPLOYMENT_PAUSE_V2_PATH}`,
     {
@@ -491,7 +544,7 @@ export async function pauseAliceReleaseMachine({
   ) {
     invalid("ALICE_DEPLOYMENT_PAUSE_INVALID");
   }
-  const confirmed = await awaitStatus((status) => {
+  const confirmed = await awaitStatus("post-pause", (status) => {
     const authority = status.authority;
     return Boolean(
       Array.isArray(authority.pausedScopes) &&
@@ -512,7 +565,7 @@ export async function pauseAliceReleaseMachine({
         candidateExpected.release,
       )
     );
-  });
+  }, paused.result.pause);
   const statusResponse = confirmed.response;
   const status = confirmed.status;
   const authority = status.authority;
