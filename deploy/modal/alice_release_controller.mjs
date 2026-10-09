@@ -347,7 +347,7 @@ export async function pauseAliceReleaseMachine({
   active,
   candidateExpected,
   expectedControlVersionId,
-  readinessAttempts = 24,
+  readinessAttempts = 60,
   readinessDelayMs = 5_000,
   nonceFactory = () => crypto.randomBytes(32).toString("base64url"),
   sleepImpl = (milliseconds) =>
@@ -515,7 +515,30 @@ export async function pauseAliceReleaseMachine({
     throw error;
   };
 
-  const ready = await awaitStatus("pre-pause", () => true);
+  // A new edge can still call the old admitted Durable Object during propagation.
+  const ready = await awaitStatus("pre-pause", (status) => {
+    const candidate = status.candidateAdmission;
+    const pausedScopes = status.authority?.pausedScopes;
+    if (!object(candidate) || !Array.isArray(pausedScopes)) return false;
+    const unadmitted = candidate.ok === false &&
+      candidate.allowed === false &&
+      candidate.code === "RELEASE_NOT_ADMITTED" &&
+      canonical(candidate.blockingScopes) === canonical([]) &&
+      candidate.binding === null &&
+      candidate.release === null;
+    const exactCandidate = exactBinding(candidate.binding, candidateExpected.binding) &&
+      exactRelease(candidate.release, candidateExpected.release);
+    const admitted = candidate.ok === true &&
+      candidate.allowed === true &&
+      candidate.code === "RUNTIME_ADMITTED" &&
+      canonical(candidate.blockingScopes) === canonical([]);
+    const alreadyPaused = pausedScopes.includes("all") &&
+      candidate.ok === false &&
+      candidate.allowed === false &&
+      candidate.code === "RUNTIME_PAUSED" &&
+      canonical(candidate.blockingScopes) === canonical(["all"]);
+    return unadmitted || (exactCandidate && (admitted || alreadyPaused));
+  });
   const pauseResponse = await fetchImpl(
     `${RELEASE_ORIGIN}${DEPLOYMENT_PAUSE_V2_PATH}`,
     {
