@@ -625,6 +625,56 @@ describe("Alice D1-backed Eliza database adapter", () => {
 
 // Exercise native owner authorization with the durable adapter rather than a
 // mocked role decision: pairing must survive replacement and reject lookalikes.
+test("retained Telegram alternate and primary remain owners after rehydration", async () => {
+  const transport = new MemoryTransport();
+  const canonicalOwner = "00000000-0000-4000-8000-000000000007" as UUID;
+  const first = createAliceD1DatabaseAdapter({ ownerId: OWNER_ID, transport });
+  await first.initialize();
+  await first.createAgents([agent()]);
+  await first.createWorlds([world()]);
+  await first.createRooms([{ ...room(), source: "telegram" }]);
+  await first.createEntities([
+    { id: canonicalOwner, agentId: AGENT_ID, names: ["owner"], metadata: {} },
+    { id: ENTITY_ID, agentId: AGENT_ID, names: ["alternate"], metadata: { telegram: { userId: "666666" } } },
+  ]);
+  const runtimeFor = (adapter: typeof first) => ({
+    agentId: AGENT_ID,
+    character: { name: "Alice" },
+    getSetting: (key: string) => key === "ELIZA_ADMIN_ENTITY_ID" ? canonicalOwner : undefined,
+    getService: () => null,
+    getRoom: async (id: UUID) => (await adapter.getRoomsByIds([id]))?.[0] ?? null,
+    getWorld: async (id: UUID) => (await adapter.getWorldsByIds([id]))?.[0] ?? null,
+    getEntityById: async (id: UUID) => (await adapter.getEntitiesByIds([id]))?.[0] ?? null,
+    getRelationships: adapter.getRelationships.bind(adapter),
+    createEntity: async (entity: Parameters<typeof adapter.createEntities>[0][number]) =>
+      (await adapter.createEntities([entity])).length > 0,
+    updateEntity: async (entity: Parameters<typeof adapter.updateEntities>[0][number]) =>
+      adapter.updateEntities([entity]),
+    createRelationship: async (relationship: Parameters<typeof adapter.createRelationships>[0][number]) =>
+      (await adapter.createRelationships([relationship])).length > 0,
+    reportError: (_source: string, error: unknown) => { throw error; },
+  }) as unknown as IAgentRuntime;
+  const service = new OwnerBindingService(runtimeFor(first));
+  for (const [externalId, retainExistingAccount] of [["424242", false], ["434343", true]] as const) {
+    const { code } = service.beginOwnerBind({ connector: "telegram", retainExistingAccount });
+    expect(await service.verifyOwnerBindFromConnector({ connector: "telegram", externalId, displayHandle: retainExistingAccount ? "primary" : "alternate", code })).toEqual({ success: true });
+  }
+  const replacement = createAliceD1DatabaseAdapter({ ownerId: OWNER_ID, transport });
+  await replacement.initialize();
+  const restored = runtimeFor(replacement);
+  const links = await restored.getRelationships({ entityIds: [canonicalOwner], tags: ["identity_link"] });
+  expect(links).toHaveLength(1);
+  expect(links[0].metadata).toMatchObject({ status: "confirmed", source: "owner_pairing", connector: "telegram" });
+  expect((await restored.getEntityById(links[0].sourceEntityId))?.metadata?.telegram).toMatchObject({ userId: "424242" });
+  expect((await restored.getEntityById(canonicalOwner))?.metadata?.telegram).toMatchObject({ userId: "434343" });
+  const request = { ...memory(), content: { text: "fix this bug", source: "telegram" } };
+  for (const entityId of [canonicalOwner, links[0].sourceEntityId]) {
+    expect(await hasRoleAccess(restored, { ...request, entityId }, "OWNER")).toBe(true);
+    expect(await hasRoleAccess(restored, { ...request, entityId }, "ADMIN")).toBe(true);
+  }
+  expect(await hasRoleAccess(restored, request, "OWNER")).toBe(false);
+});
+
 test("Discord owner pairing authorizes only the verified stable ID after rehydration", async () => {
   const transport = new MemoryTransport();
   const canonicalOwner = "00000000-0000-4000-8000-000000000007" as UUID;

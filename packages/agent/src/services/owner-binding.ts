@@ -20,6 +20,7 @@
  */
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import {
+  createUniqueUuid,
   ElizaError,
   getConfiguredOwnerEntityIds,
   type IAgentRuntime,
@@ -75,6 +76,7 @@ type PendingBind = {
   /** Owner entity captured at issuance so verify binds to the same identity
    *  even if settings change mid-flow. */
   ownerEntityId: UUID;
+  retainExistingAccount: boolean;
 };
 
 function hashCode(code: string): Buffer {
@@ -133,11 +135,18 @@ export class OwnerBindingService extends Service {
    */
   beginOwnerBind(params: {
     connector: OwnerBindConnector;
+    /** Explicit owner consent to keep the previously paired Telegram account. */
+    retainExistingAccount?: boolean;
   }): OwnerBindIssueResult {
     if (!isSupportedConnector(params.connector)) {
       throw new ElizaError("Unsupported owner-pairing connector", {
         code: "OWNER_BIND_UNSUPPORTED_CONNECTOR",
         context: { connector: String(params.connector) },
+      });
+    }
+    if (params.retainExistingAccount && params.connector !== "telegram") {
+      throw new ElizaError("Retaining an alternate is supported for Telegram", {
+        code: "OWNER_BIND_RETENTION_UNSUPPORTED",
       });
     }
 
@@ -159,6 +168,7 @@ export class OwnerBindingService extends Service {
       expiresAt,
       attemptsRemaining: OWNER_BIND_MAX_ATTEMPTS,
       ownerEntityId: ownerEntityId as UUID,
+      retainExistingAccount: params.retainExistingAccount === true,
     });
 
     logger.info(
@@ -246,6 +256,7 @@ export class OwnerBindingService extends Service {
         params.connector,
         params.externalId.trim(),
         params.displayHandle,
+        bind.retainExistingAccount,
       );
     } catch (err) {
       // error-policy:J1 boundary translation — this method is the service
@@ -283,8 +294,79 @@ export class OwnerBindingService extends Service {
     connector: OwnerBindConnector,
     externalId: string,
     displayHandle: string,
+    retainExistingAccount: boolean,
   ): Promise<void> {
     const existing = await this.runtime.getEntityById(ownerEntityId);
+    const previousIdentity = asRecord(existing?.metadata?.[connector]);
+    if (retainExistingAccount && previousIdentity) {
+      const previousId = previousIdentity.userId ?? previousIdentity.id;
+      if (typeof previousId === "string" && previousId !== externalId) {
+        const verifiedAt = previousIdentity.ownerBindVerifiedAt;
+        if (
+          typeof verifiedAt !== "number" ||
+          !Number.isFinite(verifiedAt) ||
+          verifiedAt <= 0
+        ) {
+          throw new ElizaError("Cannot retain an unverified owner account", {
+            code: "OWNER_BIND_RETENTION_UNVERIFIED",
+          });
+        }
+        const alternateId = createUniqueUuid(
+          this.runtime,
+          `owner-paired:${ownerEntityId}:${connector}:${previousId}`,
+        );
+        const alternate = {
+          id: alternateId,
+          agentId: this.runtime.agentId,
+          names: existing?.names ?? [],
+          metadata: { [connector]: previousIdentity },
+        };
+        const existingAlternate = await this.runtime.getEntityById(alternateId);
+        if (existingAlternate) {
+          await this.runtime.updateEntity({
+            ...existingAlternate,
+            metadata: {
+              ...existingAlternate.metadata,
+              [connector]: previousIdentity,
+            },
+          });
+        } else if (!(await this.runtime.createEntity(alternate))) {
+          throw new ElizaError("Failed to preserve owner account", {
+            code: "OWNER_BIND_RETENTION_WRITE_FAILED",
+          });
+        }
+        const links = await this.runtime.getRelationships({
+          entityIds: [alternateId],
+          tags: ["identity_link"],
+        });
+        const alreadyLinked = links.some(
+          (link) =>
+            link.sourceEntityId === alternateId &&
+            link.targetEntityId === ownerEntityId &&
+            link.tags?.includes("identity_link") &&
+            link.metadata?.status === "confirmed" &&
+            link.metadata?.source === "owner_pairing" &&
+            link.metadata?.connector === connector,
+        );
+        if (
+          !alreadyLinked &&
+          !(await this.runtime.createRelationship({
+            sourceEntityId: alternateId,
+            targetEntityId: ownerEntityId,
+            tags: ["identity_link"],
+            metadata: {
+              status: "confirmed",
+              source: "owner_pairing",
+              connector,
+            },
+          }))
+        ) {
+          throw new ElizaError("Failed to preserve owner account link", {
+            code: "OWNER_BIND_RETENTION_WRITE_FAILED",
+          });
+        }
+      }
+    }
     const handle =
       typeof displayHandle === "string" && displayHandle.trim().length > 0
         ? displayHandle.trim()
