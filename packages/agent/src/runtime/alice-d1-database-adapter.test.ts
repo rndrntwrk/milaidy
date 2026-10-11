@@ -11,6 +11,7 @@ import {
   type AliceElizaStateTransport,
   createAliceD1DatabaseAdapter,
   createAliceFullRuntimeDatabaseAdapter,
+  createAliceHttpStateTransport,
 } from "./alice-d1-database-adapter";
 import { createAliceRuntimeSql } from "./alice-runtime-sql";
 import { OwnerBindingService } from "../services/owner-binding";
@@ -448,6 +449,190 @@ describe("Alice D1-backed Eliza database adapter", () => {
       ]),
     ).rejects.toThrow("STATE_REMOTE_UNAVAILABLE");
     expect(await adapter.getAgentsByIds([AGENT_ID])).toEqual([agent()]);
+  });
+
+  for (const transaction of [false, true]) {
+    test(`reconciles a lost commit response without repeating ${transaction ? "the transaction callback" : "the mutation"}`, async () => {
+      const transport = new MemoryTransport();
+      const commit = transport.commit.bind(transport);
+      let accepted: AliceElizaStateCommit | undefined;
+      let receipt: { revision: number } | undefined;
+      let attempts = 0;
+      transport.commit = async (input) => {
+        attempts += 1;
+        if (receipt) {
+          expect(input).toEqual(accepted);
+          return receipt;
+        }
+        accepted = structuredClone(input);
+        receipt = await commit(input);
+        throw transaction
+          ? new Error("STATE_OPERATION_FAILED")
+          : new TypeError("Commit response lost");
+      };
+      const adapter = createAliceD1DatabaseAdapter({
+        ownerId: OWNER_ID,
+        transport,
+      });
+      await adapter.initialize();
+      let callbacks = 0;
+      if (transaction) {
+        await adapter.transaction(async (tx) => {
+          callbacks += 1;
+          await tx.createAgents([agent()]);
+        });
+        expect(callbacks).toBe(1);
+      } else {
+        await adapter.createAgents([agent()]);
+      }
+      expect(transport.commits).toHaveLength(1);
+      expect(attempts).toBe(2);
+      expect(await adapter.getAgentsByIds([AGENT_ID])).toEqual([agent()]);
+      transport.commit = commit;
+      await adapter.updateAgents([
+        { agentId: AGENT_ID, agent: { name: "Recovered Alice" } },
+      ]);
+      expect(transport.revision).toBe(2);
+      expect((await adapter.getAgentsByIds([AGENT_ID]))[0]?.name).toBe(
+        "Recovered Alice",
+      );
+    });
+
+    test(`reloads a stale revision before the next ${transaction ? "transaction" : "mutation"}`, async () => {
+      const transport = new MemoryTransport();
+      const commit = transport.commit.bind(transport);
+      transport.commit = async (input) => {
+        if (input.expectedRevision !== transport.revision)
+          throw new Error("ELIZA_REVISION_STALE");
+        return commit(input);
+      };
+      const stale = createAliceD1DatabaseAdapter({
+        ownerId: OWNER_ID,
+        transport,
+      });
+      const writer = createAliceD1DatabaseAdapter({
+        ownerId: OWNER_ID,
+        transport,
+      });
+      await stale.initialize();
+      await writer.initialize();
+      await writer.createAgents([agent()]);
+      let callbacks = 0;
+      const mutate = () =>
+        transaction
+          ? stale.transaction(async (tx) => {
+              callbacks += 1;
+              await tx.createAgents([
+                { ...agent(), name: "Rejected stale write" },
+              ]);
+            })
+          : stale.createAgents([{ ...agent(), name: "Rejected stale write" }]);
+      await expect(mutate()).rejects.toThrow("ELIZA_REVISION_STALE");
+      if (transaction) expect(callbacks).toBe(1);
+      expect(await stale.getAgentsByIds([AGENT_ID])).toEqual([agent()]);
+      await stale.updateAgents([
+        { agentId: AGENT_ID, agent: { name: "Fresh write" } },
+      ]);
+      expect(transport.revision).toBe(2);
+      const restored = createAliceD1DatabaseAdapter({
+        ownerId: OWNER_ID,
+        transport,
+      });
+      await restored.initialize();
+      expect((await restored.getAgentsByIds([AGENT_ID]))[0]?.name).toBe(
+        "Fresh write",
+      );
+    });
+  }
+
+  test("reloads authoritative state when both commit responses are lost", async () => {
+    const transport = new MemoryTransport();
+    const commit = transport.commit.bind(transport);
+    let accepted: AliceElizaStateCommit | undefined;
+    let attempts = 0;
+    transport.commit = async (input) => {
+      attempts += 1;
+      if (!accepted) {
+        accepted = structuredClone(input);
+        await commit(input);
+      } else {
+        expect(input).toEqual(accepted);
+      }
+      throw new Error("ELIZA_COMMIT_FAILED");
+    };
+    const adapter = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+    });
+    await adapter.initialize();
+    await expect(adapter.createAgents([agent()])).rejects.toThrow(
+      "ELIZA_COMMIT_FAILED",
+    );
+    expect(await adapter.getAgentsByIds([AGENT_ID])).toEqual([agent()]);
+    expect(transport.commits).toHaveLength(1);
+    expect(attempts).toBe(2);
+    transport.commit = commit;
+    await adapter.createWorlds([world()]);
+    expect(transport.revision).toBe(2);
+  });
+
+  test("blocks writes during reload failure and lets a new request recover", async () => {
+    const transport = new MemoryTransport();
+    const load = transport.load.bind(transport);
+    const commit = transport.commit.bind(transport);
+    const adapter = createAliceD1DatabaseAdapter({
+      ownerId: OWNER_ID,
+      transport,
+    });
+    await expect(adapter.createAgents([agent()])).rejects.toThrow(
+      "ALICE_D1_ADAPTER_NOT_INITIALIZED",
+    );
+    await adapter.initialize();
+    transport.commit = async () => {
+      throw new Error("ELIZA_REVISION_STALE");
+    };
+    transport.load = async () => {
+      throw new Error("STATE_LOAD_UNAVAILABLE");
+    };
+    let callbacks = 0;
+    const results = await Promise.allSettled([
+      adapter.createAgents([agent()]),
+      adapter.transaction(async (tx) => {
+        callbacks += 1;
+        await tx.createWorlds([world()]);
+      }),
+    ]);
+    expect(
+      results.map((result) =>
+        result.status === "rejected" ? result.reason.message : "resolved",
+      ),
+    ).toEqual(["STATE_LOAD_UNAVAILABLE", "STATE_LOAD_UNAVAILABLE"]);
+    expect(callbacks).toBe(0);
+    expect(await adapter.isReady()).toBe(false);
+    transport.load = load;
+    transport.commit = commit;
+    await adapter.createAgents([agent()]);
+    expect(await adapter.isReady()).toBe(true);
+    expect(await adapter.getAgentsByIds([AGENT_ID])).toEqual([agent()]);
+  });
+
+  test("preserves state-plane revision rejection codes", async () => {
+    const transport = createAliceHttpStateTransport({
+      url: "http://alice-state-plane.internal/v1/eliza-database",
+      fetch: async () =>
+        Response.json(
+          { ok: false, code: "ELIZA_REVISION_STALE" },
+          { status: 409 },
+        ),
+    });
+    await expect(
+      transport.commit({
+        ownerId: OWNER_ID,
+        operationId: "stale-operation",
+        expectedRevision: 1,
+        mutations: [],
+      }),
+    ).rejects.toThrow("ELIZA_REVISION_STALE");
   });
 
   test("does not expose tentative local state before the canonical commit completes", async () => {
