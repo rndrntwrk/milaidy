@@ -478,6 +478,7 @@ export function createAliceD1DatabaseAdapter(input: {
     );
   let revision = 0;
   let initialized = false;
+  let needsReload = false;
   let tail = Promise.resolve<unknown>(undefined);
   const nextOperationId = input.operationId ?? (() => crypto.randomUUID());
   let proxy: IDatabaseAdapter<Record<string, never>>;
@@ -488,15 +489,26 @@ export function createAliceD1DatabaseAdapter(input: {
     return result;
   };
 
-  const persistMutation = async <T>(
-    method: (...args: unknown[]) => Promise<T>,
-    args: unknown[],
-  ): Promise<T> => {
-    if (!initialized) throw new Error("ALICE_D1_ADAPTER_NOT_INITIALIZED");
+  const loadCanonicalState = async (): Promise<void> => {
+    const loaded = await input.transport.load(input.ownerId);
+    if (!Number.isSafeInteger(loaded.revision) || loaded.revision < 0) {
+      throw new Error("ALICE_D1_LOAD_REVISION_INVALID");
+    }
+    restoreState(target, snapshotFromRecords(loaded.records));
+    revision = loaded.revision;
+    initialized = true;
+    needsReload = false;
+  };
+
+  const persistMutation = <T>(operation: () => Promise<T>): Promise<T> => {
     return serialized(async () => {
+      if (needsReload) await loadCanonicalState();
+      if (!initialized) throw new Error("ALICE_D1_ADAPTER_NOT_INITIALIZED");
       const before = captureState(target);
+      let result: T;
+      let commit: AliceElizaStateCommit;
       try {
-        const result = await Reflect.apply(method, target, args);
+        result = await operation();
         const after = captureState(target);
         const mutations = diffState(before, after);
         if (mutations.length === 0) return result;
@@ -504,19 +516,58 @@ export function createAliceD1DatabaseAdapter(input: {
         if (!OPERATION.test(operationId)) {
           throw new Error("ALICE_D1_OPERATION_ID_INVALID");
         }
-        const committed = await input.transport.commit({
+        commit = {
           ownerId: input.ownerId,
           operationId,
           expectedRevision: revision,
           mutations,
-        });
-        if (committed.revision !== revision + 1) {
+        };
+      } catch (error) {
+        restoreState(target, before);
+        throw error;
+      }
+
+      const commitOnce = async () => {
+        const committed = await input.transport.commit(commit);
+        if (committed.revision !== commit.expectedRevision + 1) {
           throw new Error("ALICE_D1_COMMIT_REVISION_INVALID");
+        }
+        return committed;
+      };
+      let ambiguousResponse = false;
+      try {
+        let committed: { revision: number };
+        try {
+          committed = await commitOnce();
+        } catch (error) {
+          // Validation/conflict rejections are definitive. A missing response
+          // or server operation failure may follow a successful write: replay
+          // its exact request, never the mutation or transaction callback.
+          if (
+            error instanceof Error &&
+            /^(?:STATE|ELIZA)_[A-Z0-9_]+$/.test(error.message) &&
+            error.message !== "STATE_OPERATION_FAILED" &&
+            error.message !== "ELIZA_COMMIT_FAILED"
+          ) {
+            throw error;
+          }
+          ambiguousResponse = true;
+          committed = await commitOnce();
         }
         revision = committed.revision;
         return result;
       } catch (error) {
         restoreState(target, before);
+        if (
+          ambiguousResponse ||
+          (error instanceof Error && error.message === "ELIZA_REVISION_STALE")
+        ) {
+          // Reads must no longer report ready and queued writes must stop if
+          // reload fails. A new request may retry the read before any callback.
+          initialized = false;
+          needsReload = true;
+          await loadCanonicalState();
+        }
         throw error;
       }
     });
@@ -535,14 +586,7 @@ export function createAliceD1DatabaseAdapter(input: {
             if (input.sql && !(await input.sql.isReady())) {
               throw new Error("ALICE_SQL_NOT_READY");
             }
-            const loaded = await input.transport.load(input.ownerId);
-            if (!Number.isSafeInteger(loaded.revision) || loaded.revision < 0) {
-              throw new Error("ALICE_D1_LOAD_REVISION_INVALID");
-            }
-            const snapshot = snapshotFromRecords(loaded.records);
-            restoreState(current, snapshot);
-            revision = loaded.revision;
-            initialized = true;
+            await loadCanonicalState();
           });
       }
       if (property === "isReady") {
@@ -555,41 +599,10 @@ export function createAliceD1DatabaseAdapter(input: {
             adapter: IDatabaseAdapter<Record<string, never>>,
           ) => Promise<T>,
         ): Promise<T> =>
-          serialized(async () => {
-            if (!initialized)
-              throw new Error("ALICE_D1_ADAPTER_NOT_INITIALIZED");
-            const before = captureState(current);
-            try {
-              // The callback receives the underlying adapter so its operations
-              // compose into this one optimistic commit. Calls made through
-              // the outer proxy remain serialized behind this transaction.
-              const result = await callback(
-                current as IDatabaseAdapter<Record<string, never>>,
-              );
-              const after = captureState(current);
-              const mutations = diffState(before, after);
-              if (mutations.length > 0) {
-                const operationId = nextOperationId();
-                if (!OPERATION.test(operationId)) {
-                  throw new Error("ALICE_D1_OPERATION_ID_INVALID");
-                }
-                const committed = await input.transport.commit({
-                  ownerId: input.ownerId,
-                  operationId,
-                  expectedRevision: revision,
-                  mutations,
-                });
-                if (committed.revision !== revision + 1) {
-                  throw new Error("ALICE_D1_COMMIT_REVISION_INVALID");
-                }
-                revision = committed.revision;
-              }
-              return result;
-            } catch (error) {
-              restoreState(current, before);
-              throw error;
-            }
-          });
+          // Use the underlying adapter so all callback writes form one commit.
+          persistMutation(() =>
+            callback(current as IDatabaseAdapter<Record<string, never>>),
+          );
       }
       const value = Reflect.get(current, property, receiver);
       if (typeof value !== "function") return value;
@@ -610,7 +623,8 @@ export function createAliceD1DatabaseAdapter(input: {
         return (...args: unknown[]) =>
           serialized(async () => Reflect.apply(value, current, args));
       }
-      return (...args: unknown[]) => persistMutation(value, args);
+      return (...args: unknown[]) =>
+        persistMutation(() => Reflect.apply(value, current, args));
     },
   }) as IDatabaseAdapter<Record<string, never>>;
 
@@ -641,7 +655,7 @@ async function readExactJson(
     const code =
       typeof value.code === "string" ? value.code : "ALICE_D1_REMOTE_FAILED";
     throw new Error(
-      /^STATE_[A-Z0-9_]+$/.test(code) ? code : "ALICE_D1_REMOTE_FAILED",
+      /^(?:STATE|ELIZA)_[A-Z0-9_]+$/.test(code) ? code : "ALICE_D1_REMOTE_FAILED",
     );
   }
   return value;
