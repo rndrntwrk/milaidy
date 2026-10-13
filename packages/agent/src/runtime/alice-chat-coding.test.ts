@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
+import {
+  type IAgentRuntime,
+  type Memory,
+  type Provider,
+  satisfiesContextGate,
+  type UUID,
+} from "@elizaos/core";
 import {
   AliceChatCodingService,
   aliceChatCodingAction,
@@ -211,11 +217,54 @@ test("full-gated boundary admits only the native owner handler, not a same-name 
     },
   };
   const guarded = enforceAliceActionExecutionBoundary(fake, env);
+  expect(await guarded.validate(fixture().runtime, message)).toBe(false);
   const result = await guarded.handler(fixture().runtime, message);
   expect(result).toMatchObject({
     success: false,
     error: "ALICE_HIGH_RISK_ACTION_DENIED",
   });
+});
+
+test("native coding is available to the owner in the planner's code context", async () => {
+  const gate = {
+    contexts: aliceChatCodingAction.contexts,
+    roleGate: aliceChatCodingAction.roleGate,
+  };
+  expect(satisfiesContextGate(["code"], gate, ["OWNER"])).toBe(true);
+  expect(satisfiesContextGate(["code"], gate, ["MEMBER"])).toBe(false);
+  expect(await aliceChatCodingAction.validate(fixture().runtime, message)).toBe(
+    true,
+  );
+});
+
+test("full-gated runtime omits desktop coding guidance before and after registration", () => {
+  const desktop = {
+    name: "CODING_AGENT_EXAMPLES",
+    get: async () => ({ text: "Use PROVISION_WORKSPACE" }),
+  } as Provider;
+  const unrelated = {
+    name: "TIME",
+    get: async () => ({ text: "Now" }),
+  } as Provider;
+  const providers = [desktop, unrelated];
+  const runtime = {
+    actions: [],
+    providers,
+    logger: fixture().runtime.logger,
+    registerProvider(provider: Provider) {
+      providers.push(provider);
+    },
+  };
+  installAliceHighRiskActionBoundary(runtime as never, {
+    ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+    ALICE_RUNTIME_PROFILE: "full-gated",
+  });
+  runtime.registerProvider(desktop);
+  runtime.registerProvider({ ...unrelated, name: "RECENT_MESSAGES" });
+  expect(providers.map((provider) => provider.name)).toEqual([
+    "TIME",
+    "RECENT_MESSAGES",
+  ]);
 });
 
 test("runtime registration routes CREATE_TASK to native owner admission regardless of plugin order", () => {

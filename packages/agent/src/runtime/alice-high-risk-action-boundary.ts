@@ -13,6 +13,8 @@ const RUNTIME_GUARD_INSTALLED = Symbol.for(
 
 type GuardableRuntime = Pick<AgentRuntime, "actions" | "logger"> & {
   registerAction?: AgentRuntime["registerAction"];
+  providers?: AgentRuntime["providers"];
+  registerProvider?: AgentRuntime["registerProvider"];
 };
 
 /**
@@ -60,7 +62,9 @@ export function enforceAliceActionExecutionBoundary<T extends Action>(
   }
   const guarded = {
     ...action,
-    validate: async () => true,
+    // Do not offer a tool that this runtime can never execute. Keep the handler
+    // denial as well, so direct calls cannot bypass the planner's validation.
+    validate: async () => false,
     handler: async (...args: Parameters<Action["handler"]>) => {
       const text = `ALICE_HIGH_RISK_ACTION_DENIED: ${action.name} requires an independently verified capability grant.`;
       const callback = args[4];
@@ -91,29 +95,44 @@ export function installAliceHighRiskActionBoundary(
     runtime.actions[index] =
       runtime.actions[index].name === "CREATE_TASK"
         ? aliceChatCodingAction
-        : enforceAliceActionExecutionBoundary(runtime.actions[index], environment);
+        : enforceAliceActionExecutionBoundary(
+            runtime.actions[index],
+            environment,
+          );
+  }
+  // The desktop examples teach workspace provisioning through denied actions.
+  // Alice's native action already describes the owner-to-draft-PR workflow.
+  if (runtime.providers) {
+    for (let index = runtime.providers.length - 1; index >= 0; index -= 1) {
+      if (runtime.providers[index].name === "CODING_AGENT_EXAMPLES") {
+        runtime.providers.splice(index, 1);
+      }
+    }
   }
 
   const marked = runtime as GuardableRuntime & {
     [RUNTIME_GUARD_INSTALLED]?: true;
   };
-  if (
-    marked[RUNTIME_GUARD_INSTALLED] ||
-    typeof runtime.registerAction !== "function"
-  ) {
-    return;
+  if (marked[RUNTIME_GUARD_INSTALLED]) return;
+  if (typeof runtime.registerProvider === "function") {
+    const registerProvider = runtime.registerProvider.bind(runtime);
+    runtime.registerProvider = (provider): void => {
+      if (provider.name !== "CODING_AGENT_EXAMPLES") registerProvider(provider);
+    };
   }
-  const registerAction = runtime.registerAction.bind(runtime);
-  runtime.registerAction = (action: Action): void => {
-    registerAction(
-      action.name === "CREATE_TASK"
-        ? aliceChatCodingAction
-        : enforceAliceActionExecutionBoundary(action, environment),
-    );
-  };
-  // Core plugins register before the application plugin. Reserve the native
-  // handler here so the desktop orchestrator cannot win that name collision.
-  runtime.registerAction(aliceChatCodingAction);
+  if (typeof runtime.registerAction === "function") {
+    const registerAction = runtime.registerAction.bind(runtime);
+    runtime.registerAction = (action: Action): void => {
+      registerAction(
+        action.name === "CREATE_TASK"
+          ? aliceChatCodingAction
+          : enforceAliceActionExecutionBoundary(action, environment),
+      );
+    };
+    // Core plugins register before the application plugin. Reserve the native
+    // handler here so the desktop orchestrator cannot win that name collision.
+    runtime.registerAction(aliceChatCodingAction);
+  }
   Object.defineProperty(marked, RUNTIME_GUARD_INSTALLED, {
     value: true,
     enumerable: false,

@@ -402,7 +402,7 @@ export class AliceChatCodingService extends Service {
 export const aliceChatCodingAction: Action = {
   name: "CREATE_TASK",
   similes: ["CODE_TASK", "START_CODING_TASK", "FIX_BUG", "CREATE_SUBTASK"],
-  contexts: ["messaging", "coding"],
+  contexts: ["messaging", "code"],
   roleGate: { minRole: "OWNER" },
   description:
     "Carry out a code change or bug fix requested by the verified owner in natural Discord or Telegram conversation. Resolve the repository and scope from the conversation, start the existing isolated cloud coding workflow, and post the draft PR back here. No separate task form or task approval is needed. The owner reviews the PR before merge.",
