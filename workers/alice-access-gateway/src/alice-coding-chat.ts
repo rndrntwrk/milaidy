@@ -55,7 +55,8 @@ export async function forwardAliceChatCoding(
       const head = await githubJsonResponse(
         await fetch(`https://api.github.com/repos/${name}/commits/HEAD`, {
           headers: githubHeaders(token),
-          redirect: "error",
+          // workerd supports manual/follow; githubJsonResponse rejects redirects.
+          redirect: "manual",
         }),
       );
       if (typeof head.sha !== "string" || !/^[a-f0-9]{40}$/.test(head.sha))
