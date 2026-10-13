@@ -635,6 +635,21 @@ test("fresh-runner replay is mandatory, mutation-disabled, and exercises contain
   assert.doesNotMatch(replaySource, /upstreamOrigin: "https:\/\/rndrntwrk--alice/);
 });
 
+test("image preparation cannot consume the live watchdog recovery window", () => {
+  const split = watchdog.indexOf("\n  recover-cloudflare:");
+  const preparation = watchdog.slice(0, split);
+  const recovery = watchdog.slice(split);
+  assert.match(preparation, /parent_run_id: \$\{\{ steps\.parent\.outputs\.parent_run_id \}\}/);
+  assert.match(preparation, /name: Select one exact parent deployment/);
+  assert.match(recovery, /needs: select-parent/);
+  assert.match(recovery, /if: \$\{\{ !inputs\.diagnostic_only \}\}/);
+  assert.match(recovery, /timeout-minutes: 360/);
+  assert.doesNotMatch(recovery, /Select one exact parent deployment|steps\.parent\.outputs/);
+  assert.match(recovery, /ALICE_PARENT_RUN_ID: \$\{\{ needs\.select-parent\.outputs\.parent_run_id \}\}/);
+  assert.match(preparation, /env: &recovery_readback_env[\s\S]*run: &recovery_readback/);
+  assert.match(recovery, /Verify Cloudflare recovery credential and provider readback\n        env: \*recovery_readback_env\n        run: \*recovery_readback[\s\S]*Write exact Cloudflare recovery readiness/);
+});
+
 test("every provider mutation remains bounded by the shared recovery reserve", () => {
   const firstMutation = workflow.indexOf(
     "Prepare service-authenticated fail-closed control route",
