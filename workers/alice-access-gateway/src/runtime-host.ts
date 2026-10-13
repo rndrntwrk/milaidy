@@ -3,12 +3,13 @@ export { AliceRuntimeContainer } from "./alice-runtime-container";
 import { fetchAliceCodingArchive } from "./alice-coding-archive";
 import { mergeAliceCodingPullRequest, publishAliceCodingTask, type AliceCodingPublishEnv } from "./alice-coding-publish";
 import {
-  forwardToAliceAiGateway,
+  forwardToAliceCodingModel,
+  type AliceRuntimeContainerNamespace,
   type AliceRuntimeContainerEnvironmentSource,
 } from "./alice-runtime-host";
 
 type RuntimeHostEnv = AliceRuntimeContainerEnvironmentSource & AliceCodingPublishEnv & {
-  ALICE_AI_GATEWAY: Fetcher;
+  ALICE_RUNTIME_CONTAINER: AliceRuntimeContainerNamespace;
 };
 
 export default {
@@ -32,9 +33,7 @@ export default {
       }
     }
     if (request.method === "POST" && url.pathname === "/internal/v1/coding/model") {
-      const upstream = new URL(request.url);
-      upstream.pathname = "/v1/chat/completions";
-      return forwardToAliceAiGateway(new Request(upstream, request), env);
+      return forwardToAliceCodingModel(request, env);
     }
     return new Response("Not found", { status: 404 });
   },

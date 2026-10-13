@@ -615,6 +615,7 @@ export async function applySubscriptionCredentials(config?: {
         throw new Error("OPENAI_CODEX_CREDENTIALS_INVALID");
       }
       await persistOpenAiCodexCredentials(credentials);
+      saveCredentials("openai-codex", credentials);
     });
     logger.info(
       "[auth] Applied OpenAI Codex subscription account credentials",

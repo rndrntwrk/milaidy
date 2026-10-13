@@ -1173,6 +1173,10 @@ export class AuthorityLedger {
       ) {
         return { allowed: false, code: "PAUSED_CODING", risk: existingDecision.decision.risk } as const;
       }
+      if ((intent.action === "coding.patch.sandbox" || intent.action === "coding.pr.create") &&
+        pausedScopes.includes("model")) {
+        return { allowed: false, code: "PAUSED_MODEL", risk: existingDecision.decision.risk } as const;
+      }
       if (existingDecision.capabilityId) {
         const currentCapability = this.state.capabilities[existingDecision.capabilityId];
         if (!currentCapability) {

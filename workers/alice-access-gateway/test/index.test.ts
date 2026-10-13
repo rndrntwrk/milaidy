@@ -774,6 +774,7 @@ describe("Alice Access gateway", () => {
       ["POST", "/api/agent/v1/sessions/companion/games/play"],
       ["POST", "/api/agent/v1/sessions/companion/games/stop"],
       ["POST", "/api/unreviewed/execute"],
+      ["POST", "/internal/v1/coding/model"],
       ["POST", "/api/knowledge/documents/url"],
       ["POST", "/api/knowledge/documents/bulk/nearby"],
       ["DELETE", "/api/knowledge/documents/document-1"],

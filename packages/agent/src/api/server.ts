@@ -145,6 +145,7 @@ import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { handleAgentStatusRoutes } from "./agent-status-routes.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
 import { handleAliceCodingPolicyRoutes } from "./alice-coding-policy-routes.js";
+import { handleAliceCodingModel } from "./alice-coding-model.js";
 import { handleAliceTaskThreadsRead } from "./alice-task-thread-routes.js";
 import { handleAliceCorpusRoutes } from "./alice-corpus-routes.js";
 import { handleAliceOperatorRoutes } from "./alice-operator-routes.js";
@@ -5082,6 +5083,26 @@ async function handleRequest(
       },
       403,
     );
+    return;
+  }
+
+  if (pathname === "/internal/v1/coding/model") {
+    const expected = getConfiguredApiToken();
+    const provided = extractAuthToken(req);
+    const authenticated = method === "POST" &&
+      isAliceProductionRuntime(process.env) && !isApiAuthDisabled() &&
+      Boolean(expected && provided && tokenMatches(expected, provided));
+    if (!authenticated) {
+      json(res, { error: "Coding model requires the internal broker", code: "CODING_MODEL_BROKER_REQUIRED" }, 403);
+      return;
+    }
+    const body = await readJsonBody(req, res, { maxBytes: 524_288 });
+    if (!body) return;
+    await handleAliceCodingModel(req, res, {
+      authenticated,
+      body,
+      model: process.env.CODEX_CLI_LARGE_MODEL,
+    });
     return;
   }
 
