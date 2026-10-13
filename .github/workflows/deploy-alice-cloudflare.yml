@@ -631,7 +631,12 @@ jobs:
           test "$(printf '%s' "$watchdog_json" | jq -r .run_attempt)" = "1"
           test "$(printf '%s' "$watchdog_json" | jq -r .path)" = \
             ".github/workflows/recover-alice-production-watchdog.yml"
-          test "$(printf '%s' "$watchdog_json" | jq -r .status)" = "in_progress"
+          # GitHub queues the run briefly between parent selection and recovery.
+          # The separate readiness gate requires the recovery job to be live.
+          case "$(printf '%s' "$watchdog_json" | jq -r .status)" in
+            queued|in_progress) ;;
+            *) echo "ALICE_RECOVERY_WATCHDOG_NOT_PENDING_OR_RUNNING" >&2; exit 1 ;;
+          esac
           test "$(printf '%s' "$watchdog_json" | jq -r .conclusion)" = "null"
 
           run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}")"
