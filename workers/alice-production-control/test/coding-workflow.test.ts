@@ -27,7 +27,7 @@ test("coding survives a twenty-minute preparation/run without a Queue handoff or
   const workItem = { schemaVersion: "alice.work-item.v1", workId: `work-${capabilityId}`, planId: taskId,
     approvalId: `approval-${capabilityId}`, actor: owner, sessionId: taskId, enqueuedAt: start, admission, intent, coding };
   let work: any = null, executions = 0, publications = 0, evidenceAttempts = 0;
-  let sandboxFailure = false;
+  let sandboxFailure = false, dependencyFailure = false, evidenceFailuresRemaining = 1;
   const queued = mock(() => { throw new Error("CODING_MUST_NOT_USE_QUEUE"); });
   const env: any = {
     ALICE_WORK_QUEUE: { send: queued },
@@ -51,6 +51,7 @@ test("coding survives a twenty-minute preparation/run without a Queue handoff or
     } },
     ALICE_CODING_SANDBOX: { async fetch() {
       executions++;
+      if (dependencyFailure) return Response.json({ code: "unavailable" }, { status: 503 });
       now += 20 * 60_000;
       if (sandboxFailure) return Response.json({ code: "CODING_AGENT_FAILED" }, { status: 410 });
       return Response.json({ ok: true, result: { changes: [{ path: "src/token.ts" }], summary: "done" } });
@@ -66,7 +67,7 @@ test("coding survives a twenty-minute preparation/run without a Queue handoff or
     } },
     ALICE_EVIDENCE_QUEUE: { async send() {
       evidenceAttempts++;
-      if (evidenceAttempts === 1) throw new Error("transient evidence failure after persisted completion");
+      if (evidenceFailuresRemaining-- > 0) throw new Error("evidence queue unavailable");
     } },
   };
   const workflow = Object.assign(Object.create(AliceCodingWorkflow.prototype), { env });
@@ -98,5 +99,29 @@ test("coding survives a twenty-minute preparation/run without a Queue handoff or
   await expect(workflow.run(event, step)).rejects.toThrow("CODING_TASK_FAILED");
   expect(executions).toBe(2);
   expect(work.payload.state).toBe("failed");
+  expect(queued).not.toHaveBeenCalled();
+
+  // Exhausted execution retries record recovery, even if its first evidence send fails.
+  now = start;
+  work = null;
+  dependencyFailure = true;
+  evidenceFailuresRemaining = 1;
+  await expect(workflow.run(event, step)).rejects.toThrow("WORK_DEPENDENCY_UNAVAILABLE");
+  expect(executions).toBe(5);
+  expect(work.payload.state).toBe("dead-lettered");
+  expect(configurations.at(-1)).toMatchObject({ name: "record terminal coding outcome",
+    retries: { limit: 10, delay: "1 minute", backoff: "exponential" } });
+
+  // Exhausted evidence retries after publication must preserve the completed PR.
+  now = start;
+  work = null;
+  sandboxFailure = false;
+  dependencyFailure = false;
+  evidenceFailuresRemaining = 3;
+  expect(await workflow.run(event, step)).toMatchObject({ status: "completed" });
+  expect(executions).toBe(6);
+  expect(publications).toBe(2);
+  expect(work.payload.state).toBe("completed");
+  expect(work.payload.result.pullRequestUrl).toBe("https://github.com/rndrntwrk/milaidy/pull/123");
   expect(queued).not.toHaveBeenCalled();
 });

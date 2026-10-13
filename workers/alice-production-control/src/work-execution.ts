@@ -580,6 +580,17 @@ export async function processAliceDeadLetter(
     const existing = await deps.getRecord("work", item.workId, item.actor);
     if (existing && typeof existing.payload === "object" && existing.payload !== null) {
       const payload = existing.payload as Record<string, unknown>;
+      if (payload.workId === item.workId &&
+        (payload.state === "completed" || payload.state === "failed")) {
+        if (Number.isSafeInteger(payload.attempt) && Number.isSafeInteger(existing.updatedAt)) {
+          await deps.emitEvidence(executionEvidence(
+            item, Number(payload.attempt), Number(existing.updatedAt), payload.state,
+            payload.state === "completed" ? "WORK_COMPLETED" : String(payload.code),
+          ));
+        }
+        return { disposition: "ack", code: payload.state === "completed"
+          ? "WORK_ALREADY_COMPLETED" : "WORK_ALREADY_TERMINAL" };
+      }
       if (payload.workId === item.workId && payload.state === "dead-lettered") {
         if (Number.isSafeInteger(payload.attempt) && Number.isSafeInteger(existing.updatedAt)) {
           await deps.emitEvidence(executionEvidence(
