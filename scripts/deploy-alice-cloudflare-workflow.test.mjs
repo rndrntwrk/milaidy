@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -362,10 +363,28 @@ test("only the Cloudflare recovery watchdog must be live before the first mutati
   assert.match(readiness, /provider=cloudflare/);
   assert.match(readiness, /alice-watchdog-ready-\$\{provider\}/);
   assert.match(readiness, /Prestarted independent Cloudflare recovery/);
+  assert.match(readiness, /test "\$\(printf '%s' "\$watchdog_json" \| jq -r \.status\)" = "in_progress"/);
+  assert.match(readiness, /\.status == "in_progress" and \.conclusion == null/);
   assert.doesNotMatch(readiness, /for provider in/);
   assert.match(watchdog, /^  recover-cloudflare:/m);
   assert.doesNotMatch(watchdog, /^  recover-modal:/m);
   assert.match(watchdog, /--capture-recovery-readiness|providerReadbackPath|ALICE_RECOVERY_PROVIDER_READBACK_PATH/);
+});
+
+test("watchdog identity accepts the queued interval between jobs but rejects terminal runs", () => {
+  const identity = namedWorkflowSteps(workflow).find(
+    (step) => step.name === "Enforce protected source and build identity",
+  ).run;
+  const gate = identity.match(
+    /(?:test|case) "\$\(printf '%s' "\$watchdog_json" \| jq -r \.status\)"[\s\S]*?test "\$\(printf '%s' "\$watchdog_json" \| jq -r \.conclusion\)" = "null"/,
+  )?.[0];
+  assert.ok(gate);
+  const result = (status, conclusion) => spawnSync("bash", ["-eu", "-c", gate], {
+    env: { ...process.env, watchdog_json: JSON.stringify({ status, conclusion }) },
+  }).status;
+  assert.equal(result("queued", null), 0);
+  assert.equal(result("in_progress", null), 0);
+  assert.notEqual(result("completed", "success"), 0);
 });
 
 test("rollback journals contain relocatable Worker bytes and artifact-relative configs", () => {
