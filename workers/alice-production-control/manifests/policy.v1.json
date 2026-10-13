@@ -47,7 +47,7 @@
   ],
   "modelRouting": {
     "cloudflareAiGateway": "alice-production",
-    "dailySynchronousUnitCeiling": 100000,
+    "dailySynchronousUnitCeiling": 2000000,
     "gatewayCaching": "disabled",
     "gatewayPayloadLogging": "disabled",
     "models": [
