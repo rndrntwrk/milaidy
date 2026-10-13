@@ -1,3 +1,5 @@
+import { ALICE_CODING_LIFETIME_MS } from "./policy";
+
 const page = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Alice coding task</title>
@@ -118,8 +120,9 @@ async function watchTask(taskId) {
   localStorage.setItem('alice-coding-last-task', taskId);
   result.textContent = '';
   status.textContent = 'Loading task ' + taskId + '…';
+  const watchUntil = Date.now() + ${ALICE_CODING_LIFETIME_MS + 60_000};
   try {
-    for (let attempt = 0; attempt < 100 && selectedTaskId === taskId; attempt++) {
+    while (Date.now() <= watchUntil && selectedTaskId === taskId) {
       const response = await fetch('/control/api/v1/coding/tasks/' + encodeURIComponent(taskId));
       const current = await response.json();
       if (selectedTaskId !== taskId) return;

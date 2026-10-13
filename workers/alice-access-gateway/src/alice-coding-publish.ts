@@ -4,7 +4,7 @@ import { authorityDurableName } from "../../alice-production-control/src/durable
 import {
   aliceCodingResultSha256, verifyAliceCodingPublish,
 } from "../../alice-production-control/src/coding-publish-signature";
-import type { ActionIntent, ReleaseAdmission } from "../../alice-production-control/src/policy";
+import { ALICE_CODING_LIFETIME_MS, type ActionIntent, type ReleaseAdmission } from "../../alice-production-control/src/policy";
 import {
   codingAppBotLogin, codingRepositoryToken, githubHeaders, githubJsonResponse,
   type GitHubAppEnvironment,
@@ -64,7 +64,7 @@ async function validateInput(value: unknown): Promise<PublishInput> {
     !input.intent || input.intent.action !== "coding.pr.create" ||
     input.intent.capabilityId !== input.taskId.slice(5) ||
     !Number.isSafeInteger(input.intent.expiresAt) || input.intent.expiresAt <= Date.now() ||
-    input.intent.expiresAt - input.requestedAt !== 600_000) invalid();
+    input.intent.expiresAt - input.requestedAt !== ALICE_CODING_LIFETIME_MS) invalid();
   const coding = parseAliceCodingRequest(input.coding);
   if (coding.delivery !== "pull-request" || !SHA.test(coding.baseCommit) ||
     input.intent.target !== coding.repository ||

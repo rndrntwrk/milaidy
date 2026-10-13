@@ -1,3 +1,6 @@
+// Includes repository preparation, an eight-minute agent run, and cleanup.
+export const ALICE_CODING_LIFETIME_MS = 30 * 60_000;
+
 export type ReleaseBinding = {
   programDigest: string;
   releaseDigest: string;

@@ -7,6 +7,13 @@ const COMMIT = /^[a-f0-9]{40}$/;
 // Sandbox are rebuilt and attested; the other Worker bytes retain their hashes.
 const CONTROLLER_PATHS = new Set([
   'workers/alice-production-control/src/coding-task.ts',
+  'workers/alice-production-control/src/coding-chat.ts',
+  'workers/alice-production-control/src/coding-workflow.ts',
+  'workers/alice-production-control/src/work-dispatch.ts',
+  'workers/alice-production-control/src/work-execution.ts',
+  'workers/alice-production-control/test/work-execution.test.ts',
+  'workers/alice-production-control/test/coding-chat.test.ts',
+  'workers/alice-production-control/test/coding-workflow.test.ts',
   'workers/alice-production-control/src/coding-merge.ts',
   'workers/alice-production-control/src/policy.ts',
   'workers/alice-production-control/src/index.ts',

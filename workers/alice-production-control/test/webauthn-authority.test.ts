@@ -123,6 +123,29 @@ describe("Alice WebAuthn authority", () => {
     expect(ledger.authorize(intent, now + 5, owner).code).toBe("CAPABILITY_AUTHORIZED");
   });
 
+  test("bounds coding execution to thirty minutes and leaves merge approval at ten", () => {
+    const ledger = registeredLedger();
+    const native = ledger.issueNativeOwnerCodingGrant(
+      "00000000-0000-4000-8000-000000000123", target, argumentHash, now);
+    expect(native.ok).toBe(true);
+    if (!native.ok) throw new Error(native.code);
+    expect(native.grant.expiresAt).toBe(now + 1_800_000);
+    const intent = { intentId: "intent-native-budget", action: "coding.pr.create", target,
+      argumentHash, nonce: native.grant.nonce, expiresAt: native.grant.expiresAt,
+      capabilityId: native.grant.capabilityId, ...binding };
+    expect(ledger.authorize(intent, now + 1, owner).allowed).toBe(true);
+    expect(ledger.authorize(intent, now + 1_200_000, owner).code).toBe("INTENT_ALREADY_AUTHORIZED");
+    expect(ledger.authorize(intent, now + 1_800_000, owner).code).toBe("INTENT_EXPIRED");
+    expect(ledger.beginWebAuthnApproval(owner, challenge, target, argumentHash,
+      "cap-browser-budget", "nonce-browser-budget", now, "coding.pr.create").ok).toBe(true);
+    const browser = ledger.completeWebAuthnApproval(owner, challenge, credential.id, 1, now + 1);
+    expect(browser).toMatchObject({ ok: true, grant: { expiresAt: now + 1_800_000 } });
+    expect(ledger.beginWebAuthnApproval(owner, challenge, target, argumentHash,
+      "cap-merge-budget", "nonce-merge-budget", now, "repository.merge").ok).toBe(true);
+    expect(ledger.completeWebAuthnApproval(owner, challenge, credential.id, 2, now + 1))
+      .toMatchObject({ ok: true, grant: { expiresAt: now + 600_000 } });
+  });
+
   test("persists an owner-only high-risk merge grant and denies replay, expiry and coding pause", () => {
     const ledger = registeredLedger();
     expect(ledger.beginWebAuthnApproval(owner, challenge, target, argumentHash,

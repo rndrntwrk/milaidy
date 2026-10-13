@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { aliceCodingArgumentHash, prepareAliceCodingTask } from "../src/coding-task";
-import type { CapabilityGrant } from "../src/policy";
+import { ALICE_CODING_LIFETIME_MS, type CapabilityGrant } from "../src/policy";
 
 const digest = (digit: string) => `sha256:${digit.repeat(64)}`;
 const request = {
@@ -237,6 +237,38 @@ test("coding page serves valid JavaScript with exact merge and read-only reconci
   );
   const stylesheet = codingPageResponse("/control/coding.css")!;
   expect(stylesheet.headers.get("content-type")).toBe("text/css; charset=utf-8");
+});
+
+test("coding page watches through the coding lifetime and terminal cleanup, then stops", async () => {
+  const { codingPageResponse } = await import("../src/coding-page");
+  const script = await codingPageResponse("/control/coding.js")!.text();
+  const taskId = "task-cap-00000000-0000-4000-8000-000000000001";
+  const nodes = Object.fromEntries(["task", "status", "result", "history", "register"].map((id) => [id, {
+    textContent: "", querySelector: () => ({}), addEventListener() {}, replaceChildren() {},
+  }]));
+  let elapsed = 0;
+  let complete = true;
+  const fetcher = async (path: string) => Response.json(path.endsWith("/tasks")
+    ? { ok: true, tasks: [] }
+    : { ok: true, work: complete && elapsed >= ALICE_CODING_LIFETIME_MS + 30_000
+      ? { state: "completed", result: { patch: "verified patch" } }
+      : { state: "queued" } });
+  const api = new Function("document", "fetch", "localStorage", "Date", "setTimeout",
+    script + "\nreturn { watchTask };")(
+    { getElementById: (id: string) => nodes[id] }, fetcher,
+    { setItem() {}, getItem: () => null }, { now: () => elapsed },
+    (callback: () => void, delay: number) => { elapsed += delay; callback(); },
+  );
+  await api.watchTask(taskId);
+  expect(elapsed).toBe(ALICE_CODING_LIFETIME_MS + 30_000);
+  expect(nodes.status!.textContent).toBe("Patch ready for review: " + taskId);
+  expect(nodes.result!.textContent).toBe("verified patch");
+  complete = false;
+  elapsed = 0;
+  await api.watchTask(taskId);
+  expect(elapsed).toBeGreaterThanOrEqual(ALICE_CODING_LIFETIME_MS + 60_000);
+  expect(elapsed).toBeLessThanOrEqual(ALICE_CODING_LIFETIME_MS + 65_000);
+  expect(nodes.status!.textContent).toBe("Still running. Task ID: " + taskId);
 });
 
 test("blocked merge opens its saved task, ordinary failures reject, and missing passkeys focus registration", async () => {

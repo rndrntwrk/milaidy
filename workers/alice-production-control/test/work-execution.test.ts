@@ -406,6 +406,22 @@ describe("Alice durable work execution", () => {
     expect(JSON.stringify(fixture.evidence[0])).toContain('"outcome":"WORK_DEAD_LETTERED"');
   });
 
+  test("terminal recovery preserves completed and failed work and re-emits their evidence", async () => {
+    for (const state of ["completed", "failed"] as const) {
+      const fixture = dependencies({ async getRecord() {
+        return { updatedAt: now, payload: { workId: item.workId, state, attempt: 1,
+          code: state === "completed" ? "WORK_COMPLETED" : "CODING_TASK_FAILED" } };
+      } });
+      expect(await processAliceDeadLetter(await createAliceWorkQueueEnvelope(item, key),
+        3, key, fixture.deps)).toEqual({ disposition: "ack",
+          code: state === "completed" ? "WORK_ALREADY_COMPLETED" : "WORK_ALREADY_TERMINAL" });
+      expect(fixture.writes).toHaveLength(0);
+      expect(fixture.executions()).toBe(0);
+      expect(fixture.evidence).toHaveLength(1);
+      expect(JSON.stringify(fixture.evidence[0])).toContain(`work.${state}`);
+    }
+  });
+
   test("retries immutable DLQ evidence without rewriting terminal recovery", async () => {
     let recorded: { payload: unknown; updatedAt: number } | null = null;
     let writes = 0;

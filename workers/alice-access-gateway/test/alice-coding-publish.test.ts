@@ -48,7 +48,7 @@ async function input() {
       action: "coding.pr.create", target: repository,
       argumentHash: await aliceCodingArgumentHash(coding),
       nonce: "nonce-cap-00000000-0000-4000-8000-000000000001",
-      expiresAt: requestedAt + 600_000,
+      expiresAt: requestedAt + 1_800_000,
       capabilityId: taskId.slice(5), ...binding,
     },
     resultSha256: await aliceCodingResultSha256(result), result,
@@ -171,8 +171,10 @@ async function request(value: unknown, signingToken = token): Promise<Request> {
   });
 }
 
-test("one approved task creates one task-owned draft PR and a replay returns it", async () => {
+test("a twenty-minute coding task publishes one draft PR and a replay returns it", async () => {
   const value = await input();
+  value.requestedAt -= 20 * 60_000;
+  value.intent.expiresAt -= 20 * 60_000;
   const state = fixture();
   const first = await publishAliceCodingTask(await request(value), state.env as any, state.fetcher);
   expect(first.status).toBe(200);

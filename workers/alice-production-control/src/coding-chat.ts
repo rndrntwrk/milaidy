@@ -165,7 +165,7 @@ export async function handleNativeCodingChat(
   const taskId = prepared.taskId;
   const workItem: AliceWorkItem = { schemaVersion: "alice.work-item.v1", workId: `work-${grant.capabilityId}`,
     planId: taskId, approvalId: `approval-${grant.capabilityId}`, actor: grant.owner, sessionId: taskId,
-    enqueuedAt: grant.expiresAt - 600_000, admission: admitted.admission, intent: prepared.intent, coding: prepared.request };
+    enqueuedAt: receipt.createdAt, admission: admitted.admission, intent: prepared.intent, coding: prepared.request };
   try {
     await env.ALICE_CODING_WORKFLOW.create({ id: taskId, params: { taskId, actor: grant.owner, sessionId: taskId,
       requestedAt: workItem.enqueuedAt, workItem } });
