@@ -144,6 +144,10 @@ export function authorizeIntent(
   ) {
     return { allowed: false, code: "PAUSED_CODING", risk };
   }
+  if ((intent.action === "coding.patch.sandbox" || intent.action === "coding.pr.create") &&
+    context.pausedScopes.includes("model")) {
+    return { allowed: false, code: "PAUSED_MODEL", risk };
+  }
   if (DISABLED_ACTIONS.has(intent.action)) {
     return { allowed: false, code: "ACTION_DISABLED", risk: "high" };
   }

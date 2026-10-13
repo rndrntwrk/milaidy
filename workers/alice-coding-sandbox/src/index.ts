@@ -8,7 +8,7 @@ import { AliceCodingLease, type AliceCodingSandboxEnv } from "./lease";
 
 export { AliceCodingLease, ContainerProxy };
 
-const MODEL = "workers-ai/@cf/openai/gpt-oss-120b";
+const MODEL = "codex-cli";
 const TASK_ID = /^task-cap-[a-f0-9-]{36}$/;
 const MAX_PATCH_BYTES = 128_000;
 const MAX_CHANGE_BYTES = 110_000;
@@ -123,6 +123,7 @@ AliceCodingSandbox.outboundByHost = {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: request.body,
+      signal: request.signal,
     });
     return env.ALICE_RUNTIME_HOST.fetch(upstream);
   },

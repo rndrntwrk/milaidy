@@ -258,3 +258,21 @@ export function fetchAliceRuntimeContainer(
 ): Promise<Response> {
   return namespace.getByName(ALICE_RUNTIME_CONTAINER_NAME).fetch(request);
 }
+
+export function forwardToAliceCodingModel(
+  request: Request,
+  env: { ALICE_RUNTIME_API_TOKEN: string; ALICE_RUNTIME_CONTAINER: AliceRuntimeContainerNamespace },
+): Promise<Response> {
+  return fetchAliceRuntimeContainer(env.ALICE_RUNTIME_CONTAINER, new Request(
+    `http://alice-runtime:${ALICE_RUNTIME_CONTAINER_PORT}/internal/v1/coding/model`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${env.ALICE_RUNTIME_API_TOKEN}`,
+      },
+      body: request.body,
+      signal: request.signal,
+    },
+  ));
+}

@@ -63,7 +63,7 @@
     "stream": "installed-but-disabled",
     "social": "native owner conversations only; connector plane inert",
     "trading": "installed-but-disabled",
-    "codingExecution": "Verified owner requests in native Discord or Telegram conversation start exact-request isolated sandbox work and produce a draft PR without a separate task approval. Merging requires fresh owner passkey approval of the exact source task, PR and head commit with repository protections enforced.",
+    "codingExecution": "Verified owner requests in native Discord or Telegram conversation start exact-request isolated sandbox work and produce a draft PR without a separate task approval. Coding inference uses the runtime's persisted ChatGPT/Codex subscription, with at most 40 model calls and eight minutes of agent execution; model pause remains enforced. Credentials never enter the sandbox. Merging requires fresh owner passkey approval of the exact source task, PR and head commit with repository protections enforced.",
     "signing": "not-present"
   },
   "nativeOwnerConversations": {

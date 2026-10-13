@@ -6,6 +6,25 @@ import * as runtimeContainer from "../src/alice-runtime-host";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 
+test("routes coding to the saved runtime subscription without forwarding sandbox credentials", async () => {
+  let forwarded: Request | undefined;
+  await runtimeContainer.forwardToAliceCodingModel(new Request("https://alice-runtime-host.internal/internal/v1/coding/model", {
+    method: "POST", body: JSON.stringify({ model: "codex-cli" }),
+    headers: { authorization: "Bearer sandbox-lease", cookie: "untrusted", "x-api-key": "untrusted" },
+  }), {
+    ALICE_RUNTIME_API_TOKEN: "runtime-token-for-test",
+    ALICE_RUNTIME_CONTAINER: { getByName(name) {
+      expect(name).toBe("alice-production-runtime");
+      return { async fetch(request) { forwarded = request; return new Response("ok"); } };
+    } },
+  });
+  expect(forwarded?.url).toBe("http://alice-runtime:2138/internal/v1/coding/model");
+  expect(forwarded?.headers.get("authorization")).toBe("Bearer runtime-token-for-test");
+  expect(forwarded?.headers.get("cookie")).toBeNull();
+  expect(forwarded?.headers.get("x-api-key")).toBeNull();
+  expect(await forwarded?.json()).toEqual({ model: "codex-cli" });
+});
+
 test("builds a fail-closed Container environment for gateway auth, release proof, and internal inference", () => {
   expect(typeof (runtimeContainer as any).buildAliceRuntimeContainerEnv).toBe(
     "function",

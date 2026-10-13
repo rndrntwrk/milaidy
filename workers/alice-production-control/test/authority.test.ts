@@ -44,6 +44,27 @@ function researchIntent(nonce: string) {
 }
 
 describe("Alice durable authority ledger", () => {
+  test("model pause denies initial and already-authorized subscription coding calls", () => {
+    const now = 1_787_400_000_000;
+    for (const action of ["coding.patch.sandbox", "coding.pr.create"]) {
+      const base = AuthorityLedger.create(binding, 100).exportState();
+      const intent = { intentId: "intent-coding-model-pause", action,
+        capabilityId: "cap-coding-model-pause", target: "rndrntwrk/milaidy",
+        argumentHash: `sha256:${"8".repeat(64)}`, nonce: "nonce-coding-model-pause",
+        expiresAt: now + 60_000, ...binding };
+      base.capabilities[intent.capabilityId] = { capabilityId: intent.capabilityId,
+        owner, scope: action, target: intent.target, argumentHash: intent.argumentHash,
+        nonce: intent.nonce, expiresAt: intent.expiresAt, rollbackBoundary: "release:canary",
+        revokedAt: null, usedAt: null, ...binding };
+      const initial = AuthorityLedger.restore(base, binding, 100);
+      expect(initial.pause("model", now, owner).ok).toBe(true);
+      expect(initial.authorize(intent, now + 1, owner)).toMatchObject({ allowed: false, code: "PAUSED_MODEL" });
+      const running = AuthorityLedger.restore(base, binding, 100);
+      expect(running.authorize(intent, now, owner).allowed).toBe(true);
+      expect(running.pause("model", now + 1, owner).ok).toBe(true);
+      expect(running.authorize(intent, now + 2, owner)).toMatchObject({ allowed: false, code: "PAUSED_MODEL" });
+    }
+  });
   test("raises a signed new-release budget without resetting today's spend", () => {
     const now = Date.UTC(2026, 8, 8, 22);
     const ledger = AuthorityLedger.create(binding, 10_000, "container:alice-runtime:v55", 9, now - 1_000);

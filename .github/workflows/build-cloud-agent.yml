@@ -206,6 +206,7 @@ jobs:
           bun --conditions=eliza-source test packages/agent/src/config/config.alice.test.ts
           bun --conditions=eliza-source test packages/agent/src/auth/alice-openai-codex-store.test.ts
           bun --conditions=eliza-source test packages/agent/src/runtime/alice-chatgpt-routing.test.ts
+          bun --conditions=eliza-source test packages/agent/src/api/alice-coding-model.test.ts
           bun --conditions=eliza-source test \
             packages/agent/src/runtime/alice-chat-coding.test.ts \
             workers/alice-access-gateway/test/alice-coding-chat.test.ts
