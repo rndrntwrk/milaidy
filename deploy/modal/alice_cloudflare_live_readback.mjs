@@ -876,8 +876,7 @@ export async function fetchAliceCloudflareWorkflowVersionState({
     const root = `/accounts/${accountId}/workflows/${workflowName}/versions`;
     const listed = await apiGetAllResults(client, root);
     if (listed.length < 1) readbackInvalid();
-    const identities = [];
-    for (const listedVersion of listed) {
+    const identities = await readAll(listed.map(async (listedVersion) => {
       const listedIdentity = workflowVersionIdentity(
         listedVersion,
         expectedWorkflowId, className, steps,
@@ -890,8 +889,8 @@ export async function fetchAliceCloudflareWorkflowVersionState({
         expectedWorkflowId, className, steps,
       );
       if (!canonicalEqual(listedIdentity, detailIdentity)) readbackInvalid();
-      identities.push(detailIdentity);
-    }
+      return detailIdentity;
+    }));
     if (new Set(identities.map((identity) => identity.id)).size !== identities.length) {
       readbackInvalid();
     }
