@@ -796,26 +796,39 @@ test("coding Workflow readback accepts 21 versions and rejects mismatched versio
   }));
   const root = `/accounts/${accountId}/workflows/${workflow.name}`;
   let mismatchedOwnership = false;
+  let activeDetails = 0;
+  let maxActiveDetails = 0;
   const options = { apiToken: "read-only-token", accountId, zoneId, baseUrl,
     fetchImpl: async (url) => {
       const pathname = new URL(url).pathname.replace("/client/v4", "");
       if (pathname === root) return json({ success: true, result: workflow });
       if (pathname === `${root}/versions`) return json({ success: true, result: versions });
       const version = versions.find((item) => pathname === `${root}/versions/${item.id}`);
-      if (version) return json({ success: true, result:
-        mismatchedOwnership && version.id === versions.at(-1).id
-          ? { ...version, workflow_id: "ffffffff-ffff-4fff-8fff-ffffffffffff" }
-          : version });
+      if (version) {
+        activeDetails += 1;
+        maxActiveDetails = Math.max(maxActiveDetails, activeDetails);
+        try {
+          await new Promise((resolve) => setImmediate(resolve));
+          return json({ success: true, result:
+            mismatchedOwnership && version.id === versions.at(-1).id
+              ? { ...version, workflow_id: "ffffffff-ffff-4fff-8fff-ffffffffffff" }
+              : version });
+        } finally {
+          activeDetails -= 1;
+        }
+      }
       throw new Error(`unexpected ${pathname}`);
     } };
   const state = await fetchAliceCodingWorkflowState(options);
   assert.equal(state.versions.length, 21);
+  assert.ok(maxActiveDetails > 1, "independent Workflow version detail reads must overlap");
   assert.deepEqual(verifyAliceCodingWorkflowStateSnapshot(state), {
     workflow: state.workflow, versions: state.versions,
   });
   mismatchedOwnership = true;
   await assert.rejects(() => fetchAliceCodingWorkflowState(options),
     /ALICE_CLOUDFLARE_LIVE_READBACK_INVALID/);
+  assert.equal(activeDetails, 0, "rejected version checks must settle all detail reads");
 });
 
 test("coding Workflow candidate version is new relative to the anchored baseline", async () => {
