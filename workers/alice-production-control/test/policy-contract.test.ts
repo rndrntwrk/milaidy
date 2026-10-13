@@ -25,7 +25,7 @@ describe("Alice source-owned production policy contract", () => {
     expect(policy.disabledActions).toEqual([...ALICE_DISABLED_ACTIONS]);
     expect(policy.pauseScopes).toEqual([...ALICE_PAUSE_SCOPES]);
     expect(policy.modelRouting.models).toEqual([...ALICE_ALLOWED_MODELS]);
-    expect(policy.modelRouting.dailySynchronousUnitCeiling).toBe(2_000_000);
+    expect(policy.modelRouting.dailySynchronousUnitCeiling).toBe(100_000);
     expect(policy.nativeOwnerConversations.platforms).toEqual(["telegram", "discord"]);
     expect(policy.authority.privilegedCapabilityGrant).toBe("verified-native-owner-single-use-draft-pr; owner-access-plus-device-bound-webauthn-merge");
     expect(policy.nativeOwnerConversations.ownerBindingSha256).toBe(

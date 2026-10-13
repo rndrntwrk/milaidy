@@ -804,7 +804,7 @@ jobs:
           const config = await loadRuntimeConfig({
             ...process.env,
             ALICE_ACCESS_ISSUER: "https://rndrntwrk.cloudflareaccess.com",
-            ALICE_MODEL_DAILY_BUDGET_UNITS: "2000000",
+            ALICE_MODEL_DAILY_BUDGET_UNITS: "100000",
             ALICE_CONTROL_RECOVERY_TOKEN: "preprovisioned-recovery-secret-not-readable-by-release",
             ALICE_RUNTIME_REVISION: process.env.EXPECTED_RUNTIME_REVISION,
             ALICE_DEPLOYMENT_MANIFEST_SHA256: manifestSha256,
@@ -1263,7 +1263,7 @@ jobs:
           ALICE_OWNER_EMAIL_SHA256: ${{ secrets.ALICE_OWNER_EMAIL_SHA256 }}
           ALICE_RELEASE_ACCESS_AUDIENCE: ${{ secrets.ALICE_RELEASE_ACCESS_AUDIENCE }}
           ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256: ${{ secrets.ALICE_RELEASE_SERVICE_TOKEN_ID_SHA256 }}
-          ALICE_MODEL_DAILY_BUDGET_UNITS: "2000000"
+          ALICE_MODEL_DAILY_BUDGET_UNITS: "100000"
           ALICE_STATE_DATABASE_ID: ${{ vars.ALICE_STATE_DATABASE_ID }}
           ALICE_PROGRAM_ENVELOPE_B64: ${{ secrets.ALICE_PROGRAM_ENVELOPE_B64 }}
           ALICE_PROGRAM_SIGNATURE_B64: ${{ secrets.ALICE_PROGRAM_SIGNATURE_B64 }}

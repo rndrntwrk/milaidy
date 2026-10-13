@@ -276,13 +276,13 @@ describe("Alice runtime configuration", () => {
     ).rejects.toThrow("ALICE_EFFECTIVE_CONFIG_MISMATCH");
   });
 
-  test("binds the coding and corpus budget to the signed configuration and enforces its ceiling", async () => {
-    const { env, trustPins } = await fixture(2_000_000);
+  test("binds the corpus budget to the signed configuration and enforces its ceiling", async () => {
+    const { env, trustPins } = await fixture(100_000);
     const now = Date.parse("2026-08-22T18:00:00.000Z");
-    expect((await loadRuntimeConfig(env, now, trustPins)).modelDailyBudgetUnits).toBe(2_000_000);
-    expect(() => loadAuthoritySafetyConfig({ ...env, ALICE_MODEL_DAILY_BUDGET_UNITS: "2000001" }))
+    expect((await loadRuntimeConfig(env, now, trustPins)).modelDailyBudgetUnits).toBe(100_000);
+    expect(() => loadAuthoritySafetyConfig({ ...env, ALICE_MODEL_DAILY_BUDGET_UNITS: "100001" }))
       .toThrow("ALICE_AUTHORITY_SAFETY_CONFIG_INVALID");
-    await expect(loadRuntimeConfig({ ...env, ALICE_MODEL_DAILY_BUDGET_UNITS: "1999999" }, now, trustPins))
+    await expect(loadRuntimeConfig({ ...env, ALICE_MODEL_DAILY_BUDGET_UNITS: "99999" }, now, trustPins))
       .rejects.toThrow();
   });
 

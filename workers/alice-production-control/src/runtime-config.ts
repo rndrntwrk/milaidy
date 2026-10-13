@@ -98,10 +98,10 @@ export function releaseRevisionResponseFields(
 export const ALICE_PRODUCTION_TRUST_PINS: AliceTrustPins = Object.freeze({
   programPublicJwkSha256:
     "sha256:b2aa16b88a789d0110f8e02521b15fd72b1d0df8873ffdfc1c7029c213825f5e",
-  policyHash: "sha256:fd761eb4efa9b7a304783c0203ba2aabea1d5b959dfc960f22784109a32210fb",
+  policyHash: "sha256:390bd5ff352a67651bd1509329c7bf18c2a26abeaac27778d91a150ebf02cf4e",
 });
 
-const PINNED_MAX_DAILY_BUDGET_UNITS = 2_000_000;
+const PINNED_MAX_DAILY_BUDGET_UNITS = 100_000;
 
 function decodeBase64UrlJson<T>(value: string): T | null {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) return null;
