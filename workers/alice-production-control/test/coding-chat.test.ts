@@ -67,6 +67,7 @@ async function fixture(options: { noOwner?: boolean; paused?: boolean; interrupt
         expect(id).toBe(`task-cap-${requestId}`);
         expect(params.actor).toBe(owner);
         expect(params.workItem.intent.action).toBe("coding.pr.create");
+        expect(params.workItem.enqueuedAt).toBe(values.get(`coding-native/request/${requestId}`).createdAt);
         expect(values.get(`coding-native/request/${requestId}`).grant.capabilityId).toBe(`cap-${requestId}`);
         if (options.interrupted && creates === 1) throw new Error("interrupted before creation");
         workflow = { status: "running" };
@@ -105,7 +106,7 @@ test("native owner starts an audited exact draft-PR task without invoking task p
     const state = f.values.get("state");
     const grant = state.capabilities[`cap-${requestId}`];
     expect(grant).toMatchObject({ owner, scope: "coding.pr.create", argumentHash: await aliceCodingArgumentHash(body.request), usedAt: null });
-    expect(grant.expiresAt - body.issuedAt).toBeGreaterThanOrEqual(600_000);
+    expect(grant.expiresAt - body.issuedAt).toBeGreaterThanOrEqual(1_800_000);
     expect(f.evidence).toHaveLength(1);
     expect(f.evidence[0].record.details.nativeMessage).toEqual(body.message);
     expect(JSON.stringify(f.evidence)).not.toContain(body.request.prompt);

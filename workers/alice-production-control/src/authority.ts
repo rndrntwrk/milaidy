@@ -1,4 +1,5 @@
 import {
+  ALICE_CODING_LIFETIME_MS,
   authorizeIntent,
   reserveModelBudget,
   type ActionIntent,
@@ -1054,7 +1055,7 @@ export class AuthorityLedger {
       target,
       nonce,
       argumentHash,
-      grantExpiresAt: now + 600_000,
+      grantExpiresAt: now + (scope === "repository.merge" ? 600_000 : ALICE_CODING_LIFETIME_MS),
     };
     this.state.sequence += 1;
     return { ok: true, code: "WEBAUTHN_APPROVAL_CHALLENGE_ISSUED" } as const;
@@ -1137,7 +1138,7 @@ export class AuthorityLedger {
       return { ok: true, code: "CAPABILITY_ALREADY_GRANTED", grant: structuredClone(existing) } as const;
     }
     const grant: CapabilityGrant = { capabilityId, owner, scope: "coding.pr.create", target, argumentHash,
-      nonce, expiresAt: now + 600_000, rollbackBoundary: this.state.rollbackBoundary,
+      nonce, expiresAt: now + ALICE_CODING_LIFETIME_MS, rollbackBoundary: this.state.rollbackBoundary,
       revokedAt: null, usedAt: null, ...structuredClone(this.state.binding) };
     this.state.capabilities[capabilityId] = grant;
     this.state.sequence += 1;

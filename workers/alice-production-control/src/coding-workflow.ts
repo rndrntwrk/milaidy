@@ -1,4 +1,5 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
+import { handleWorkQueueMessage } from "./work-dispatch";
 import { NonRetryableError } from "cloudflare:workflows";
 import type { AliceWorkerEnv } from "./env";
 import { authorityDurableName } from "./durable-names";
@@ -61,7 +62,7 @@ export class AliceCodingWorkflow extends WorkflowEntrypoint<
       }
       return { authorized: true };
     });
-    await step.do("persist and enqueue coding task", async () => {
+    await step.do("persist coding task", async () => {
       const state = createAliceStatePlaneClient(
         this.env.ALICE_STATE_PLANE,
         this.env.ALICE_STATE_PLANE_SERVICE_TOKEN,
@@ -93,15 +94,25 @@ export class AliceCodingWorkflow extends WorkflowEntrypoint<
           },
         ],
       });
-      await this.env.ALICE_WORK_QUEUE.send(
-        await createAliceWorkQueueEnvelope(
-          workItem,
-          this.env.ALICE_EVIDENCE_QUEUE_HMAC_KEY,
-        ),
-        { contentType: "json" },
-      );
-      return { queued: true };
+      return { persisted: true };
     });
-    return { taskId, status: "queued-for-execution" };
+    // Repository preparation can exceed a Queue consumer's fifteen-minute lifetime.
+    // Reuse the same guarded executor, with the Workflow as the sole execution owner.
+    const result = await step.do("execute coding task", {
+      timeout: "31 minutes",
+      retries: { limit: 2, delay: "10 seconds", backoff: "constant" },
+    }, async () => {
+      const outcome = await handleWorkQueueMessage(
+        await createAliceWorkQueueEnvelope(workItem, this.env.ALICE_EVIDENCE_QUEUE_HMAC_KEY),
+        1, false, this.env,
+      );
+      // A retry reuses the same lease/result and can finish a persisted result's evidence.
+      if (outcome.disposition === "retry") throw new Error(outcome.code);
+      if (!["WORK_COMPLETED", "WORK_ALREADY_COMPLETED"].includes(outcome.code)) {
+        throw new NonRetryableError(outcome.code);
+      }
+      return outcome;
+    });
+    return { taskId, status: "completed", code: result.code };
   }
 }

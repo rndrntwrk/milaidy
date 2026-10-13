@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { getSandbox } from "@cloudflare/sandbox";
 import { authorityDurableName } from "../../alice-production-control/src/durable-names";
-import type { ActionIntent, ReleaseAdmission } from "../../alice-production-control/src/policy";
+import { ALICE_CODING_LIFETIME_MS, type ActionIntent, type ReleaseAdmission } from "../../alice-production-control/src/policy";
 
 export type AliceCodingSandboxEnv = Env;
 
@@ -30,8 +30,6 @@ type LeaseState = {
 };
 
 const MAX_MODEL_CALLS = 40;
-// Covers bounded preparation plus the eight-minute agent run and cleanup.
-const MAX_LEASE_MS = 720_000;
 
 export class AliceCodingLease extends DurableObject<AliceCodingSandboxEnv> {
   private async authorityCode(state: LeaseState): Promise<string | null> {
@@ -123,7 +121,7 @@ export class AliceCodingLease extends DurableObject<AliceCodingSandboxEnv> {
       const token = `${taskId}.${crypto.randomUUID()}`;
       const state: LeaseState = {
         taskId, argumentHash, actor, admission, intent, token,
-        expiresAt: Math.min(Date.now() + MAX_LEASE_MS, intent.expiresAt),
+        expiresAt: Math.min(Date.now() + ALICE_CODING_LIFETIME_MS, intent.expiresAt),
         useCount: 0, status: "running", failureCode: null, result: null,
       };
       const code = await this.authorityCode(state);
