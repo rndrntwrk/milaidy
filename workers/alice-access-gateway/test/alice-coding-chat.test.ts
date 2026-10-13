@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
-import { createHmac } from "node:crypto";
+import { expect, spyOn, test } from "bun:test";
+import { createHmac, generateKeyPairSync } from "node:crypto";
 import { forwardAliceChatCoding } from "../src/alice-coding-chat";
 
 const id = "10000000-0000-4000-8000-000000000001";
@@ -87,4 +87,48 @@ test("authenticated native request reaches only draft PR admission, never merge 
     ).toBe(404);
   }
   expect(calls).toHaveLength(1);
+});
+
+test("repository lookup works with Workers redirect modes and rejects redirected HEAD responses", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const env = {
+    ALICE_GITHUB_APP_ID: "1234",
+    ALICE_GITHUB_APP_PRIVATE_KEY_B64: Buffer.from(
+      privateKey.export({ type: "pkcs8", format: "pem" }),
+    ).toString("base64"),
+  };
+  let redirected = false;
+  const headRequests: Request[] = [];
+  const upstream = spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    // Match workerd: redirect:error throws before any upstream request.
+    if (init?.redirect === "error") throw new TypeError("Invalid redirect value");
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    if (url.origin !== "https://api.github.com") throw new Error("Unexpected upstream");
+    if (url.pathname === "/repos/rndrntwrk/milaidy/installation") {
+      return Response.json({ id: 123, app_id: 1234, account: { login: "rndrntwrk" }, suspended_at: null });
+    }
+    if (url.pathname === "/app/installations/123/access_tokens") {
+      return Response.json({ token: "test-repository-token-long-enough" }, { status: 201 });
+    }
+    if (url.pathname !== "/repos/rndrntwrk/milaidy/commits/HEAD") throw new Error("Unexpected path");
+    headRequests.push(request);
+    return redirected
+      ? new Response(null, { status: 302, headers: { location: "https://elsewhere.invalid/HEAD" } })
+      : Response.json({ sha: "a".repeat(40) });
+  });
+  const request = () => new Request("http://alice-coding.internal/v1/repository?repository=rndrntwrk%2Fmilaidy");
+  try {
+    const found = await forwardAliceChatCoding(request(), env);
+    expect(found.status).toBe(200);
+    expect(await found.json()).toEqual({ ok: true, repository: "rndrntwrk/milaidy", baseCommit: "a".repeat(40) });
+    redirected = true;
+    const denied = await forwardAliceChatCoding(request(), env);
+    expect(denied.status).toBe(503);
+    expect(await denied.json()).toEqual({ ok: false, code: "CODING_REPOSITORY_UNAVAILABLE" });
+    expect(headRequests).toHaveLength(2);
+    expect(headRequests.every((entry) => entry.redirect === "manual")).toBe(true);
+  } finally {
+    upstream.mockRestore();
+  }
 });

@@ -12,6 +12,7 @@ const CONTROLLER_PATHS = new Set([
   'workers/alice-production-control/src/index.ts',
   'workers/alice-production-control/src/coding-page.ts',
   'workers/alice-access-gateway/src/alice-coding-archive.ts',
+  'workers/alice-access-gateway/src/alice-coding-chat.ts',
   'workers/alice-access-gateway/src/alice-coding-publish.ts',
   'workers/alice-coding-sandbox/src/index.ts',
   'workers/alice-coding-sandbox/src/lease.ts',
@@ -22,6 +23,7 @@ const CONTROLLER_PATHS = new Set([
   'workers/alice-production-control/test/program.test.ts',
   'workers/alice-production-control/test/webauthn-authority.test.ts',
   'workers/alice-access-gateway/test/alice-coding-archive.test.ts',
+  'workers/alice-access-gateway/test/alice-coding-chat.test.ts',
   'workers/alice-access-gateway/test/alice-coding-publish.test.ts',
 
   '.github/workflows/recover-alice-production-watchdog.yml',

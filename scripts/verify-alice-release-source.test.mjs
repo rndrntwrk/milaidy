@@ -71,12 +71,13 @@ test('host-only changes can reuse the image but dependency changes cannot', t =>
   const hostDirectory = path.join(f.root, 'workers/alice-access-gateway/src');
   fs.mkdirSync(hostDirectory, {recursive: true});
   fs.writeFileSync(path.join(hostDirectory, 'alice-runtime-container.ts'), 'export const interceptHttps = true;\n');
-  for (const file of ['alice-coding-archive.ts', 'alice-coding-publish.ts', 'runtime-host.ts']) {
+  for (const file of ['alice-coding-archive.ts', 'alice-coding-chat.ts', 'alice-coding-publish.ts', 'runtime-host.ts']) {
     fs.writeFileSync(path.join(hostDirectory, file), 'export const exactOwnerMerge = true;\n');
   }
   const archiveTest = path.join(f.root, 'workers/alice-access-gateway/test/alice-coding-archive.test.ts');
   fs.mkdirSync(path.dirname(archiveTest), {recursive: true});
   fs.writeFileSync(archiveTest, 'test("archive redirect", () => {});\n');
+  fs.writeFileSync(path.join(path.dirname(archiveTest), 'alice-coding-chat.test.ts'), 'test("repository redirect", () => {});\n');
   const controlDirectory = path.join(f.root, 'workers/alice-production-control/src');
   fs.mkdirSync(controlDirectory, {recursive: true});
   for (const file of ['coding-task.ts', 'coding-page.ts', 'index.ts', 'policy.ts']) {
