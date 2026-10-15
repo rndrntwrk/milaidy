@@ -929,6 +929,27 @@ jobs:
                   "cf-access-authenticated-user-email": "alice-owner-verified.invalid",
                   "x-milady-cloudflare-access-secret": process.env.MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET,
                 };
+                // Exercise both HTTP guards in the built image. An invalid body
+                // reaches the broker handler without invoking paid inference.
+                const codingModelIngressStatuses = [];
+                for (const [headers, expectedStatus, expectedCode] of [
+                  [{}, 401, undefined],
+                  [{ "cf-access-authenticated-user-email": authHeaders["cf-access-authenticated-user-email"],
+                    "x-milady-cloudflare-access-secret": authHeaders["x-milady-cloudflare-access-secret"] },
+                    403, "CODING_MODEL_BROKER_REQUIRED"],
+                  [{ authorization: authHeaders.authorization }, 400, "CODING_MODEL_REQUEST_INVALID"],
+                ]) {
+                  const coding = await fetch(`${base}/internal/v1/coding/model`, {
+                    method: "POST", headers: { ...headers, "content-type": "application/json" }, body: "{}",
+                  });
+                  const body = await coding.json();
+                  const code = body.error?.code ?? body.code;
+                  if (coding.status !== expectedStatus || code !== expectedCode) {
+                    console.error(JSON.stringify({ codingModelStatus: coding.status, code, expectedStatus, expectedCode }));
+                    process.exit(21);
+                  }
+                  codingModelIngressStatuses.push(coding.status);
+                }
                 const liveness = await fetch(`${base}/health/live`);
                 if (liveness.status !== 200) {
                   console.error(JSON.stringify({ livenessStatus: liveness.status }));
@@ -1243,7 +1264,7 @@ jobs:
                   console.error(JSON.stringify({ vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
                   process.exit(13);
                 }
-                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, capabilityBomSha256: capabilities.capabilityBomSha256, capabilityCount: capabilities.entries.length, emoteStatus: emoteResponse.status, companionReadStatus: initialCompanionResponse.status, companionWriteStatus: companionUpdateResponse.status, companionPersistedStatus: persistedCompanionResponse.status, statePlaneElizaLoadRequests: statePlaneState.elizaLoadRequests, statePlaneElizaCommitRequests: statePlaneState.elizaCommitRequests, statePlaneCompanionGetRequests: statePlaneState.companionGetRequests, statePlaneCompanionPutRequests: statePlaneState.companionPutRequests, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatProfile: "full-gated", modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
+                process.stdout.write(JSON.stringify({ status: response.status, agentState: health.agentState, canRespond: health.canRespond, capabilityBomSha256: capabilities.capabilityBomSha256, capabilityCount: capabilities.entries.length, emoteStatus: emoteResponse.status, companionReadStatus: initialCompanionResponse.status, companionWriteStatus: companionUpdateResponse.status, companionPersistedStatus: persistedCompanionResponse.status, statePlaneElizaLoadRequests: statePlaneState.elizaLoadRequests, statePlaneElizaCommitRequests: statePlaneState.elizaCommitRequests, statePlaneCompanionGetRequests: statePlaneState.companionGetRequests, statePlaneCompanionPutRequests: statePlaneState.companionPutRequests, broadcastStatus: broadcastResponse.status, authenticatedDeniedReadCount: deniedReads.length, dashboardStatus: dashboardResponse.status, bundleStatus: bundleResponse.status, forbiddenMutationCount: deniedMutations.length, codingModelIngressStatuses, maliciousOriginStatus: maliciousOrigin.status, bearerOnlyChatStatus: bearerOnlyChat.status, chatStatus: chatResponse.status, chatProfile: "full-gated", modelChatRequests: modelState.chatRequests, vrmStatus: vrmResponse.status, vrmBytes: compressedVrm.length, vrmMagic }));
               ')"
           # Replace the application container while retaining only the private
           # state dependency. No application files or writable layers survive.

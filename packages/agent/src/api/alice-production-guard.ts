@@ -74,6 +74,7 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
 ];
 
 const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
+  /^\/internal\/v1\/coding\/model$/,
   /^\/api\/emote$/,
   /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/catalog$/,
   /^\/api\/knowledge\/documents(?:\/bulk)?$/,

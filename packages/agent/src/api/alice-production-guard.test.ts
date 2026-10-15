@@ -115,6 +115,7 @@ describe("Alice production runtime guard", () => {
       ["POST", "/api/subscription/openai/start"],
       ["POST", "/api/subscription/openai/exchange"],
       ["POST", "/api/agent/restart"],
+      ["POST", "/internal/v1/coding/model"],
       ["DELETE", "/api/subscription/openai-codex"],
     ]) {
       expect(
@@ -145,6 +146,8 @@ describe("Alice production runtime guard", () => {
       ["POST", "/api/repository/merge"],
       ["POST", "/api/sandbox/exec"],
       ["POST", "/api/unreviewed/execute"],
+      ["GET", "/internal/v1/coding/model"],
+      ["POST", "/internal/v1/coding/model/nearby"],
       ["POST", "/animations/idle.glb.gz"],
       ["POST", "/api/knowledge/documents/url"],
       ["POST", "/api/knowledge/documents/bulk/nearby"],
