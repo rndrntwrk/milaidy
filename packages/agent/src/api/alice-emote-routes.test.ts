@@ -29,7 +29,7 @@ function context(overrides: Record<string, unknown> = {}) {
                 getBoundSessionId: () => "session-live",
                 broadcastEvent: async (...args: unknown[]) => {
                   streamEvents.push(args);
-                  return { ok: true };
+                  return { ok: true, sent: true };
                 },
               }
             : undefined,
@@ -41,7 +41,7 @@ function context(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Alice emote routes", () => {
-  it("keeps Alice full-gated Companion emotes on the local websocket", async () => {
+  it("relays Alice full-gated Companion emotes through the existing Stream service", async () => {
     const previousMode = process.env.ALICE_RUNTIME_AUTHORITY_MODE;
     const previousProfile = process.env.ALICE_RUNTIME_PROFILE;
     process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
@@ -58,12 +58,25 @@ describe("Alice emote routes", () => {
           loop: false,
         },
       ]);
-      expect(fixture.streamEvents).toEqual([]);
+      expect(fixture.streamEvents).toEqual([
+        [
+          "emote",
+          {
+            emoteId: "dance-happy",
+            path: "/animations/emotes/dance-happy.glb.gz",
+            duration: 4,
+            loop: false,
+          },
+        ],
+      ]);
       expect(fixture.responses[0]?.data).toEqual({
         ok: true,
         broadcast: {
-          sent: false,
-          reason: "Alice Companion emotes are local-only",
+          hasService: true,
+          hasBroadcastEvent: true,
+          boundSessionId: "session-live",
+          sent: true,
+          result: { ok: true, sent: true },
         },
       });
     } finally {
@@ -108,12 +121,34 @@ describe("Alice emote routes", () => {
             hasBroadcastEvent: true,
             boundSessionId: "session-live",
             sent: true,
-            result: { ok: true },
+            result: { ok: true, sent: true },
           },
         },
         status: undefined,
       },
     ]);
+  });
+
+  it("reports a resolved Stream non-delivery without claiming the emote was sent", async () => {
+    const fixture = context({
+      runtime: {
+        getService: () => ({
+          getBoundSessionId: () => "session-live",
+          broadcastEvent: async () => ({ ok: true, sent: false }),
+        }),
+      },
+    });
+    expect(await handleAliceEmoteRoutes(fixture.value as never)).toBe(true);
+    expect(fixture.responses[0]?.data).toEqual({
+      ok: true,
+      broadcast: {
+        hasService: true,
+        hasBroadcastEvent: true,
+        boundSessionId: "session-live",
+        sent: false,
+        result: { ok: true, sent: false },
+      },
+    });
   });
 
   it("lists the canonical emote catalog", async () => {
