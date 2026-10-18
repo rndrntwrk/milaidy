@@ -1,4 +1,4 @@
-import type { PluginParamDef } from "@miladyai/app-core/api";
+import { client } from "@miladyai/app-core/api";
 import { useApp } from "@miladyai/app-core/state";
 import {
   Button,
@@ -27,8 +27,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { paramsToSchema } from "../pages/PluginsView";
-import { ConfigRenderer, defaultRegistry } from "../config-ui/config-renderer";
 import {
   OPERATOR_ACTION_BUTTON_BASE_CLASSNAME,
   OPERATOR_ACTION_BUTTON_TONE_CLASSNAME,
@@ -40,15 +38,12 @@ import {
 } from "./OperatorPrimitives";
 import {
   buildStream555SetupSummary,
-  filterStream555SetupParams,
   findStream555Plugin,
-  serializeStream555ConfigValue,
   titleForStream555LaunchMode,
   type Stream555LaunchMode,
 } from "./stream555-setup";
 import {
   formatOperatorErrorMessage,
-  formatUnknownOperatorError,
 } from "./operator-error-messages";
 import type { useCompanionStageOperator } from "./useCompanionStageOperator";
 
@@ -59,7 +54,6 @@ type GoLiveStep =
   | "review-and-launch";
 
 type CompanionStageOperatorState = ReturnType<typeof useCompanionStageOperator>;
-type WalletAuthChain = "solana" | "eth";
 
 const STEP_ORDER: readonly { key: GoLiveStep; label: string }[] = [
   { key: "setup-required", label: "Setup" },
@@ -72,31 +66,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value != null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
-}
-
-function readSetupParamString(
-  params: PluginParamDef[],
-  key: string,
-): string | null {
-  const param = params.find((entry) => entry.key === key);
-  const raw = param?.currentValue ?? param?.default ?? null;
-  if (typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normalizeWalletAuthChain(value: string | null): WalletAuthChain | null {
-  const normalized = value?.trim().toLowerCase();
-  if (!normalized) return null;
-  if (normalized === "sol" || normalized === "solana") return "solana";
-  if (normalized === "eth" || normalized === "evm" || normalized === "ethereum") {
-    return "eth";
-  }
-  return null;
-}
-
-function labelForWalletAuthChain(chain: WalletAuthChain): string {
-  return chain === "solana" ? "Solana" : "Ethereum";
 }
 
 function labelForDestinationReadiness(
@@ -126,22 +95,6 @@ function labelForDestinationReadiness(
   }
 }
 
-function toneForDestinationReadiness(
-  readinessState: ReturnType<
-    typeof buildStream555SetupSummary
-  >["destinations"][number]["readinessState"],
-): OperatorPillTone {
-  switch (readinessState) {
-    case "ready":
-      return "success";
-    case "missing-stream-key":
-    case "missing-url":
-      return "warning";
-    case "disabled":
-    default:
-      return "neutral";
-  }
-}
 
 function descriptionForMode(
   mode: Stream555LaunchMode,
@@ -323,22 +276,13 @@ export function CompanionGoLiveModal({
   onPreferredModeChange: (mode: Stream555LaunchMode) => void;
   operator: CompanionStageOperatorState;
 }) {
-  const {
-    handlePluginConfigSave,
-    loadPlugins,
-    pluginSaving,
-    plugins,
-    walletAddresses,
-    t,
-  } = useApp();
+  const { plugins, t } = useApp();
 
   const [step, setStep] = useState<GoLiveStep>("setup-required");
-  const [draftConfig, setDraftConfig] = useState<Record<string, unknown>>({});
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [launchMode, setLaunchMode] =
     useState<Stream555LaunchMode>(preferredMode);
   const [launching, setLaunching] = useState(false);
-  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [inlineNotice, setInlineNotice] = useState<{
     tone: "success" | "warning" | "error";
     message: string;
@@ -357,82 +301,27 @@ export function CompanionGoLiveModal({
     () => buildStream555SetupSummary(streamPlugin),
     [streamPlugin],
   );
-  const setupParams = useMemo(
-    () => filterStream555SetupParams(streamPlugin),
-    [streamPlugin],
-  );
-  const initialValues = useMemo(() => {
-    const values: Record<string, unknown> = {};
-    for (const param of setupParams) {
-      if (
-        param.currentValue != null &&
-        String(param.currentValue).trim().length > 0
-      ) {
-        values[param.key] = param.currentValue;
-      } else if (
-        param.default != null &&
-        String(param.default).trim().length > 0
-      ) {
-        values[param.key] = param.default;
-      }
-    }
-    return values;
-  }, [setupParams]);
-  const mergedValues = useMemo(
-    () => ({ ...initialValues, ...draftConfig }),
-    [draftConfig, initialValues],
-  );
-  const setKeys = useMemo(
-    () =>
-      new Set(
-        setupParams.filter((param) => param.isSet).map((param) => param.key),
-      ),
-    [setupParams],
-  );
-  const { schema, hints } = useMemo(() => {
-    if (!streamPlugin || setupParams.length === 0) {
-      return { schema: null, hints: {} as Record<string, unknown> };
-    }
-    const generated = paramsToSchema(setupParams, streamPlugin.id);
-    if (streamPlugin.configUiHints) {
-      for (const [key, serverHint] of Object.entries(
-        streamPlugin.configUiHints,
-      )) {
-        generated.hints[key] = { ...generated.hints[key], ...serverHint };
-      }
-    }
-    return generated;
-  }, [setupParams, streamPlugin]);
-
-  const preferredWalletAuthChain =
-    normalizeWalletAuthChain(
-      readSetupParamString(setupParams, "STREAM555_WALLET_AUTH_PREFERRED_CHAIN"),
-    ) ?? "solana";
-  const provisionTargetChain =
-    normalizeWalletAuthChain(
-      readSetupParamString(
-        setupParams,
-        "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
-      ),
-    ) ?? (walletAddresses?.solanaAddress ? "solana" : "eth");
-  const preferredChainLabel = labelForWalletAuthChain(
-    preferredWalletAuthChain,
-  );
-  const provisionTargetLabel = labelForWalletAuthChain(provisionTargetChain);
-  const streamPluginMissingMessage = t("aliceoperator.streamPluginMissing", {
-    defaultValue:
-      "555stream is not running in this runtime. Refresh status after staging finishes loading, then reconnect setup.",
-  });
-
+  const [nativeSetup, setNativeSetup] = useState<Awaited<ReturnType<typeof client.getStream555NativeSetup>> | null>(null);
+  const [nativeSetupError, setNativeSetupError] = useState<string | null>(null);
+  const [nativeSetupLoading, setNativeSetupLoading] = useState(false);
+  const nativeReadGeneration = useRef(0);
   const refreshRuntimeStatus = useCallback(() => {
     if (refreshInFlightRef.current) return refreshInFlightRef.current;
 
-    const refresh = Promise.all([
-      loadPlugins(),
-      operator.stream.refreshStatus(),
-      operator.stream.refreshDestinations(),
-      operator.arcade.refreshState(),
-    ]).then(() => undefined);
+    const generation = ++nativeReadGeneration.current;
+    setNativeSetupLoading(true);
+    setNativeSetup(null);
+    setNativeSetupError(null);
+    const refresh = client.getStream555NativeSetup().then(saved => {
+      if (generation === nativeReadGeneration.current) setNativeSetup(saved);
+    }).catch(() => {
+      if (generation === nativeReadGeneration.current) {
+        setNativeSetup(null);
+        setNativeSetupError('Native Studio setup is unavailable. Configure its session and native admission before continuing.');
+      }
+    }).finally(() => {
+      if (generation === nativeReadGeneration.current) setNativeSetupLoading(false);
+    });
     refreshInFlightRef.current = refresh;
     void refresh.then(
       () => {
@@ -447,24 +336,26 @@ export function CompanionGoLiveModal({
       },
     );
     return refresh;
-  }, [loadPlugins, operator.arcade, operator.stream]);
+  }, []);
 
   useEffect(() => {
     if (!open) {
       refreshedOnOpenRef.current = false;
+      nativeReadGeneration.current++;
+      refreshInFlightRef.current = null;
       return;
     }
     if (refreshedOnOpenRef.current) return;
     refreshedOnOpenRef.current = true;
-    void refreshRuntimeStatus().catch(() => {});
+    void refreshRuntimeStatus();
+    return () => { nativeReadGeneration.current++; refreshInFlightRef.current = null; };
   }, [open, refreshRuntimeStatus]);
 
   useEffect(() => {
     if (!open) return;
     setInlineNotice(null);
-    setDraftConfig({});
     setLaunchMode(preferredMode);
-    setStep(summary.setupRequired ? "setup-required" : "channel-selection");
+    setStep("setup-required");
     setSelectedChannels(
       summary.destinations
         .filter((destination) => destination.readinessState === "ready")
@@ -480,90 +371,6 @@ export function CompanionGoLiveModal({
       node.scrollIntoView({ block: "nearest" });
     });
   }, [inlineNotice]);
-
-  const executeSetupAction = useCallback(
-    async (
-      actionKey: string,
-      action:
-        | "STREAM555_AUTH_WALLET_LOGIN"
-        | "STREAM555_AUTH_WALLET_PROVISION_LINKED",
-      params: Record<string, unknown>,
-      successMessage: string,
-      errorMessage: string,
-    ) => {
-      if (busyAction) return;
-      setBusyAction(actionKey);
-      setInlineNotice(null);
-      try {
-        const response = await operator.executePlan([{ action, params }], true);
-        const result = response.results[0];
-        if (!result?.success) {
-          throw new Error(result?.message || errorMessage);
-        }
-        setInlineNotice({
-          tone: "success",
-          message: result.message || successMessage,
-        });
-        await refreshRuntimeStatus();
-      } catch (err) {
-        setInlineNotice({
-          tone: "error",
-          message: formatUnknownOperatorError(err, errorMessage, t),
-        });
-      } finally {
-        setBusyAction(null);
-      }
-    },
-    [busyAction, operator, refreshRuntimeStatus],
-  );
-
-  const handleSaveSetup = useCallback(async () => {
-    if (!streamPlugin) return;
-    const patch: Record<string, string> = {};
-    for (const param of setupParams) {
-      const serialized = serializeStream555ConfigValue(mergedValues[param.key]);
-      if (serialized !== null) {
-        patch[param.key] = serialized;
-      }
-    }
-    if (Object.keys(patch).length === 0) {
-      setInlineNotice({
-        tone: "warning",
-        message: t("aliceoperator.noSetupChanges", {
-          defaultValue: "Add or update at least one setup field before saving.",
-        }),
-      });
-      return;
-    }
-    try {
-      await handlePluginConfigSave(streamPlugin.id, patch);
-      await refreshRuntimeStatus();
-      setInlineNotice({
-        tone: "success",
-        message: t("aliceoperator.setupSaved", {
-          defaultValue: "555stream setup saved and refreshed.",
-        }),
-      });
-    } catch (err) {
-      setInlineNotice({
-        tone: "error",
-        message: formatUnknownOperatorError(
-          err,
-          t("aliceoperator.setupSaveFailed", {
-            defaultValue: "Failed to save 555stream setup.",
-          }),
-          t,
-        ),
-      });
-    }
-  }, [
-    handlePluginConfigSave,
-    mergedValues,
-    refreshRuntimeStatus,
-    setupParams,
-    streamPlugin,
-    t,
-  ]);
 
   const handleLaunch = useCallback(async () => {
     setLaunching(true);
@@ -593,22 +400,9 @@ export function CompanionGoLiveModal({
 
   const handleAdvance = useCallback(async () => {
     if (step === "setup-required") {
-      if (summary.setupRequired) {
-        setInlineNotice({
-          tone: "warning",
-          state: "blocked",
-          message: formatOperatorErrorMessage(
-            summary.runtimeWarnings[0],
-            t("aliceoperator.setupBlocked", {
-              defaultValue:
-                "Authenticate and enable at least one ready destination before continuing.",
-            }),
-            t,
-          ),
-        });
-        return;
+      if (nativeSetup && !nativeSetupError && !nativeSetupLoading) {
+        window.open(nativeSetup.studioUrl, "_blank", "noopener,noreferrer");
       }
-      setStep("channel-selection");
       return;
     }
     if (step === "channel-selection") {
@@ -633,8 +427,9 @@ export function CompanionGoLiveModal({
     handleLaunch,
     selectedChannels.length,
     step,
-    summary.runtimeWarnings,
-    summary.setupRequired,
+    nativeSetup,
+    nativeSetupError,
+    nativeSetupLoading,
     t,
   ]);
 
@@ -737,14 +532,14 @@ export function CompanionGoLiveModal({
                   })}
                 </div>
                 <DialogTitle className="go-live-modal__title">
-                  {t("aliceoperator.goLiveTitle", {
-                    defaultValue: "Go Live",
+                  {t("aliceoperator.nativeStudioTitle", {
+                    defaultValue: "Shared Stream Studio",
                   })}
                 </DialogTitle>
                 <DialogDescription className="go-live-modal__description">
-                  {t("aliceoperator.goLiveDescription", {
+                  {t("aliceoperator.nativeStudioDescription", {
                     defaultValue:
-                      "Authenticate, choose channels, pick the launch format, and send Alice live without leaving the stage.",
+                      "Review the saved native session, then open its shared Studio to edit or go live.",
                   })}
                 </DialogDescription>
               </div>
@@ -797,299 +592,24 @@ export function CompanionGoLiveModal({
 
           <div className="go-live-modal__body">
             {step === "setup-required" ? (
-              <div className="space-y-5">
+              <section className="space-y-4" aria-label="Shared native Studio setup">
                 {renderInlineNotice()}
-                <div className="go-live-modal__setup-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <div className="go-live-modal__setup-card rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
-                    <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                      {t("aliceoperator.setup.auth", { defaultValue: "Auth" })}
-                    </div>
-                    <div className="mt-2 text-lg font-semibold text-txt">
-                      {summary.authConnected
-                        ? t("aliceoperator.connected", {
-                            defaultValue: "Connected",
-                          })
-                        : t("aliceoperator.authRequired", {
-                            defaultValue: "Authentication required",
-                          })}
-                    </div>
-                    <div className="mt-1 text-sm text-muted-strong">
-                      {summary.authLabel}
-                    </div>
-                  </div>
-                  <div className="go-live-modal__setup-card rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
-                    <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                      {t("aliceoperator.setup.readyChannels", {
-                        defaultValue: "Ready channels",
-                      })}
-                    </div>
-                    <div className="mt-2 text-lg font-semibold text-txt">
-                      {summary.readyDestinations}/
-                      {summary.enabledDestinations ||
-                        summary.destinations.length}
-                    </div>
-                    <div className="mt-1 text-sm text-muted-strong">
-                      {t("aliceoperator.setup.channelHint", {
-                        defaultValue:
-                          "At least one ready destination is required.",
-                      })}
-                    </div>
-                  </div>
-                  <div className="go-live-modal__setup-card rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
-                    <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                      {t("aliceoperator.setup.savedDestinations", {
-                        defaultValue: "Saved destinations",
-                      })}
-                    </div>
-                    <div className="mt-2 text-lg font-semibold text-txt">
-                      {summary.configuredDestinations}
-                    </div>
-                    <div className="mt-1 text-sm text-muted-strong">
-                      {t("aliceoperator.setup.savedHint", {
-                        defaultValue:
-                          "Destination keys and URLs available to 555stream.",
-                      })}
-                    </div>
-                  </div>
-                  <div className="go-live-modal__setup-card rounded-[1.5rem] border border-border/35 bg-bg-elevated px-4 py-4">
-                    <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                      {t("aliceoperator.setup.preferredChain", {
-                        defaultValue: "Preferred chain",
-                      })}
-                    </div>
-                    <div className="mt-2 text-lg font-semibold text-txt">
-                      {t("aliceoperator.setup.preferredChainValue", {
-                        defaultValue: `${preferredChainLabel} preferred`,
-                      })}
-                    </div>
-                    <div className="mt-1 text-sm text-muted-strong">
-                      {t("aliceoperator.setup.chainHint", {
-                        defaultValue: `Provision fallback: ${provisionTargetLabel}`,
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="go-live-modal__setup-panel rounded-[1.75rem] border border-border/35 bg-bg-elevated px-5 py-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <OperatorPill tone="warning">
-                      {t("aliceoperator.setupRequiredBadge", {
-                        defaultValue: "Setup required",
-                      })}
-                    </OperatorPill>
-                    {streamPlugin ? (
-                      <OperatorPill>{streamPlugin.name}</OperatorPill>
-                    ) : null}
-                  </div>
-                  <p
-                    className={`${OPERATOR_SECTION_DESCRIPTION_CLASSNAME} mt-3`}
-                  >
-                    {t("aliceoperator.setupStepDescription", {
-                      defaultValue:
-                        "Finish authentication and channel readiness here. You do not need to leave the stage to complete 555stream onboarding.",
-                    })}
-                  </p>
-                  {!streamPlugin ? (
-                    <div
-                      role="status"
-                      aria-live="polite"
-                      aria-atomic="true"
-                      className="mt-4 rounded-[1.25rem] border border-warn/26 bg-warn/10 px-4 py-3 text-sm leading-6 text-warn"
-                    >
-                      {streamPluginMissingMessage}
-                    </div>
-                  ) : null}
-                  {summary.runtimeWarnings.length > 0 ? (
-                    <div className="mt-4 space-y-2 rounded-[1.25rem] border border-border/35 bg-black/18 px-4 py-3 text-sm leading-6 text-warn">
-                      {summary.runtimeWarnings.map((warning) => (
-                        <div key={warning}>
-                          {formatOperatorErrorMessage(
-                            warning,
-                            t("aliceoperator.streamRuntimeWarning", {
-                              defaultValue:
-                                "555stream setup needs attention before launch.",
-                            }),
-                            t,
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={`${OPERATOR_ACTION_BUTTON_BASE_CLASSNAME} ${OPERATOR_ACTION_BUTTON_TONE_CLASSNAME.accent}`}
-                      disabled={Boolean(busyAction) || !streamPlugin}
-                      onClick={() =>
-                        void executeSetupAction(
-                          "wallet-login",
-                          "STREAM555_AUTH_WALLET_LOGIN",
-                          {},
-                          "Wallet authentication completed.",
-                          "Wallet authentication failed.",
-                        )
-                      }
-                    >
-                      {busyAction === "wallet-login"
-                        ? t("aliceoperator.authenticating", {
-                            defaultValue: "Authenticating...",
-                          })
-                        : t("aliceoperator.authenticate", {
-                            defaultValue: "Authenticate",
-                          })}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={OPERATOR_ACTION_BUTTON_BASE_CLASSNAME}
-                      disabled={Boolean(busyAction) || !streamPlugin}
-                      onClick={() =>
-                        void executeSetupAction(
-                          "wallet-provision",
-                          "STREAM555_AUTH_WALLET_PROVISION_LINKED",
-                          { targetChain: provisionTargetChain },
-                          `Linked wallet provisioned for ${provisionTargetChain}.`,
-                          "Linked wallet provisioning failed.",
-                        )
-                      }
-                    >
-                      {busyAction === "wallet-provision"
-                        ? t("aliceoperator.provisioning", {
-                            defaultValue: "Provisioning...",
-                          })
-                        : t("aliceoperator.provisionViaSw4p", {
-                            defaultValue: "Provision via sw4p",
-                          })}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={OPERATOR_ACTION_BUTTON_BASE_CLASSNAME}
-                      disabled={Boolean(busyAction)}
-                      onClick={() => void refreshRuntimeStatus()}
-                    >
-                      {t("aliceoperator.refreshStatus", {
-                        defaultValue: "Refresh status",
-                      })}
-                    </Button>
-                  </div>
-
-                  <div
-                    className="go-live-modal__destination-board mt-5"
-                    aria-label={t("aliceoperator.setup.channelReadiness", {
-                      defaultValue: "Channel readiness",
-                    })}
-                  >
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                        {t("aliceoperator.setup.channelReadiness", {
-                          defaultValue: "Channel readiness",
-                        })}
-                      </div>
-                      <OperatorPill
-                        tone={
-                          summary.readyDestinations > 0
-                            ? "success"
-                            : "warning"
-                        }
-                      >
-                        {summary.readyDestinations}/
-                        {summary.destinations.length} ready
-                      </OperatorPill>
-                    </div>
-                    <div className="go-live-modal__destination-list">
-                      {summary.destinations.map((destination) => (
-                        <div
-                          key={destination.id}
-                          className="go-live-modal__destination-row"
-                          data-readiness-state={destination.readinessState}
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-txt">
-                              {destination.label}
-                            </div>
-                            <div className="mt-0.5 truncate text-xs text-muted-strong">
-                              {destination.enabled
-                                ? destination.hasUrl
-                                  ? t("aliceoperator.destinationUrlConfigured", {
-                                      defaultValue: "RTMP URL configured",
-                                    })
-                                  : t("aliceoperator.destinationNeedsUrl", {
-                                      defaultValue: "Needs RTMP URL",
-                                    })
-                                : t("aliceoperator.destinationNotEnabled", {
-                                    defaultValue: "Not enabled",
-                                  })}
-                            </div>
-                          </div>
-                          <OperatorPill
-                            tone={toneForDestinationReadiness(
-                              destination.readinessState,
-                            )}
-                          >
-                            {labelForDestinationReadiness(
-                              destination.readinessState,
-                              t,
-                            )}
-                          </OperatorPill>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {schema ? (
-                    <div className="go-live-modal__setup-config mt-5 rounded-[1.5rem] border border-border/35 bg-black/16 px-4 py-4">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className={OPERATOR_SECTION_EYEBROW_CLASSNAME}>
-                            {t("aliceoperator.configureNow", {
-                              defaultValue: "Configure now",
-                            })}
-                          </div>
-                          <div className="mt-1 text-sm text-muted-strong">
-                            {t("aliceoperator.configureNowHint", {
-                              defaultValue:
-                                "Save only the onboarding fields needed for authentication and channel readiness.",
-                            })}
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`${OPERATOR_ACTION_BUTTON_BASE_CLASSNAME} ${OPERATOR_ACTION_BUTTON_TONE_CLASSNAME.accent}`}
-                          disabled={
-                            !streamPlugin || pluginSaving.has(streamPlugin.id)
-                          }
-                          onClick={() => void handleSaveSetup()}
-                        >
-                          {streamPlugin && pluginSaving.has(streamPlugin.id)
-                            ? t("aliceoperator.savingSetup", {
-                                defaultValue: "Saving...",
-                              })
-                            : t("aliceoperator.saveSetup", {
-                                defaultValue: "Save setup",
-                              })}
-                        </Button>
-                      </div>
-                      <ConfigRenderer
-                        schema={schema}
-                        hints={hints}
-                        values={mergedValues}
-                        setKeys={setKeys}
-                        registry={defaultRegistry}
-                        pluginId={streamPlugin?.id}
-                        onChange={(key, value) =>
-                          setDraftConfig((current) => ({
-                            ...current,
-                            [key]: value,
-                          }))
-                        }
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </div>
+                <h3>555 Stream Studio</h3>
+                <p>Edit the saved program in the same Studio used by direct 555 Stream. Refresh here after saving there.</p>
+                <Button onClick={() => void refreshRuntimeStatus()} disabled={nativeSetupLoading}>Refresh status</Button>
+                {nativeSetupLoading ? <p role="status">Reading saved Studio setup…</p> : null}
+                {nativeSetupError ? <p role="alert">{nativeSetupError}</p> : null}
+                {nativeSetup && !nativeSetupError ? <>
+                  <p>Session {nativeSetup.sessionId} · Revision {nativeSetup.revision} · {nativeSetup.active ? 'Live' : 'Offline'}</p>
+                  <p>Canvas {nativeSetup.aspectRatio || 'Not set'} · Overlay {nativeSetup.overlay.enabled ? nativeSetup.overlay.mode || 'Enabled' : 'Off'}</p>
+                  <p>Layout {nativeSetup.activeLayout || 'Not set'} · PiP {nativeSetup.pipPosition || 'Not set'}</p>
+                  <ul aria-label="Saved sources">{nativeSetup.sources.map(source =>
+                    <li key={source.id}>{source.name || source.id} · {source.type}{source.gameId ? ` · ${source.gameId}` : ''}{source.avatarPreset ? ` · ${source.avatarPreset}` : ''} · {source.visible ? 'Visible' : 'Hidden'}</li>)}</ul>
+                  <ul aria-label="Native destination readiness">{nativeSetup.destinations.map(destination =>
+                    <li key={destination.platformId}>{destination.platformId} · {destination.enabled ? 'Enabled' : 'Disabled'} · {destination.configured ? 'Configured' : 'Not configured'}</li>)}</ul>
+                  <a href={nativeSetup.studioUrl} target="_blank" rel="noopener noreferrer">Open shared Studio</a>
+                </> : null}
+              </section>
             ) : null}
 
             {step === "channel-selection" ? (
@@ -1380,7 +900,7 @@ export function CompanionGoLiveModal({
                   variant="ghost"
                   size="sm"
                   className={`${OPERATOR_ACTION_BUTTON_BASE_CLASSNAME} ${OPERATOR_ACTION_BUTTON_TONE_CLASSNAME.accent}`}
-                  disabled={launching || Boolean(busyAction)}
+                  disabled={launching || (step === "setup-required" && (!nativeSetup || Boolean(nativeSetupError) || nativeSetupLoading))}
                   onClick={() => void handleAdvance()}
                 >
                   {launching
@@ -1391,7 +911,9 @@ export function CompanionGoLiveModal({
                       ? t("aliceoperator.launchNow", {
                           defaultValue: "Launch now",
                         })
-                      : t("aliceoperator.continue", {
+                      : step === "setup-required"
+                        ? "Open shared Studio"
+                        : t("aliceoperator.continue", {
                           defaultValue: "Continue",
                         })}
                   {!launching ? <ChevronRight className="h-4 w-4" /> : null}

@@ -5,6 +5,7 @@ import { createApprovalRequest } from "../routes/approvals.js";
 import { StreamControlService } from "./StreamControlService.js";
 
 const STREAM_ENV_KEYS = [
+  "STREAM555_DEFAULT_SESSION_ID",
   "STREAM555_BASE_URL",
   "STREAM555_PUBLIC_BASE_URL",
   "STREAM555_INTERNAL_BASE_URL",
@@ -49,6 +50,71 @@ describe("StreamControlService", () => {
       }
     }
     ORIGINAL_ENV.clear();
+  });
+
+  it("reads the same configured native session without exposing secrets or mutating it", async () => {
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_AGENT_TOKEN", "private-server-token");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ origin: string; path: string; method: string | undefined; session: string | null }> = [];
+    setEnv("STREAM555_INTERNAL_BASE_URL", "http://legacy-control-plane:3000");
+    let revision = 7;
+    globalThis.fetch = async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      calls.push({ origin: new URL(String(input)).origin, path, method: init?.method, session: new Headers(init?.headers).get("X-Session-Id") });
+      const data = path.endsWith('/composition') ? { sessionId: 'alice-session', snapshot: {
+        schemaVersion: 1, revision, productionState: { aspectRatio: '16:9', activeLayout: 'pip', pipPosition: 'bottom-right',
+          broadcastOverlay: { enabled: true, mode: 'filter' }, sources: [
+            { id: 'game', type: 'game', gameId: '555drive', visible: true, url: 'private-source-url' },
+            { id: 'pip', type: 'avatar', avatarPreset: 'alice-3d', visible: true }], token: 'private-composition-token' } } }
+        : path.endsWith('/destinations') ? { sessionId: 'alice-session', destinations: [
+          { platformId: 'youtube', enabled: true, configured: true, streamKey: 'private-stream-key', rtmpUrl: 'private-rtmp-url' }] }
+        : { sessionId: 'alice-session', active: true, token: 'private-status-token' };
+      return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } });
+    };
+    const service = await StreamControlService.start({ agentId: "alice" } as IAgentRuntime);
+    try {
+      const saved = await service.getNativeSetup();
+      assert.equal(saved.studioUrl, 'https://stream.rndrntwrk.com/studio?sessionId=alice-session');
+      assert.equal(service.getConfig()?.baseUrl, 'http://legacy-control-plane:3000');
+      assert.equal(saved.revision, 7);
+      assert.equal(saved.activeLayout, 'pip');
+      assert.equal(saved.pipPosition, 'bottom-right');
+      assert.equal(saved.sources[0].gameId, '555drive');
+      assert.equal(saved.sources[1].avatarPreset, 'alice-3d');
+      assert.deepEqual(saved.destinations, [{ platformId: 'youtube', enabled: true, configured: true }]);
+      assert.equal(saved.active, true);
+      assert.doesNotMatch(JSON.stringify(saved), /private-/);
+      assert.equal(service.getBoundSessionId(), null);
+      revision = 8;
+      assert.equal((await service.getNativeSetup()).revision, 8);
+      assert.equal(calls.length, 6);
+      assert.ok(calls.every(call => call.method === 'GET' && call.session === 'alice-session' && call.origin === 'https://stream.rndrntwrk.com'));
+      assert.deepEqual(new Set(calls.map(call => call.path)), new Set([
+        '/api/session/composition', '/api/session/destinations', '/api/stream/status']));
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("requires explicit native binding and rejects denied or mismatched native readback", async () => {
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_AGENT_TOKEN", "private-server-token");
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return new Response('{"error":"private-denial"}', { status: 403 }); };
+    let service = await StreamControlService.start({} as IAgentRuntime);
+    try {
+      await assert.rejects(service.getNativeSetup(), /DEFAULT_SESSION_ID/);
+      assert.equal(calls, 0);
+      await service.stop();
+      setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+      service = await StreamControlService.start({} as IAgentRuntime);
+      await assert.rejects(service.getNativeSetup(), /admission or readback is unavailable/);
+      assert.equal(service.getBoundSessionId(), null);
+      globalThis.fetch = async () => new Response('{"sessionId":"other-owner-session","active":true}');
+      await assert.rejects(service.getNativeSetup(), /did not match the configured session/);
+      assert.equal(service.getBoundSessionId(), null);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
   });
 
   it("starts through the runtime service contract and reports channel readiness", async () => {

@@ -8,444 +8,106 @@ import { createInlineUiMock } from "./mockInlineUi";
 import { findButtonByText, textOf } from "../../../../test/helpers/react-test";
 
 const mockUseApp = vi.hoisted(() => vi.fn());
-
-vi.mock("@miladyai/ui", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>("@miladyai/ui");
-  return createInlineUiMock(actual);
-});
-
-vi.mock("@miladyai/app-core/state", () => ({
-  useApp: () => mockUseApp(),
-}));
-
-vi.mock("../../src/config/config-renderer", () => ({
-  ConfigRenderer: () =>
-    React.createElement(
-      "div",
-      { "data-testid": "config-renderer" },
-      "ConfigRenderer",
-    ),
-  defaultRegistry: {},
-}));
-
-vi.mock("../../src/components/PluginsView", () => ({
-  paramsToSchema: () => ({
-    schema: {
-      type: "object",
-      properties: {},
-    },
-    hints: {},
-  }),
-}));
-
+const readNativeSetup = vi.hoisted(() => vi.fn());
+vi.mock("@miladyai/ui", () => createInlineUiMock({}));
+vi.mock("@miladyai/app-core/state", () => ({ useApp: () => mockUseApp() }));
+vi.mock("@miladyai/app-core/api", () => ({ client: { getStream555NativeSetup: readNativeSetup } }));
 import { CompanionGoLiveModal } from "../../src/components/operator/CompanionGoLiveModal";
 import { buildStream555SetupSummary } from "../../src/components/operator/stream555-setup";
 
-function t(key: string, options?: Record<string, unknown>) {
-  return String(options?.defaultValue ?? key);
-}
-
-function createReadyPlugin() {
-  return {
-    id: "555stream",
-    name: "555 Stream",
-    parameters: [
-      { key: "STREAM555_AGENT_TOKEN", currentValue: "token" },
-      { key: "STREAM555_DEST_X_ENABLED", currentValue: "true" },
-      { key: "STREAM555_DEST_X_RTMP_URL", currentValue: "rtmp://x" },
-      { key: "STREAM555_DEST_X_STREAM_KEY", currentValue: "abc123" },
-    ],
-    validationWarnings: [],
-    validationErrors: [],
-  };
-}
-
-function createBlockedPlugin() {
-  return {
-    id: "555stream",
-    name: "555 Stream",
-    parameters: [{ key: "STREAM555_DEST_X_ENABLED", currentValue: "true" }],
-    validationWarnings: [],
-    validationErrors: [],
-  };
-}
-
-function createPartiallyReadyPlugin() {
-  return {
-    id: "555stream",
-    name: "555 Stream",
-    parameters: [
-      { key: "STREAM555_AGENT_API_KEY", currentValue: null, isSet: true },
-      { key: "STREAM555_DEST_PUMPFUN_ENABLED", currentValue: "true" },
-      {
-        key: "STREAM555_DEST_PUMPFUN_RTMP_URL",
-        currentValue: "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
-      },
-      { key: "STREAM555_DEST_TWITCH_ENABLED", currentValue: "true" },
-      {
-        key: "STREAM555_DEST_TWITCH_RTMP_URL",
-        currentValue: "rtmps://ingest.global-contribute.live-video.net/app",
-      },
-      { key: "STREAM555_DEST_TWITCH_STREAM_KEY", currentValue: null },
-      { key: "STREAM555_DEST_KICK_ENABLED", currentValue: "true" },
-      {
-        key: "STREAM555_DEST_KICK_RTMP_URL",
-        currentValue: "rtmps://fa723fc1b171.global-contribute.live-video.net",
-      },
-      { key: "STREAM555_DEST_KICK_STREAM_KEY", currentValue: null },
-      { key: "STREAM555_DEST_YOUTUBE_ENABLED", currentValue: "true" },
-      {
-        key: "STREAM555_DEST_YOUTUBE_RTMP_URL",
-        currentValue: "rtmps://a.rtmp.youtube.com/live2",
-      },
-      { key: "STREAM555_DEST_YOUTUBE_STREAM_KEY", currentValue: null },
-    ],
-    validationWarnings: [],
-    validationErrors: [],
-  };
-}
-
-function createWalletConfigPlugin() {
-  return {
-    id: "555stream",
-    name: "555 Stream",
-    parameters: [
-      { key: "STREAM555_DEST_X_ENABLED", currentValue: "true" },
-      {
-        key: "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
-        currentValue: "solana",
-      },
-      {
-        key: "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
-        currentValue: "eth",
-      },
-    ],
-    validationWarnings: [],
-    validationErrors: [],
-  };
-}
-
-function createOperator(overrides: Record<string, unknown> = {}) {
-  return {
-    stream: {
-      refreshStatus: vi.fn(async () => {}),
-      refreshDestinations: vi.fn(async () => {}),
-    },
-    arcade: {
-      refreshState: vi.fn(async () => {}),
-      runtimeAvailable: true,
-      selectedGameId: "game-1",
-      selectedGameLabel: "Super Alice Kart",
-    },
-    executePlan: vi.fn(async () => ({
-      results: [{ success: true, message: "ok" }],
-    })),
-    performGuidedGoLive: vi.fn(async () => ({ state: "success" })),
-    ...overrides,
-  };
+function t(key: string, options?: Record<string, unknown>) { return String(options?.defaultValue ?? key); }
+function saved(revision = 7) { return {
+  sessionId: "alice-session", studioUrl: "https://stream.rndrntwrk.com/studio?sessionId=alice-session",
+  revision, aspectRatio: "16:9", activeLayout: "pip", pipPosition: "bottom-right", overlay: { enabled: true, mode: "filter" }, active: true,
+  sources: [{ id: "game", type: "game", name: "555 Drive", gameId: "555drive", avatarPreset: null, visible: true },
+    { id: "pip", type: "avatar", name: "Alice", gameId: null, avatarPreset: "alice-3d", visible: true }],
+  destinations: [{ platformId: "youtube", enabled: true, configured: true }],
+}; }
+function createReadyPlugin() { return { id: "555stream", name: "555 Stream", parameters: [
+  { key: "STREAM555_AGENT_TOKEN", isSet: true }, { key: "STREAM555_DEST_X_ENABLED", currentValue: "true" },
+  { key: "STREAM555_DEST_X_RTMP_URL", isSet: true }, { key: "STREAM555_DEST_X_STREAM_KEY", isSet: true }],
+  validationWarnings: [], validationErrors: [] }; }
+function createOperator() { return {
+  stream: { refreshStatus: vi.fn(), refreshDestinations: vi.fn() },
+  arcade: { refreshState: vi.fn(), runtimeAvailable: true, selectedGameId: "game-1", selectedGameLabel: "Super Alice Kart" },
+  executePlan: vi.fn(), performGuidedGoLive: vi.fn(async () => ({ state: "success" })),
+}; }
+const props = (operator = createOperator()) => ({ open: true, onOpenChange: vi.fn(), preferredMode: "camera" as const,
+  onPreferredModeChange: vi.fn(), operator });
+async function mount(options = props()) {
+  let tree!: TestRenderer.ReactTestRenderer;
+  await act(async () => { tree = TestRenderer.create(React.createElement(CompanionGoLiveModal, options)); });
+  return tree;
 }
 
 describe("CompanionGoLiveModal", () => {
   beforeEach(() => {
-    mockUseApp.mockReturnValue({
-      handlePluginConfigSave: vi.fn(async () => {}),
-      loadPlugins: vi.fn(async () => {}),
-      pluginSaving: new Set<string>(),
-      plugins: [createReadyPlugin()],
-      walletAddresses: { evmAddress: "0x123" },
-      t,
-    });
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    readNativeSetup.mockReset().mockResolvedValue(saved());
+    mockUseApp.mockReturnValue({ plugins: [createReadyPlugin()], t });
   });
-
-  it("refreshes read-only runtime state once per open cycle and deduplicates concurrent refreshes", async () => {
-    let resolveRefresh!: () => void;
-    let released = false;
-    const pendingRefresh = new Promise<void>((resolve) => {
-      resolveRefresh = resolve;
-    });
-    const readOnlyRefresh = vi.fn(() =>
-      released ? Promise.resolve() : pendingRefresh,
-    );
-    const loadPlugins = readOnlyRefresh;
-    const operator = createOperator({
-      stream: {
-        refreshStatus: readOnlyRefresh,
-        refreshDestinations: readOnlyRefresh,
-      },
-      arcade: {
-        refreshState: readOnlyRefresh,
-        runtimeAvailable: true,
-        selectedGameId: "game-1",
-        selectedGameLabel: "Super Alice Kart",
-      },
-    });
-    // The "Refresh status" control only renders inside the `setup-required`
-    // step, so the dedup half of this test needs a plugin fixture that keeps
-    // the modal there. A blocked fixture has no auth credential, which makes
-    // `buildStream555SetupSummary().setupRequired` true.
-    mockUseApp.mockReturnValue({
-      handlePluginConfigSave: vi.fn(async () => {}),
-      loadPlugins,
-      pluginSaving: new Set<string>(),
-      plugins: [createBlockedPlugin()],
-      walletAddresses: { evmAddress: "0x123" },
-      t,
-    });
-
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    const props = {
-      onOpenChange: vi.fn(),
-      preferredMode: "camera" as const,
-      onPreferredModeChange: vi.fn(),
-      operator,
-    };
-
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(CompanionGoLiveModal, { ...props, open: true }),
-      );
-      await Promise.resolve();
-    });
-
-    expect(readOnlyRefresh).toHaveBeenCalledTimes(4);
-
-    await act(async () => {
-      findButtonByText(tree!.root, "Refresh status").props.onClick();
-      await Promise.resolve();
-    });
-    expect(readOnlyRefresh).toHaveBeenCalledTimes(4);
-
-    released = true;
-    await act(async () => {
-      resolveRefresh();
-      // A macrotask drains the whole in-flight promise chain (Promise.all, the
-      // void-returning tail, then the handler that clears the in-flight ref).
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    // Close and reopen in separate commits so the open effect actually tears
-    // down and re-runs, the way a real close/reopen cycle does.
-    await act(async () => {
-      tree!.update(
-        React.createElement(CompanionGoLiveModal, { ...props, open: false }),
-      );
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      tree!.update(
-        React.createElement(CompanionGoLiveModal, { ...props, open: true }),
-      );
-      await Promise.resolve();
-    });
-
-    expect(readOnlyRefresh).toHaveBeenCalledTimes(8);
+  it("opens the same native session and refreshes upstream saved state without legacy operations", async () => {
+    const operator = createOperator();
+    const tree = await mount(props(operator));
+    expect(readNativeSetup).toHaveBeenCalledTimes(1);
+    expect(textOf(tree.root)).toContain("Revision 7");
+    expect(textOf(tree.root)).toContain("555drive");
+    expect(textOf(tree.root)).toContain("alice-3d");
+    expect(textOf(tree.root)).toContain("Layout pip · PiP bottom-right");
+    expect(textOf(tree.root)).toContain("youtube");
+    expect(tree.root.findByType("a").props.href).toBe(saved().studioUrl);
+    readNativeSetup.mockResolvedValue(saved(8));
+    await act(async () => { findButtonByText(tree.root, "Refresh status").props.onClick(); });
+    expect(textOf(tree.root)).toContain("Revision 8");
+    expect(operator.stream.refreshStatus).not.toHaveBeenCalled();
+    expect(operator.stream.refreshDestinations).not.toHaveBeenCalled();
+    expect(operator.arcade.refreshState).not.toHaveBeenCalled();
+    expect(operator.executePlan).not.toHaveBeenCalled();
   });
-
-  it("marks the active step and exposes checkbox semantics for channel selection", async () => {
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(CompanionGoLiveModal, {
-          open: true,
-          onOpenChange: vi.fn(),
-          preferredMode: "camera",
-          onPreferredModeChange: vi.fn(),
-          operator: createOperator(),
-        }),
-      );
-      await Promise.resolve();
-    });
-
-    const currentStep = tree?.root.find(
-      (node) =>
-        node.props?.["aria-current"] === "step" &&
-        textOf(node).includes("Channels"),
-    );
-    const channelCheckboxes = tree?.root.findAll(
-      (node) => node.type === "input" && node.props.type === "checkbox",
-    );
-
-    expect(currentStep).toBeDefined();
-    expect(channelCheckboxes?.length).toBeGreaterThan(0);
-    expect(channelCheckboxes?.some((node) => node.props.checked)).toBe(true);
+  it("deduplicates refreshes and ignores an obsolete read after close and reopen", async () => {
+    let complete!: (value: ReturnType<typeof saved>) => void;
+    readNativeSetup.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    const options = props();
+    const tree = await mount(options);
+    await act(async () => { findButtonByText(tree.root, "Refresh status").props.onClick(); });
+    expect(readNativeSetup).toHaveBeenCalledTimes(1);
+    await act(async () => { tree.update(React.createElement(CompanionGoLiveModal, { ...options, open: false })); });
+    await act(async () => { tree.update(React.createElement(CompanionGoLiveModal, options)); });
+    expect(readNativeSetup).toHaveBeenCalledTimes(2);
+    await act(async () => { complete(saved(1)); });
+    expect(textOf(tree.root)).toContain("Revision 7");
+    expect(textOf(tree.root)).not.toContain("Revision 1");
   });
-
-  it("uses radio semantics for launch mode selection", async () => {
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(CompanionGoLiveModal, {
-          open: true,
-          onOpenChange: vi.fn(),
-          preferredMode: "camera",
-          onPreferredModeChange: vi.fn(),
-          operator: createOperator(),
-        }),
-      );
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      findButtonByText(tree!.root, "Continue").props.onClick();
-      await Promise.resolve();
-    });
-
-    const currentStep = tree?.root.find(
-      (node) =>
-        node.props?.["aria-current"] === "step" &&
-        textOf(node).includes("Mode"),
-    );
-    const radios = tree?.root.findAll(
-      (node) => node.type === "input" && node.props.type === "radio",
-    );
-
-    expect(currentStep).toBeDefined();
-    expect(radios).toHaveLength(5);
-    expect(radios.filter((node) => node.props.checked)).toHaveLength(1);
+  it("shows denied or missing native setup visibly with no legacy fallback or stale editor link", async () => {
+    const operator = createOperator();
+    const tree = await mount(props(operator));
+    readNativeSetup.mockRejectedValue(new Error("Admission denied"));
+    await act(async () => { findButtonByText(tree.root, "Refresh status").props.onClick(); });
+    expect(textOf(tree.root.findByProps({ role: "alert" }))).toContain("Native Studio setup is unavailable");
+    expect(tree.root.findAllByType("a")).toHaveLength(0);
+    expect(findButtonByText(tree.root, "Open shared Studio").props.disabled).toBe(true);
+    expect(operator.stream.refreshStatus).not.toHaveBeenCalled();
+    expect(operator.stream.refreshDestinations).not.toHaveBeenCalled();
+    expect(operator.arcade.refreshState).not.toHaveBeenCalled();
   });
-
-  it("announces blocked setup notices as alerts", async () => {
-    mockUseApp.mockReturnValue({
-      handlePluginConfigSave: vi.fn(async () => {}),
-      loadPlugins: vi.fn(async () => {}),
-      pluginSaving: new Set<string>(),
-      plugins: [createBlockedPlugin()],
-      walletAddresses: { evmAddress: "0x123" },
-      t,
-    });
-
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(CompanionGoLiveModal, {
-          open: true,
-          onOpenChange: vi.fn(),
-          preferredMode: "camera",
-          onPreferredModeChange: vi.fn(),
-          operator: createOperator(),
-        }),
-      );
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      findButtonByText(tree!.root, "Continue").props.onClick();
-      await Promise.resolve();
-    });
-
-    const alert = tree?.root.find(
-      (node) =>
-        node.props?.role === "alert" && textOf(node).includes("Authenticate"),
-    );
-
-    expect(alert).toBeDefined();
+  it("hands off to the same Studio without entering the legacy launch flow", async () => {
+    const operator = createOperator();
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    try {
+      const tree = await mount(props(operator));
+      await act(async () => { findButtonByText(tree.root, "Open shared Studio").props.onClick(); });
+      expect(open).toHaveBeenCalledWith(saved().studioUrl, "_blank", "noopener,noreferrer");
+      expect(new URL(open.mock.calls[0][0] as string).search).toBe("?sessionId=alice-session");
+      expect(operator.performGuidedGoLive).not.toHaveBeenCalled();
+      expect(operator.executePlan).not.toHaveBeenCalled();
+      expect(operator.stream.refreshDestinations).not.toHaveBeenCalled();
+      expect(tree.root.findAll(node => node.type === "input" && node.props.type === "checkbox")).toHaveLength(0);
+      expect(textOf(tree.root)).toContain("Review the saved native session");
+    } finally { open.mockRestore(); }
   });
-
-  it("treats redacted configured 555stream secrets as setup-ready", () => {
-    const summary = buildStream555SetupSummary({
-      id: "555stream",
-      name: "555 Stream",
-      parameters: [
-        {
-          key: "STREAM555_AGENT_API_KEY",
-          currentValue: null,
-          isSet: true,
-          sensitive: true,
-        },
-        {
-          key: "STREAM555_DEST_TWITCH_ENABLED",
-          currentValue: "true",
-          isSet: true,
-          sensitive: false,
-        },
-        {
-          key: "STREAM555_DEST_TWITCH_RTMP_URL",
-          currentValue: "rtmps://ingest.global-contribute.live-video.net/app",
-          isSet: true,
-          sensitive: false,
-        },
-        {
-          key: "STREAM555_DEST_TWITCH_STREAM_KEY",
-          currentValue: null,
-          isSet: true,
-          sensitive: true,
-        },
-      ],
-      validationWarnings: [],
-      validationErrors: [],
-    } as never);
-
-    expect(summary.authConnected).toBe(true);
-    expect(summary.readyDestinations).toBe(1);
-    expect(summary.configuredDestinations).toBe(1);
-    expect(summary.setupRequired).toBe(false);
+  it("retains redacted plugin readiness for the existing later launch flow", () => {
+    expect(buildStream555SetupSummary(createReadyPlugin()).setupRequired).toBe(false);
   });
-
-  it("shows per-channel setup readiness before the config form", async () => {
-    mockUseApp.mockReturnValue({
-      handlePluginConfigSave: vi.fn(async () => {}),
-      loadPlugins: vi.fn(async () => {}),
-      pluginSaving: new Set<string>(),
-      plugins: [createPartiallyReadyPlugin()],
-      walletAddresses: { evmAddress: "0x123" },
-      t,
-    });
-
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(CompanionGoLiveModal, {
-          open: true,
-          onOpenChange: vi.fn(),
-          preferredMode: "camera",
-          onPreferredModeChange: vi.fn(),
-          operator: createOperator(),
-        }),
-      );
-      await Promise.resolve();
-    });
-
-    const setupCopy = textOf(tree!.root);
-
-    expect(setupCopy).toContain("Pump.fun");
-    expect(setupCopy).toContain("Twitch");
-    expect(setupCopy).toContain("Kick");
-    expect(setupCopy).toContain("YouTube");
-    expect(setupCopy).toContain("Missing stream key");
-  });
-
-  it("shows wallet-auth chain config instead of inferring from loaded wallet addresses", async () => {
-    mockUseApp.mockReturnValue({
-      handlePluginConfigSave: vi.fn(async () => {}),
-      loadPlugins: vi.fn(async () => {}),
-      pluginSaving: new Set<string>(),
-      plugins: [createWalletConfigPlugin()],
-      walletAddresses: { evmAddress: "0x123" },
-      t,
-    });
-
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(
-        React.createElement(CompanionGoLiveModal, {
-          open: true,
-          onOpenChange: vi.fn(),
-          preferredMode: "camera",
-          onPreferredModeChange: vi.fn(),
-          operator: createOperator(),
-        }),
-      );
-      await Promise.resolve();
-    });
-
-    const setupCopy = textOf(tree!.root);
-
-    expect(setupCopy).toContain("Solana preferred");
-    expect(setupCopy).toContain("Provision fallback: Ethereum");
-    expect(setupCopy).not.toContain("Ethereum fallbackUsed");
-  });
-
   it("keeps the go-live modal body bounded and scrollable on short viewports", () => {
     const cssFiles = [
       readFileSync(

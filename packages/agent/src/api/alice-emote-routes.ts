@@ -1,7 +1,6 @@
 import type http from "node:http";
 import { logger, type AgentRuntime } from "@elizaos/core";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
-import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
 
 interface AliceEmoteRouteContext {
   req: http.IncomingMessage;
@@ -23,7 +22,7 @@ type StreamControlService = {
     topic: string,
     payload: unknown,
     sessionId?: string,
-  ) => Promise<unknown>;
+  ) => Promise<{ ok: boolean; sent: boolean }>;
   getBoundSessionId?: () => string | null;
 };
 
@@ -72,17 +71,6 @@ export async function handleAliceEmoteRoutes(
   };
   broadcastWs?.({ type: "emote", ...emotePayload });
 
-  if (isAliceFullRuntimeProfile()) {
-    json(res, {
-      ok: true,
-      broadcast: {
-        sent: false,
-        reason: "Alice Companion emotes are local-only",
-      },
-    });
-    return true;
-  }
-
   const streamControl =
     (runtime?.getService?.("stream555") as StreamControlService | undefined) ??
     undefined;
@@ -98,11 +86,13 @@ export async function handleAliceEmoteRoutes(
   if (streamControl && typeof streamControl.broadcastEvent === "function") {
     try {
       const result = await streamControl.broadcastEvent("emote", emotePayload);
-      broadcast.sent = true;
+      broadcast.sent = result.ok === true && result.sent === true;
       broadcast.result = result;
-      logger.info?.(
-        `[alice-emote-routes] relayed emote ${emotePayload.emoteId} to Stream`,
-      );
+      if (broadcast.sent) {
+        logger.info?.(
+          `[alice-emote-routes] relayed emote ${emotePayload.emoteId} to Stream`,
+        );
+      }
     } catch (err: unknown) {
       broadcast.sent = false;
       broadcast.error =
