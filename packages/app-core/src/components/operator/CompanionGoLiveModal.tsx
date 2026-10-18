@@ -400,22 +400,9 @@ export function CompanionGoLiveModal({
 
   const handleAdvance = useCallback(async () => {
     if (step === "setup-required") {
-      if (summary.setupRequired) {
-        setInlineNotice({
-          tone: "warning",
-          state: "blocked",
-          message: formatOperatorErrorMessage(
-            summary.runtimeWarnings[0],
-            t("aliceoperator.setupBlocked", {
-              defaultValue:
-                "Authenticate and enable at least one ready destination before continuing.",
-            }),
-            t,
-          ),
-        });
-        return;
+      if (nativeSetup && !nativeSetupError && !nativeSetupLoading) {
+        window.open(nativeSetup.studioUrl, "_blank", "noopener,noreferrer");
       }
-      setStep("channel-selection");
       return;
     }
     if (step === "channel-selection") {
@@ -440,8 +427,9 @@ export function CompanionGoLiveModal({
     handleLaunch,
     selectedChannels.length,
     step,
-    summary.runtimeWarnings,
-    summary.setupRequired,
+    nativeSetup,
+    nativeSetupError,
+    nativeSetupLoading,
     t,
   ]);
 
@@ -544,14 +532,14 @@ export function CompanionGoLiveModal({
                   })}
                 </div>
                 <DialogTitle className="go-live-modal__title">
-                  {t("aliceoperator.goLiveTitle", {
-                    defaultValue: "Go Live",
+                  {t("aliceoperator.nativeStudioTitle", {
+                    defaultValue: "Shared Stream Studio",
                   })}
                 </DialogTitle>
                 <DialogDescription className="go-live-modal__description">
-                  {t("aliceoperator.goLiveDescription", {
+                  {t("aliceoperator.nativeStudioDescription", {
                     defaultValue:
-                      "Authenticate, choose channels, pick the launch format, and send Alice live without leaving the stage.",
+                      "Review the saved native session, then open its shared Studio to edit or go live.",
                   })}
                 </DialogDescription>
               </div>
@@ -923,7 +911,9 @@ export function CompanionGoLiveModal({
                       ? t("aliceoperator.launchNow", {
                           defaultValue: "Launch now",
                         })
-                      : t("aliceoperator.continue", {
+                      : step === "setup-required"
+                        ? "Open shared Studio"
+                        : t("aliceoperator.continue", {
                           defaultValue: "Continue",
                         })}
                   {!launching ? <ChevronRight className="h-4 w-4" /> : null}

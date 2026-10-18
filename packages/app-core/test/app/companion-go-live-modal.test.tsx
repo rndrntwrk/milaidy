@@ -85,21 +85,25 @@ describe("CompanionGoLiveModal", () => {
     await act(async () => { findButtonByText(tree.root, "Refresh status").props.onClick(); });
     expect(textOf(tree.root.findByProps({ role: "alert" }))).toContain("Native Studio setup is unavailable");
     expect(tree.root.findAllByType("a")).toHaveLength(0);
+    expect(findButtonByText(tree.root, "Open shared Studio").props.disabled).toBe(true);
     expect(operator.stream.refreshStatus).not.toHaveBeenCalled();
     expect(operator.stream.refreshDestinations).not.toHaveBeenCalled();
     expect(operator.arcade.refreshState).not.toHaveBeenCalled();
   });
-  it("preserves channel checkbox semantics after explicitly continuing from setup", async () => {
-    const tree = await mount();
-    await act(async () => { findButtonByText(tree.root, "Continue").props.onClick(); });
-    expect(tree.root.findAll(node => node.props?.["aria-current"] === "step" && textOf(node).includes("Channels")).length).toBeGreaterThan(0);
-    expect(tree.root.findAll(node => node.type === "input" && node.props.type === "checkbox").length).toBeGreaterThan(0);
-  });
-  it("preserves radio semantics for later launch mode selection", async () => {
-    const tree = await mount();
-    await act(async () => { findButtonByText(tree.root, "Continue").props.onClick(); });
-    await act(async () => { findButtonByText(tree.root, "Continue").props.onClick(); });
-    expect(tree.root.findAll(node => node.type === "input" && node.props.type === "radio").length).toBeGreaterThan(0);
+  it("hands off to the same Studio without entering the legacy launch flow", async () => {
+    const operator = createOperator();
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    try {
+      const tree = await mount(props(operator));
+      await act(async () => { findButtonByText(tree.root, "Open shared Studio").props.onClick(); });
+      expect(open).toHaveBeenCalledWith(saved().studioUrl, "_blank", "noopener,noreferrer");
+      expect(new URL(open.mock.calls[0][0] as string).search).toBe("?sessionId=alice-session");
+      expect(operator.performGuidedGoLive).not.toHaveBeenCalled();
+      expect(operator.executePlan).not.toHaveBeenCalled();
+      expect(operator.stream.refreshDestinations).not.toHaveBeenCalled();
+      expect(tree.root.findAll(node => node.type === "input" && node.props.type === "checkbox")).toHaveLength(0);
+      expect(textOf(tree.root)).toContain("Review the saved native session");
+    } finally { open.mockRestore(); }
   });
   it("retains redacted plugin readiness for the existing later launch flow", () => {
     expect(buildStream555SetupSummary(createReadyPlugin()).setupRequired).toBe(false);
