@@ -697,3 +697,19 @@ export interface ChatStartResult {
   sessionId: string;
   platforms: string[];
 }
+
+
+/** Read-only projection of the configured native Studio; contains no credentials. */
+export interface NativeStreamSetup {
+  sessionId: string;
+  studioUrl: string;
+  revision: number;
+  aspectRatio: string | null;
+  activeLayout: string | null;
+  pipPosition: string | null;
+  overlay: { enabled: boolean; mode: string | null };
+  sources: Array<{ id: string; type: string; name: string | null; visible: boolean;
+    gameId: string | null; avatarPreset: string | null }>;
+  destinations: Array<{ platformId: string; enabled: boolean; configured: boolean }>;
+  active: boolean;
+}

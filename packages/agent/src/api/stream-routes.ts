@@ -9,6 +9,7 @@
  */
 
 import fs from "node:fs";
+import type { NativeStreamSetup } from "@rndrntwrk/plugin-555stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { logger } from "@elizaos/core";
 import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
@@ -143,6 +144,7 @@ interface Stream555ConfigLike {
 }
 
 interface Stream555ServiceLike {
+  getNativeSetup?(): Promise<NativeStreamSetup>;
   getBoundSessionId(): string | null;
   getConfig(): Stream555ConfigLike | null;
   getPlatformStatusOverview?(): Promise<Stream555PlatformOverviewLike>;
@@ -1225,6 +1227,25 @@ export async function handleStreamRoute(
       json(res, { ok: true, ...result });
     } catch (err) {
       error(res, formatErrorMessage(err), 500);
+    }
+    return true;
+  }
+
+  // Native setup is observation-only, including for non-Alice callers.
+  if (method === "GET" && pathname === "/api/stream/native-setup") {
+    const service = getStream555Service(state);
+    if (!service?.getNativeSetup) {
+      error(res, "Native Studio setup is unavailable", 503);
+      return true;
+    }
+    if (!service.getConfig()?.defaultSessionId?.trim()) {
+      error(res, "STREAM555_DEFAULT_SESSION_ID is not configured", 503);
+      return true;
+    }
+    try {
+      json(res, await service.getNativeSetup());
+    } catch {
+      error(res, "Native Studio setup is unavailable; configure its session and native admission", 502);
     }
     return true;
   }

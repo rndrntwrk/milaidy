@@ -23,6 +23,7 @@ import {
 import { resolveStream555BaseUrl } from '../lib/baseUrl.js';
 import type {
   Stream555Config,
+  NativeStreamSetup,
   Session,
   SessionState,
   HealthcheckResult,
@@ -309,6 +310,67 @@ export class StreamControlService implements Service {
       result.checks.authValid.passed;
 
     return result;
+  }
+
+  /** Observe only the explicitly configured native session; never bootstrap or bind. */
+  async getNativeSetup(): Promise<NativeStreamSetup> {
+    if (!this.httpClient || !this.config) throw new Error('555 Stream service is unavailable');
+    const sessionId = this.config.defaultSessionId?.trim();
+    if (!sessionId) throw new Error('STREAM555_DEFAULT_SESSION_ID is not configured');
+    if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(sessionId) || sessionId === '.' || sessionId === '..')
+      throw new Error('Configured native session ID is invalid');
+    const publicBase = process.env.STREAM555_PUBLIC_BASE_URL?.trim();
+    if (!publicBase) throw new Error('STREAM555_PUBLIC_BASE_URL is not configured');
+    const studio = new URL(publicBase);
+    if (studio.protocol !== 'https:' || studio.username || studio.password || studio.search || studio.hash || studio.pathname !== '/')
+      throw new Error('555 Stream public Studio URL is invalid');
+    const nativeBase = studio.origin;
+    const nativeToken = await resolveAgentBearer(nativeBase);
+    if (!nativeToken) throw new Error('Native Studio admission is unavailable');
+    const nativeClient = new HttpClient({ baseUrl: nativeBase, token: nativeToken,
+      tokenProvider: () => resolveAgentBearer(nativeBase) });
+    studio.pathname = '/studio';
+    studio.searchParams.set('sessionId', sessionId);
+    const headers = { 'X-Session-Id': sessionId };
+    type Source = { id: string; type: string; name?: string; visible?: boolean;
+      gameId?: string; avatarPreset?: string };
+    const [composition, destinations, status] = await Promise.all([
+      nativeClient.get<{ sessionId: string; snapshot: { schemaVersion: number; revision: number;
+        productionState: { aspectRatio?: string; activeLayout?: string; pipPosition?: string; broadcastOverlay?: { enabled?: boolean; mode?: string };
+          sources: Source[] } } | null }>(
+        `/api/session/composition?sessionId=${encodeURIComponent(sessionId)}`, { headers }),
+      nativeClient.get<{ sessionId: string; destinations: NativeStreamSetup['destinations'] }>(
+        `/api/session/destinations?sessionId=${encodeURIComponent(sessionId)}`, { headers }),
+      nativeClient.get<{ sessionId: string; active: boolean }>('/api/stream/status', { headers }),
+    ]);
+    // Never relay upstream error bodies, full composition or destination secrets to browsers.
+    if (!composition.success || !destinations.success || !status.success)
+      throw new Error('Native Studio admission or readback is unavailable');
+    const saved = composition.data, platforms = destinations.data, live = status.data;
+    const snapshot = saved?.snapshot;
+    if (saved?.sessionId !== sessionId || platforms?.sessionId !== sessionId || live?.sessionId !== sessionId ||
+        !snapshot || snapshot.schemaVersion !== 1 || !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 1 ||
+        !Array.isArray(snapshot.productionState?.sources) || !Array.isArray(platforms.destinations) ||
+        typeof live.active !== 'boolean') throw new Error('Native Studio readback did not match the configured session');
+    const sources = snapshot.productionState.sources.map(source => {
+      if (!source || typeof source.id !== 'string' || typeof source.type !== 'string')
+        throw new Error('Native Studio source readback is invalid');
+      return { id: source.id, type: source.type, name: typeof source.name === 'string' ? source.name : null,
+        visible: source.visible === true, gameId: typeof source.gameId === 'string' ? source.gameId : null,
+        avatarPreset: typeof source.avatarPreset === 'string' ? source.avatarPreset : null };
+    });
+    const projectedDestinations = platforms.destinations.map(destination => {
+      if (!destination || typeof destination.platformId !== 'string' || typeof destination.enabled !== 'boolean' ||
+          typeof destination.configured !== 'boolean') throw new Error('Native Studio destination readback is invalid');
+      return { platformId: destination.platformId, enabled: destination.enabled, configured: destination.configured };
+    });
+    const overlay = snapshot.productionState.broadcastOverlay;
+    return { sessionId, studioUrl: studio.href, revision: snapshot.revision,
+      aspectRatio: typeof snapshot.productionState.aspectRatio === 'string' ? snapshot.productionState.aspectRatio : null,
+      activeLayout: typeof snapshot.productionState.activeLayout === 'string' ? snapshot.productionState.activeLayout : null,
+      pipPosition: typeof snapshot.productionState.pipPosition === 'string' ? snapshot.productionState.pipPosition : null,
+      overlay: { enabled: overlay?.enabled === true, mode: typeof overlay?.mode === 'string' ? overlay.mode : null },
+      sources, destinations: projectedDestinations, active: live.active };
   }
 
   getRuntimeState(): Stream555RuntimeState {

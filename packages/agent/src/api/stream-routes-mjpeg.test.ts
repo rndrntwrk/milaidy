@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 /**
  * Validates that MJPEG subscriber cleanup doesn't modify the Set
@@ -33,5 +33,58 @@ describe("MJPEG subscriber cleanup pattern", () => {
     expect(iterEnd).toBeGreaterThan(iterStart);
     const iterBody = fnBody.slice(iterStart, iterEnd);
     expect(iterBody).not.toContain("mjpegSubscribers.delete");
+  });
+});
+
+
+vi.mock("@elizaos/core", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+import { handleStreamRoute } from "./stream-routes";
+import type { StreamRouteState } from "./stream-route-state";
+import { createMockHttpResponse, createMockIncomingMessage } from "../test-support/test-helpers";
+
+function nativeSetupState(service: object | null): StreamRouteState {
+  return {
+    destinations: new Map(), activeStreamSource: { type: 'stream-tab' },
+    runtime: { getService: () => service },
+    streamManager: {
+      isRunning: vi.fn(() => false), writeFrame: vi.fn(() => false), start: vi.fn(async () => {}),
+      stop: vi.fn(async () => ({ uptime: 0 })),
+      getHealth: vi.fn(() => ({ running: false, ffmpegAlive: false, uptime: 0, frameCount: 0,
+        volume: 1, muted: false, audioSource: 'none', inputMode: null })),
+      getVolume: vi.fn(() => 1), isMuted: vi.fn(() => false), setVolume: vi.fn(async () => {}),
+      mute: vi.fn(async () => {}), unmute: vi.fn(async () => {}),
+    },
+  };
+}
+
+describe('native shared setup route', () => {
+  it('dispatches the configured native read without starting, binding, or local fallback', async () => {
+    const saved = { sessionId: 'alice-session', revision: 3, studioUrl: 'https://stream.rndrntwrk.com/studio?sessionId=alice-session',
+      aspectRatio: '16:9', activeLayout: 'pip', pipPosition: 'bottom-right', overlay: { enabled: true, mode: 'filter' }, sources: [], destinations: [], active: true };
+    const service = { getNativeSetup: vi.fn(async () => saved), getConfig: () => ({ defaultSessionId: 'alice-session' }),
+      getStreamStatus: vi.fn(), startStream: vi.fn(), stopStream: vi.fn(), bindWebSocket: vi.fn(), createOrResumeSession: vi.fn() };
+    const state = nativeSetupState(service);
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    expect(await handleStreamRoute(createMockIncomingMessage({}), res, '/api/stream/native-setup', 'GET', state)).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual(saved);
+    expect(service.getNativeSetup).toHaveBeenCalledTimes(1);
+    expect(service.getStreamStatus).not.toHaveBeenCalled();
+    expect(service.startStream).not.toHaveBeenCalled();
+    expect(service.bindWebSocket).not.toHaveBeenCalled();
+    expect(service.createOrResumeSession).not.toHaveBeenCalled();
+    expect(state.streamManager.getHealth).not.toHaveBeenCalled();
+  });
+  it('fails visibly for missing native authority or denied admission without local fallback', async () => {
+    const missing = createMockHttpResponse();
+    await handleStreamRoute(createMockIncomingMessage({}), missing.res, '/api/stream/native-setup', 'GET', nativeSetupState(null));
+    expect(missing.getStatus()).toBe(503);
+    const service = { getNativeSetup: vi.fn(async () => { throw new Error('private upstream denial'); }),
+      getConfig: () => ({ defaultSessionId: 'alice-session' }), getStreamStatus: vi.fn(), startStream: vi.fn(), stopStream: vi.fn() };
+    const state = nativeSetupState(service), denied = createMockHttpResponse();
+    await handleStreamRoute(createMockIncomingMessage({}), denied.res, '/api/stream/native-setup', 'GET', state);
+    expect(denied.getStatus()).toBe(502);
+    expect(JSON.stringify(denied.getJson())).not.toContain('private upstream denial');
+    expect(state.streamManager.getHealth).not.toHaveBeenCalled();
   });
 });

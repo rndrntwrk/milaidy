@@ -1,3 +1,4 @@
+import type { NativeStreamSetup } from "@rndrntwrk/plugin-555stream";
 /**
  * Agent domain methods — lifecycle, auth, config, connectors, triggers,
  * training, plugins, streaming/PTY, logs, character, permissions, updates.
@@ -552,6 +553,7 @@ declare module "./client-base" {
       destination?: string;
     }>;
     streamGoOffline(): Promise<{ ok: boolean; live: boolean }>;
+    getStream555NativeSetup(): Promise<NativeStreamSetup>;
     streamStatus(): Promise<{
       ok: boolean;
       running: boolean;
@@ -2066,6 +2068,10 @@ MiladyClient.prototype.streamGoLive = async function (this: MiladyClient) {
 
 MiladyClient.prototype.streamGoOffline = async function (this: MiladyClient) {
   return this.fetch("/api/stream/offline", { method: "POST" });
+};
+
+MiladyClient.prototype.getStream555NativeSetup = async function (this: MiladyClient) {
+  return this.fetch<NativeStreamSetup>("/api/stream/native-setup");
 };
 
 MiladyClient.prototype.streamStatus = async function (this: MiladyClient) {
