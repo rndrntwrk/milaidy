@@ -824,8 +824,9 @@ export class StreamControlService implements Service {
   async broadcastEvent(
     topic: string,
     payload: unknown,
-    sessionId?: string
-  ): Promise<{ ok: boolean; sent: boolean }> {
+    sessionId?: string,
+    expectedDispatchId?: string
+  ): Promise<{ ok: boolean; sent: boolean; eventId?: string; createdAt?: number }> {
     if (!this.httpClient) {
       throw new Error('[555stream] Service not initialized');
     }
@@ -835,14 +836,15 @@ export class StreamControlService implements Service {
       process.env.STREAM555_PUBLIC_BASE_URL?.trim()
       ? await this.nativeConnection(sessionId, 0)
       : null;
+    if (expectedDispatchId && !native) throw new Error('Native Stream dispatch delivery is unavailable');
     const id = native?.sessionId || sessionId || this.boundSessionId;
     if (!id) {
       throw new Error('[555stream] No session bound');
     }
 
-    const response = await (native?.client ?? this.httpClient).post<{ ok: boolean; sent: boolean }>(
+    const response = await (native?.client ?? this.httpClient).post<{ ok: boolean; sent: boolean; eventId?: string; createdAt?: number }>(
       `/api/agent/v1/sessions/${id}/livekit/broadcast-event`,
-      native ? { topic, payload, kind: 'reliable' } : { topic, payload }
+      native ? { topic, payload, kind: 'reliable', ...(expectedDispatchId ? { dispatchId: expectedDispatchId } : {}) } : { topic, payload }
     );
 
     if (!response.success || !response.data) {

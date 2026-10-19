@@ -424,10 +424,10 @@ describe("StreamControlService", () => {
     const service = await StreamControlService.start({ agentId: "alice" } as IAgentRuntime);
     try {
       const payload = { emoteId: 'dance-happy', path: '/animations/emotes/dance-happy.glb.gz', duration: 4, loop: false };
-      assert.deepEqual(await service.broadcastEvent('emote', payload), { ok: true, sent: true });
+      assert.deepEqual(await service.broadcastEvent('emote', payload, 'alice-session', 'dispatch-1'), { ok: true, sent: true });
       assert.deepEqual(calls, [{
         url: 'https://stream.rndrntwrk.com/api/agent/v1/sessions/alice-session/livekit/broadcast-event',
-        body: { topic: 'emote', payload, kind: 'reliable' },
+        body: { topic: 'emote', payload, kind: 'reliable', dispatchId: 'dispatch-1' },
       }]);
       assert.equal(service.getBoundSessionId(), null);
       await assert.rejects(service.broadcastEvent('emote', payload, 'other-session'), /configured native session/);

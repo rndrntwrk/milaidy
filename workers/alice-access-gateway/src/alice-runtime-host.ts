@@ -7,6 +7,8 @@ const IMAGE =
   /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
 
 export type AliceRuntimeContainerEnvironmentSource = {
+  ALICE_GAMEPLAY_OBSERVER_TOKEN?: string;
+  ALICE_GAMEPLAY_OBSERVER_SESSION_ID?: string;
   ALICE_ACCESS_PROXY_SECRET: string;
   ALICE_RUNTIME_API_TOKEN: string;
   ALICE_RUNTIME_RELEASE_TOKEN: string;
@@ -32,6 +34,19 @@ export function buildAliceRuntimeContainerEnv(
   env: AliceRuntimeContainerEnvironmentSource,
 ): Record<string, string> {
   const runtimeRevision = Number(env.ALICE_RUNTIME_REVISION);
+  if (
+    (env.ALICE_GAMEPLAY_OBSERVER_TOKEN !== undefined ||
+      env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID !== undefined) &&
+    (typeof env.ALICE_GAMEPLAY_OBSERVER_TOKEN !== "string" ||
+      env.ALICE_GAMEPLAY_OBSERVER_TOKEN.length < 32 ||
+      !/^[A-Za-z0-9_.:-]{1,128}$/.test(
+        env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID ?? "",
+      ) ||
+      [".", ".."].includes(env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID ?? ""))
+  ) {
+    throw new Error("ALICE_GAMEPLAY_OBSERVER_CONFIG_INVALID");
+  }
+
   if (
     Boolean(env.ALICE_GITHUB_APP_ID?.trim()) !==
     Boolean(env.ALICE_GITHUB_APP_PRIVATE_KEY_B64?.trim())
@@ -66,6 +81,10 @@ export function buildAliceRuntimeContainerEnv(
     throw new Error("ALICE_RUNTIME_CONTAINER_ENV_INVALID");
   }
   return {
+    ...(env.ALICE_GAMEPLAY_OBSERVER_TOKEN && env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID ? {
+      ALICE_GAMEPLAY_OBSERVER_TOKEN: env.ALICE_GAMEPLAY_OBSERVER_TOKEN,
+      ALICE_GAMEPLAY_OBSERVER_SESSION_ID: env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID,
+    } : {}),
     NODE_ENV: "production",
     // Trust the ephemeral CA injected by Cloudflare's HTTPS interception.
     NODE_EXTRA_CA_CERTS: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",

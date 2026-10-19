@@ -1,6 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Memory } from "@elizaos/core";
-import type { AliceReactionPersistencePort, AliceReactionDecision, AliceVrmEmote } from "./alice-reaction-bridge.js";
+import type {
+  AliceReactionPersistencePort,
+  AliceReactionDecision,
+  AliceVrmEmote,
+} from "./alice-reaction-bridge.js";
 import type {
   AliceGameplayMasteryPort,
   AliceGameplayReflectionPort,
@@ -9,6 +13,8 @@ import type {
 export interface AliceGameplayMemoryRuntime {
   agentId: Memory["entityId"];
   createMemory(memory: Memory, table: "messages"): Promise<unknown>;
+  getMemoryById?(id: Memory["id"]): Promise<Memory | null>;
+  updateMemory?(memory: Memory): Promise<unknown>;
 }
 
 /**
@@ -17,7 +23,10 @@ export interface AliceGameplayMemoryRuntime {
  * not become the source of Alice's mastery state.
  */
 export class AliceGameplayMemoryPersistence
-  implements AliceGameplayReflectionPort, AliceGameplayMasteryPort, AliceReactionPersistencePort
+  implements
+    AliceGameplayReflectionPort,
+    AliceGameplayMasteryPort,
+    AliceReactionPersistencePort
 {
   constructor(
     private readonly runtime: AliceGameplayMemoryRuntime,
@@ -25,7 +34,9 @@ export class AliceGameplayMemoryPersistence
   ) {}
 
   async persistControlReflection(
-    value: Parameters<AliceGameplayReflectionPort["persistControlReflection"]>[0],
+    value: Parameters<
+      AliceGameplayReflectionPort["persistControlReflection"]
+    >[0],
   ): Promise<void> {
     await this.persist(
       "alice.gameplay.control_reflection.v1",
@@ -35,7 +46,9 @@ export class AliceGameplayMemoryPersistence
   }
 
   async persistVerifiedMasteryOutcome(
-    value: Parameters<AliceGameplayMasteryPort["persistVerifiedMasteryOutcome"]>[0],
+    value: Parameters<
+      AliceGameplayMasteryPort["persistVerifiedMasteryOutcome"]
+    >[0],
   ): Promise<void> {
     await this.persist(
       "alice.gameplay.mastery_outcome.v1",
@@ -48,6 +61,9 @@ export class AliceGameplayMemoryPersistence
     decision: AliceReactionDecision,
     emote: AliceVrmEmote,
   ): Promise<void> {
+    const id = this.observationMemoryId(`reaction:${decision.decisionId}`);
+    if (this.runtime.getMemoryById && (await this.runtime.getMemoryById(id)))
+      return;
     await this.persist(
       "alice.gameplay.reaction_decision.v1",
       `Alice selected ${decision.reactionKind} reaction ${emote.emoteId} for gameplay observation ${decision.sourceObservationSequence}.`,
@@ -58,17 +74,59 @@ export class AliceGameplayMemoryPersistence
         emoteDuration: emote.duration,
         emoteLoop: emote.loop,
       },
+      id,
     );
+  }
+
+  observationMemoryId(key: string): Memory["id"] {
+    const hex = createHash("sha256")
+      .update(`${this.runtime.agentId}:alice-observation:${key}`)
+      .digest("hex");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}` as Memory["id"];
+  }
+
+  async readObservationState(
+    key: string,
+  ): Promise<Record<string, unknown> | null> {
+    if (!this.runtime.getMemoryById || !this.runtime.updateMemory)
+      throw new Error("Alice durable observation persistence unavailable");
+    const memory = await this.runtime.getMemoryById(
+      this.observationMemoryId(key),
+    );
+    return (
+      (memory?.content.metadata as Record<string, unknown> | undefined) ?? null
+    );
+  }
+
+  async writeObservationState(
+    key: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    const existing = await this.readObservationState(key);
+    const memory = {
+      id: this.observationMemoryId(key),
+      entityId: this.runtime.agentId,
+      roomId: this.roomId,
+      content: {
+        text: "Alice observed gameplay; no applied control or mastery is claimed.",
+        source: "alice-gameplay",
+        type: "system",
+        metadata,
+      },
+    } as Memory;
+    if (existing) await this.runtime.updateMemory!(memory);
+    else await this.runtime.createMemory(memory, "messages");
   }
 
   private async persist(
     kind: string,
     text: string,
     metadata: Record<string, unknown>,
+    id: Memory["id"] = randomUUID() as Memory["id"],
   ): Promise<void> {
     await this.runtime.createMemory(
       {
-        id: randomUUID() as Memory["id"],
+        id,
         entityId: this.runtime.agentId,
         roomId: this.roomId,
         content: {

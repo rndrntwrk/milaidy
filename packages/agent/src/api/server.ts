@@ -149,6 +149,7 @@ import { handleAliceCodingPolicyRoutes } from "./alice-coding-policy-routes.js";
 import { handleAliceCodingModel } from "./alice-coding-model.js";
 import { handleAliceTaskThreadsRead } from "./alice-task-thread-routes.js";
 import { handleAliceCorpusRoutes } from "./alice-corpus-routes.js";
+import { handleAliceGameplayObservationRoutes } from "./alice-gameplay-observation-routes.js";
 import { handleAliceOperatorRoutes } from "./alice-operator-routes.js";
 import {
   evaluateAliceProductionRequest,
@@ -5057,6 +5058,12 @@ async function handleRequest(
   // In production-core mode even the normally public dashboard/broadcast
   // paths require runtime auth. This closes direct Modal-origin access while
   // retaining only process liveness for unauthenticated provider probes.
+  if (await handleAliceGameplayObservationRoutes({
+    req, res, method, pathname, json,
+    runtime: state.runtime,
+    broadcastWs: state.broadcastWs,
+  })) return;
+
   // Detailed health, readiness, and release proof stay authenticated.
   if (
     isAliceProductionRuntime(process.env) &&

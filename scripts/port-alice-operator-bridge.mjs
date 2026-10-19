@@ -8,6 +8,16 @@ const ALICE_EMOTE_CATALOG = "packages/agent/src/emotes/catalog.ts";
 const OFFICIAL_ROUTE = "eliza/packages/agent/src/api/alice-operator-routes.ts";
 const OFFICIAL_EMOTE_ROUTE = "eliza/packages/agent/src/api/alice-emote-routes.ts";
 const OFFICIAL_EMOTE_CATALOG = "eliza/packages/agent/src/emotes/catalog.ts";
+const OBSERVATION_FILES = [
+  "api/alice-gameplay-observation-routes.ts",
+  "plugins/five55-games/alice-gameplay-observer.ts",
+  "plugins/five55-games/alice-gameplay-memory-persistence.ts",
+  "plugins/five55-games/alice-reaction-bridge.ts",
+];
+const OBSERVATION_IMPORT = 'import { handleAliceGameplayObservationRoutes } from "./alice-gameplay-observation-routes.ts";\n';
+const OBSERVATION_DISPATCH = `
+  if (await handleAliceGameplayObservationRoutes({req,res,method,pathname,json,runtime:state.runtime,broadcastWs:state.broadcastWs})) return;
+`;
 const OFFICIAL_SERVER = "eliza/packages/agent/src/api/server.ts";
 
 const ROUTE_HELPER_IMPORT = 'from "./route-helpers";';
@@ -172,6 +182,19 @@ export async function portAliceOperatorBridge(root = process.cwd()) {
   }
   if (!server.includes(EMOTE_DISPATCH)) {
     server = insertAfter(server, OPERATOR_DISPATCH, EMOTE_DISPATCH, "Alice operator route dispatch");
+  }
+
+  if (!server.includes(OBSERVATION_IMPORT)) server = insertAfter(server, EMOTE_IMPORT, OBSERVATION_IMPORT, "Alice emote route import");
+  // Dispatch before upstream owner authentication: this handler authenticates
+  // its exact private route itself and grants no general API identity.
+  if (!server.includes(OBSERVATION_DISPATCH)) server = insertAfter(server, "  const pathname = url.pathname;", OBSERVATION_DISPATCH, "official request pathname");
+  requireExactlyOnce(server, OBSERVATION_IMPORT, "Alice observation import");
+  requireExactlyOnce(server, OBSERVATION_DISPATCH, "Alice observation dispatch");
+  for (const relative of OBSERVATION_FILES) {
+    const source = await readFile(path.join(root,"packages/agent/src",relative),"utf8");
+    const target = path.join(root,"eliza/packages/agent/src",relative);
+    await mkdir(path.dirname(target),{recursive:true});
+    await writeFile(target,source.replace(/(from ["'][^"']+)\.js(["'])/g,"$1.ts$2"));
   }
 
   requireExactlyOnce(server, OPERATOR_IMPORT, "Alice operator server import");

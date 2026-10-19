@@ -2055,3 +2055,86 @@ describe("Alice Access gateway", () => {
     expect(seen).toHaveLength(0);
   });
 });
+
+test("private observation identity uses only exact POST route and strips owner/trusted header spoofing", async () => {
+  const env = Object.assign(await environment(), {
+    ALICE_GAMEPLAY_OBSERVER_TOKEN: "o".repeat(32),
+    ALICE_GAMEPLAY_OBSERVER_SESSION_ID: "session-1",
+  });
+  const { token: ownerToken } = await accessFixture();
+  const received: Request[] = [];
+  env.setRuntimeFetch(async (request) => {
+    if (new URL(request.url).pathname === "/api/alice-production/proof")
+      return Response.json(fullRuntimeProof());
+    received.push(request);
+    return Response.json({
+      accepted: true,
+      duplicate: false,
+      decisionId: "decision",
+      delivery: { ok: true, sent: true },
+    });
+  });
+  const request = (
+    path = "/api/alice/gameplay-observation",
+    method = "POST",
+    headers = {},
+  ) =>
+    new Request(`https://alice.rndrntwrk.com${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${env.ALICE_GAMEPLAY_OBSERVER_TOKEN}`,
+        ...headers,
+      },
+      ...(method === "POST"
+        ? { body: JSON.stringify({ sessionId: "session-1" }) }
+        : {}),
+    });
+  expect((await handleGatewayRequest(request("/api/emote"), env)).status).toBe(
+    401,
+  );
+  expect(
+    (
+      await handleGatewayRequest(
+        request("/api/alice/gameplay-observation/"),
+        env,
+      )
+    ).status,
+  ).not.toBe(200);
+  expect(
+    (
+      await handleGatewayRequest(
+        request("/api/alice/gameplay-observation", "GET"),
+        env,
+      )
+    ).status,
+  ).not.toBe(200);
+  expect(
+    (
+      await handleGatewayRequest(
+        request(undefined, undefined, { authorization: "Bearer owner" }),
+        env,
+      )
+    ).status,
+  ).toBe(401);
+  expect((await handleGatewayRequest(request(undefined,undefined, {authorization:"", "cf-access-jwt-assertion":ownerToken}),env)).status).toBe(401);
+  const response = await handleGatewayRequest(
+    request(undefined, undefined, {
+      "cf-access-authenticated-user-email": "spoof",
+      "x-milady-cloudflare-access-secret": "spoof",
+      "x-alice-observer": "spoof",
+    }),
+    env,
+  );
+  expect(response.status).toBe(200);
+  expect(received).toHaveLength(1);
+  expect(
+    received[0].headers.get("cf-access-authenticated-user-email"),
+  ).toBeNull();
+  expect(
+    received[0].headers.get("x-milady-cloudflare-access-secret"),
+  ).toBeNull();
+  expect(received[0].headers.get("x-alice-observer")).toBeNull();
+  expect(received[0].headers.get("authorization")).toBe(
+    `Bearer ${env.ALICE_GAMEPLAY_OBSERVER_TOKEN}`,
+  );
+});

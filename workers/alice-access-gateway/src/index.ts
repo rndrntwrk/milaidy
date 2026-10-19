@@ -10,6 +10,8 @@ import {
 } from "./alice-runtime-host";
 
 export type AliceAccessGatewayEnv = {
+  ALICE_GAMEPLAY_OBSERVER_TOKEN?: string;
+  ALICE_GAMEPLAY_OBSERVER_SESSION_ID?: string;
   ALICE_ACCESS_ISSUER: string;
   ALICE_ACCESS_AUDIENCE: string;
   ALICE_OWNER_EMAIL_SHA256: string;
@@ -1343,6 +1345,86 @@ export async function handleRequest(
     const path = requestUrl.pathname.replace(/\/+$/, "") || "/";
     if (path === "/control" || path.startsWith("/control/")) {
       return jsonResponse({ ok: false, code: "CONTROL_ROUTE_ISOLATED" }, 404);
+    }
+
+    // This private relay identity never grants owner/API/coding authority.
+    if (requestUrl.pathname === "/api/alice/gameplay-observation") {
+      const secret = env.ALICE_GAMEPLAY_OBSERVER_TOKEN;
+      if (request.method !== "POST" || requestUrl.search !== "")
+        return jsonResponse({ error: "Observer route denied" }, 403);
+      if (
+        !secret ||
+        secret.length < 32 ||
+        !env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID
+      )
+        return jsonResponse({ error: "Observer unavailable" }, 503);
+      const expected = new TextEncoder().encode(`Bearer ${secret}`);
+      const provided = new TextEncoder().encode(
+        request.headers.get("authorization") ?? "",
+      );
+      let difference = expected.length ^ provided.length;
+      for (let i = 0; i < expected.length; i++)
+        difference |= (expected[i] ?? 0) ^ (provided[i] ?? 0);
+      if (difference !== 0)
+        return jsonResponse({ error: "Trusted observer required" }, 401);
+      const admission = await checkRuntimeAdmission(env);
+      if (!admission.ok) return admission.response;
+      const proof = await verifyUpstreamRelease(
+        request,
+        admission.admission,
+        env,
+      );
+      if (!proof.ok) return proof.response;
+      if (!isFullRuntimeProof(proof.proof))
+        return jsonResponse({ error: "Observer runtime unavailable" }, 503);
+      const reader = request.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let bytes = 0;
+      if (reader) {
+        while (true) {
+          const next = await reader.read();
+          if (next.done) break;
+          bytes += next.value.byteLength;
+          if (bytes > 4096) {
+            await reader.cancel();
+            return jsonResponse({ error: "Observation too large" }, 413);
+          }
+          chunks.push(next.value);
+        }
+      }
+      const body = new Uint8Array(bytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        body.set(chunk, offset);
+        offset += chunk.length;
+      }
+      try {
+        if (
+          JSON.parse(new TextDecoder().decode(body)).sessionId !==
+          env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID
+        )
+          return jsonResponse({ error: "Observation session denied" }, 403);
+      } catch {
+        return jsonResponse({ error: "Invalid observation" }, 400);
+      }
+      const headers = new Headers({
+        "content-type": "application/json",
+        authorization: `Bearer ${secret}`,
+      });
+      const response = await fetchAliceRuntimeContainer(
+        env.ALICE_RUNTIME_CONTAINER,
+        new Request(
+          "https://alice-runtime.internal/api/alice/gameplay-observation",
+          { method: "POST", headers, body, redirect: "manual" },
+        ),
+      );
+      return new Response(response.body, {
+        status: response.status,
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+        },
+      });
     }
 
     const token = request.headers.get("cf-access-jwt-assertion") ?? "";
