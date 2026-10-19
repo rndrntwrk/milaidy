@@ -154,7 +154,7 @@ export const streamStatusAction: Action = {
 function formatStatusResponse(status: StreamStatus): string {
   const lines: string[] = [];
 
-  const statusIcon = status.active ? '**LIVE**' : '**OFFLINE**';
+  const statusIcon = `**${status.status?.toUpperCase() || (status.active ? 'LIVE' : 'OFFLINE')}**`;
   lines.push(`## Stream Status: ${statusIcon}`);
   lines.push('');
 
@@ -190,9 +190,8 @@ function formatStatusResponse(status: StreamStatus): string {
     lines.push('');
     lines.push('**Platforms:**');
     for (const [platformId, platform] of Object.entries(status.platforms)) {
-      const statusIcon = platform.enabled ? (platform.status === 'live' ? '' : '') : '';
-      const statusText = platform.enabled ? platform.status : 'disabled';
-      let platformLine = `- ${platformId}: ${statusIcon} ${statusText}`;
+      const statusText = platform.enabled === false ? 'disabled' : platform.status;
+      let platformLine = `- ${platformId}: ${statusText}`;
       if (platform.error) {
         platformLine += ` (${platform.error})`;
       }

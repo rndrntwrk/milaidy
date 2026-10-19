@@ -36,6 +36,7 @@ import { ethers } from "ethers";
 import { type WebSocket, WebSocketServer } from "ws";
 import { getGlobalAwarenessRegistry } from "../awareness/registry.js";
 import { CharacterSchema } from "../config/character-schema.js";
+import { registerAliceNativeStreamTokenPersistence } from "../config/stream555-native-token.js";
 import {
   type ElizaConfig,
   loadElizaConfig,
@@ -7047,6 +7048,7 @@ export async function startApiServer(opts?: {
     connectorRouteHandlers: [],
     connectorHealthMonitor: null,
   };
+  registerAliceNativeStreamTokenPersistence(() => state.config);
   const trainingServiceCtor = optionalRuntimeSubsystems
     ? await resolveTrainingServiceCtor()
     : null;

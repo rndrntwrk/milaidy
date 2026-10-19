@@ -397,6 +397,10 @@ export interface StreamStopResult {
 export interface StreamStatus {
   sessionId: string;
   active: boolean;
+  status?: NativeStreamSetup['status'];
+  pendingJob?: boolean;
+  continuity?: NativeStreamSetup['continuity'];
+  lease?: { expiresAt: number; autoRenew: boolean; nextRenewalAt: number | null } | null;
   jobId?: string;
   cfSessionId?: string;
   cloudflare?: {
@@ -405,7 +409,7 @@ export interface StreamStatus {
   };
   serverFallbackActive: boolean;
   startTime?: number;
-  platforms: Record<string, { enabled: boolean; status: string; error?: string }>;
+  platforms: Record<string, { enabled?: boolean; status: string; error?: string }>;
   stats?: StreamStats;
   jobStatus?: {
     state: string;
@@ -657,6 +661,9 @@ export interface ChatMessage {
   };
   metadata?: {
     timestamp: number;
+    sequence?: number;
+    receivedAt?: number;
+    isHistory?: boolean;
     isModerator?: boolean;
     isSubscriber?: boolean;
     isReply?: boolean;
@@ -665,7 +672,7 @@ export interface ChatMessage {
   sessionId?: string;
 }
 
-export interface ChatStatus {
+export interface ChatStatus extends Partial<NativeChatSnapshot> {
   sessionId: string;
   active: boolean;
   platforms: Record<string, { connected: boolean; connecting: boolean }>;
@@ -680,10 +687,37 @@ export interface ChatPlatformConfig {
   };
 }
 
-export interface ChatMessagesResult {
+export interface ChatMessagesResult extends Partial<NativeChatSnapshot> {
   sessionId: string;
   messages: ChatMessage[];
   count: number;
+}
+
+/** Receive-only native chat snapshot, bound to one current primary dispatch. */
+export interface NativeChatSnapshot {
+  version: 1;
+  sessionId: string;
+  dispatchId: string;
+  revision: number;
+  sequence: number;
+  cursor: string;
+  gap: boolean;
+  reset: boolean;
+  channels: Array<{
+    platform: 'pump' | 'twitch' | 'kick' | 'youtube' | 'x' | 'tiktok' | 'tencent';
+    channelId: string;
+    generation: string;
+    mode: 'direct' | 'bridge' | 'existing';
+    status: 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'unavailable' | 'credential_required' | 'bridge_required' | 'ended';
+    reason?: string | null;
+    canSend: false;
+    receivedCount?: number;
+    liveReceivedCount?: number;
+    connectedAt?: number | null;
+    lastMessageAt?: number | null;
+    retryAt?: number | null;
+  }>;
+  messages: ChatMessage[];
 }
 
 export interface ChatSendResult {
@@ -711,5 +745,11 @@ export interface NativeStreamSetup {
   sources: Array<{ id: string; type: string; name: string | null; visible: boolean;
     gameId: string | null; avatarPreset: string | null }>;
   destinations: Array<{ platformId: string; enabled: boolean; configured: boolean }>;
+  destinationsReady: boolean;
   active: boolean;
+  status: 'stopped' | 'preflighting' | 'starting' | 'connecting' | 'live' | 'reconnecting' | 'stopping' | 'failed';
+  continuity: {
+    publisher: 'realtimekit_rtmp_out' | 'capture_service_rtmps';
+    status: 'live_output_active' | 'bootstrap_keepalive_active' | 'handoff_in_progress';
+  } | null;
 }

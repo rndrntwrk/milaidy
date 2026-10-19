@@ -17,6 +17,7 @@ import {
 } from '../routes/approvals.js';
 import {
   describeAgentAuthSource,
+  isAliceNativeStreamRuntime,
   isAgentAuthConfigured,
   resolveAgentBearer,
 } from '../lib/agentAuth.js';
@@ -56,7 +57,51 @@ import type {
   AppCatalogResponse,
   AppStreamDescriptor,
   Approval,
+  ChatMessagesResult,
+  ChatStatus,
+  NativeChatSnapshot,
 } from '../types/index.js';
+
+function nativeChatCursor(cursor: string): [string, number] {
+  try {
+    if (cursor.length > 256 || !/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error();
+    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (!Array.isArray(value) || value.length !== 2 || typeof value[0] !== 'string' ||
+        !Number.isSafeInteger(value[1]) || value[1] < 0) throw new Error();
+    return value as [string, number];
+  } catch { throw new Error('Native chat contains an invalid or foreign cursor'); }
+}
+
+function validateNativeChat(value: NativeChatSnapshot | undefined, sessionId: string, dispatchId: string): NativeChatSnapshot {
+  const invalid = () => new Error('Native chat readback did not match the current dispatch');
+  if (!value || value.version !== 1 || value.sessionId !== sessionId || value.dispatchId !== dispatchId ||
+      !Number.isSafeInteger(value.revision) || value.revision < 0 || !Number.isSafeInteger(value.sequence) || value.sequence < 0 ||
+      typeof value.cursor !== 'string' || typeof value.gap !== 'boolean' || typeof value.reset !== 'boolean' ||
+      !Array.isArray(value.channels) || value.channels.length > 7 || !Array.isArray(value.messages) || value.messages.length > 50) throw invalid();
+  const [cursorDispatch, sequence] = nativeChatCursor(value.cursor);
+  if (cursorDispatch !== dispatchId || sequence !== value.sequence) throw invalid();
+  const channels = new Map<string, string>();
+  for (const channel of value.channels) {
+    if (!channel || !['pump', 'twitch', 'kick', 'youtube', 'x', 'tiktok', 'tencent'].includes(channel.platform) ||
+        channels.has(channel.platform) || typeof channel.channelId !== 'string' || channel.channelId.length < 1 || channel.channelId.length > 256 ||
+        typeof channel.generation !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(channel.generation) ||
+        !['direct', 'bridge', 'existing'].includes(channel.mode) || channel.canSend !== false ||
+        !['disabled', 'connecting', 'connected', 'reconnecting', 'unavailable', 'credential_required', 'bridge_required', 'ended'].includes(channel.status) ||
+        [channel.receivedCount, channel.liveReceivedCount].some(count => count !== undefined && (!Number.isSafeInteger(count) || count < 0))) throw invalid();
+    channels.set(channel.platform, channel.channelId);
+  }
+  const ids = new Set<string>();
+  for (const message of value.messages) {
+    if (!message || typeof message.id !== 'string' || message.id.length > 1024 || ids.has(message.id) ||
+        message.sessionId !== sessionId || channels.get(message.platform) !== message.channelId ||
+        typeof message.content?.text !== 'string' || message.content.text.length > 4096 ||
+        typeof message.user?.username !== 'string' || typeof message.user?.displayName !== 'string' ||
+        !Number.isSafeInteger(message.metadata?.timestamp) || !Number.isSafeInteger(message.metadata?.sequence) ||
+        message.metadata!.sequence! < 1 || message.metadata!.sequence! > value.sequence) throw invalid();
+    ids.add(message.id);
+  }
+  return value;
+}
 
 const STREAM555_CHANNEL_RUNTIME_SPECS = [
   {
@@ -158,6 +203,12 @@ export class StreamControlService implements Service {
   private sessionState: Map<string, SessionState> = new Map();
   private boundSessionId: string | null = null;
   private lastWsError: string | null = null;
+  private nativeAuthTimer: ReturnType<typeof setInterval> | null = null;
+  private nativeAuthPending: Promise<void> | null = null;
+  private nativeConnectionError: string | null = null;
+  private nativeChatDispatchId: string | null = null;
+  private nativeChatReadGeneration = 0;
+  private nativeChatCurrentStatus: { generation: number; dispatchId: string } | null = null;
 
   /**
    * Get service type identifier
@@ -171,12 +222,24 @@ export class StreamControlService implements Service {
    */
   async initialize(runtime: IAgentRuntime): Promise<void> {
     this.runtime = runtime;
+    this.nativeConnectionError = null;
 
     const baseUrl = resolveStream555BaseUrl(runtime.agentId?.toString());
-    const agentToken =
-      baseUrl && baseUrl.trim().length > 0
-        ? await resolveAgentBearer(baseUrl)
-        : undefined;
+    // An unconnected Stream must not prevent Alice's chat runtime from booting.
+    // Connecting later uses the existing encrypted config write + runtime restart.
+    if (isAliceNativeStreamRuntime() && !isAgentAuthConfigured()) {
+      console.warn('[555stream] Native Stream is not connected');
+      return;
+    }
+    let agentToken: string | undefined;
+    try {
+      agentToken = baseUrl && baseUrl.trim().length > 0 ? await resolveAgentBearer(baseUrl) : undefined;
+    } catch (error) {
+      if (!isAliceNativeStreamRuntime()) throw error;
+      this.nativeConnectionError = 'Native Stream authorization is unavailable; reconnect Stream';
+      console.warn(`[555stream] ${this.nativeConnectionError}`);
+      return;
+    }
 
     if (!agentToken) {
       throw new Error(
@@ -212,6 +275,22 @@ export class StreamControlService implements Service {
     // Set up WebSocket message handlers
     this.setupWsHandlers();
 
+    if (isAliceNativeStreamRuntime()) {
+      // Local metadata checks are cheap; only grants due for renewal make a request.
+      this.nativeAuthTimer = setInterval(() => {
+        if (this.nativeAuthPending) return;
+        this.nativeAuthPending = resolveAgentBearer(baseUrl).then(token => {
+          if (this.config) this.config.agentToken = token;
+        }).catch(() => {
+          this.nativeConnectionError = 'Native credential renewal failed; reconnect Stream';
+          if (this.nativeAuthTimer) clearInterval(this.nativeAuthTimer);
+          this.nativeAuthTimer = null;
+          console.warn(`[555stream] ${this.nativeConnectionError}`);
+        }).finally(() => { this.nativeAuthPending = null; });
+      }, 60000);
+      this.nativeAuthTimer.unref?.();
+    }
+
     console.log('[555stream] Service initialized');
   }
 
@@ -219,6 +298,13 @@ export class StreamControlService implements Service {
    * Stop the service
    */
   async stop(): Promise<void> {
+    if (this.nativeAuthTimer) clearInterval(this.nativeAuthTimer);
+    this.nativeAuthTimer = null;
+    await this.nativeAuthPending;
+    this.nativeChatDispatchId = null;
+    this.nativeChatReadGeneration++;
+    this.nativeChatCurrentStatus = null;
+    this.nativeConnectionError = null;
     if (this.wsClient) {
       this.wsClient.disconnect();
     }
@@ -347,19 +433,29 @@ export class StreamControlService implements Service {
         productionState: { aspectRatio?: string; activeLayout?: string; pipPosition?: string; broadcastOverlay?: { enabled?: boolean; mode?: string };
           sources: Source[] } } | null }>(
         `/api/session/composition?sessionId=${encodeURIComponent(sessionId)}`, { headers }),
-      nativeClient.get<{ sessionId: string; destinations: NativeStreamSetup['destinations'] }>(
+      nativeClient.get<{ sessionId: string; ready: boolean; destinations: NativeStreamSetup['destinations'] }>(
         `/api/session/destinations?sessionId=${encodeURIComponent(sessionId)}`, { headers }),
-      nativeClient.get<{ sessionId: string; active: boolean }>('/api/stream/status', { headers }),
+      nativeClient.get<{ sessionId: string | null; active: boolean; status: NativeStreamSetup['status'];
+        alwaysOnLive?: NativeStreamSetup['continuity'] }>('/api/stream/status', { headers }),
     ]);
     // Never relay upstream error bodies, full composition or destination secrets to browsers.
     if (!composition.success || !destinations.success || !status.success)
       throw new Error('Native Studio admission or readback is unavailable');
     const saved = composition.data, platforms = destinations.data, live = status.data;
     const snapshot = saved?.snapshot;
-    if (saved?.sessionId !== sessionId || platforms?.sessionId !== sessionId || live?.sessionId !== sessionId ||
+    const emptyCapture = live?.sessionId === null && live.status === 'stopped' && live.active === false &&
+      live.alwaysOnLive == null;
+    if (saved?.sessionId !== sessionId || platforms?.sessionId !== sessionId || !live ||
+        (live.sessionId !== sessionId && !emptyCapture) ||
         !snapshot || snapshot.schemaVersion !== 1 || !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 1 ||
         !Array.isArray(snapshot.productionState?.sources) || !Array.isArray(platforms.destinations) ||
-        typeof live.active !== 'boolean') throw new Error('Native Studio readback did not match the configured session');
+        typeof platforms.ready !== 'boolean' || typeof live.active !== 'boolean' ||
+        !['stopped', 'preflighting', 'starting', 'connecting', 'live', 'reconnecting', 'stopping', 'failed'].includes(live.status) ||
+        live.active !== (live.status === 'live')) throw new Error('Native Studio readback did not match the configured session');
+    const continuity = live.alwaysOnLive;
+    if (continuity != null && (!['realtimekit_rtmp_out', 'capture_service_rtmps'].includes(continuity.publisher) ||
+        !['live_output_active', 'bootstrap_keepalive_active', 'handoff_in_progress'].includes(continuity.status)))
+      throw new Error('Native Studio continuity readback is invalid');
     const sources = snapshot.productionState.sources.map(source => {
       if (!source || typeof source.id !== 'string' || typeof source.type !== 'string')
         throw new Error('Native Studio source readback is invalid');
@@ -378,7 +474,8 @@ export class StreamControlService implements Service {
       activeLayout: typeof snapshot.productionState.activeLayout === 'string' ? snapshot.productionState.activeLayout : null,
       pipPosition: typeof snapshot.productionState.pipPosition === 'string' ? snapshot.productionState.pipPosition : null,
       overlay: { enabled: overlay?.enabled === true, mode: typeof overlay?.mode === 'string' ? overlay.mode : null },
-      sources, destinations: projectedDestinations, active: live.active };
+      sources, destinations: projectedDestinations, destinationsReady: platforms.ready, active: live.active, status: live.status,
+      continuity: continuity == null ? null : { publisher: continuity.publisher, status: continuity.status } };
   }
 
   getRuntimeState(): Stream555RuntimeState {
@@ -398,8 +495,10 @@ export class StreamControlService implements Service {
     const channelsReady = channels.filter((channel) => channel.ready).length;
     const warnings: string[] = [];
     const errors: string[] = [];
+    if (this.nativeConnectionError) errors.push(this.nativeConnectionError);
 
-    const baseUrlConfigured = Boolean(this.config?.baseUrl?.trim());
+    const baseUrlConfigured = Boolean(this.config?.baseUrl?.trim()) ||
+      (isAliceNativeStreamRuntime() && Boolean(process.env.STREAM555_PUBLIC_BASE_URL?.trim()));
     const authConfigured = isAgentAuthConfigured();
     const wsState = this.wsClient?.getState() ?? 'disconnected';
 
@@ -514,6 +613,8 @@ export class StreamControlService implements Service {
    * Check if service is ready (initialized, connected, bound)
    */
   isReady(): boolean {
+    if (isAliceNativeStreamRuntime()) return !!(this.httpClient && this.config?.defaultSessionId?.trim() &&
+      isAgentAuthConfigured() && !this.nativeConnectionError);
     return !!(
       this.httpClient &&
       this.boundSessionId
@@ -780,6 +881,10 @@ export class StreamControlService implements Service {
    * Get current stream status
    */
   async getStreamStatus(sessionId?: string): Promise<StreamStatus> {
+    if (isAliceNativeStreamRuntime()) {
+      const connection = await this.nativeConnection(sessionId);
+      return this.readNativeStatus(connection);
+    }
     if (!this.httpClient) {
       throw new Error('[555stream] Service not initialized');
     }
@@ -2179,13 +2284,102 @@ export class StreamControlService implements Service {
   // Chat Methods
   // ==========================================
 
+  /** Native status identifies the current capture generation as jobId. */
+  private async readNativeStatus(connection: { sessionId: string; client: HttpClient }): Promise<StreamStatus> {
+    const { sessionId, client } = connection;
+    const response = await client.get<{
+      sessionId: string | null; active: boolean; status: NativeStreamSetup['status'];
+      jobId?: string | null; cfSessionId?: string | null; pendingJob?: boolean; startTime?: number | null;
+      platforms?: Record<string, { status: string }>;
+      alwaysOnLive?: NativeStreamSetup['continuity'];
+      lease?: { expiresAt: number; autoRenew?: boolean; nextRenewalAt?: number | null } | null;
+    }>('/api/stream/status', { headers: { 'X-Session-Id': sessionId } });
+    if (!response.success || !response.data) throw new Error('Native Stream status admission or readback is unavailable');
+    const live = response.data;
+    const empty = live.sessionId === null && live.status === 'stopped' && live.active === false &&
+      live.jobId == null && live.lease == null && live.alwaysOnLive == null;
+    if ((live.sessionId !== sessionId && !empty) || typeof live.active !== 'boolean' ||
+        !['stopped', 'preflighting', 'starting', 'connecting', 'live', 'reconnecting', 'stopping', 'failed'].includes(live.status) ||
+        live.active !== (live.status === 'live') || (!empty && (typeof live.jobId !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(live.jobId))))
+      throw new Error('Native Stream status did not match the configured session or current primary dispatch');
+    const continuity = live.alwaysOnLive;
+    if (continuity != null && (!['realtimekit_rtmp_out', 'capture_service_rtmps'].includes(continuity.publisher) ||
+        !['live_output_active', 'bootstrap_keepalive_active', 'handoff_in_progress'].includes(continuity.status)))
+      throw new Error('Native Stream continuity readback is invalid');
+    if (live.lease != null && (!Number.isSafeInteger(live.lease.expiresAt) ||
+        (live.lease.autoRenew !== undefined && typeof live.lease.autoRenew !== 'boolean') ||
+        (live.lease.nextRenewalAt != null && !Number.isSafeInteger(live.lease.nextRenewalAt))))
+      throw new Error('Native Stream lease readback is invalid');
+    if (live.platforms !== undefined && (!live.platforms || typeof live.platforms !== 'object' || Array.isArray(live.platforms)))
+      throw new Error('Native Stream platform readback is invalid');
+    const platforms: StreamStatus['platforms'] = {};
+    for (const [platform, value] of Object.entries(live.platforms || {})) {
+      if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(platform) || !value || !['pending', 'connecting', 'stopped', 'error'].includes(value.status))
+        throw new Error('Native Stream platform readback is invalid');
+      // A ready provider output is still only connecting until platform delivery is independently observed.
+      platforms[platform] = { status: value.status };
+    }
+    return { sessionId, active: live.active, status: live.status,
+      ...(typeof live.jobId === 'string' ? { jobId: live.jobId } : {}),
+      ...(typeof live.cfSessionId === 'string' ? { cfSessionId: live.cfSessionId } : {}),
+      ...(typeof live.pendingJob === 'boolean' ? { pendingJob: live.pendingJob } : {}),
+      ...(Number.isSafeInteger(live.startTime) && live.startTime! > 0 ? { startTime: live.startTime! } : {}),
+      continuity: continuity == null ? null : { publisher: continuity.publisher, status: continuity.status },
+      lease: live.lease == null ? null : { expiresAt: live.lease.expiresAt, autoRenew: live.lease.autoRenew === true,
+        nextRenewalAt: live.lease.nextRenewalAt ?? null },
+      serverFallbackActive: live.active && continuity?.publisher === 'capture_service_rtmps', platforms };
+  }
+
+  private async readNativeChat(path: 'messages' | 'channels', sessionId?: string, cursor?: string): Promise<NativeChatSnapshot> {
+    const generation = ++this.nativeChatReadGeneration;
+    const connection = await this.nativeConnection(sessionId);
+    const status = await this.readNativeStatus(connection);
+    if (!this.httpClient || !this.config) throw new Error('555 Stream service is unavailable');
+    const dispatchId = status.jobId;
+    if (!dispatchId || !['starting', 'connecting', 'live', 'reconnecting'].includes(status.status || '') ||
+        !status.lease || status.lease.expiresAt <= Date.now()) throw new Error('Native chat requires the current primary dispatch');
+    if (this.nativeChatCurrentStatus && generation < this.nativeChatCurrentStatus.generation &&
+        dispatchId !== this.nativeChatCurrentStatus.dispatchId) throw new Error('Native chat read was superseded by a newer dispatch read');
+    if (!this.nativeChatCurrentStatus || generation > this.nativeChatCurrentStatus.generation)
+      this.nativeChatCurrentStatus = { generation, dispatchId };
+    const changed = this.nativeChatDispatchId !== null && this.nativeChatDispatchId !== dispatchId;
+    if (cursor !== undefined) {
+      const [cursorDispatch] = nativeChatCursor(cursor);
+      if (cursorDispatch !== dispatchId) {
+        // An observed capture replacement starts a complete snapshot; never forward its predecessor's cursor.
+        if (changed && cursorDispatch === this.nativeChatDispatchId) cursor = undefined;
+        else throw new Error('Native chat contains an invalid or foreign cursor');
+      }
+    }
+    const query = cursor === undefined ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+    const response = await connection.client.get<NativeChatSnapshot>(`/api/stream/chat/${path}${query}`, { headers: {
+      'X-Session-Id': connection.sessionId, 'X-Studio-Dispatch-Id': dispatchId,
+    } });
+    if (!response.success) throw new Error(response.error || 'Native chat read is unavailable');
+    const snapshot = validateNativeChat(response.data, connection.sessionId, dispatchId);
+    if (this.nativeChatCurrentStatus?.dispatchId !== dispatchId) throw new Error('Native chat read was superseded by a newer dispatch read');
+    // Status reads must not consume the message reader's dispatch/cursor boundary.
+    if (path === 'messages') this.nativeChatDispatchId = dispatchId;
+    return changed ? { ...snapshot, reset: true } : snapshot;
+  }
+
   /**
    * Get recent chat messages for the bound session.
    */
   async getChatMessages(
-    options?: { limit?: number; platform?: string },
+    options?: { limit?: number; platform?: string; cursor?: string },
     sessionId?: string
-  ): Promise<{ sessionId: string; messages: unknown[]; count: number }> {
+  ): Promise<ChatMessagesResult> {
+    if (isAliceNativeStreamRuntime()) {
+      if (options?.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > 50))
+        throw new Error('Native chat message limit must be between 1 and 50');
+      const snapshot = await this.readNativeChat('messages', sessionId, options?.cursor);
+      let messages = options?.platform ? snapshot.messages.filter(message => message.platform === options.platform) : snapshot.messages;
+      if (options?.limit !== undefined) {
+        messages = messages.slice(-options.limit);
+      }
+      return { ...snapshot, messages, count: messages.length };
+    }
     if (!this.httpClient) {
       throw new Error('[555stream] Service not initialized');
     }
@@ -2202,7 +2396,7 @@ export class StreamControlService implements Service {
     const qs = params.toString();
     const url = `/api/agent/v1/sessions/${id}/chat/messages${qs ? `?${qs}` : ''}`;
 
-    const response = await this.httpClient.get<{ sessionId: string; messages: unknown[]; count: number }>(url);
+    const response = await this.httpClient.get<ChatMessagesResult>(url);
 
     if (!response.success || !response.data) {
       throw new Error(response.error || 'Failed to get chat messages');
@@ -2219,6 +2413,7 @@ export class StreamControlService implements Service {
     platform?: string,
     sessionId?: string
   ): Promise<{ sent: boolean; sessionId: string; platform: string }> {
+    if (isAliceNativeStreamRuntime()) throw new Error('Native outbound chat is unavailable; current channels are receive-only');
     if (!this.httpClient) {
       throw new Error('[555stream] Service not initialized');
     }
@@ -2245,7 +2440,13 @@ export class StreamControlService implements Service {
    */
   async getChatStatus(
     sessionId?: string
-  ): Promise<{ sessionId: string; active: boolean; platforms: Record<string, unknown> }> {
+  ): Promise<ChatStatus> {
+    if (isAliceNativeStreamRuntime()) {
+      const snapshot = await this.readNativeChat('channels', sessionId);
+      return { ...snapshot, active: snapshot.channels.some(channel => channel.status === 'connected'),
+        platforms: Object.fromEntries(snapshot.channels.map(channel => [channel.platform, { ...channel,
+          connected: channel.status === 'connected', connecting: ['connecting', 'reconnecting'].includes(channel.status) }])) };
+    }
     if (!this.httpClient) {
       throw new Error('[555stream] Service not initialized');
     }
@@ -2255,7 +2456,7 @@ export class StreamControlService implements Service {
       throw new Error('[555stream] No session bound');
     }
 
-    const response = await this.httpClient.get<{ sessionId: string; active: boolean; platforms: Record<string, unknown> }>(
+    const response = await this.httpClient.get<ChatStatus>(
       `/api/agent/v1/sessions/${id}/chat/status`
     );
 
@@ -2273,6 +2474,7 @@ export class StreamControlService implements Service {
     platforms: Array<{ platform: string; channelId: string; credentials?: Record<string, string> }>,
     sessionId?: string
   ): Promise<{ success: boolean; sessionId: string; platforms: string[] }> {
+    if (isAliceNativeStreamRuntime()) throw new Error('Configure native chat channels in the shared Studio; legacy chat start is unsupported');
     if (!this.httpClient) {
       throw new Error('[555stream] Service not initialized');
     }
@@ -2300,6 +2502,7 @@ export class StreamControlService implements Service {
   async stopChat(
     sessionId?: string
   ): Promise<{ success: boolean; sessionId: string }> {
+    if (isAliceNativeStreamRuntime()) throw new Error('Configure native chat channels in the shared Studio; legacy chat stop is unsupported');
     if (!this.httpClient) {
       throw new Error('[555stream] Service not initialized');
     }

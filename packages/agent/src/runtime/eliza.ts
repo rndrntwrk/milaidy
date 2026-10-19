@@ -31,6 +31,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { runFirstTimeSetup } from "./first-time-setup.js";
 import { resolvePlugins } from "./plugin-resolver.js";
 import { captureAliceGitHubAppSigningMaterial } from "../services/alice-github-installation.js";
+import { registerAliceNativeStreamTokenPersistence } from "../config/stream555-native-token.js";
 import {
   consumeAliceGitHubAgentPat,
   hasAliceGitHubAgentPat,
@@ -3488,6 +3489,7 @@ export async function startEliza(
   if (!opts?.headless) {
     config = await runFirstTimeSetup(config);
   }
+  registerAliceNativeStreamTokenPersistence(() => config, true);
 
   // 1c. Apply logging level from config to process.env so the global
   //     @elizaos/core logger (used by plugins) respects it.

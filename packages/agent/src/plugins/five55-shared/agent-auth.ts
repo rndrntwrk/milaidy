@@ -1,4 +1,10 @@
 import crypto from "node:crypto";
+import {
+  isAliceNativeStreamRuntime,
+  isAgentAuthConfigured as isNativeAuthConfigured,
+  describeAgentAuthSource as describeNativeAuthSource,
+  resolveAgentBearer as resolveNativeBearer,
+} from "@rndrntwrk/plugin-555stream/auth";
 
 export const STREAM555_AGENT_TOKEN_ENV = "STREAM555_AGENT_TOKEN";
 export const STREAM555_AGENT_API_KEY_ENV = "STREAM555_AGENT_API_KEY";
@@ -27,7 +33,7 @@ interface AgentTokenCacheEntry {
   expiresAtMs?: number;
 }
 
-type AgentBearerKind = "api-key-exchange" | "static-bearer";
+type AgentBearerKind = "api-key-exchange" | "static-bearer" | "native-grant";
 
 interface ResolvedAgentBearer {
   token: string;
@@ -237,6 +243,7 @@ async function exchangeTokenWithApiKeyDetailed(
 }
 
 export function isAgentAuthConfigured(): boolean {
+  if (isAliceNativeStreamRuntime()) return isNativeAuthConfigured();
   return Boolean(
     trimEnv(STREAM555_AGENT_API_KEY_ENV) ||
       trimEnv(STREAM555_AGENT_TOKEN_ENV) ||
@@ -245,6 +252,7 @@ export function isAgentAuthConfigured(): boolean {
 }
 
 export function describeAgentAuthSource(): string {
+  if (isAliceNativeStreamRuntime()) return describeNativeAuthSource();
   if (trimEnv(STREAM555_AGENT_API_KEY_ENV)) {
     return `${STREAM555_AGENT_API_KEY_ENV} (short-lived JWT exchange)`;
   }
@@ -264,6 +272,9 @@ function resolveStaticAgentBearer(): string | undefined {
 }
 
 async function resolveAgentBearerDetailed(baseUrl: string): Promise<ResolvedAgentBearer> {
+  if (isAliceNativeStreamRuntime()) {
+    return { token: await resolveNativeBearer(baseUrl), kind: "native-grant", usedCachedExchangeToken: false };
+  }
   const apiKey = trimEnv(STREAM555_AGENT_API_KEY_ENV);
   if (apiKey) {
     return exchangeTokenWithApiKeyDetailed(baseUrl, apiKey);
@@ -323,7 +334,9 @@ export async function requestAgentJson(
   options: AgentJsonRequestOptions,
 ): Promise<AgentJsonResponse> {
   const requestId = options.requestId?.trim() || createAgentRequestId(options.logScope);
-  const retries = Math.max(0, options.retries ?? getHttpRetries());
+  // Native writes may already have applied when a response is lost. Do not replay them.
+  const native = isAliceNativeStreamRuntime();
+  const retries = native && options.method !== "GET" ? 0 : Math.max(0, options.retries ?? getHttpRetries());
   const retryBaseDelayMs = Math.max(
     1,
     options.retryBaseDelayMs ?? getHttpRetryBaseDelayMs(),
@@ -354,11 +367,16 @@ export async function requestAgentJson(
         if (bodyText !== undefined && !headers["Content-Type"]) {
           headers["Content-Type"] = "application/json";
         }
-        const response = await fetch(new URL(options.endpoint, options.baseUrl).toString(), {
+        const target = new URL(options.endpoint, options.baseUrl);
+        if (native && (target.origin !== "https://stream.rndrntwrk.com" || target.username || target.password)) {
+          throw new Error("Native Stream request target is invalid");
+        }
+        const response = await fetch(target.toString(), {
           method: options.method,
           headers,
           ...(bodyText !== undefined ? { body: bodyText } : {}),
           signal: controller.signal,
+          ...(native ? { redirect: "error" as const } : {}),
         });
         const rawBody = truncate(await response.text(), maxResponseChars);
         return {
@@ -398,7 +416,7 @@ export async function requestAgentJson(
             : `request failed after ${attempts} attempt(s): ${message}`,
           requestId,
           refreshedOnUnauthorized,
-          authSource: trimEnv(STREAM555_AGENT_API_KEY_ENV)
+          authSource: native ? "native-grant" : trimEnv(STREAM555_AGENT_API_KEY_ENV)
             ? "api-key-exchange"
             : "static-bearer",
         };
@@ -415,7 +433,7 @@ export async function requestAgentJson(
     rawBody: "request failed: exhausted retry budget",
     requestId,
     refreshedOnUnauthorized,
-    authSource: trimEnv(STREAM555_AGENT_API_KEY_ENV)
+    authSource: native ? "native-grant" : trimEnv(STREAM555_AGENT_API_KEY_ENV)
       ? "api-key-exchange"
       : "static-bearer",
   };

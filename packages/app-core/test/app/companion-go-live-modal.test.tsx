@@ -13,12 +13,12 @@ vi.mock("@miladyai/ui", () => createInlineUiMock({}));
 vi.mock("@miladyai/app-core/state", () => ({ useApp: () => mockUseApp() }));
 vi.mock("@miladyai/app-core/api", () => ({ client: { getStream555NativeSetup: readNativeSetup } }));
 import { CompanionGoLiveModal } from "../../src/components/operator/CompanionGoLiveModal";
-import { buildStream555SetupSummary } from "../../src/components/operator/stream555-setup";
 
 function t(key: string, options?: Record<string, unknown>) { return String(options?.defaultValue ?? key); }
 function saved(revision = 7) { return {
   sessionId: "alice-session", studioUrl: "https://stream.rndrntwrk.com/studio?sessionId=alice-session",
   revision, aspectRatio: "16:9", activeLayout: "pip", pipPosition: "bottom-right", overlay: { enabled: true, mode: "filter" }, active: true,
+  status: "live", destinationsReady: true, continuity: { publisher: "capture_service_rtmps", status: "bootstrap_keepalive_active" },
   sources: [{ id: "game", type: "game", name: "555 Drive", gameId: "555drive", avatarPreset: null, visible: true },
     { id: "pip", type: "avatar", name: "Alice", gameId: null, avatarPreset: "alice-3d", visible: true }],
   destinations: [{ platformId: "youtube", enabled: true, configured: true }],
@@ -102,11 +102,22 @@ describe("CompanionGoLiveModal", () => {
       expect(operator.executePlan).not.toHaveBeenCalled();
       expect(operator.stream.refreshDestinations).not.toHaveBeenCalled();
       expect(tree.root.findAll(node => node.type === "input" && node.props.type === "checkbox")).toHaveLength(0);
+      expect(tree.root.findAllByProps({ "aria-label": "Go live progress" })).toHaveLength(0);
+      expect(textOf(tree.root)).not.toContain("1 channel");
       expect(textOf(tree.root)).toContain("Review the saved native session");
     } finally { open.mockRestore(); }
   });
-  it("retains redacted plugin readiness for the existing later launch flow", () => {
-    expect(buildStream555SetupSummary(createReadyPlugin()).setupRequired).toBe(false);
+  it("distinguishes live fallback from a reconnecting handoff using native readiness", async () => {
+    const tree = await mount();
+    expect(textOf(tree.root)).toContain("Capture: Live");
+    expect(textOf(tree.root)).toContain("Destinations: Ready");
+    expect(textOf(tree.root)).toContain("Program: Fallback playback");
+    readNativeSetup.mockResolvedValue({ ...saved(), active: false, status: "reconnecting", destinationsReady: false,
+      continuity: { publisher: "capture_service_rtmps", status: "handoff_in_progress" } });
+    await act(async () => { findButtonByText(tree.root, "Refresh status").props.onClick(); });
+    expect(textOf(tree.root)).toContain("Capture: Reconnecting");
+    expect(textOf(tree.root)).toContain("Destinations: Setup required");
+    expect(textOf(tree.root)).toContain("Program: Handoff in progress");
   });
   it("keeps the go-live modal body bounded and scrollable on short viewports", () => {
     const cssFiles = [
