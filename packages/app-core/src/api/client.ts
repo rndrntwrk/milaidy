@@ -5,6 +5,8 @@
  * Replaces the gateway WebSocket protocol entirely.
  */
 
+import type { NativeStreamSetup } from "@rndrntwrk/plugin-555stream";
+
 import type {
   AudioGenConfig,
   AudioGenProvider,
@@ -6300,6 +6302,7 @@ export class MiladyClient {
 
   async streamStatus(): Promise<{
     ok: boolean;
+    nativeCaptureStatus?: NativeStreamSetup['status'];
     running: boolean;
     ffmpegAlive: boolean;
     uptime: number;

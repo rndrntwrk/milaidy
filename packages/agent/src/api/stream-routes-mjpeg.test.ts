@@ -58,6 +58,28 @@ function nativeSetupState(service: object | null): StreamRouteState {
 }
 
 describe('native shared setup route', () => {
+  it('retains native capture lifecycle on owner status reads without claiming FFmpeg delivery', async () => {
+    const originalMode = process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+    const originalProfile = process.env.ALICE_RUNTIME_PROFILE;
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = 'proposer-only';
+    process.env.ALICE_RUNTIME_PROFILE = 'full-gated';
+    try {
+      const service = { getConfig: () => ({ defaultSessionId: 'alice-session' }),
+        startStream: vi.fn(), stopStream: vi.fn(),
+        getStreamStatus: vi.fn(async () => ({ sessionId: 'alice-session', active: true, status: 'live', platforms: {} })) };
+      const { res, getStatus, getJson } = createMockHttpResponse();
+      await handleStreamRoute(createMockIncomingMessage({}), res, '/api/stream/status', 'GET', nativeSetupState(service));
+      expect(getStatus()).toBe(200);
+      expect(getJson()).toMatchObject({ nativeCaptureStatus: 'live', running: true, ffmpegAlive: false });
+      expect(service.startStream).not.toHaveBeenCalled();
+      expect(service.stopStream).not.toHaveBeenCalled();
+    } finally {
+      if (originalMode === undefined) delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+      else process.env.ALICE_RUNTIME_AUTHORITY_MODE = originalMode;
+      if (originalProfile === undefined) delete process.env.ALICE_RUNTIME_PROFILE;
+      else process.env.ALICE_RUNTIME_PROFILE = originalProfile;
+    }
+  });
   it('dispatches the configured native read without starting, binding, or local fallback', async () => {
     const saved = { sessionId: 'alice-session', revision: 3, studioUrl: 'https://stream.rndrntwrk.com/studio?sessionId=alice-session',
       aspectRatio: '16:9', activeLayout: 'pip', pipPosition: 'bottom-right', overlay: { enabled: true, mode: 'filter' }, sources: [], destinations: [], active: true };

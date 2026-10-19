@@ -964,7 +964,8 @@ export async function resolvePlugins(
         mod = staticElizaPlugin as PluginModuleShape;
       } else if (workspaceOverridePath) {
         const shouldPreferRepoNodeModules =
-          isOfficialElizaPlugin &&
+          (isOfficialElizaPlugin || (isAliceFullRuntimeProfile() &&
+            pluginName === "@rndrntwrk/plugin-555stream")) &&
           (await hasNonSymlinkWorkspaceNodeModulesPackage(pluginName));
         if (shouldPreferRepoNodeModules) {
           logger.debug(

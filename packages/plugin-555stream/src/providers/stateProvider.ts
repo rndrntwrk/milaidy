@@ -6,6 +6,7 @@
 
 import type { Provider, IAgentRuntime, Memory, State } from '../types/index.js';
 import { StreamControlService } from '../services/StreamControlService.js';
+import { isAliceNativeStreamRuntime } from '../lib/agentAuth.js';
 import type { SessionState, ProductionState, PlatformStatus } from '../types/index.js';
 
 export const stateProvider: Provider = {
@@ -16,23 +17,27 @@ export const stateProvider: Provider = {
     runtime: IAgentRuntime,
     _message: Memory,
     _state?: State
-  ): Promise<string> => {
+  ): Promise<{ text: string }> => {
     try {
       const service = runtime.getService('stream555') as StreamControlService | undefined;
 
       if (!service) {
-        return formatNotInitialized();
+        return { text: formatNotInitialized() };
       }
+
+      if (isAliceNativeStreamRuntime()) return { text: service.isReady()
+        ? 'Native Stream is configured. A verified owner can use STREAM555_STREAM_STATUS and STREAM555_CHAT_READ for current server readback. Shared Studio owns the saved program; no legacy session binding is needed.'
+        : 'Native Stream is not connected. The owner must complete native Stream authorization.' };
 
       const sessionState = service.getState();
 
       if (!sessionState) {
-        return formatNoSession(service);
+        return { text: formatNoSession(service) };
       }
 
-      return formatStateForLLM(sessionState);
+      return { text: formatStateForLLM(sessionState) };
     } catch (error) {
-      return `[555stream State Error] ${(error as Error).message}`;
+      return { text: `[555stream State Error] ${(error as Error).message}` };
     }
   },
 };

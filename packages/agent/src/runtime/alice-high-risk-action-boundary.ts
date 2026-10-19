@@ -1,4 +1,12 @@
-import type { Action, AgentRuntime, Content } from "@elizaos/core";
+import {
+  hasRoleAccess,
+  type Action,
+  type AgentRuntime,
+  type Content,
+  type IAgentRuntime,
+  type Memory,
+} from "@elizaos/core";
+import { chatReadAction, streamStatusAction } from "@rndrntwrk/plugin-555stream";
 import { aliceChatCodingAction } from "./alice-chat-coding.js";
 
 import {
@@ -42,6 +50,17 @@ const ALICE_FULL_GATED_SAFE_ACTION_SET = new Set<string>(
   ALICE_FULL_GATED_SAFE_ACTION_NAMES,
 );
 
+async function ownerStreamRead(runtime: IAgentRuntime, message: Memory): Promise<boolean> {
+  const source = message.content?.source;
+  const metadata = message.metadata as { fromBot?: unknown; source?: unknown } | undefined;
+  if (!runtime.agentId || !message.id || !message.entityId || !message.roomId ||
+      message.agentId !== runtime.agentId || message.entityId === runtime.agentId ||
+      !["client_chat", "discord", "telegram"].includes(String(source))) return false;
+  if (source !== "client_chat" && (metadata?.fromBot !== false || metadata?.source !== source)) return false;
+  try { return await hasRoleAccess(runtime, message, "OWNER"); }
+  catch { return false; }
+}
+
 export function isAliceFullGatedSafeActionName(name: string): boolean {
   return ALICE_FULL_GATED_SAFE_ACTION_SET.has(name);
 }
@@ -59,6 +78,21 @@ export function enforceAliceActionExecutionBoundary<T extends Action>(
   const marked = action as T & { [ACTION_GUARDED]?: true };
   if (marked[ACTION_GUARDED] || isAliceFullGatedSafeActionName(action.name)) {
     return action;
+  }
+  // Admit only the actual native read implementations, and recheck the owner
+  // at execution. Same-name plugins and unsupported Stream writes stay denied.
+  if (action === (chatReadAction as unknown) || action === (streamStatusAction as unknown)) {
+    const guarded = {
+      ...action,
+      validate: async (...args: Parameters<Action["validate"]>) =>
+        await ownerStreamRead(args[0], args[1]) && await action.validate(...args),
+      handler: async (...args: Parameters<Action["handler"]>) => {
+        if (await ownerStreamRead(args[0], args[1])) return action.handler(...args);
+        return { success: false, error: "ALICE_OWNER_REQUIRED", text: "Only a verified owner can read this Stream session." };
+      },
+    } as T & { [ACTION_GUARDED]?: true };
+    Object.defineProperty(guarded, ACTION_GUARDED, { value: true });
+    return guarded;
   }
   const guarded = {
     ...action,

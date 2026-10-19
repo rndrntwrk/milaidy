@@ -115,6 +115,7 @@ function formatErrorMessage(err: unknown): string {
 interface Stream555StatusLike {
   sessionId?: string;
   active: boolean;
+  status?: NativeStreamSetup['status'];
   cfSessionId?: string;
   cloudflare?: {
     isConnected?: boolean;
@@ -1281,7 +1282,7 @@ export async function handleStreamRoute(
         }
         json(res, {
           ok: true,
-          ...(alice ? { sessionId } : {}),
+          ...(alice ? { sessionId, nativeCaptureStatus: status.status } : {}),
           ...mapStream555StatusToHealth(status),
           destination: deriveStream555Destination(status),
         });

@@ -315,7 +315,9 @@ export function useCompanionStageOperator() {
         setStreamCapabilityResolved(true);
         setStreamAvailable(true);
         setStreamError(null);
-        setStreamLive(Boolean(status.running && status.ffmpegAlive));
+        setStreamLive(status.nativeCaptureStatus
+          ? status.nativeCaptureStatus === "live"
+          : Boolean(status.running && status.ffmpegAlive));
         setUptime(status.uptime ?? 0);
         setFrameCount(status.frameCount ?? 0);
         setActiveDestination(status.destination ?? null);
@@ -747,7 +749,9 @@ export function useCompanionStageOperator() {
               ),
             );
           }
-          if (!refreshed.status?.running || !refreshed.status.ffmpegAlive) {
+          if (refreshed.status?.nativeCaptureStatus
+            ? refreshed.status.nativeCaptureStatus !== "live"
+            : !refreshed.status?.running || !refreshed.status.ffmpegAlive) {
             return partial(
               t("aliceoperator.cameraLaunchPending", {
                 defaultValue:

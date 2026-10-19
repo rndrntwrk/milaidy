@@ -556,6 +556,7 @@ declare module "./client-base" {
     getStream555NativeSetup(): Promise<NativeStreamSetup>;
     streamStatus(): Promise<{
       ok: boolean;
+      nativeCaptureStatus?: NativeStreamSetup['status'];
       running: boolean;
       ffmpegAlive: boolean;
       uptime: number;

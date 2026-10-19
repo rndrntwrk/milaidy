@@ -99,6 +99,22 @@ describe("useCompanionStageOperator stream health", () => {
     vi.clearAllMocks();
   });
 
+  it("uses native capture lifecycle without a legacy FFmpeg health flag", async () => {
+    mockStreamStatus.mockResolvedValue({ running: true, ffmpegAlive: false,
+      nativeCaptureStatus: "live", uptime: 12, frameCount: 0 });
+    let tree!: TestRenderer.ReactTestRenderer;
+    let operator!: ReturnType<typeof useCompanionStageOperator>;
+    await act(async () => {
+      tree = TestRenderer.create(<Harness onOperator={value => { operator = value; }} />);
+    });
+    expect(tree.root.findByProps({ "data-testid": "operator-stream" }).props["data-live"]).toBe("true");
+    mockStreamStatus.mockResolvedValue({ running: false, ffmpegAlive: true,
+      nativeCaptureStatus: "reconnecting", uptime: 12, frameCount: 0 });
+    await act(async () => { await operator.stream.refreshStatus(); });
+    expect(tree.root.findByProps({ "data-testid": "operator-stream" }).props["data-live"]).toBe("false");
+    await act(async () => { tree.unmount(); });
+  });
+
   it("does not mark the stream live until the stream health is actually ready", async () => {
     mockStreamStatus.mockResolvedValue({
       running: true,

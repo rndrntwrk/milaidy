@@ -80,7 +80,7 @@ export interface Action {
 export interface Provider {
   name: string;
   description: string;
-  get: (runtime: IAgentRuntime, message: Memory, state?: State) => Promise<string>;
+  get: (runtime: IAgentRuntime, message: Memory, state?: State) => Promise<{ text: string }>;
 }
 
 export interface Route {

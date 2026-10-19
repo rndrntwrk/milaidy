@@ -6,6 +6,7 @@
 
 import type { Provider, IAgentRuntime, Memory, State } from '../types/index.js';
 import { StreamControlService } from '../services/StreamControlService.js';
+import { isAliceNativeStreamRuntime } from '../lib/agentAuth.js';
 
 // Action category type
 interface ActionCategory {
@@ -71,20 +72,24 @@ export const capabilitiesProvider: Provider = {
     runtime: IAgentRuntime,
     _message: Memory,
     _state?: State
-  ): Promise<string> => {
+  ): Promise<{ text: string }> => {
     try {
       const service = runtime.getService('stream555') as StreamControlService | undefined;
 
       if (!service) {
-        return formatNotInitialized();
+        return { text: formatNotInitialized() };
       }
+
+      if (isAliceNativeStreamRuntime()) return { text: service.isReady()
+        ? 'Native Stream: STREAM555_STREAM_STATUS and STREAM555_CHAT_READ are available to verified owners. Stream validates the current grant on each read. Chat is receive-only. Edit the saved program in the shared Stream Studio.'
+        : 'Native Stream capabilities are unavailable until the owner completes native authorization.' };
 
       const config = service.getConfig();
       const isReady = service.isReady();
 
-      return formatCapabilities(config?.requireApprovals ?? true, isReady);
+      return { text: formatCapabilities(config?.requireApprovals ?? true, isReady) };
     } catch (error) {
-      return `[555stream Capabilities Error] ${(error as Error).message}`;
+      return { text: `[555stream Capabilities Error] ${(error as Error).message}` };
     }
   },
 };
