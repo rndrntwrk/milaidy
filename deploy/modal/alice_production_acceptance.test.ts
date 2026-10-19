@@ -258,12 +258,14 @@ function mockRuntime(
     failRoot?: boolean;
     staleEvidence?: boolean;
     terminalScopedPause?: boolean;
+    codingPause?: Record<string, any>;
   } = {},
 ) {
   const {
     failRoot = false,
     staleEvidence = false,
     terminalScopedPause = false,
+    codingPause,
   } = options;
   let activated = false;
   let paused = true;
@@ -310,11 +312,11 @@ function mockRuntime(
     admissionGeneration: 4 + pauseCount,
     activeReleaseEpoch: 1,
     rollbackBoundary: data.expected.rollbackBoundary,
-    pausedScopes: paused
-      ? ["all"]
-      : terminalScopedPause && resumeCount >= 2
-        ? ["model"]
-        : [],
+    pausedScopes: [
+      ...(paused ? ["all"] : terminalScopedPause && resumeCount >= 2 ? ["model"] : []),
+      ...(codingPause ? ["coding"] : []),
+    ],
+    activePauses: codingPause ? { coding: structuredClone(codingPause) } : {},
     budget: { maxUnits: 10_000, usedUnits: 0 },
   });
   const chatSession = () => ({
@@ -663,6 +665,72 @@ describe("Alice terminal production acceptance", () => {
         expect(receipts).toHaveLength(0);
         expect(runtime.paused).toBe(true);
       }
+    }
+  });
+
+  test("preserves the exact existing coding pause while resuming only all", async () => {
+    const data = containerFixture();
+    const codingPause = {
+      pauseId: "pause-existing-coding",
+      pausedAt: nowMs - 1_000,
+      pausedBy: `owner:sha256:${crypto.createHash("sha256").update("owner-subject").digest("hex")}`,
+      resumedAt: null,
+      binding: { ...data.binding, releaseDigest: `sha256:${"0".repeat(64)}` },
+      deploymentManifestSha256: `sha256:${"e".repeat(64)}`,
+      rollbackBoundary: "container:alice-runtime:v49",
+    };
+    const runtime = mockRuntime(data, { codingPause });
+    const input: any = { ...acceptanceInput(data, runtime), expectedCodingPauseId: codingPause.pauseId };
+    const receipts: any[] = [];
+    input.signReceiptImpl = async (payload: any) => {
+      receipts.push(payload);
+      return `${b64(payload)}.${"s".repeat(43)}`;
+    };
+    const evidence = await runAliceProductionAcceptance(input);
+    expect(evidence.terminal).toBe(true);
+    expect(evidence.finalAuthority.pausedScopes).toEqual(["coding"]);
+    expect(evidence.finalAuthority.preservedCodingPause).toEqual(codingPause);
+    expect(receipts).toHaveLength(2);
+    expect(receipts.every(receipt => receipt.scope === "all")).toBe(true);
+    expect(runtime.paused).toBe(false);
+  });
+
+  test("rejects a missing or replaced coding pause before admission and any later record drift", async () => {
+    for (const scenario of ["missing", "replaced", "record-drift"]) {
+      const data = containerFixture();
+      const codingPause = {
+        pauseId: "pause-existing-coding", pausedAt: nowMs - 1_000,
+        pausedBy: `owner:sha256:${crypto.createHash("sha256").update("owner-subject").digest("hex")}`,
+        resumedAt: null, binding: data.binding,
+        deploymentManifestSha256: data.programAdmission.deploymentManifestSha256,
+        rollbackBoundary: data.expected.rollbackBoundary,
+      };
+      const runtime = mockRuntime(data, { codingPause });
+      const input: any = { ...acceptanceInput(data, runtime), expectedCodingPauseId: codingPause.pauseId };
+      let admissions = 0;
+      const receipts: any[] = [];
+      input.signReceiptImpl = async (payload: any) => {
+        receipts.push(payload);
+        return `${b64(payload)}.${"s".repeat(43)}`;
+      };
+      input.fetchImpl = async (url: any, init: any) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/control/api/v1/release/admit") admissions++;
+        const response = await runtime.fetchImpl(url, init);
+        if (pathname !== "/control/api/v1/state") return response;
+        const state = await response.json();
+        if (scenario === "missing") delete state.authority.activePauses.coding;
+        if (scenario === "replaced") state.authority.activePauses.coding.pauseId = "pause-another-coding";
+        if (scenario === "record-drift" && admissions > 0) state.authority.activePauses.coding.pausedAt++;
+        return Response.json(state);
+      };
+      await expect(runAliceProductionAcceptance(input)).rejects.toThrow("INVALID_CODING_PAUSE");
+      expect(runtime.paused).toBe(true);
+      if (scenario !== "record-drift") {
+        expect(admissions).toBe(0);
+        expect(receipts).toHaveLength(0);
+      }
+      expect(receipts.every(receipt => receipt.scope === "all")).toBe(true);
     }
   });
 
