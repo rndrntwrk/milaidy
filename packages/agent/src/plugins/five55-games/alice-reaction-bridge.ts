@@ -37,7 +37,7 @@ function resolveAliceVrmEmote(kind: AliceReactionKind): AliceVrmEmote {
     emoteId: emote.id,
     path: emote.path,
     duration: emote.duration,
-    loop: emote.loop,
+    loop: false,
   };
 }
 

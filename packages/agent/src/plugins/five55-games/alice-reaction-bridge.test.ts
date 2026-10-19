@@ -14,7 +14,7 @@ const decision: AliceReactionDecision = {
 };
 
 describe("AliceReactionBridge", () => {
-  it("persists Alice's reaction decision before broadcasting the real VRM emote", async () => {
+  it("persists Alice's one-shot reaction before broadcasting the real VRM emote", async () => {
     const events: string[] = [];
     let deliveredPayload: unknown;
     const bridge = new AliceReactionBridge({
@@ -43,7 +43,7 @@ describe("AliceReactionBridge", () => {
       emoteId: "dance-happy",
       path: "/animations/emotes/dance-happy.glb.gz",
       duration: 4,
-      loop: true,
+      loop: false,
     });
   });
 
