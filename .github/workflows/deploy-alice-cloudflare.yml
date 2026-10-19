@@ -1249,6 +1249,8 @@ jobs:
           NODE
       - name: Materialize signed manifest and exact-byte Worker configs
         env:
+          ALICE_GAMEPLAY_OBSERVER_TOKEN: ${{ secrets.ALICE_GAMEPLAY_OBSERVER_TOKEN }}
+          ALICE_GAMEPLAY_OBSERVER_SESSION_ID: ${{ vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID }}
           ALICE_WORKER_BUNDLE_SCHEMA_VERSION: alice.worker-bundle-artifact.v4
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29
@@ -1463,6 +1465,7 @@ jobs:
           ALICE_RUNTIME_RELEASE_TOKEN_SHA256_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token-sha256
           ALICE_EVIDENCE_QUEUE_HMAC_KEY_FILE: ${{ runner.temp }}/alice-release/.alice-evidence-queue-hmac-key
           ALICE_CLOUDFLARE_RELEASE_PHASE: prepare
+          ALICE_GAMEPLAY_OBSERVER_TOKEN: ${{ secrets.ALICE_GAMEPLAY_OBSERVER_TOKEN }}
           ALICE_GITHUB_APP_ID: ${{ secrets.ALICE_GITHUB_APP_ID }}
           ALICE_GITHUB_APP_PRIVATE_KEY_B64: ${{ secrets.ALICE_GITHUB_APP_PRIVATE_KEY_B64 }}
           ALICE_CODING_PUBLISH_TOKEN: ${{ secrets.ALICE_CODING_PUBLISH_TOKEN }}

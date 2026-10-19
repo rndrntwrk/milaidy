@@ -3,8 +3,21 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import type { IAgentRuntime } from "../types/index.js";
 import { createApprovalRequest } from "../routes/approvals.js";
 import { StreamControlService } from "./StreamControlService.js";
+import { setNativeAgentTokenPersistence } from "../lib/agentAuth.js";
+
+function nativeGrant(overrides: Record<string, unknown> = {}): string {
+  const now = Math.floor(Date.now() / 1000);
+  return [Buffer.from('{"alg":"HS256"}').toString('base64url'), Buffer.from(JSON.stringify({
+    type: 'agent', studioAuthority: 'd1-v1', iss: '555stream-studio-agent', aud: '555stream-native',
+    jti: 'grant-1', userId: 'alice', subjectUserId: 'alice', agentId: 'alice', actorId: 'actor-alice',
+    actorType: 'agent', authMethod: 'agent_key', sessionKind: 'agent_runtime', policyId: 'policy-1',
+    scopes: ['sessions:read', 'studio:write'], sessionIds: ['alice-session'], iat: now, exp: now + 604800,
+    ...overrides,
+  })).toString('base64url'), 'test-signature'].join('.');
+}
 
 const STREAM_ENV_KEYS = [
+  "STREAM555_DEFAULT_SESSION_ID",
   "STREAM555_BASE_URL",
   "STREAM555_PUBLIC_BASE_URL",
   "STREAM555_INTERNAL_BASE_URL",
@@ -12,6 +25,8 @@ const STREAM_ENV_KEYS = [
   "STREAM555_AGENT_API_KEY",
   "STREAM555_AGENT_TOKEN",
   "STREAM_API_BEARER_TOKEN",
+  "ALICE_RUNTIME_AUTHORITY_MODE",
+  "ALICE_RUNTIME_PROFILE",
   "STREAM555_DEST_PUMPFUN_ENABLED",
   "STREAM555_DEST_PUMPFUN_RTMP_URL",
   "STREAM555_DEST_PUMPFUN_STREAM_KEY",
@@ -41,6 +56,7 @@ describe("StreamControlService", () => {
   });
 
   afterEach(() => {
+    setNativeAgentTokenPersistence(undefined);
     for (const [key, value] of ORIGINAL_ENV.entries()) {
       if (value === undefined) {
         delete process.env[key];
@@ -49,6 +65,180 @@ describe("StreamControlService", () => {
       }
     }
     ORIGINAL_ENV.clear();
+  });
+
+  it("keeps Alice chat bootable and reports Stream unconnected before native authorization", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_AGENT_API_KEY", "retired-key");
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      assert.equal(service.getRuntimeState().loaded, false);
+      assert.equal(service.getRuntimeState().authenticated, false);
+      assert.equal(service.getConfig(), null);
+    } finally { await service.stop(); }
+  });
+
+  it("keeps Alice bootable with an expired native grant and reports a sanitized connection error", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    const now = Math.floor(Date.now() / 1000);
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant({ iat: now - 600, exp: now - 1 }));
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      assert.equal(service.isReady(), false);
+      assert.equal(service.getRuntimeState().authenticated, false);
+      assert.equal(service.getRuntimeState().baseUrlConfigured, true);
+      assert.ok(service.getRuntimeState().errors.includes('Native Stream authorization is unavailable; reconnect Stream'));
+      await assert.rejects(service.getStreamStatus(), /unavailable/);
+    } finally { await service.stop(); }
+  });
+
+  it("reads native stream lifecycle without claiming configured destinations are live", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant());
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    let live: Record<string, unknown> = { sessionId: 'alice-session', jobId: 'dispatch-1', status: 'reconnecting',
+      active: false, pendingJob: true, platforms: { youtube: { status: 'connecting' } },
+      lease: { expiresAt: Date.now() + 60000, autoRenew: true, nextRenewalAt: Date.now() + 30000 },
+      alwaysOnLive: { publisher: 'capture_service_rtmps', status: 'handoff_in_progress', lastHandoffReason: 'private-diagnostic' },
+      realtimeKit: { authToken: 'private-token' } };
+    globalThis.fetch = async (input, init) => {
+      assert.equal(init?.method, 'GET');
+      assert.equal(new Headers(init?.headers).get('X-Session-Id'), 'alice-session');
+      calls.push(String(input)); return Response.json(live);
+    };
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      const status = await service.getStreamStatus();
+      assert.equal(status.status, 'reconnecting');
+      assert.equal(status.active, false);
+      assert.equal(status.jobId, 'dispatch-1');
+      assert.equal(status.pendingJob, true);
+      assert.equal(status.lease?.autoRenew, true);
+      assert.deepEqual(status.platforms, { youtube: { status: 'connecting' } });
+      assert.deepEqual(status.continuity, { publisher: 'capture_service_rtmps', status: 'handoff_in_progress' });
+      assert.doesNotMatch(JSON.stringify(status), /private-/);
+      live = { sessionId: null, jobId: null, status: 'stopped', active: false, lease: null, platforms: {} };
+      assert.equal((await service.getStreamStatus()).status, 'stopped');
+      assert.equal(service.getBoundSessionId(), null);
+      for (const invalid of [
+        { sessionId: null, status: 'starting', active: false },
+        { sessionId: null, status: 'stopped', active: true },
+        { sessionId: 'foreign-session', jobId: 'dispatch-1', status: 'live', active: true },
+      ]) {
+        live = invalid;
+        await assert.rejects(service.getStreamStatus(), /configured session or current primary dispatch/);
+      }
+      assert.ok(calls.every(url => url === 'https://stream.rndrntwrk.com/api/stream/status'));
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("renews native credentials while idle and finishes persistence before stopping", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant());
+    const originalInterval = globalThis.setInterval;
+    const originalClear = globalThis.clearInterval;
+    const originalFetch = globalThis.fetch;
+    let tick: (() => void) | undefined;
+    let cleared = false;
+    const timer = { unref() {} };
+    globalThis.setInterval = ((callback: () => void, delay: number) => {
+      assert.equal(delay, 60000);
+      tick = callback;
+      return timer;
+    }) as typeof setInterval;
+    globalThis.clearInterval = ((handle: unknown) => { cleared = handle === timer; }) as typeof clearInterval;
+    let service: StreamControlService | undefined;
+    try {
+      service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+      const now = Math.floor(Date.now() / 1000);
+      setEnv("STREAM555_AGENT_TOKEN", nativeGrant({ iat: now - 172800, exp: now + 432000 }));
+      const child = nativeGrant({ jti: 'grant-2' });
+      let saved: string | undefined;
+      let release!: () => void;
+      const saving = new Promise<void>(resolve => { release = resolve; });
+      setNativeAgentTokenPersistence(async next => { saved = next; await saving; });
+      globalThis.fetch = async () => Response.json({ token: child });
+      tick?.();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      assert.equal(saved, child);
+      let stopped = false;
+      const stopping = service.stop().then(() => { stopped = true; });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      assert.equal(stopped, false);
+      assert.equal(cleared, true);
+      release();
+      await stopping;
+      assert.equal(process.env.STREAM555_AGENT_TOKEN, child);
+      assert.equal(service.getConfig(), null);
+      assert.equal(cleared, true);
+    } finally {
+      if (service) await service.stop();
+      globalThis.setInterval = originalInterval;
+      globalThis.clearInterval = originalClear;
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("relays native emotes to the configured session without a legacy bind or replay", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_INTERNAL_BASE_URL", "http://legacy-control-plane:3000");
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant());
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; body: unknown }> = [];
+    let status = 200;
+    globalThis.fetch = async (input, init) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return Response.json(status === 200 ? { ok: true, sent: true } : { error: 'unavailable' }, { status });
+    };
+    const service = await StreamControlService.start({ agentId: "alice" } as IAgentRuntime);
+    try {
+      const payload = { emoteId: 'dance-happy', path: '/animations/emotes/dance-happy.glb.gz', duration: 4, loop: false };
+      assert.deepEqual(await service.broadcastEvent('emote', payload, 'alice-session', 'dispatch-1'), { ok: true, sent: true });
+      assert.deepEqual(calls, [{
+        url: 'https://stream.rndrntwrk.com/api/agent/v1/sessions/alice-session/livekit/broadcast-event',
+        body: { topic: 'emote', payload, kind: 'reliable', dispatchId: 'dispatch-1' },
+      }]);
+      assert.equal(service.getBoundSessionId(), null);
+      await assert.rejects(service.broadcastEvent('emote', payload, 'other-session'), /configured native session/);
+      assert.equal(calls.length, 1);
+      status = 503;
+      await assert.rejects(service.broadcastEvent('emote', payload), /unavailable/);
+      assert.equal(calls.length, 2);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("preserves explicit event targets for other Stream plugin consumers", async () => {
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_AGENT_TOKEN", "private-server-token");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "default-session");
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; body: unknown }> = [];
+    globalThis.fetch = async (input, init) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return Response.json({ ok: true, sent: true });
+    };
+    const service = await StreamControlService.start({} as IAgentRuntime);
+    try {
+      assert.deepEqual(await service.broadcastEvent('emote', {}, 'other-session'), { ok: true, sent: true });
+      assert.deepEqual(calls, [{
+        url: 'https://stream.rndrntwrk.com/api/agent/v1/sessions/other-session/livekit/broadcast-event',
+        body: { topic: 'emote', payload: {} },
+      }]);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
   });
 
   it("starts through the runtime service contract and reports channel readiness", async () => {

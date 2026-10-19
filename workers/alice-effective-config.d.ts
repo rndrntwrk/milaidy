@@ -20,6 +20,10 @@ export const ALICE_AI_GATEWAY_OPTIONS: Readonly<{
 
 export function canonicalAliceJson(value: unknown): string;
 export function digestAliceEffectiveConfig(config: unknown): Promise<string>;
+export function resolveAliceGameplayObserverConfig(env: {
+  ALICE_GAMEPLAY_OBSERVER_TOKEN?: string;
+  ALICE_GAMEPLAY_OBSERVER_SESSION_ID?: string;
+}): { gameplayObserverSessionId?: string };
 export function encodeAliceDeploymentManifest(serializedManifest: string): string;
 export function buildAliceAccessEffectiveConfig(inputs: {
   accessIssuer: string;
@@ -32,9 +36,11 @@ export function buildAliceContainerAccessEffectiveConfig(inputs: {
   accessAudience: string;
   ownerEmailSha256: string;
   runtimeImage: string;
+  gameplayObserverSessionId?: string;
 }): Record<string, unknown>;
 export function buildAliceRuntimeHostEffectiveConfig(inputs: {
   runtimeImage: string;
+  gameplayObserverSessionId?: string;
 }): Record<string, unknown>;
 export function buildAliceControlEffectiveConfig(inputs: {
   accessIssuer: string;

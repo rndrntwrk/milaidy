@@ -44,6 +44,8 @@ describe("settings persistence commit ordering", () => {
     const key = "STREAM555_AGENT_API_KEY";
     const envUpdates = {
       [key]: "new",
+      STREAM555_PUBLIC_BASE_URL: "https://stream.rndrntwrk.com",
+      STREAM555_AGENT_TOKEN: "new-native-grant",
       ELIZA_LIFEOPS_PASSIVE_CONNECTORS: "false",
       ELIZA_DISCORD_OWNER_USER_IDS_JSON: '["123456789012345678"]',
       ELIZA_TELEGRAM_STANDALONE_BOT: "false",

@@ -17,6 +17,7 @@ import {
   buildAliceCodingSandboxEffectiveConfig,
   canonicalAliceJson,
   encodeAliceDeploymentManifest,
+  resolveAliceGameplayObserverConfig,
   verifyAliceEffectiveConfigBinding,
 } from "../../workers/alice-effective-config.js";
 import {
@@ -286,6 +287,9 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
         accessAudience: identityConfig.vars?.ALICE_ACCESS_AUDIENCE,
         ownerEmailSha256: identityConfig.vars?.ALICE_OWNER_EMAIL_SHA256,
         runtimeImage: identityConfig.vars?.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+        ...(identityConfig.vars?.ALICE_GAMEPLAY_OBSERVER_SESSION_ID === undefined ? {} : {
+          gameplayObserverSessionId: identityConfig.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID,
+        }),
         runtimeContainerName: "alice-production-runtime",
         runtimePort: 2138,
         runtimeEgress: "deny-by-default",
@@ -325,6 +329,9 @@ export function aliceEffectiveConfigFromWrangler(role, config, options = {}) {
       },
       values: {
         runtimeImage: identityConfig.containers?.[0]?.image,
+        ...(identityConfig.vars?.ALICE_GAMEPLAY_OBSERVER_SESSION_ID === undefined ? {} : {
+          gameplayObserverSessionId: identityConfig.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID,
+        }),
         runtimeContainerName: identityConfig.containers?.[0]?.name,
         runtimePort: 2138,
         runtimeEgress: "deny-by-default",
@@ -673,6 +680,22 @@ export function materializeAliceWranglerConfig(role, sourceConfig, values) {
   }
   config.unsafe = { metadata: { keep_bindings: [] } };
   config.vars ??= {};
+  if (role === "access" || role === "runtimeHost") {
+    const observer = Object.hasOwn(values, "gameplayObserverSessionId")
+      ? { gameplayObserverSessionId: values.gameplayObserverSessionId } : {};
+    buildAliceRuntimeHostEffectiveConfig({ runtimeImage: values.runtimeImage, ...observer });
+    if (!Array.isArray(config.secrets?.required)) {
+      throw new Error("ALICE_WRANGLER_CONFIG_INVALID");
+    }
+    delete config.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID;
+    config.secrets.required = config.secrets.required.filter(
+      (name) => name !== "ALICE_GAMEPLAY_OBSERVER_TOKEN",
+    );
+    if (observer.gameplayObserverSessionId) {
+      config.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID = observer.gameplayObserverSessionId;
+      config.secrets.required.push("ALICE_GAMEPLAY_OBSERVER_TOKEN");
+    }
+  }
   if (role === "access") {
     Object.assign(config.vars, {
       ALICE_ACCESS_ISSUER: values.accessIssuer,
@@ -781,6 +804,7 @@ const invokedPath = process.argv[1]
   : "";
 if (invokedPath === import.meta.url) {
   try {
+    const observer = resolveAliceGameplayObserverConfig(process.env);
     const sourceRoot = process.env.ALICE_SOURCE_ROOT;
     const outputDir = process.env.ALICE_WRANGLER_OUTPUT_DIR;
     const manifestPath = process.env.ALICE_DEPLOYMENT_MANIFEST_PATH;
@@ -815,11 +839,13 @@ if (invokedPath === import.meta.url) {
         accessAudience: commonValues.accessAudience,
         ownerEmailSha256: commonValues.ownerEmailSha256,
         runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+        ...observer,
       }),
       runtimeHost: (verifiedManifest.schemaVersion === "alice.deployment-manifest.v4"
         ? buildAliceCodingRuntimeHostEffectiveConfig
         : buildAliceRuntimeHostEffectiveConfig)({
         runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+        ...observer,
       }),
       control: (verifiedManifest.schemaVersion === "alice.deployment-manifest.v4"
         ? buildAliceCodingControlEffectiveConfig
@@ -876,6 +902,7 @@ if (invokedPath === import.meta.url) {
         ? {
             ...commonValues,
             runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+            ...observer,
           }
         : role === "control"
           ? {

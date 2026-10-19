@@ -9,6 +9,10 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./auth": {
+      "import": "./src/lib/agentAuth.ts",
+      "types": "./src/lib/agentAuth.ts"
     }
   },
   "files": [

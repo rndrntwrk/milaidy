@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -41,12 +42,17 @@ test("ports the Alice operator route into the official agent idempotently", asyn
       'export const EMOTE_CATALOG = [{ id: "dance-happy" }];\n',
     );
 
+    for (const relative of ["api/alice-gameplay-observation-routes.ts", "plugins/five55-games/alice-gameplay-observer.ts", "plugins/five55-games/alice-gameplay-memory-persistence.ts", "plugins/five55-games/alice-reaction-bridge.ts"]) {
+      await mkdir(path.dirname(path.join(root, "packages/agent/src", relative)), {recursive:true});
+      await writeFile(path.join(root,"packages/agent/src",relative), await readFile(path.join(repoRoot,"packages/agent/src",relative)));
+    }
+
     const avatarImport =
       'import { handleAvatarRoutes } from "./avatar-routes.ts";\n';
     const avatarDispatch = `  // ── Avatar routes (extracted to avatar-routes.ts) ───────────────────\n  if (\n    await handleAvatarRoutes({\n      req,\n      res,\n      method,\n      pathname,\n      json,\n      error,\n    })\n  ) {\n    return;\n  }\n`;
     await writeFile(
       path.join(officialApi, "server.ts"),
-      `${avatarImport}\nasync function route() {\n${avatarDispatch}}\n`,
+      `${avatarImport}\nasync function route() {\n  const pathname = url.pathname;\n${avatarDispatch}}\n`,
     );
 
     await portAliceOperatorBridge(root);
@@ -61,6 +67,10 @@ test("ports the Alice operator route into the official agent idempotently", asyn
     assert.match(firstRoute, /"STREAM555_AD_LIST"/);
     assert.match(firstRoute, /"STREAM555_ADS_STATUS"/);
     assert.match(firstServer, /handleAliceEmoteRoutes/);
+    assert.equal((firstServer.match(/handleAliceGameplayObservationRoutes/g) ?? []).length, 2);
+    assert.ok(firstServer.indexOf("await handleAliceGameplayObservationRoutes") < firstServer.indexOf("await handleAvatarRoutes"));
+    assert.match(await readFile(path.join(officialApi,"alice-gameplay-observation-routes.ts"),"utf8"), /alice-gameplay-observer.ts/);
+    assert.match(await readFile(path.join(root,"eliza/packages/agent/src/plugins/five55-games/alice-reaction-bridge.ts"),"utf8"), /emotes\/catalog.ts/);
     assert.match(
       await readFile(path.join(officialApi, "alice-emote-routes.ts"), "utf8"),
       /\.\.\/emotes\/catalog\.ts/,
@@ -98,8 +108,11 @@ test("ports into the exact pinned official Eliza server shape", async () => {
       readFile(path.join(repoRoot, "packages/agent/src/api/alice-operator-routes.ts")).then(
         (contents) => writeFile(path.join(aliceApi, "alice-operator-routes.ts"), contents),
       ),
-      readFile(path.join(repoRoot, "eliza/packages/agent/src/api/server.ts")).then(
-        (contents) => writeFile(path.join(officialApi, "server.ts"), contents),
+      readFile(process.env.ALICE_OFFICIAL_SERVER_TEST_FIXTURE ?? path.join(repoRoot, "eliza/packages/agent/src/api/server.ts")).then(
+        (contents) => {
+          if (process.env.ALICE_OFFICIAL_SERVER_TEST_FIXTURE) assert.equal(createHash("sha256").update(contents).digest("hex"),"c3aa4e12bca6e42546f8cae3c6db7b983fc8eb85238b87b6082f61c1f7bcc085");
+          return writeFile(path.join(officialApi, "server.ts"), contents);
+        },
       ),
       readFile(path.join(repoRoot, "packages/agent/src/api/alice-emote-routes.ts")).then(
         (contents) => writeFile(path.join(aliceApi, "alice-emote-routes.ts"), contents),
@@ -108,6 +121,11 @@ test("ports into the exact pinned official Eliza server shape", async () => {
         (contents) => writeFile(path.join(aliceEmotes, "catalog.ts"), contents),
       ),
     ]);
+
+    for (const relative of ["api/alice-gameplay-observation-routes.ts", "plugins/five55-games/alice-gameplay-observer.ts", "plugins/five55-games/alice-gameplay-memory-persistence.ts", "plugins/five55-games/alice-reaction-bridge.ts"]) {
+      await mkdir(path.dirname(path.join(root,"packages/agent/src",relative)), {recursive:true});
+      await writeFile(path.join(root,"packages/agent/src",relative), await readFile(path.join(repoRoot,"packages/agent/src",relative)));
+    }
 
     await portAliceOperatorBridge(root);
     const server = await readFile(path.join(officialApi, "server.ts"), "utf8");

@@ -52,6 +52,9 @@ test("builds a fail-closed Container environment for gateway auth, release proof
     ALICE_ELIZA_COMMIT: "9".repeat(40),
     ALICE_RUNTIME_REVISION: "49",
   };
+  expect(build({...input, ALICE_GAMEPLAY_OBSERVER_TOKEN:"o".repeat(32), ALICE_GAMEPLAY_OBSERVER_SESSION_ID:"session-1"})).toMatchObject({ALICE_GAMEPLAY_OBSERVER_TOKEN:"o".repeat(32), ALICE_GAMEPLAY_OBSERVER_SESSION_ID:"session-1"});
+  expect(() => build({...input, ALICE_GAMEPLAY_OBSERVER_TOKEN:"short",ALICE_GAMEPLAY_OBSERVER_SESSION_ID:"session-1"})).toThrow();
+  expect(() => build({...input, ALICE_GAMEPLAY_OBSERVER_TOKEN:"o".repeat(32)})).toThrow();
   const result = build(input);
 
   expect(result).toMatchObject({

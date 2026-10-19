@@ -392,6 +392,74 @@ function valuesForRole(role) {
       : commonValues;
 }
 
+test("observer configuration is optional and rejects incomplete or invalid credentials", () => {
+  const resolve = aliceEffectiveConfigModule.resolveAliceGameplayObserverConfig;
+  assert.deepEqual(resolve({}), {});
+  assert.deepEqual(resolve({
+    ALICE_GAMEPLAY_OBSERVER_TOKEN: "",
+    ALICE_GAMEPLAY_OBSERVER_SESSION_ID: "",
+  }), {});
+  const enabled = {
+    ALICE_GAMEPLAY_OBSERVER_TOKEN: "test-observer-token-".repeat(3),
+    ALICE_GAMEPLAY_OBSERVER_SESSION_ID: "observer-session-test",
+  };
+  assert.deepEqual(resolve(enabled), {
+    gameplayObserverSessionId: enabled.ALICE_GAMEPLAY_OBSERVER_SESSION_ID,
+  });
+  for (const invalid of [
+    { ALICE_GAMEPLAY_OBSERVER_TOKEN: enabled.ALICE_GAMEPLAY_OBSERVER_TOKEN },
+    { ALICE_GAMEPLAY_OBSERVER_SESSION_ID: enabled.ALICE_GAMEPLAY_OBSERVER_SESSION_ID },
+    { ...enabled, ALICE_GAMEPLAY_OBSERVER_TOKEN: "short" },
+    { ...enabled, ALICE_GAMEPLAY_OBSERVER_SESSION_ID: "../other" },
+    { ...enabled, ALICE_GAMEPLAY_OBSERVER_SESSION_ID: ".." },
+  ]) {
+    assert.throws(() => resolve(invalid), /ALICE_GAMEPLAY_OBSERVER_CONFIG_INVALID/);
+  }
+});
+
+test("observer session and secret binding round-trip together without materializing secret values", () => {
+  const token = "test-observer-secret-".repeat(3);
+  const observer = aliceEffectiveConfigModule.resolveAliceGameplayObserverConfig({
+    ALICE_GAMEPLAY_OBSERVER_TOKEN: token,
+    ALICE_GAMEPLAY_OBSERVER_SESSION_ID: "observer-session-test",
+  });
+  for (const role of ["access", "runtimeHost"]) {
+    const inputs = role === "access" ? {
+      accessIssuer: commonValues.accessIssuer,
+      accessAudience: commonValues.accessAudience,
+      ownerEmailSha256: owner,
+      runtimeImage: runtimeContainerImage,
+    } : { runtimeImage: runtimeContainerImage };
+    const builder = role === "access"
+      ? buildAliceContainerAccessEffectiveConfig
+      : buildAliceCodingRuntimeHostEffectiveConfig;
+    const effective = builder({ ...inputs, ...observer });
+    const config = materializeAliceWranglerConfig(role, source[role], {
+      ...valuesForRole(role), ...observer,
+    });
+    assert.equal(config.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID, observer.gameplayObserverSessionId);
+    assert.ok(config.secrets.required.includes("ALICE_GAMEPLAY_OBSERVER_TOKEN"));
+    assert.equal(JSON.stringify(config).includes(token), false);
+    assert.deepEqual(assertAliceWranglerMatchesEffectiveConfig(role, config, effective), effective);
+    assert.throws(() => builder({ ...inputs, gameplayObserverSessionId: "../other" }),
+      /ALICE_GAMEPLAY_OBSERVER_CONFIG_INVALID/);
+    for (const mutate of [
+      (value) => { delete value.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID; },
+      (value) => { value.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID = "another-session"; },
+      (value) => { value.secrets.required = value.secrets.required.filter((name) => name !== "ALICE_GAMEPLAY_OBSERVER_TOKEN"); },
+    ]) {
+      const changed = structuredClone(config);
+      mutate(changed);
+      assert.throws(() => assertAliceWranglerMatchesEffectiveConfig(role, changed, effective),
+        /ALICE_WRANGLER_EFFECTIVE_CONFIG_MISMATCH/);
+    }
+    const disabled = materializeAliceWranglerConfig(role, source[role], valuesForRole(role));
+    assert.equal(Object.hasOwn(disabled.vars, "ALICE_GAMEPLAY_OBSERVER_SESSION_ID"), false);
+    assert.equal(disabled.secrets.required.includes("ALICE_GAMEPLAY_OBSERVER_TOKEN"), false);
+    assert.deepEqual(assertAliceWranglerMatchesEffectiveConfig(role, disabled, expected[role]), expected[role]);
+  }
+});
+
 test("renders every canonical effective config from its deployable Wrangler file", () => {
   for (const role of releaseRoles) {
     assert.deepEqual(rendered(role).unsafe, {

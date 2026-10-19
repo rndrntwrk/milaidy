@@ -43,6 +43,27 @@ const bom = {
 };
 
 describe("Alice final-image capability runtime inventory", () => {
+  it("loads native Stream before connection without resuming the GitHub capability", () => {
+    const policy = JSON.parse(fs.readFileSync(new URL(
+      "../../../../deploy/alice/alice-capability-policy.v1.json", import.meta.url), "utf8"));
+    const previousMode = process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+    const previousProfile = process.env.ALICE_RUNTIME_PROFILE;
+    try {
+      process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+      process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+      const packages = collectPluginNames({});
+      enforceAliceFullGatedCapabilityPolicy(packages, policy);
+      expect(packages.has("@rndrntwrk/plugin-555stream")).toBe(true);
+      expect(packages.has("@elizaos/plugin-github")).toBe(false);
+      expect(policy.entries.find((entry: AliceCapabilityBomEntry) => entry.id === "package:@rndrntwrk/plugin-555stream"))
+        .toMatchObject({ classification: "core", runtimeNames: ["555stream"], policyState: "enabled" });
+    } finally {
+      if (previousMode === undefined) delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+      else process.env.ALICE_RUNTIME_AUTHORITY_MODE = previousMode;
+      if (previousProfile === undefined) delete process.env.ALICE_RUNTIME_PROFILE;
+      else process.env.ALICE_RUNTIME_PROFILE = previousProfile;
+    }
+  });
   it("attests every bounded heavy or platform-specific adapter", () => {
     expect(aliceDelegatedCapabilityAdapters).toEqual({
       cloudflareWorkflows: {
