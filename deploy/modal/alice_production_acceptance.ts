@@ -187,14 +187,41 @@ function normalizedPausedScopes(value: unknown): string[] {
   return normalized;
 }
 
+export function assertAliceAcceptanceCodingPause({
+  state, pauseId, ownerActor,
+}: Record<string, any>): Record<string, any> {
+  const authority = state.authority;
+  const pause = authority?.activePauses?.coding;
+  if (!/^pause-[A-Za-z0-9-]{8,128}$/.test(pauseId ?? "") ||
+    typeof ownerActor !== "string" || !ownerActor ||
+    state.ok !== true || !object(pause) ||
+    pause.pauseId !== pauseId || pause.pausedBy !== ownerActor ||
+    pause.resumedAt !== null || !Number.isSafeInteger(pause.pausedAt) || pause.pausedAt <= 0 ||
+    !object(pause.binding) ||
+    ![pause.binding.programDigest, pause.binding.releaseDigest, pause.binding.policyHash,
+      pause.deploymentManifestSha256].every(value => typeof value === "string" && DIGEST.test(value)) ||
+    !/^(?:container|modal):alice-runtime:v[1-9][0-9]*$/.test(pause.rollbackBoundary ?? "") ||
+    !exact(normalizedPausedScopes(authority?.pausedScopes), ["all", "coding"])) {
+    invalid("ALICE_PRODUCTION_ACCEPTANCE_INVALID_CODING_PAUSE");
+  }
+  return structuredClone(pause);
+}
+
 function assertCandidateState(
   value: Record<string, any>,
   expected: any,
   expectedPausedScopes: string[],
+  expectedCodingPause: Record<string, any> | null = null,
 ): Record<string, any> {
   const authority = value.authority;
+  if (expectedCodingPause && (!object(authority?.activePauses?.coding) ||
+    !exact(authority.activePauses.coding, expectedCodingPause))) {
+    invalid("ALICE_PRODUCTION_ACCEPTANCE_INVALID_CODING_PAUSE");
+  }
   const observedPausedScopes = normalizedPausedScopes(authority?.pausedScopes);
-  const intendedPausedScopes = normalizedPausedScopes(expectedPausedScopes);
+  const intendedPausedScopes = normalizedPausedScopes([
+    ...expectedPausedScopes, ...(expectedCodingPause ? ["coding"] : []),
+  ]);
   if (
     value.ok !== true || !object(authority) ||
     !exact(authority.binding, expected.binding) ||
@@ -208,9 +235,9 @@ function assertCandidateState(
 }
 
 export function assertAliceAcceptanceRecoveryPause({
-  state, expected, pauseId, ownerActor,
+  state, expected, pauseId, ownerActor, expectedCodingPause = null,
 }: Record<string, any>) {
-  const authority = assertCandidateState(state, expected, ["all"]);
+  const authority = assertCandidateState(state, expected, ["all"], expectedCodingPause);
   const pause = authority.activePauses?.all;
   if (!/^pause-[A-Za-z0-9-]{8,128}$/.test(pauseId ?? "") ||
       pause?.pauseId !== pauseId || pause.pausedBy !== ownerActor ||
@@ -531,12 +558,18 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     programAdmission,
     deploymentPauseEvidence,
     recoveryPauseId,
+    expectedCodingPauseId,
     rollbackAnchor,
     cloudflareRollbackProof,
     cloudflareLiveReadback,
     modalPromotionEvidence,
     containerImageEvidence,
   } = input;
+  if (expectedCodingPauseId !== undefined &&
+    (typeof expectedCodingPauseId !== "string" ||
+      !/^pause-[A-Za-z0-9-]{8,128}$/.test(expectedCodingPauseId))) {
+    invalid("ALICE_PRODUCTION_ACCEPTANCE_INVALID_CODING_PAUSE");
+  }
   if (
     typeof fetchImpl !== "function" || typeof sleepImpl !== "function" ||
     typeof now !== "function" || typeof randomUuid !== "function" ||
@@ -645,12 +678,21 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     nowSeconds: Math.floor(startedAt / 1000),
   });
   let recoveryPause = null;
-  if (recoveryPauseId) {
+  let expectedCodingPause: Record<string, any> | null = null;
+  if (recoveryPauseId || expectedCodingPauseId) {
     const state = await ownerJson(fetchImpl, ownerAuthorization, "/control/api/v1/state");
     if (!state.response.ok) invalid();
-    recoveryPause = assertAliceAcceptanceRecoveryPause({
-      state: state.value, expected, pauseId: recoveryPauseId, ownerActor: owner.actor,
-    });
+    if (expectedCodingPauseId) {
+      expectedCodingPause = assertAliceAcceptanceCodingPause({
+        state: state.value, pauseId: expectedCodingPauseId, ownerActor: owner.actor,
+      });
+    }
+    if (recoveryPauseId) {
+      recoveryPause = assertAliceAcceptanceRecoveryPause({
+        state: state.value, expected, pauseId: recoveryPauseId, ownerActor: owner.actor,
+        expectedCodingPause,
+      });
+    }
   }
 
   const unauthenticated = await fetchImpl(`${OWNER_ORIGIN}/`, {
@@ -849,7 +891,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       ownerAuthorization,
       "/control/api/v1/state",
     );
-    const authority = assertCandidateState(preBudgetState.value, expected, []);
+    const authority = assertCandidateState(preBudgetState.value, expected, [], expectedCodingPause);
     const maxUnits = authority.budget?.maxUnits;
     if (!Number.isSafeInteger(maxUnits) || maxUnits < 1 || maxUnits > 100_000) {
       invalid();
@@ -990,7 +1032,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       ownerAuthorization,
       "/control/api/v1/state",
     );
-    assertCandidateState(pausedState.value, expected, ["all"]);
+    assertCandidateState(pausedState.value, expected, ["all"], expectedCodingPause);
 
     const pauseReceiptSha256 = await resumePause({
       fetchImpl,
@@ -1018,7 +1060,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
       ownerAuthorization,
       "/control/api/v1/state",
     );
-    const finalAuthority = assertCandidateState(finalState.value, expected, []);
+    const finalAuthority = assertCandidateState(finalState.value, expected, [], expectedCodingPause);
     const finalGateway = await ownerJson(
       fetchImpl,
       ownerAuthorization,
@@ -1159,6 +1201,7 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
         admissionGeneration: finalAuthority.admissionGeneration,
         pausedScopes: finalAuthority.pausedScopes,
         rollbackBoundary: finalAuthority.rollbackBoundary,
+        ...(expectedCodingPause ? { preservedCodingPause: expectedCodingPause } : {}),
       },
       provenance: {
         runtimeBoundaryProofSha256: digestBytes(canonicalAliceJson(proof.value)),
@@ -1250,6 +1293,7 @@ async function main() {
     releaseAccessClientSecret: process.env.ALICE_RELEASE_ACCESS_CLIENT_SECRET,
     deploymentPauseToken: process.env.ALICE_DEPLOYMENT_PAUSE_TOKEN,
     recoveryPauseId,
+    expectedCodingPauseId: process.env.ALICE_EXPECTED_CODING_PAUSE_ID || undefined,
     cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN,
     deploymentRunId: process.env.ALICE_DEPLOYMENT_RUN_ID,
     deploymentRunAttempt: Number(process.env.ALICE_DEPLOYMENT_RUN_ATTEMPT),

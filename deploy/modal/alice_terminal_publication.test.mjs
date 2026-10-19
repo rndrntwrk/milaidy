@@ -235,6 +235,24 @@ function writeJson(directory, name, value) {
   return filePath;
 }
 
+function codingPause() {
+  return {
+    pauseId: "pause-existing-coding",
+    pausedAt: Date.parse("2026-08-22T12:00:00.000Z"),
+    pausedBy: `owner:sha256:${"7".repeat(64)}`,
+    resumedAt: null,
+    resumedBy: null,
+    recoveryReceipt: null,
+    binding: {
+      programDigest: `sha256:${"3".repeat(64)}`,
+      releaseDigest: `sha256:${"4".repeat(64)}`,
+      policyHash: `sha256:${"5".repeat(64)}`,
+    },
+    deploymentManifestSha256: `sha256:${"2".repeat(64)}`,
+    rollbackBoundary: "container:alice-runtime:v49",
+  };
+}
+
 test("accepts only a terminal artifact from the final successful workflow conclusion", () => {
   const verified = verifyAliceTerminalPublication(fixture());
   assert.equal(verified.terminal, true);
@@ -269,6 +287,38 @@ test("accepts Container terminal publication without reading Modal evidence", ()
     Object.hasOwn(verified, "currentModalProviderReadbackSha256"),
     false,
   );
+});
+
+test("accepts only the explicitly expected complete preserved coding pause", () => {
+  const input = containerFixture();
+  input.expectedCodingPause = codingPause();
+  input.acceptance.finalAuthority = {
+    pausedScopes: ["coding"],
+    preservedCodingPause: structuredClone(input.expectedCodingPause),
+  };
+  assert.equal(verifyAliceTerminalPublication(input).terminal, true);
+  for (const mutate of [
+    (value) => { delete value.expectedCodingPause; },
+    (value) => { value.acceptance.finalAuthority.pausedScopes.push("model"); },
+    (value) => { delete value.acceptance.finalAuthority.preservedCodingPause; },
+    (value) => { value.acceptance.finalAuthority.preservedCodingPause.pausedAt++; },
+    (value) => { value.expectedCodingPause.resumedAt = 1; },
+  ]) {
+    const changed = structuredClone(input);
+    mutate(changed);
+    assert.throws(() => verifyAliceTerminalPublication(changed), /ALICE_TERMINAL_PUBLICATION_INVALID/);
+  }
+});
+
+test("binds retained-image workflow head to its explicitly expected controller", () => {
+  const input = containerFixture();
+  input.expectedControllerSha = "8".repeat(40);
+  input.workflowRun.head_sha = input.expectedControllerSha;
+  assert.equal(verifyAliceTerminalPublication(input).terminal, true);
+  delete input.expectedControllerSha;
+  assert.throws(() => verifyAliceTerminalPublication(input), /ALICE_TERMINAL_PUBLICATION_INVALID/);
+  input.expectedControllerSha = "9".repeat(40);
+  assert.throws(() => verifyAliceTerminalPublication(input), /ALICE_TERMINAL_PUBLICATION_INVALID/);
 });
 
 test("rejects ambiguous or absent terminal provider evidence", () => {
@@ -388,6 +438,23 @@ test("CLI accepts only the conditional Container evidence path", (t) => {
     verified.containerImageEvidenceSha256,
     digest(input.containerImageEvidence),
   );
+
+  input.workflowRun.head_sha = "8".repeat(40);
+  input.acceptance.finalAuthority = {
+    pausedScopes: ["coding"], preservedCodingPause: codingPause(),
+  };
+  writeJson(directory, "workflow.json", input.workflowRun);
+  writeJson(directory, "acceptance.json", input.acceptance);
+  const preserved = spawnSync(process.execPath, [terminalPublicationPath], {
+    encoding: "utf8",
+    env: {
+      ...env,
+      ALICE_DEPLOYMENT_CONTROLLER_COMMIT: input.workflowRun.head_sha,
+      ALICE_EXPECTED_CODING_PAUSE_PATH: writeJson(directory, "coding-pause.json", codingPause()),
+    },
+  });
+  assert.equal(preserved.status, 0, preserved.stderr);
+  assert.equal(JSON.parse(preserved.stdout).terminal, true);
 
   const missingProvider = { ...env };
   delete missingProvider.ALICE_CONTAINER_IMAGE_EVIDENCE_PATH;
