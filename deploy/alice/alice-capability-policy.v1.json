@@ -1000,16 +1000,16 @@
     },
     {
       "id": "package:@rndrntwrk/plugin-555stream",
-      "classification": "policy-disabled",
+      "classification": "core",
       "source": {
         "type": "package",
         "package": "@rndrntwrk/plugin-555stream",
         "entrypoint": "."
       },
       "surface": "plugin",
-      "runtimeNames": [],
+      "runtimeNames": ["555stream"],
       "adapter": null,
-      "policyState": "disabled"
+      "policyState": "enabled"
     },
     {
       "id": "platform:browser-onnx-runtime",

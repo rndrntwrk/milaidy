@@ -884,6 +884,8 @@ jobs:
 
       - name: Materialize fresh signed-input manifest and provider readback
         env:
+          ALICE_GAMEPLAY_OBSERVER_TOKEN: ${{ secrets.ALICE_GAMEPLAY_OBSERVER_TOKEN }}
+          ALICE_GAMEPLAY_OBSERVER_SESSION_ID: ${{ vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID }}
           ALICE_WORKER_BUNDLE_SCHEMA_VERSION: alice.worker-bundle-artifact.v4
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 036df6c823669b8fa2f66cf4c16eeb29

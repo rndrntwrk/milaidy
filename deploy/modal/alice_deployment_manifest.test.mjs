@@ -311,6 +311,36 @@ test("v4 binds the coding Sandbox Worker", async () => {
     role: "codingSandbox",
     effectiveConfig: codingInputs.codingSandboxEffectiveConfig,
   });
+  const gameplayObserverSessionId = "observer-session-test";
+  const observerInputs = {
+    ...codingInputs,
+    accessEffectiveConfig: buildAliceContainerAccessEffectiveConfig({
+      accessIssuer: containerAccessEffectiveConfig.values.accessIssuer,
+      accessAudience,
+      ownerEmailSha256: accessPolicyReadback.ownerEmailSha256,
+      runtimeImage: codingInputs.runtimeImage,
+      gameplayObserverSessionId,
+    }),
+    runtimeHostEffectiveConfig: buildAliceCodingRuntimeHostEffectiveConfig({
+      runtimeImage: codingInputs.runtimeImage,
+      gameplayObserverSessionId,
+    }),
+  };
+  const observerManifest = await buildAliceDeploymentManifest(observerInputs);
+  assert.notEqual(observerManifest.cloudflare.accessConfigSha256, manifest.cloudflare.accessConfigSha256);
+  assert.notEqual(observerManifest.cloudflare.runtimeHostConfigSha256, manifest.cloudflare.runtimeHostConfigSha256);
+  assert.deepEqual(verifyAliceDeploymentManifest(serializeAliceDeploymentManifest(observerManifest)), observerManifest);
+  for (const override of [
+    { accessEffectiveConfig: codingInputs.accessEffectiveConfig },
+    { runtimeHostEffectiveConfig: codingInputs.runtimeHostEffectiveConfig },
+    { runtimeHostEffectiveConfig: buildAliceCodingRuntimeHostEffectiveConfig({
+      runtimeImage: codingInputs.runtimeImage,
+      gameplayObserverSessionId: "another-session",
+    }) },
+  ]) {
+    await assert.rejects(() => buildAliceDeploymentManifest({ ...observerInputs, ...override }),
+      /ALICE_DEPLOYMENT_MANIFEST_INPUT_INVALID/);
+  }
 });
 
 test("rejects substituted targets, ambiguous bytes, and self-referential fields", async () => {

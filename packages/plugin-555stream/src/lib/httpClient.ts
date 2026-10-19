@@ -28,8 +28,8 @@ export class HttpClient {
   /**
    * Make a GET request
    */
-  async get<T>(path: string): Promise<ApiResponse<T>> {
-    return this.request<T>('GET', path);
+  async get<T>(path: string, options?: { headers?: Record<string, string> }): Promise<ApiResponse<T>> {
+    return this.request<T>('GET', path, undefined, options);
   }
 
   /**

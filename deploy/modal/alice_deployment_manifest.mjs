@@ -18,6 +18,7 @@ import {
   buildAliceStatePlaneEffectiveConfig,
   canonicalAliceJson,
   digestAliceEffectiveConfig,
+  resolveAliceGameplayObserverConfig,
 } from "../../workers/alice-effective-config.js";
 import {
   buildAliceAccessPolicyProviderConfig,
@@ -95,6 +96,11 @@ function effectiveConfigsAreCanonical(value) {
     const containerMode =
       value.accessEffectiveConfig?.schemaVersion ===
       "alice.container-access-effective-config.v2";
+    const observer = accessValues?.gameplayObserverSessionId === undefined ? {} : {
+      gameplayObserverSessionId: accessValues.gameplayObserverSessionId,
+    };
+    if (containerMode && accessValues?.gameplayObserverSessionId !==
+      value.runtimeHostEffectiveConfig?.values?.gameplayObserverSessionId) return false;
     const codingMode = value.workerBundleArtifact?.schemaVersion ===
       "alice.worker-bundle-artifact.v4";
     const expectedAccess =
@@ -104,6 +110,7 @@ function effectiveConfigsAreCanonical(value) {
             accessAudience: accessValues?.accessAudience,
             ownerEmailSha256: accessValues?.ownerEmailSha256,
             runtimeImage: accessValues?.runtimeImage,
+            ...observer,
           })
         : buildAliceAccessEffectiveConfig({
             accessIssuer: accessValues?.accessIssuer,
@@ -135,6 +142,7 @@ function effectiveConfigsAreCanonical(value) {
         ? buildAliceCodingRuntimeHostEffectiveConfig
         : buildAliceRuntimeHostEffectiveConfig)({
           runtimeImage: value.runtimeHostEffectiveConfig?.values?.runtimeImage,
+          ...observer,
         })
       : null;
     const expectedStatePlane = buildAliceStatePlaneEffectiveConfig({
@@ -518,12 +526,14 @@ const invokedPath = process.argv[1]
   : "";
 if (invokedPath === import.meta.url) {
   try {
+    const observer = resolveAliceGameplayObserverConfig(process.env);
     const runtimeRevision = Number(process.env.ALICE_RUNTIME_REVISION);
     const accessEffectiveConfig = buildAliceContainerAccessEffectiveConfig({
       accessIssuer: process.env.ALICE_ACCESS_ISSUER,
       accessAudience: process.env.ALICE_ACCESS_AUDIENCE,
       ownerEmailSha256: process.env.ALICE_OWNER_EMAIL_SHA256,
       runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+      ...observer,
     });
     const codingMode = process.env.ALICE_WORKER_BUNDLE_SCHEMA_VERSION ===
       "alice.worker-bundle-artifact.v4";
@@ -531,6 +541,7 @@ if (invokedPath === import.meta.url) {
       ? buildAliceCodingRuntimeHostEffectiveConfig
       : buildAliceRuntimeHostEffectiveConfig)({
       runtimeImage: process.env.ALICE_CLOUDFLARE_RUNTIME_IMAGE,
+      ...observer,
     });
     const controlEffectiveConfig = (codingMode
       ? buildAliceCodingControlEffectiveConfig

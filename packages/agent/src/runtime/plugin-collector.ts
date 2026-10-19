@@ -304,6 +304,7 @@ export function collectPluginNames(
       "@elizaos/plugin-telegram",
       "@elizaos/plugin-discord",
       "@elizaos/plugin-github",
+      STREAM555_PLUGIN_PACKAGE,
     ]) {
       pluginsToLoad.add(name);
       track(name, "Alice full runtime");

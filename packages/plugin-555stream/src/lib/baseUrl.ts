@@ -31,6 +31,10 @@ export function isInternalAgentId(agentId: string | undefined): boolean {
 
 export function resolveStream555BaseUrl(agentId: string | undefined): string {
   const publicBaseUrl = trimEnv(STREAM555_PUBLIC_BASE_ENV);
+  if (process.env.ALICE_RUNTIME_AUTHORITY_MODE === 'proposer-only' &&
+      process.env.ALICE_RUNTIME_PROFILE === 'full-gated') {
+    return publicBaseUrl || DEFAULT_STREAM555_PUBLIC_BASE_URL;
+  }
   const internalBaseUrl = trimEnv(STREAM555_INTERNAL_BASE_ENV);
   const legacyBaseUrl = trimEnv(STREAM555_BASE_ENV);
   const hasSplitBaseUrls = Boolean(publicBaseUrl || internalBaseUrl);

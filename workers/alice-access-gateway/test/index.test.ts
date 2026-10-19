@@ -45,7 +45,8 @@ const releaseSource = {
   runtimeBuildManifestSha256: `sha256:${"8".repeat(64)}`,
   elizaCommit: "7".repeat(40),
 };
-const testDeploymentManifest = await buildAliceDeploymentManifest({
+function createTestDeploymentManifest(gameplayObserverSessionId?: string) {
+return buildAliceDeploymentManifest({
   releaseEpoch: 1,
   ...releaseSource,
   capabilityBomSha256: `sha256:${"a".repeat(64)}`,
@@ -58,12 +59,14 @@ const testDeploymentManifest = await buildAliceDeploymentManifest({
     sourceCommit: releaseSource.deploymentControllerCommit,
   }),
   accessEffectiveConfig: buildAliceContainerAccessEffectiveConfig({
+    ...(gameplayObserverSessionId ? { gameplayObserverSessionId } : {}),
     accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
     accessAudience: "alice-access-audience",
     ownerEmailSha256,
     runtimeImage: runtimeContainerImage,
   }),
   runtimeHostEffectiveConfig: buildAliceRuntimeHostEffectiveConfig({
+    ...(gameplayObserverSessionId ? { gameplayObserverSessionId } : {}),
     runtimeImage: runtimeContainerImage,
   }),
   controlEffectiveConfig: buildAliceContainerControlEffectiveConfig({
@@ -83,6 +86,8 @@ const testDeploymentManifest = await buildAliceDeploymentManifest({
     providerActivation: "disabled",
   }),
 });
+}
+const testDeploymentManifest = await createTestDeploymentManifest();
 const testDeploymentManifestBytes = serializeAliceDeploymentManifest(
   testDeploymentManifest,
 );
@@ -276,6 +281,7 @@ async function accessFixture() {
 }
 
 type EnvironmentOptions = {
+  observerSessionId?: string;
   blockingScopes?: string[];
   admissionGeneration?: number;
   admissionBinding?: typeof binding;
@@ -295,7 +301,15 @@ async function environment(options: EnvironmentOptions = {}) {
       { ok: false, code: "UNCONFIGURED_TEST_RUNTIME" },
       { status: 503 },
     );
+  const manifestBytes = options.observerSessionId
+    ? serializeAliceDeploymentManifest(await createTestDeploymentManifest(options.observerSessionId))
+    : testDeploymentManifestBytes;
+  const currentRelease = { ...release, deploymentManifestSha256: digestAliceDeploymentManifest(manifestBytes) };
   return {
+    ...(options.observerSessionId ? {
+      ALICE_GAMEPLAY_OBSERVER_TOKEN: "o".repeat(32),
+      ALICE_GAMEPLAY_OBSERVER_SESSION_ID: options.observerSessionId,
+    } : {}),
     ALICE_ACCESS_ISSUER: "https://rndrntwrk.cloudflareaccess.com",
     ALICE_ACCESS_AUDIENCE: "alice-access-audience",
     ALICE_OWNER_EMAIL_SHA256: ownerEmailSha256,
@@ -312,15 +326,15 @@ async function environment(options: EnvironmentOptions = {}) {
     ALICE_PROGRAM_DIGEST: binding.programDigest,
     ALICE_RELEASE_DIGEST: binding.releaseDigest,
     ALICE_POLICY_HASH: binding.policyHash,
-    ALICE_SOURCE_COMMIT: release.sourceCommit,
+    ALICE_SOURCE_COMMIT: currentRelease.sourceCommit,
     ALICE_DEPLOYMENT_CONTROLLER_COMMIT:
-      release.deploymentControllerCommit,
-    ALICE_RUNTIME_IMAGE: release.runtimeImage,
+      currentRelease.deploymentControllerCommit,
+    ALICE_RUNTIME_IMAGE: currentRelease.runtimeImage,
     ALICE_RUNTIME_BUILD_MANIFEST_SHA256:
-      release.runtimeBuildManifestSha256,
-    ALICE_CAPABILITY_BOM_SHA256: release.capabilityBomSha256,
-    ALICE_ELIZA_COMMIT: release.elizaCommit,
-    ALICE_RUNTIME_REVISION: String(release.runtimeRevision),
+      currentRelease.runtimeBuildManifestSha256,
+    ALICE_CAPABILITY_BOM_SHA256: currentRelease.capabilityBomSha256,
+    ALICE_ELIZA_COMMIT: currentRelease.elizaCommit,
+    ALICE_RUNTIME_REVISION: String(currentRelease.runtimeRevision),
     ALICE_AI_GATEWAY: {
       async fetch() {
         return Response.json({ ok: false }, { status: 503 });
@@ -347,7 +361,7 @@ async function environment(options: EnvironmentOptions = {}) {
               blockingScopes,
               admissionGeneration: options.admissionGeneration ?? 1,
               binding: options.admissionBinding ?? binding,
-              release: options.admissionRelease ?? release,
+              release: options.admissionRelease ?? currentRelease,
             },
             { status: blockingScopes.length === 0 ? 200 : 503 },
           );
@@ -385,9 +399,9 @@ async function environment(options: EnvironmentOptions = {}) {
     setRuntimeFetch(next: (request: Request) => Promise<Response>) {
       runtimeFetch = next;
     },
-    ALICE_DEPLOYMENT_MANIFEST_SHA256: release.deploymentManifestSha256,
+    ALICE_DEPLOYMENT_MANIFEST_SHA256: currentRelease.deploymentManifestSha256,
     ALICE_DEPLOYMENT_MANIFEST_B64: encodeAliceDeploymentManifest(
-      testDeploymentManifestBytes,
+      manifestBytes,
     ),
     ALICE_VERSION: { id: "worker-version-test", tag: "", timestamp: "" },
   };
@@ -2054,4 +2068,87 @@ describe("Alice Access gateway", () => {
     }
     expect(seen).toHaveLength(0);
   });
+});
+
+test("private observation identity uses only exact POST route and strips owner/trusted header spoofing", async () => {
+  const env = await environment({ observerSessionId: "session-1" });
+  const { token: ownerToken } = await accessFixture();
+  const received: Request[] = [];
+  env.setRuntimeFetch(async (request) => {
+    if (new URL(request.url).pathname === "/api/alice-production/proof") {
+      const proof = fullRuntimeProof();
+      proof.release.deploymentManifestSha256 = env.ALICE_DEPLOYMENT_MANIFEST_SHA256;
+      return Response.json(proof);
+    }
+    received.push(request);
+    return Response.json({
+      accepted: true,
+      duplicate: false,
+      decisionId: "decision",
+      delivery: { ok: true, sent: true },
+    });
+  });
+  const request = (
+    path = "/api/alice/gameplay-observation",
+    method = "POST",
+    headers = {},
+  ) =>
+    new Request(`https://alice.rndrntwrk.com${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${env.ALICE_GAMEPLAY_OBSERVER_TOKEN}`,
+        ...headers,
+      },
+      ...(method === "POST"
+        ? { body: JSON.stringify({ sessionId: "session-1" }) }
+        : {}),
+    });
+  expect((await handleGatewayRequest(request("/api/emote"), env)).status).toBe(
+    401,
+  );
+  expect(
+    (
+      await handleGatewayRequest(
+        request("/api/alice/gameplay-observation/"),
+        env,
+      )
+    ).status,
+  ).not.toBe(200);
+  expect(
+    (
+      await handleGatewayRequest(
+        request("/api/alice/gameplay-observation", "GET"),
+        env,
+      )
+    ).status,
+  ).not.toBe(200);
+  expect(
+    (
+      await handleGatewayRequest(
+        request(undefined, undefined, { authorization: "Bearer owner" }),
+        env,
+      )
+    ).status,
+  ).toBe(401);
+  expect((await handleGatewayRequest(request(undefined,undefined, {authorization:"", "cf-access-jwt-assertion":ownerToken}),env)).status).toBe(401);
+  const response = await handleGatewayRequest(
+    request(undefined, undefined, {
+      "cf-access-authenticated-user-email": "spoof",
+      "x-milady-cloudflare-access-secret": "spoof",
+      "x-alice-observer": "spoof",
+    }),
+    env,
+  );
+  expect(response.status).toBe(200);
+  expect(received).toHaveLength(1);
+  expect(
+    received[0].headers.get("cf-access-authenticated-user-email"),
+  ).toBeNull();
+  expect(
+    received[0].headers.get("x-milady-cloudflare-access-secret"),
+  ).toBeNull();
+  expect(received[0].headers.get("x-alice-observer")).toBeNull();
+  expect(received[0].headers.get("authorization")).toBe(
+    `Bearer ${env.ALICE_GAMEPLAY_OBSERVER_TOKEN}`,
+  );
 });

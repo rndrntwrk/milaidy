@@ -18,6 +18,7 @@ import { allActions } from './actions/index.js';
 import { approvalRoutes, setApprovalAuthToken } from './routes/approvals.js';
 import {
   describeAgentAuthSource,
+  isAliceNativeStreamRuntime,
   isAgentAuthConfigured,
   resolveAgentBearer,
 } from './lib/agentAuth.js';
@@ -40,6 +41,12 @@ export const stream555Plugin: Plugin = {
     console.log('[555stream] Plugin initializing...');
 
     const baseUrl = resolveStream555BaseUrl(runtime.agentId?.toString());
+    // The native service validates and renews Alice's grant. Legacy health and
+    // WebSocket admission do not describe the native Studio API.
+    if (isAliceNativeStreamRuntime()) {
+      console.log(`[555stream] Native Studio ${isAgentAuthConfigured() ? 'configured' : 'not connected'}`);
+      return;
+    }
     const agentToken =
       baseUrl && baseUrl.trim().length > 0
         ? await resolveAgentBearer(baseUrl)

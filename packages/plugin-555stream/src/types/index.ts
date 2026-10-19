@@ -397,6 +397,10 @@ export interface StreamStopResult {
 export interface StreamStatus {
   sessionId: string;
   active: boolean;
+  status?: NativeStreamState['status'];
+  pendingJob?: boolean;
+  continuity?: NativeStreamState['continuity'];
+  lease?: { expiresAt: number; autoRenew: boolean; nextRenewalAt: number | null } | null;
   jobId?: string;
   cfSessionId?: string;
   cloudflare?: {
@@ -405,7 +409,7 @@ export interface StreamStatus {
   };
   serverFallbackActive: boolean;
   startTime?: number;
-  platforms: Record<string, { enabled: boolean; status: string; error?: string }>;
+  platforms: Record<string, { enabled?: boolean; status: string; error?: string }>;
   stats?: StreamStats;
   jobStatus?: {
     state: string;
@@ -696,4 +700,13 @@ export interface ChatStartResult {
   success: boolean;
   sessionId: string;
   platforms: string[];
+}
+
+/** Native capture lifecycle and its independent continuity publisher. */
+export interface NativeStreamState {
+  status: 'stopped' | 'preflighting' | 'starting' | 'connecting' | 'live' | 'reconnecting' | 'stopping' | 'failed';
+  continuity: {
+    publisher: 'realtimekit_rtmp_out' | 'capture_service_rtmps';
+    status: 'live_output_active' | 'bootstrap_keepalive_active' | 'handoff_in_progress';
+  } | null;
 }

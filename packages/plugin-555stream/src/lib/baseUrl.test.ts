@@ -28,6 +28,14 @@ afterEach(() => {
 });
 
 describe('resolveStream555BaseUrl', () => {
+  it('uses the native public origin for Alice production despite legacy internal settings', () => {
+    setEnv('ALICE_RUNTIME_AUTHORITY_MODE', 'proposer-only');
+    setEnv('ALICE_RUNTIME_PROFILE', 'full-gated');
+    setEnv('STREAM555_PUBLIC_BASE_URL', 'https://stream.rndrntwrk.com');
+    setEnv('STREAM555_INTERNAL_BASE_URL', 'http://retired-control-plane:3000');
+    setEnv('STREAM555_BASE_URL', 'https://retired.example');
+    assert.equal(resolveStream555BaseUrl('alice'), 'https://stream.rndrntwrk.com');
+  });
   it('prefers the internal base URL for allow-listed internal agents', () => {
     setEnv('STREAM555_BASE_URL', 'https://stream.rndrntwrk.com');
     setEnv('STREAM555_PUBLIC_BASE_URL', 'https://stream.rndrntwrk.com');

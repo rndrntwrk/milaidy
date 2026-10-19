@@ -134,6 +134,21 @@ describe("Alice production runtime guard", () => {
     });
   });
 
+  it("admits only the full-profile observer POST to its dedicated authentication handler", () => {
+    const path = "/api/alice/gameplay-observation";
+    expect(evaluateAliceProductionRequest("POST", path, fullAliceEnv)).toEqual({ allowed: true });
+    for (const [method, pathname, env] of [
+      ["GET", path, fullAliceEnv],
+      ["PUT", path, fullAliceEnv],
+      ["POST", `${path}/nearby`, fullAliceEnv],
+      ["POST", path, aliceEnv],
+    ] as const) {
+      expect(evaluateAliceProductionRequest(method, pathname, env)).toEqual({
+        allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED",
+      });
+    }
+  });
+
   it("keeps high-risk and WebSocket surfaces denied without an exact grant", () => {
     for (const [method, pathname] of [
       ["POST", "/api/wallet/trade/execute"],

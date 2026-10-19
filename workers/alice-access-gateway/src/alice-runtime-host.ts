@@ -1,3 +1,4 @@
+import { resolveAliceGameplayObserverConfig } from "../../alice-effective-config.js";
 export const ALICE_RUNTIME_CONTAINER_NAME = "alice-production-runtime";
 export const ALICE_RUNTIME_CONTAINER_PORT = 2138;
 export const ALICE_RUNTIME_STATE_OWNER_ID = "alice-owner-production";
@@ -7,6 +8,8 @@ const IMAGE =
   /^registry\.cloudflare\.com\/036df6c823669b8fa2f66cf4c16eeb29\/alice-runtime@sha256:[a-f0-9]{64}$/;
 
 export type AliceRuntimeContainerEnvironmentSource = {
+  ALICE_GAMEPLAY_OBSERVER_TOKEN?: string;
+  ALICE_GAMEPLAY_OBSERVER_SESSION_ID?: string;
   ALICE_ACCESS_PROXY_SECRET: string;
   ALICE_RUNTIME_API_TOKEN: string;
   ALICE_RUNTIME_RELEASE_TOKEN: string;
@@ -32,6 +35,8 @@ export function buildAliceRuntimeContainerEnv(
   env: AliceRuntimeContainerEnvironmentSource,
 ): Record<string, string> {
   const runtimeRevision = Number(env.ALICE_RUNTIME_REVISION);
+  resolveAliceGameplayObserverConfig(env);
+
   if (
     Boolean(env.ALICE_GITHUB_APP_ID?.trim()) !==
     Boolean(env.ALICE_GITHUB_APP_PRIVATE_KEY_B64?.trim())
@@ -66,6 +71,10 @@ export function buildAliceRuntimeContainerEnv(
     throw new Error("ALICE_RUNTIME_CONTAINER_ENV_INVALID");
   }
   return {
+    ...(env.ALICE_GAMEPLAY_OBSERVER_TOKEN && env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID ? {
+      ALICE_GAMEPLAY_OBSERVER_TOKEN: env.ALICE_GAMEPLAY_OBSERVER_TOKEN,
+      ALICE_GAMEPLAY_OBSERVER_SESSION_ID: env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID,
+    } : {}),
     NODE_ENV: "production",
     // Trust the ephemeral CA injected by Cloudflare's HTTPS interception.
     NODE_EXTRA_CA_CERTS: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",

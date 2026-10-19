@@ -129,6 +129,30 @@ function validateOwnerInputs(inputs, expectedKeys) {
   );
 }
 
+function gameplayObserverValues(inputs) {
+  if (!Object.hasOwn(inputs ?? {}, "gameplayObserverSessionId")) return {};
+  const sessionId = inputs.gameplayObserverSessionId;
+  if (
+    typeof sessionId !== "string" ||
+    !/^[A-Za-z0-9_.:-]{1,128}$/.test(sessionId) ||
+    sessionId === "." || sessionId === ".."
+  ) {
+    throw new Error("ALICE_GAMEPLAY_OBSERVER_CONFIG_INVALID");
+  }
+  return { gameplayObserverSessionId: sessionId };
+}
+
+export function resolveAliceGameplayObserverConfig(env) {
+  const token = env.ALICE_GAMEPLAY_OBSERVER_TOKEN;
+  const sessionId = env.ALICE_GAMEPLAY_OBSERVER_SESSION_ID;
+  if ((token === undefined || token === "") &&
+    (sessionId === undefined || sessionId === "")) return {};
+  if (typeof token !== "string" || token.length < 32) {
+    throw new Error("ALICE_GAMEPLAY_OBSERVER_CONFIG_INVALID");
+  }
+  return gameplayObserverValues({ gameplayObserverSessionId: sessionId });
+}
+
 export function canonicalAliceJson(value) {
   if (value === null || typeof value === "boolean" || typeof value === "string") {
     return JSON.stringify(value);
@@ -220,12 +244,14 @@ export function buildAliceAccessEffectiveConfig(inputs) {
 }
 
 export function buildAliceContainerAccessEffectiveConfig(inputs) {
+  const observer = gameplayObserverValues(inputs);
   if (
     !validateOwnerInputs(inputs, [
       "accessAudience",
       "accessIssuer",
       "ownerEmailSha256",
       "runtimeImage",
+      ...Object.keys(observer),
     ]) ||
     !CLOUDFLARE_CONTAINER_IMAGE.test(inputs.runtimeImage)
   ) {
@@ -269,6 +295,7 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
       secretNames: [
         "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
         "ALICE_ACCESS_PROXY_SECRET",
+        ...(observer.gameplayObserverSessionId ? ["ALICE_GAMEPLAY_OBSERVER_TOKEN"] : []),
       ],
     },
     values: {
@@ -279,14 +306,16 @@ export function buildAliceContainerAccessEffectiveConfig(inputs) {
       runtimeContainerName: "alice-production-runtime",
       runtimePort: 2138,
       runtimeEgress: "deny-by-default",
+      ...observer,
     },
     observability: aliceObservability(),
   };
 }
 
 export function buildAliceRuntimeHostEffectiveConfig(inputs) {
+  const observer = gameplayObserverValues(inputs);
   if (
-    !exactKeys(inputs, ["runtimeImage"]) ||
+    !exactKeys(inputs, ["runtimeImage", ...Object.keys(observer)]) ||
     !CLOUDFLARE_CONTAINER_IMAGE.test(inputs.runtimeImage)
   ) {
     throw new Error("ALICE_RUNTIME_HOST_EFFECTIVE_CONFIG_INVALID");
@@ -342,6 +371,7 @@ export function buildAliceRuntimeHostEffectiveConfig(inputs) {
         "ALICE_CAPABILITY_BOM_SHA256",
         "ALICE_DEPLOYMENT_CONTROLLER_COMMIT",
         "ALICE_ELIZA_COMMIT",
+        ...(observer.gameplayObserverSessionId ? ["ALICE_GAMEPLAY_OBSERVER_TOKEN"] : []),
         "ALICE_POLICY_HASH",
         "ALICE_PROGRAM_DIGEST",
         "ALICE_RELEASE_DIGEST",
@@ -360,6 +390,7 @@ export function buildAliceRuntimeHostEffectiveConfig(inputs) {
       runtimeContainerName: "alice-production-runtime",
       runtimePort: 2138,
       runtimeEgress: "deny-by-default",
+      ...observer,
     },
     observability: aliceObservability(),
   };
