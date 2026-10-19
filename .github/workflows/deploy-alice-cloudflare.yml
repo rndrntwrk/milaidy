@@ -1675,6 +1675,7 @@ jobs:
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
       CONTROLLER_SHA: ${{ github.sha }}
+      ALICE_EXPECTED_CODING_PAUSE_ID: ${{ vars.ALICE_EXPECTED_CODING_PAUSE_ID }}
       ALICE_REACCEPT_CANDIDATE: ${{ inputs.reaccept_candidate }}
       RECOVERY_WATCHDOG_RUN_ID: ${{ inputs.recovery_watchdog_run_id }}
       ALICE_DEPLOYMENT_RUN_ID: ${{ github.run_id }}
@@ -1754,7 +1755,6 @@ jobs:
 
       - name: Prove terminal authenticated Alice production acceptance
         env:
-          ALICE_EXPECTED_CODING_PAUSE_ID: ${{ vars.ALICE_EXPECTED_CODING_PAUSE_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ALICE_OWNER_AUTHORIZATION: ${{ secrets.ALICE_OWNER_AUTHORIZATION }}
           ALICE_ACCESS_ISSUER: https://rndrntwrk.cloudflareaccess.com

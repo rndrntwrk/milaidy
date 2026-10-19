@@ -3,6 +3,13 @@ import { deriveAliceRetainedV4Owner, parseAliceReacceptSelection,
   verifyAliceRecordedPause, verifyAliceRetainedV4Candidate } from "./alice_reaccept_qualified_candidate";
 
 const roles = ["control", "statePlane", "aiGateway", "connectorPlane", "runtimeHost", "access"];
+const codingPause = {
+  pauseId: "pause-existing-coding", pausedBy: `owner:sha256:${"a".repeat(64)}`,
+  binding: { programDigest: `sha256:${"0".repeat(64)}`, releaseDigest: `sha256:${"1".repeat(64)}`,
+    policyHash: `sha256:${"2".repeat(64)}` },
+  deploymentManifestSha256: `sha256:${"3".repeat(64)}`,
+  rollbackBoundary: "container:alice-runtime:v60", pausedAt: 1790328600000, resumedAt: null,
+};
 
 test("accepts only the original recorded machine pause before owner admission", () => {
   const pause = { pauseId: "pause-recorded-release", pausedBy: "deployment-controller:pause-only",
@@ -14,6 +21,24 @@ test("accepts only the original recorded machine pause before owner admission", 
     deploymentManifestSha256: pause.deploymentManifestSha256, rollbackBoundary: pause.rollbackBoundary,
     activeReleaseEpoch: 15, pausedScopes: ["all"], activePauses: { all: pause } } };
   expect(() => verifyAliceRecordedPause({ state, evidence, pauseId: pause.pauseId })).not.toThrow();
+  const codingState = { ...state, authority: { ...state.authority,
+    pausedScopes: ["all", "coding"], activePauses: { all: pause, coding: structuredClone(codingPause) } } };
+  const input = { state: codingState, evidence, pauseId: pause.pauseId,
+    ownerActor: codingPause.pausedBy, expectedCodingPauseId: codingPause.pauseId };
+  const captured = verifyAliceRecordedPause(input);
+  expect(captured).toEqual(codingPause);
+  expect(() => verifyAliceRecordedPause({ ...input, expectedCodingPause: captured })).not.toThrow();
+  expect(() => verifyAliceRecordedPause({ ...input, expectedCodingPauseId: undefined })).toThrow("OWNER_STATE_INVALID");
+  for (const scenario of ["missing", "replaced", "record-drift", "extra-scope", "other-owner"]) {
+    const changed: any = structuredClone(codingState);
+    if (scenario === "missing") delete changed.authority.activePauses.coding;
+    if (scenario === "replaced") changed.authority.activePauses.coding.pauseId = "pause-replaced-coding";
+    if (scenario === "record-drift") changed.authority.activePauses.coding.pausedAt++;
+    if (scenario === "extra-scope") changed.authority.pausedScopes.push("model");
+    if (scenario === "other-owner") changed.authority.activePauses.coding.pausedBy = "other-owner";
+    expect(() => verifyAliceRecordedPause({ ...input, state: changed,
+      expectedCodingPause: captured })).toThrow("OWNER_STATE_INVALID");
+  }
   state.authority.activeReleaseEpoch = 16;
   expect(() => verifyAliceRecordedPause({ state, evidence, pauseId: pause.pauseId })).toThrow("OWNER_STATE_INVALID");
 });
@@ -44,6 +69,17 @@ test("accepts the exact owner pause left by failed candidate acceptance", () => 
   const input = { state, evidence, pauseId: pause.pauseId, admission, ownerActor };
   expect(() => verifyAliceRecordedPause(input)).not.toThrow();
   expect(() => verifyAliceRecordedPause({ ...input, ownerActor: "other-owner" })).toThrow("OWNER_STATE_INVALID");
+  const codingState = { ...state, authority: { ...state.authority,
+    pausedScopes: ["all", "coding"], activePauses: { all: pause, coding: codingPause } } };
+  const codingInput = { ...input, state: codingState, expectedCodingPauseId: codingPause.pauseId };
+  const captured = verifyAliceRecordedPause(codingInput);
+  expect(captured).toEqual(codingPause);
+  expect(() => verifyAliceRecordedPause({ ...codingInput, expectedCodingPause: captured,
+    ownerActor: "other-owner" })).toThrow("OWNER_STATE_INVALID");
+  expect(() => verifyAliceRecordedPause({ ...codingInput, expectedCodingPause: captured,
+    state: { ...codingState, authority: { ...codingState.authority,
+      activePauses: { ...codingState.authority.activePauses, all: { ...pause, pausedBy: "other-owner" } } } },
+  })).toThrow("OWNER_STATE_INVALID");
 });
 
 test("requires an exact artifact and owner pause selection", () => {

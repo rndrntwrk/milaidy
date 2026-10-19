@@ -145,6 +145,8 @@ export function verifyAliceTerminalPublication({
   currentModalProviderReadback,
   workflowRun,
   expectedSourceSha,
+  expectedControllerSha = expectedSourceSha,
+  expectedCodingPause,
   expectedRunId,
   expectedRunAttempt,
   nowMs = Date.now(),
@@ -154,10 +156,24 @@ export function verifyAliceTerminalPublication({
     !object(cloudflareRollbackProof) ||
     !object(currentCloudflareLiveReadback) || !object(workflowRun) ||
     !COMMIT.test(expectedSourceSha ?? "") ||
+    !COMMIT.test(expectedControllerSha ?? "") ||
     !RUN_ID.test(String(expectedRunId ?? "")) ||
     !Number.isSafeInteger(expectedRunAttempt) || expectedRunAttempt < 1 ||
     !Number.isSafeInteger(nowMs)
   ) invalid();
+  if (expectedCodingPause !== undefined && (
+    !object(expectedCodingPause) ||
+    !/^pause-[A-Za-z0-9-]{8,128}$/.test(expectedCodingPause.pauseId ?? "") ||
+    !/^owner:sha256:[a-f0-9]{64}$/.test(expectedCodingPause.pausedBy ?? "") ||
+    !Number.isSafeInteger(expectedCodingPause.pausedAt) || expectedCodingPause.pausedAt <= 0 ||
+    expectedCodingPause.resumedAt !== null ||
+    expectedCodingPause.resumedBy !== null || expectedCodingPause.recoveryReceipt !== null ||
+    !object(expectedCodingPause.binding) ||
+    ![expectedCodingPause.binding.programDigest, expectedCodingPause.binding.releaseDigest,
+      expectedCodingPause.binding.policyHash, expectedCodingPause.deploymentManifestSha256]
+      .every(value => typeof value === "string" && DIGEST.test(value)) ||
+    !/^(?:container|modal):alice-runtime:v[1-9][0-9]*$/.test(expectedCodingPause.rollbackBoundary ?? "")
+  )) invalid();
   const containerEvidenceSupplied =
     containerImageEvidence !== undefined && containerImageEvidence !== null;
   const modalPromotionSupplied =
@@ -200,7 +216,13 @@ export function verifyAliceTerminalPublication({
     new Set(objectKeys).size !== objectKeys.length ||
     !Number.isFinite(observedAt) ||
     !Array.isArray(acceptance.finalAuthority?.pausedScopes) ||
-    acceptance.finalAuthority.pausedScopes.length !== 0 ||
+    canonicalAliceJson(acceptance.finalAuthority.pausedScopes) !==
+      canonicalAliceJson(expectedCodingPause === undefined ? [] : ["coding"]) ||
+    (expectedCodingPause === undefined
+      ? Object.hasOwn(acceptance.finalAuthority, "preservedCodingPause")
+      : !object(acceptance.finalAuthority.preservedCodingPause) ||
+        canonicalAliceJson(acceptance.finalAuthority.preservedCodingPause) !==
+          canonicalAliceJson(expectedCodingPause)) ||
     acceptance.authenticatedRoot !== "full-milady-companion-ui" ||
     acceptance.runtimeProfile !== "full-gated" ||
     canonicalAliceJson(acceptance.productSurfaces) !==
@@ -221,7 +243,7 @@ export function verifyAliceTerminalPublication({
   if (
     String(workflowRun.id) !== runId ||
     workflowRun.run_attempt !== expectedRunAttempt ||
-    workflowRun.head_sha !== expectedSourceSha ||
+    workflowRun.head_sha !== expectedControllerSha ||
     workflowRun.head_branch !== RELEASE_BRANCH ||
     workflowRun.event !== "workflow_dispatch" ||
     workflowRun.path !== ".github/workflows/deploy-alice-cloudflare.yml" ||
@@ -336,6 +358,7 @@ function readJson(filePath) {
 }
 
 function main() {
+  const expectedCodingPausePath = process.env.ALICE_EXPECTED_CODING_PAUSE_PATH;
   const containerEvidencePath =
     process.env.ALICE_CONTAINER_IMAGE_EVIDENCE_PATH;
   const modalPromotionPath =
@@ -370,6 +393,8 @@ function main() {
       : {}),
     workflowRun: readJson(process.env.ALICE_WORKFLOW_RUN_READBACK_PATH),
     expectedSourceSha: process.env.ALICE_SOURCE_COMMIT,
+    expectedControllerSha: process.env.ALICE_DEPLOYMENT_CONTROLLER_COMMIT || undefined,
+    ...(expectedCodingPausePath ? { expectedCodingPause: readJson(expectedCodingPausePath) } : {}),
     expectedRunId: process.env.ALICE_DEPLOYMENT_RUN_ID,
     expectedRunAttempt: Number(process.env.ALICE_DEPLOYMENT_RUN_ATTEMPT),
   });

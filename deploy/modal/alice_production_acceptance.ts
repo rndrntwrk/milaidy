@@ -187,6 +187,26 @@ function normalizedPausedScopes(value: unknown): string[] {
   return normalized;
 }
 
+export function assertAliceAcceptanceCodingPause({
+  state, pauseId, ownerActor,
+}: Record<string, any>): Record<string, any> {
+  const authority = state.authority;
+  const pause = authority?.activePauses?.coding;
+  if (!/^pause-[A-Za-z0-9-]{8,128}$/.test(pauseId ?? "") ||
+    typeof ownerActor !== "string" || !ownerActor ||
+    state.ok !== true || !object(pause) ||
+    pause.pauseId !== pauseId || pause.pausedBy !== ownerActor ||
+    pause.resumedAt !== null || !Number.isSafeInteger(pause.pausedAt) || pause.pausedAt <= 0 ||
+    !object(pause.binding) ||
+    ![pause.binding.programDigest, pause.binding.releaseDigest, pause.binding.policyHash,
+      pause.deploymentManifestSha256].every(value => typeof value === "string" && DIGEST.test(value)) ||
+    !/^(?:container|modal):alice-runtime:v[1-9][0-9]*$/.test(pause.rollbackBoundary ?? "") ||
+    !exact(normalizedPausedScopes(authority?.pausedScopes), ["all", "coding"])) {
+    invalid("ALICE_PRODUCTION_ACCEPTANCE_INVALID_CODING_PAUSE");
+  }
+  return structuredClone(pause);
+}
+
 function assertCandidateState(
   value: Record<string, any>,
   expected: any,
@@ -663,19 +683,9 @@ export async function runAliceProductionAcceptance(input: Record<string, any>) {
     const state = await ownerJson(fetchImpl, ownerAuthorization, "/control/api/v1/state");
     if (!state.response.ok) invalid();
     if (expectedCodingPauseId) {
-      const authority = state.value.authority;
-      const pause = authority?.activePauses?.coding;
-      if (state.value.ok !== true || !object(pause) ||
-        pause.pauseId !== expectedCodingPauseId || pause.pausedBy !== owner.actor ||
-        pause.resumedAt !== null || !Number.isSafeInteger(pause.pausedAt) || pause.pausedAt <= 0 ||
-        !object(pause.binding) ||
-        ![pause.binding.programDigest, pause.binding.releaseDigest, pause.binding.policyHash,
-          pause.deploymentManifestSha256].every(value => typeof value === "string" && DIGEST.test(value)) ||
-        !/^(?:container|modal):alice-runtime:v[1-9][0-9]*$/.test(pause.rollbackBoundary ?? "") ||
-        !exact(normalizedPausedScopes(authority?.pausedScopes), ["all", "coding"])) {
-        invalid("ALICE_PRODUCTION_ACCEPTANCE_INVALID_CODING_PAUSE");
-      }
-      expectedCodingPause = structuredClone(pause);
+      expectedCodingPause = assertAliceAcceptanceCodingPause({
+        state: state.value, pauseId: expectedCodingPauseId, ownerActor: owner.actor,
+      });
     }
     if (recoveryPauseId) {
       recoveryPause = assertAliceAcceptanceRecoveryPause({

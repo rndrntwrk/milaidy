@@ -56,6 +56,8 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/alice_recovery_credential_binding.test.mjs',
   'deploy/modal/alice_production_acceptance.ts',
   'deploy/modal/alice_production_acceptance.test.ts',
+  'deploy/modal/alice_terminal_publication.mjs',
+  'deploy/modal/alice_terminal_publication.test.mjs',
   'deploy/modal/alice_reaccept_qualified_candidate.ts',
   'deploy/modal/alice_reaccept_qualified_candidate.test.ts',
   'deploy/modal/alice_release_pause.mjs',
