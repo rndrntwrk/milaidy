@@ -64,6 +64,7 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/api\/workbench\/tasks(?:\/[^/]+)?$/,
   /^\/api\/subscription\/status$/,
   /^\/api\/stream\/status$/,
+  /^\/api\/stream\/native-setup$/,
   /^\/api\/coding-agents\/coordinator\/status$/,
   /^\/api\/coding-agents\/coordinator\/threads$/,
   /^\/api\/coding-agents\/coordinator\/threads\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,

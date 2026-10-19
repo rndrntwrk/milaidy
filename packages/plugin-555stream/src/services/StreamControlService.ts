@@ -312,13 +312,16 @@ export class StreamControlService implements Service {
     return result;
   }
 
-  /** Observe only the explicitly configured native session; never bootstrap or bind. */
-  async getNativeSetup(): Promise<NativeStreamSetup> {
+  private async nativeConnection(requestedSessionId?: string, maxRetries?: number): Promise<{
+    sessionId: string; studio: URL; client: HttpClient;
+  }> {
     if (!this.httpClient || !this.config) throw new Error('555 Stream service is unavailable');
     const sessionId = this.config.defaultSessionId?.trim();
     if (!sessionId) throw new Error('STREAM555_DEFAULT_SESSION_ID is not configured');
     if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(sessionId) || sessionId === '.' || sessionId === '..')
       throw new Error('Configured native session ID is invalid');
+    if (requestedSessionId !== undefined && requestedSessionId !== sessionId)
+      throw new Error('Event target does not match the configured native session');
     const publicBase = process.env.STREAM555_PUBLIC_BASE_URL?.trim();
     if (!publicBase) throw new Error('STREAM555_PUBLIC_BASE_URL is not configured');
     const studio = new URL(publicBase);
@@ -327,8 +330,13 @@ export class StreamControlService implements Service {
     const nativeBase = studio.origin;
     const nativeToken = await resolveAgentBearer(nativeBase);
     if (!nativeToken) throw new Error('Native Studio admission is unavailable');
-    const nativeClient = new HttpClient({ baseUrl: nativeBase, token: nativeToken,
-      tokenProvider: () => resolveAgentBearer(nativeBase) });
+    return { sessionId, studio, client: new HttpClient({ baseUrl: nativeBase, token: nativeToken,
+      tokenProvider: () => resolveAgentBearer(nativeBase), maxRetries }) };
+  }
+
+  /** Observe only the explicitly configured native session; never bootstrap or bind. */
+  async getNativeSetup(): Promise<NativeStreamSetup> {
+    const { sessionId, studio, client: nativeClient } = await this.nativeConnection();
     studio.pathname = '/studio';
     studio.searchParams.set('sessionId', sessionId);
     const headers = { 'X-Session-Id': sessionId };
@@ -721,18 +729,23 @@ export class StreamControlService implements Service {
       throw new Error('[555stream] Service not initialized');
     }
 
-    const id = sessionId || this.boundSessionId;
+    const native = process.env.ALICE_RUNTIME_AUTHORITY_MODE === 'proposer-only' &&
+      process.env.ALICE_RUNTIME_PROFILE === 'full-gated' &&
+      process.env.STREAM555_PUBLIC_BASE_URL?.trim()
+      ? await this.nativeConnection(sessionId, 0)
+      : null;
+    const id = native?.sessionId || sessionId || this.boundSessionId;
     if (!id) {
       throw new Error('[555stream] No session bound');
     }
 
-    const response = await this.httpClient.post<{ ok: boolean; sent: boolean }>(
+    const response = await (native?.client ?? this.httpClient).post<{ ok: boolean; sent: boolean }>(
       `/api/agent/v1/sessions/${id}/livekit/broadcast-event`,
-      { topic, payload }
+      native ? { topic, payload, kind: 'reliable' } : { topic, payload }
     );
 
     if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to broadcast event');
+      throw new Error(native ? 'Native Stream event delivery is unavailable' : response.error || 'Failed to broadcast event');
     }
 
     return response.data;

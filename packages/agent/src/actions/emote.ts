@@ -12,6 +12,7 @@
 
 import type { Action, HandlerOptions, Memory } from "@elizaos/core";
 import { AGENT_EMOTE_BY_ID, AGENT_EMOTE_CATALOG } from "../emotes/catalog.js";
+import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
 
 /** API port for posting emote requests. */
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
@@ -66,6 +67,10 @@ export const emoteAction: Action = {
 
       if (!response.ok) {
         return { text: "", success: false };
+      }
+      if (isAliceFullRuntimeProfile() && process.env.STREAM555_PUBLIC_BASE_URL?.trim()) {
+        const receipt = await response.json() as { broadcast?: { sent?: boolean } };
+        if (receipt.broadcast?.sent !== true) return { text: "", success: false };
       }
     } catch {
       return { text: "", success: false };

@@ -13,6 +13,8 @@ const STREAM_ENV_KEYS = [
   "STREAM555_AGENT_API_KEY",
   "STREAM555_AGENT_TOKEN",
   "STREAM_API_BEARER_TOKEN",
+  "ALICE_RUNTIME_AUTHORITY_MODE",
+  "ALICE_RUNTIME_PROFILE",
   "STREAM555_DEST_PUMPFUN_ENABLED",
   "STREAM555_DEST_PUMPFUN_RTMP_URL",
   "STREAM555_DEST_PUMPFUN_STREAM_KEY",
@@ -93,6 +95,69 @@ describe("StreamControlService", () => {
       assert.ok(calls.every(call => call.method === 'GET' && call.session === 'alice-session' && call.origin === 'https://stream.rndrntwrk.com'));
       assert.deepEqual(new Set(calls.map(call => call.path)), new Set([
         '/api/session/composition', '/api/session/destinations', '/api/stream/status']));
+      const readFetch = globalThis.fetch;
+      let transientFailed = false;
+      globalThis.fetch = async (input, init) => {
+        if (new URL(String(input)).pathname.endsWith('/composition') && !transientFailed) {
+          transientFailed = true;
+          return Response.json({ error: 'temporary' }, { status: 503 });
+        }
+        return readFetch(input, init);
+      };
+      revision = 9;
+      assert.equal((await service.getNativeSetup()).revision, 9);
+      assert.equal(transientFailed, true);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("relays native emotes to the configured session without a legacy bind or replay", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_INTERNAL_BASE_URL", "http://legacy-control-plane:3000");
+    setEnv("STREAM555_AGENT_TOKEN", "private-server-token");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; body: unknown }> = [];
+    let status = 200;
+    globalThis.fetch = async (input, init) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return Response.json(status === 200 ? { ok: true, sent: true } : { error: 'unavailable' }, { status });
+    };
+    const service = await StreamControlService.start({ agentId: "alice" } as IAgentRuntime);
+    try {
+      const payload = { emoteId: 'dance-happy', path: '/animations/emotes/dance-happy.glb.gz', duration: 4, loop: false };
+      assert.deepEqual(await service.broadcastEvent('emote', payload), { ok: true, sent: true });
+      assert.deepEqual(calls, [{
+        url: 'https://stream.rndrntwrk.com/api/agent/v1/sessions/alice-session/livekit/broadcast-event',
+        body: { topic: 'emote', payload, kind: 'reliable' },
+      }]);
+      assert.equal(service.getBoundSessionId(), null);
+      await assert.rejects(service.broadcastEvent('emote', payload, 'other-session'), /configured native session/);
+      assert.equal(calls.length, 1);
+      status = 503;
+      await assert.rejects(service.broadcastEvent('emote', payload), /unavailable/);
+      assert.equal(calls.length, 2);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("preserves explicit event targets for other Stream plugin consumers", async () => {
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_AGENT_TOKEN", "private-server-token");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "default-session");
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; body: unknown }> = [];
+    globalThis.fetch = async (input, init) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return Response.json({ ok: true, sent: true });
+    };
+    const service = await StreamControlService.start({} as IAgentRuntime);
+    try {
+      assert.deepEqual(await service.broadcastEvent('emote', {}, 'other-session'), { ok: true, sent: true });
+      assert.deepEqual(calls, [{
+        url: 'https://stream.rndrntwrk.com/api/agent/v1/sessions/other-session/livekit/broadcast-event',
+        body: { topic: 'emote', payload: {} },
+      }]);
     } finally { globalThis.fetch = originalFetch; await service.stop(); }
   });
 

@@ -80,6 +80,8 @@ describe("Alice production runtime guard", () => {
       ["GET", "/api/character/random-name"],
       ["GET", "/api/subscription/status"],
       ["GET", "/api/stream/status"],
+      ["GET", "/api/stream/native-setup"],
+      ["HEAD", "/api/stream/native-setup"],
       ["GET", "/api/coding-agents/coordinator/status"],
       ["GET", "/api/coding-agents/coordinator/threads"],
       ["GET", "/api/coding-agents/coordinator/threads/8d129718-1d37-4bdb-8750-890b480b2ddd"],
