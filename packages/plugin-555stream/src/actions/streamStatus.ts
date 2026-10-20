@@ -192,7 +192,7 @@ function formatStatusResponse(status: StreamStatus): string {
     lines.push('**Platforms:**');
     for (const [platformId, platform] of Object.entries(status.platforms)) {
       const statusIcon = platform.enabled ? (platform.status === 'live' ? '' : '') : '';
-      const statusText = platform.enabled ? platform.status : 'disabled';
+      const statusText = platform.enabled === false ? 'disabled' : platform.status;
       let platformLine = `- ${platformId}: ${statusIcon} ${statusText}`;
       if (platform.error) {
         platformLine += ` (${platform.error})`;

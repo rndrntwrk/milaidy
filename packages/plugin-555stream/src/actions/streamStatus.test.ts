@@ -13,13 +13,14 @@ function runtime(getStreamStatus: () => Promise<StreamStatus>): IAgentRuntime {
 test('status is returned to the planner even without a transcript callback', async () => {
   const status: StreamStatus = {
     sessionId: 'alice-session', active: true, jobId: 'current-dispatch',
-    serverFallbackActive: false, platforms: {},
+    serverFallbackActive: false, platforms: { youtube: { status: 'connecting' } },
   };
   const result = await streamStatusAction.handler(runtime(async () => status), {});
   assert.equal(typeof result, 'object');
   if (typeof result === 'boolean') assert.fail('Status payload was discarded');
   assert.equal(result.success, true);
   assert.match(result.text ?? '', /LIVE/);
+  assert.match(result.text ?? '', /youtube:.*connecting/);
   assert.deepEqual(result.data, status);
 });
 
