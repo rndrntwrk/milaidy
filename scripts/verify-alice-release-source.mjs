@@ -79,6 +79,7 @@ const CONTROLLER_PATHS = new Set([
   'deploy/modal/verify_alice_program_admission.test.ts',
   'workers/alice-access-gateway/src/alice-runtime-container.ts',
   'workers/alice-access-gateway/src/alice-runtime-host.ts',
+  'workers/alice-access-gateway/src/index.ts',
   'workers/alice-access-gateway/test/runtime-container.test.ts',
   'workers/alice-access-gateway/test/runtime-https.test.ts',
   'workers/alice-access-gateway/test/index.test.ts',
