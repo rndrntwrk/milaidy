@@ -556,6 +556,7 @@ declare module "./client-base" {
       ok: boolean;
       running: boolean;
       nativeStatus?: string;
+      sessionId?: string;
       ffmpegAlive: boolean;
       uptime: number;
       frameCount: number;

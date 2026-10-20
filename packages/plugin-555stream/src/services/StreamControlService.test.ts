@@ -290,6 +290,15 @@ describe("StreamControlService", () => {
     };
     const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
     try {
+      assert.deepEqual(await service.getNativeGameState(), {
+        sessionId: 'alice-session', sourceId: 'game-1', gameId: 'old-game',
+        playMode: 'solo', compositionRevision: 7,
+      });
+      await assert.rejects(service.getNativeGameState('foreign-session'), /configured native session/);
+      assert.deepEqual(calls, [
+        { method: 'GET', url: 'https://stream.rndrntwrk.com/api/session/composition' },
+      ]);
+      calls.length = 0;
       assert.deepEqual(await service.selectNativeGame('555drive'), {
         sessionId: 'alice-session', sourceId: 'game-1', gameId: '555drive', compositionRevision: 8,
       });

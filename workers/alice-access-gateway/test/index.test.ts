@@ -723,6 +723,9 @@ describe("Alice Access gateway", () => {
       ["GET", "/music-player/status"],
       ["GET", "/api/agent/v1/sessions/companion/games/state"],
       ["POST", "/api/agent/v1/sessions/companion/games/catalog"],
+      ["POST", "/api/agent/v1/sessions/companion/games/play"],
+      ["POST", "/api/agent/v1/sessions/alice_session/games/play"],
+      ["POST", "/api/agent/v1/sessions/companion/games/switch"],
       ["POST", "/api/emote"],
       ["POST", "/api/conversations/7/operator-action"],
       ["GET", "/api/memories/feed?limit=10"],
@@ -804,7 +807,10 @@ describe("Alice Access gateway", () => {
       ["HEAD", "/vrm-decoders/draco/draco_decoder.wasm"],
       ["GET", "/api/stream/settings/nearby"],
       ["GET", "/vrm-decoders/draco/draco_decoder.js"],
-      ["POST", "/api/agent/v1/sessions/companion/games/play"],
+      ["GET", "/api/agent/v1/sessions/companion/games/play"],
+      ["PUT", "/api/agent/v1/sessions/companion/games/switch"],
+      ["POST", "/api/agent/v1/sessions/companion/games/play/nearby"],
+      ["POST", "/api/alice/operator/execute"],
       ["POST", "/api/agent/v1/sessions/companion/games/stop"],
       ["POST", "/api/unreviewed/execute"],
       ["GET", "/api/conversations/7/operator-action"],
@@ -946,6 +952,8 @@ describe("Alice Access gateway", () => {
     const env = await environment();
     for (const [method, pathname] of [
       ["GET", "/api/health"],
+      ["POST", "/api/agent/v1/sessions/companion/games/play"],
+      ["POST", "/api/agent/v1/sessions/companion/games/switch"],
       [
         "DELETE",
         "/api/knowledge/documents/00000000-0000-4000-8000-000000000001",

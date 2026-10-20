@@ -1181,13 +1181,14 @@ const FULL_RUNTIME_API_READS = [
   /^\/api\/coding-agents\/coordinator\/threads\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
   /^\/api\/apps\/runs$/,
   /^\/music-player\/status$/,
-  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/state$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/state$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
 const FULL_RUNTIME_WRITES = [
   /^\/api\/emote$/,
-  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/catalog$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/catalog$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/(?:play|switch)$/,
   /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,

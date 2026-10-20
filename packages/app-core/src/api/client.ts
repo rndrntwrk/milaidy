@@ -4247,8 +4247,22 @@ export class MiladyClient {
     return this.fetch(`/api/cloud/compat/jobs/${encodeURIComponent(jobId)}`);
   }
 
-  private getOrCreateArcade555SessionId(preferredSessionId?: string): string {
+  private async getOrCreateArcade555SessionId(
+    preferredSessionId?: string,
+  ): Promise<string> {
     const explicit = preferredSessionId?.trim();
+    const stream = await this.streamStatus();
+    if (stream.nativeStatus !== undefined) {
+      const sessionId = stream.sessionId?.trim();
+      if (
+        !sessionId || !/^[A-Za-z0-9_.:-]{1,128}$/.test(sessionId) ||
+        sessionId === "." || sessionId === ".." ||
+        (explicit && explicit !== sessionId)
+      ) {
+        throw new Error("Arcade requires Alice's configured native session.");
+      }
+      return sessionId;
+    }
     if (explicit) return explicit;
 
     const fallback =
@@ -4304,7 +4318,7 @@ export class MiladyClient {
     sessionId?: string;
     includeBeta?: boolean;
   }): Promise<Arcade555GamesCatalogResponse> {
-    const sessionId = this.getOrCreateArcade555SessionId(input?.sessionId);
+    const sessionId = await this.getOrCreateArcade555SessionId(input?.sessionId);
     return this.fetch(
       `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
       {
@@ -4320,7 +4334,7 @@ export class MiladyClient {
     mode?: "standard" | "ranked" | "spectate" | "solo" | "agent";
     sessionId?: string;
   }): Promise<Arcade555GameActionResponse> {
-    const sessionId = this.getOrCreateArcade555SessionId(input.sessionId);
+    const sessionId = await this.getOrCreateArcade555SessionId(input.sessionId);
     return this.fetch(
       `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/play`,
       {
@@ -4337,7 +4351,7 @@ export class MiladyClient {
     mode?: "standard" | "ranked" | "spectate" | "solo" | "agent";
     sessionId?: string;
   }): Promise<Arcade555GameActionResponse> {
-    const sessionId = this.getOrCreateArcade555SessionId(input.sessionId);
+    const sessionId = await this.getOrCreateArcade555SessionId(input.sessionId);
     return this.fetch(
       `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/switch`,
       {
@@ -4352,7 +4366,7 @@ export class MiladyClient {
   async stopArcade555Game(input?: {
     sessionId?: string;
   }): Promise<Arcade555GameActionResponse> {
-    const sessionId = this.getOrCreateArcade555SessionId(input?.sessionId);
+    const sessionId = await this.getOrCreateArcade555SessionId(input?.sessionId);
     return this.fetch(
       `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/stop`,
       {
@@ -4364,7 +4378,7 @@ export class MiladyClient {
   async getArcade555GameState(input?: {
     sessionId?: string;
   }): Promise<Arcade555GameStateResponse> {
-    const sessionId = this.getOrCreateArcade555SessionId(input?.sessionId);
+    const sessionId = await this.getOrCreateArcade555SessionId(input?.sessionId);
     return this.fetch(
       `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/state`,
     );
@@ -6302,6 +6316,7 @@ export class MiladyClient {
     ok: boolean;
     running: boolean;
     nativeStatus?: string;
+    sessionId?: string;
     ffmpegAlive: boolean;
     uptime: number;
     frameCount: number;

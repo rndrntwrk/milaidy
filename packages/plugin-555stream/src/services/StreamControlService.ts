@@ -803,6 +803,58 @@ export class StreamControlService implements Service {
   // Studio Methods
   // ==========================================
 
+  private readNativeGameSnapshot(value: unknown, sessionId: string) {
+    const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
+      candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate);
+    const validId = (candidate: unknown): candidate is string => typeof candidate === 'string' &&
+      /^[A-Za-z0-9_.:-]{1,128}$/.test(candidate) && candidate !== '.' && candidate !== '..';
+    type Snapshot = {
+      schemaVersion: 1; revision: number; updatedAt: number;
+      productionState: Record<string, unknown> & { sources: Record<string, unknown>[] };
+      scenes: unknown[]; activeSceneId: string | null; sceneDslEnabled: boolean;
+      graphics: Record<string, unknown> & { global: unknown[]; user: unknown[] };
+    };
+    if (!isRecord(value) || value.sessionId !== sessionId || !isRecord(value.snapshot))
+      throw new Error('Native composition does not match the configured session');
+    const raw = value.snapshot;
+    if (raw.schemaVersion !== 1 || !Number.isSafeInteger(raw.revision) ||
+        (raw.revision as number) < 1 || !Number.isSafeInteger(raw.updatedAt) ||
+        !isRecord(raw.productionState) || !Array.isArray(raw.productionState.sources) ||
+        !raw.productionState.sources.every(isRecord) || !Array.isArray(raw.scenes) ||
+        (raw.activeSceneId !== null && !validId(raw.activeSceneId)) ||
+        typeof raw.sceneDslEnabled !== 'boolean' || !isRecord(raw.graphics) ||
+        !Array.isArray(raw.graphics.global) || !Array.isArray(raw.graphics.user))
+      throw new Error('Native composition snapshot is incomplete or invalid');
+    const snapshot = raw as Snapshot;
+    if (snapshot.sceneDslEnabled) throw new Error('Native game selection does not support SceneDSL sources');
+    const games = snapshot.productionState.sources.filter(source => source.type === 'game' && source.visible === true);
+    if (games.length !== 1 || !validId(games[0].id))
+      throw new Error('Native game selection requires exactly one visible existing game source');
+    const selected = games[0];
+    if (selected.gameConfig !== undefined && !isRecord(selected.gameConfig))
+      throw new Error('The existing game source configuration is invalid');
+    return { snapshot, selected, sourceId: selected.id as string,
+      gameConfig: selected.gameConfig as Record<string, unknown> | undefined };
+  }
+
+  /** Read saved selection only; no game runtime registration, playback or input claim. */
+  async getNativeGameState(sessionId?: string): Promise<{
+    sessionId: string; sourceId: string; gameId: string; playMode: 'solo' | 'agent'; compositionRevision: number;
+  }> {
+    if (!isAliceNativeStreamRuntime()) throw new Error('Native game state requires the native Stream runtime');
+    const connection = await this.nativeConnection(sessionId);
+    const current = await connection.client.get<unknown>('/api/session/composition', {
+      headers: { 'X-Session-Id': connection.sessionId },
+    });
+    if (!current.success) throw new Error('Current native composition is unavailable');
+    const { snapshot, selected, sourceId, gameConfig } = this.readNativeGameSnapshot(current.data, connection.sessionId);
+    if (typeof selected.gameId !== 'string' || !/^[a-z0-9-]{1,128}$/.test(selected.gameId) ||
+        (gameConfig?.playMode !== 'solo' && gameConfig?.playMode !== 'agent'))
+      throw new Error('Native composition does not contain a valid game selection');
+    return { sessionId: connection.sessionId, sourceId, gameId: selected.gameId,
+      playMode: gameConfig.playMode, compositionRevision: snapshot.revision };
+  }
+
   /** Persist selection in the existing source; this does not prove playback or gameplay input. */
   async selectNativeGame(
     gameId: string,
@@ -815,42 +867,11 @@ export class StreamControlService implements Service {
     const selectedGameId = gameId.trim().toLowerCase();
     if (playMode !== 'solo' && playMode !== 'agent') throw new Error('Game play mode must be solo or agent');
     const connection = await this.nativeConnection(sessionId, 0);
-    const isRecord = (value: unknown): value is Record<string, unknown> =>
-      value !== null && typeof value === 'object' && !Array.isArray(value);
-    const validId = (value: unknown): value is string => typeof value === 'string' &&
-      /^[A-Za-z0-9_.:-]{1,128}$/.test(value) && value !== '.' && value !== '..';
-    type Snapshot = {
-      schemaVersion: 1; revision: number; updatedAt: number;
-      productionState: Record<string, unknown> & { sources: Record<string, unknown>[] };
-      scenes: unknown[]; activeSceneId: string | null; sceneDslEnabled: boolean;
-      graphics: Record<string, unknown> & { global: unknown[]; user: unknown[] };
-    };
-    const readSnapshot = (value: unknown): Snapshot => {
-      if (!isRecord(value) || value.sessionId !== connection.sessionId || !isRecord(value.snapshot))
-        throw new Error('Native composition does not match the configured session');
-      const snapshot = value.snapshot;
-      if (snapshot.schemaVersion !== 1 || !Number.isSafeInteger(snapshot.revision) ||
-          (snapshot.revision as number) < 1 || !Number.isSafeInteger(snapshot.updatedAt) ||
-          !isRecord(snapshot.productionState) || !Array.isArray(snapshot.productionState.sources) ||
-          !snapshot.productionState.sources.every(isRecord) || !Array.isArray(snapshot.scenes) ||
-          (snapshot.activeSceneId !== null && !validId(snapshot.activeSceneId)) ||
-          typeof snapshot.sceneDslEnabled !== 'boolean' || !isRecord(snapshot.graphics) ||
-          !Array.isArray(snapshot.graphics.global) || !Array.isArray(snapshot.graphics.user))
-        throw new Error('Native composition snapshot is incomplete or invalid');
-      return snapshot as Snapshot;
-    };
     const headers = { 'X-Session-Id': connection.sessionId };
     const current = await connection.client.get<unknown>('/api/session/composition', { headers });
     if (!current.success) throw new Error('Current native composition is unavailable');
-    const snapshot = readSnapshot(current.data);
-    if (snapshot.sceneDslEnabled) throw new Error('Native game selection does not support SceneDSL sources');
+    const { snapshot, selected, sourceId, gameConfig } = this.readNativeGameSnapshot(current.data, connection.sessionId);
     if (snapshot.revision >= Number.MAX_SAFE_INTEGER) throw new Error('Native composition revision cannot be advanced');
-    const games = snapshot.productionState.sources.filter(source => source.type === 'game' && source.visible === true);
-    if (games.length !== 1 || !validId(games[0].id))
-      throw new Error('Native game selection requires exactly one visible existing game source');
-    const selected = games[0];
-    if (selected.gameConfig !== undefined && !isRecord(selected.gameConfig))
-      throw new Error('The existing game source configuration is invalid');
 
     try {
       const deployed = await fetch(`${connection.studio.origin}/game-embed/${selectedGameId}/content`, {
@@ -865,7 +886,7 @@ export class StreamControlService implements Service {
 
     const productionState = { ...snapshot.productionState,
       sources: snapshot.productionState.sources.map(source => source === selected ? {
-        ...source, gameId: selectedGameId, gameConfig: { ...(source.gameConfig as Record<string, unknown> | undefined), playMode },
+        ...source, gameId: selectedGameId, gameConfig: { ...gameConfig, playMode },
       } : source),
     };
     try {
@@ -875,14 +896,12 @@ export class StreamControlService implements Service {
         sceneDslEnabled: snapshot.sceneDslEnabled, graphics: snapshot.graphics,
       }, { headers });
       if (!result.success) throw new Error('Composition write not confirmed');
-      const applied = readSnapshot(result.data);
-      const appliedGames = applied.productionState.sources.filter(source => source.id === selected.id && source.type === 'game' && source.visible === true);
-      if (applied.revision !== snapshot.revision + 1 || appliedGames.length !== 1 ||
-          appliedGames[0].gameId !== selectedGameId || !isRecord(appliedGames[0].gameConfig) ||
-          appliedGames[0].gameConfig.playMode !== playMode)
+      const applied = this.readNativeGameSnapshot(result.data, connection.sessionId);
+      if (applied.snapshot.revision !== snapshot.revision + 1 || applied.sourceId !== sourceId ||
+          applied.selected.gameId !== selectedGameId || applied.gameConfig?.playMode !== playMode)
         throw new Error('Composition readback did not confirm the selection');
-      return { sessionId: connection.sessionId, sourceId: selected.id as string,
-        gameId: selectedGameId, compositionRevision: applied.revision };
+      return { sessionId: connection.sessionId, sourceId,
+        gameId: selectedGameId, compositionRevision: applied.snapshot.revision };
     } catch {
       throw new Error('Native game selection was not confirmed; read current composition before retrying');
     }
