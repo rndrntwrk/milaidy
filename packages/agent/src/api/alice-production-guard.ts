@@ -81,6 +81,7 @@ const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
   /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
+  /^\/api\/conversations\/[^/]+\/operator-action$/,
   /^\/api\/companion\/stage$/,
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/subscription\/openai\/(?:start|exchange)$/,

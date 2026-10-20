@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { type AgentRuntime, logger } from "@elizaos/core";
 import {
   evaluateAliceProductionRequest,
+  isAliceFullRuntimeProfile,
   isAliceProductionRuntime,
 } from "@miladyai/agent/api/alice-production-guard";
 import { handleCloudBillingRoute } from "@miladyai/agent/api/cloud-billing-routes";
@@ -607,6 +608,12 @@ async function handleCompatMiscRoutes(
 ): Promise<boolean> {
   const method = (req.method ?? "GET").toUpperCase();
   const url = new URL(req.url ?? "/", "http://localhost");
+  // The native agent listener owns the authenticated avatar websocket. The
+  // compat misc state below has no broadcaster, so emotes must reach it.
+  if (
+    isAliceFullRuntimeProfile() &&
+    method === "POST" && url.pathname === "/api/emote"
+  ) return false;
   const config = loadElizaConfig();
   const agentName =
     state.current?.character?.name ??

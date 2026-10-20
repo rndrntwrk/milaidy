@@ -1,4 +1,6 @@
 import type { Action, AgentRuntime, Content } from "@elizaos/core";
+import { streamStatusAction } from "@rndrntwrk/plugin-555stream";
+import { playAction, switchAction } from "../plugins/five55-games/index.js";
 import { aliceChatCodingAction } from "./alice-chat-coding.js";
 
 import {
@@ -55,6 +57,19 @@ export function enforceAliceActionExecutionBoundary<T extends Action>(
   // This concrete native handler verifies the incoming owner message. A same-name
   // desktop executor stays denied; the controller admits only an exact draft PR grant.
   if (action === aliceChatCodingAction) return action;
+
+  // Plugin registration copies actions to add contexts. Keep the reviewed
+  // handler and validation identities; names alone cannot admit a substitute.
+  if (
+    [streamStatusAction, playAction, switchAction].some(
+      (native) =>
+        action.name === native.name &&
+        action.handler === native.handler &&
+        action.validate === native.validate,
+    )
+  ) {
+    return action;
+  }
 
   const marked = action as T & { [ACTION_GUARDED]?: true };
   if (marked[ACTION_GUARDED] || isAliceFullGatedSafeActionName(action.name)) {

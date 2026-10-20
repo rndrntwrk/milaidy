@@ -226,6 +226,7 @@ import { handleLifeOpsRoutes } from "./lifeops-routes.js";
 import { handleMcpRoutes } from "./mcp-routes.js";
 import { pushWithBatchEvict, sweepExpiredEntries } from "./memory-bounds.js";
 import { handleMemoryRoutes } from "./memory-routes.js";
+import { handleAliceEmoteRoutes } from "./alice-emote-routes.js";
 import { handleMiscRoutes } from "./misc-routes.js";
 import { handleModelsRoutes } from "./models-routes.js";
 import { tryHandleMusicPlayerStatusFallback } from "./music-player-route-fallback.js";
@@ -6790,6 +6791,16 @@ async function handleRequest(
   // ═══════════════════════════════════════════════════════════════════════
   // Misc routes (extracted to misc-routes.ts)
   // ═══════════════════════════════════════════════════════════════════════
+  if (
+    isAliceFullRuntimeProfile() &&
+    await handleAliceEmoteRoutes({
+      req, res, method, pathname, json, error, readJsonBody,
+      runtime: state.runtime,
+      broadcastWs: state.broadcastWs ?? undefined,
+    })
+  ) {
+    return;
+  }
   if (
     await handleMiscRoutes({
       req,

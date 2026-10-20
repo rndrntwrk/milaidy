@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
 import {
+  type Action,
   type IAgentRuntime,
   type Memory,
   type Provider,
   satisfiesContextGate,
   type UUID,
 } from "@elizaos/core";
+import { streamStatusAction } from "@rndrntwrk/plugin-555stream";
+import { createFive55GamesPlugin } from "../plugins/five55-games/index";
 import {
   AliceChatCodingService,
   aliceChatCodingAction,
@@ -223,6 +226,64 @@ test("full-gated boundary admits only the native owner handler, not a same-name 
     success: false,
     error: "ALICE_HIGH_RISK_ACTION_DENIED",
   });
+});
+
+test("full-gated registration preserves reviewed native Stream and game handlers, including context copies", () => {
+  const canonicalActions = [
+    streamStatusAction as unknown as Action,
+    ...createFive55GamesPlugin().actions!.filter((action) =>
+      ["FIVE55_GAMES_PLAY", "FIVE55_GAMES_SWITCH"].includes(action.name),
+    ),
+  ];
+  expect(canonicalActions).toHaveLength(3);
+  const runtime = {
+    actions: canonicalActions.map((action) => ({
+      ...action,
+      contexts: ["social"],
+    })) as Action[],
+    logger: fixture().runtime.logger,
+    registerAction(action: Action) {
+      this.actions.push(action);
+    },
+  };
+  const env = {
+    ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+    ALICE_RUNTIME_PROFILE: "full-gated",
+  };
+  installAliceHighRiskActionBoundary(runtime as never, env);
+  for (const action of canonicalActions) {
+    const registered = runtime.actions.find((entry) => entry.name === action.name);
+    expect(registered?.handler).toBe(action.handler);
+    expect(registered?.validate).toBe(action.validate);
+    runtime.registerAction(action);
+    expect(runtime.actions.at(-1)).toBe(action);
+  }
+});
+
+test("full-gated native action admission rejects same-name replacement handlers", async () => {
+  const canonicalActions = [
+    streamStatusAction as unknown as Action,
+    ...createFive55GamesPlugin().actions!.filter((action) =>
+      ["FIVE55_GAMES_PLAY", "FIVE55_GAMES_SWITCH"].includes(action.name),
+    ),
+  ];
+  for (const action of canonicalActions) {
+    const fake = {
+      ...action,
+      handler: async () => {
+        throw new Error("unreviewed handler ran");
+      },
+    };
+    const guarded = enforceAliceActionExecutionBoundary(fake, {
+      ALICE_RUNTIME_AUTHORITY_MODE: "proposer-only",
+      ALICE_RUNTIME_PROFILE: "full-gated",
+    });
+    expect(await guarded.validate(fixture().runtime, message)).toBe(false);
+    expect(await guarded.handler(fixture().runtime, message)).toMatchObject({
+      success: false,
+      error: "ALICE_HIGH_RISK_ACTION_DENIED",
+    });
+  }
 });
 
 test("native coding is available to the owner in the planner's code context", async () => {

@@ -858,7 +858,7 @@ const catalogAction: Action = {
   ],
 };
 
-const playAction: Action = {
+export const playAction: Action = {
   name: "FIVE55_GAMES_PLAY",
   similes: ["PLAY_GAME", "START_FIVE55_GAME", "LAUNCH_FIVE55_GAME"],
   description:
@@ -941,7 +941,7 @@ const playAction: Action = {
   ],
 };
 
-const switchAction: Action = {
+export const switchAction: Action = {
   name: "FIVE55_GAMES_SWITCH",
   similes: ["SWITCH_FIVE55_GAME", "CHANGE_FIVE55_GAME"],
   description: "Switches the active Five55 game inside the current session.",

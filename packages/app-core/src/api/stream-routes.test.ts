@@ -130,6 +130,7 @@ function mockStream555Service(
     getStreamStatus: (sessionId?: string) => Promise<{
       sessionId: string;
       active: boolean;
+      status?: string;
       cfSessionId?: string;
       cloudflare?: { isConnected?: boolean; state?: string };
       startTime?: number;
@@ -582,6 +583,30 @@ describe("handleStreamRoute", () => {
         );
         expect(getStatus()).toBe(200);
         expect(getJson()).toMatchObject({ ok: true, sessionId: "alice-session", running: false });
+        expect(service.getStreamStatus).toHaveBeenCalledWith("alice-session");
+        expect(service.createOrResumeSession).not.toHaveBeenCalled();
+        expect(service.bindWebSocket).not.toHaveBeenCalled();
+      });
+
+      it("projects native capture status without promoting platform delivery health", async () => {
+        const service = mockStream555Service({
+          getConfig: vi.fn(() => ({ defaultSessionId: "alice-session" })),
+          getStreamStatus: vi.fn(async () => ({
+            sessionId: "alice-session", active: true, status: "live",
+            serverFallbackActive: false,
+            platforms: { youtube: { enabled: true, status: "connecting" } },
+          })),
+        });
+        const { res, getStatus, getJson } = createMockHttpResponse();
+        await handleStreamRoute(
+          createMockIncomingMessage({ method: "GET", url: "/api/stream/status" }),
+          res, "/api/stream/status", "GET",
+          mockState({ runtime: { getService: vi.fn(() => service) } }),
+        );
+        expect(getStatus()).toBe(200);
+        expect(getJson()).toMatchObject({
+          sessionId: "alice-session", nativeStatus: "live", running: true, ffmpegAlive: false,
+        });
         expect(service.getStreamStatus).toHaveBeenCalledWith("alice-session");
         expect(service.createOrResumeSession).not.toHaveBeenCalled();
         expect(service.bindWebSocket).not.toHaveBeenCalled();

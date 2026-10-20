@@ -6301,6 +6301,7 @@ export class MiladyClient {
   async streamStatus(): Promise<{
     ok: boolean;
     running: boolean;
+    nativeStatus?: string;
     ffmpegAlive: boolean;
     uptime: number;
     frameCount: number;
