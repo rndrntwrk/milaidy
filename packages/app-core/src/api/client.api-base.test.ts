@@ -221,6 +221,70 @@ describe("MiladyClient runtime API base/token fallback", () => {
     );
   });
 
+  it("consumes one chat stream whose headers arrive after twelve seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const { MiladyClient } = await import("./client");
+      const encoder = new TextEncoder();
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+        () => new Promise<Response>((resolve) => {
+          setTimeout(() => resolve(new Response(new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode('data: {"type":"token","text":"Hello Alice","fullText":"Hello Alice"}\n\n'));
+              controller.enqueue(encoder.encode('data: {"type":"done","fullText":"Hello Alice","agentName":"Alice"}\n\n'));
+              controller.close();
+            },
+          }), { headers: { "Content-Type": "text/event-stream" } })), 12_000);
+        }),
+      );
+      const onToken = vi.fn();
+      const client = new MiladyClient("http://127.0.0.1:31337");
+      const completion = client.sendConversationMessageStream(
+        "conversation-1", "Hello", onToken,
+      ).then((result) => ({ result }), (error: unknown) => ({ error }));
+
+      await vi.advanceTimersByTimeAsync(12_000);
+      expect(await completion).toMatchObject({ result: {
+        text: "Hello Alice", agentName: "Alice", completed: true,
+      } });
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(onToken).toHaveBeenCalledExactlyOnceWith("Hello Alice", "Hello Alice");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the shipped chat stream header deadline bounded to sixty seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const { MiladyClient } = await import("./client");
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+        () => new Promise<Response>(() => {}),
+      );
+      const client = new MiladyClient("http://127.0.0.1:31337");
+      let settled = false;
+      const outcome = client.sendConversationMessageStream(
+        "conversation-1", "Hello", vi.fn(),
+      ).then(
+        (result) => ({ result }),
+        (error: unknown) => ({ error }),
+      );
+      void outcome.then(() => { settled = true; });
+
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await outcome).toMatchObject({ error: {
+        kind: "timeout",
+        path: "/api/conversations/conversation-1/messages/stream",
+        message: "Request timed out after 60000ms",
+      } });
+      expect(fetchSpy).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("aborts timed-out requests instead of leaving fetches pending", async () => {
     vi.useFakeTimers();
     try {

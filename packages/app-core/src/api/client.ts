@@ -5207,6 +5207,7 @@ export class MiladyClient {
     completed: boolean;
     usage?: ChatTokenUsage;
   }> {
+    // Chat can take longer than ordinary API requests to return SSE headers.
     const res = await this.rawRequest(path, {
       method: "POST",
       headers: {
@@ -5220,7 +5221,7 @@ export class MiladyClient {
         ...(conversationMode ? { conversationMode } : {}),
       }),
       signal,
-    });
+    }, { timeoutMs: 60_000 });
 
     if (!res.body) {
       throw new Error("Streaming not supported by this browser");
