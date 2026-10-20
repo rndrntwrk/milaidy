@@ -63,46 +63,23 @@ describe("five55-games-routes", () => {
       process.env.FIVE55_HTTP_RETRIES = "0";
     });
 
-    it("reads the catalog from the configured session without a bootstrap request", async () => {
-      const catalog = { sessionId: "alice-session", games: [{ id: "ninja" }] };
-      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-        new Response(JSON.stringify(catalog)),
-      );
-      const { ctx, getStatus, getJson } = buildCtx(
-        "POST", "/api/agent/v1/sessions/browser-local/games/catalog",
-        { readJsonBody: vi.fn(async () => ({ includeBeta: true })) },
-      );
-      await handleFive55GamesRoutes(ctx);
-      expect(getStatus()).toBe(200);
-      expect(getJson()).toEqual(catalog);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://stream555.example/api/agent/v1/sessions/alice-session/games/catalog");
-      expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
-      expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ includeBeta: true });
-    });
-
     it("does not request a catalog without the configured session", async () => {
       delete process.env.STREAM555_DEFAULT_SESSION_ID;
+      process.env.MILADY_TRUST_CLOUDFLARE_ACCESS = "true";
+      process.env.MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET = "test-owner-proof";
       const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
         new Response(JSON.stringify({ sessionId: "browser-local", games: [] })),
       );
-      const { ctx, getStatus } = buildCtx("POST", "/api/agent/v1/sessions/browser-local/games/catalog");
+      const pathname = "/api/agent/v1/sessions/alice-session/games/catalog";
+      const { ctx, getStatus } = buildCtx("POST", pathname, {
+        req: createMockIncomingMessage({ method: "POST", url: pathname, headers: {
+          "cf-access-authenticated-user-email": "alice-owner-verified.invalid",
+          "x-milady-cloudflare-access-secret": "test-owner-proof",
+        } }),
+      });
       await handleFive55GamesRoutes(ctx);
       expect(getStatus()).toBe(503);
       expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    it.each([
-      { sessionId: "unrelated-session", games: [] },
-      { sessionId: "alice-session", games: null },
-    ])("rejects an unverified catalog response: %j", async (catalog) => {
-      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-        new Response(JSON.stringify(catalog)),
-      );
-      const { ctx, getStatus } = buildCtx("POST", "/api/agent/v1/sessions/browser-local/games/catalog");
-      await handleFive55GamesRoutes(ctx);
-      expect(getStatus()).toBe(502);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("does not request native selection without verified owner ingress", async () => {
@@ -169,6 +146,35 @@ describe("five55-games-routes", () => {
       });
     }
 
+    it("reads the native deployed catalog with the requested beta visibility and no bootstrap", async () => {
+      const games = [{ id: "555drive", name: "555 Drive", inputType: "keyboard", description: "Racing game" }];
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        expect(String(input)).toBe("https://stream.rndrntwrk.com/api/sources/games?beta=true");
+        expect(init?.method).toBe("GET");
+        expect(init?.body).toBeUndefined();
+        expect(new Headers(init?.headers).get("X-Session-Id")).toBe("alice-session");
+        return Response.json(games);
+      });
+      const request = nativeCtx("POST", "catalog", "alice-session", ownerHeaders, { includeBeta: true });
+      await handleFive55GamesRoutes(request.ctx);
+      expect(request.getStatus()).toBe(200);
+      expect(request.getJson()).toEqual({ ok: true, sessionId: "alice-session", games });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects invalid native catalog methods and body fields before calling Stream", async () => {
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected upstream call"));
+      const wrongMethod = nativeCtx("GET", "catalog", "alice-session", ownerHeaders, {});
+      await handleFive55GamesRoutes(wrongMethod.ctx);
+      expect(wrongMethod.getStatus()).toBe(405);
+      for (const body of [{ includeBeta: "true" }, { includeBeta: true, sessionId: "foreign-session" }]) {
+        const request = nativeCtx("POST", "catalog", "alice-session", ownerHeaders, body);
+        await handleFive55GamesRoutes(request.ctx);
+        expect(request.getStatus()).toBe(400);
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it("reads saved selection and selects through native CAS without bootstrap or gameplay claims", async () => {
       const calls: string[] = [];
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -210,10 +216,11 @@ describe("five55-games-routes", () => {
 
     it("rejects foreign sessions, forged owner identity and stop before any upstream call", async () => {
       const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected upstream call"));
-      for (const operation of ["state", "play", "switch", "stop"]) {
+      for (const operation of ["catalog", "state", "play", "switch", "stop"]) {
         const method = operation === "state" ? "GET" : "POST";
         for (const [sessionId, headers] of [
           ["foreign-session", ownerHeaders],
+          ["%61lice-session", ownerHeaders],
           ["alice-session", { ...ownerHeaders, "x-milady-cloudflare-access-secret": "wrong-proof" }],
           ["alice-session", { ...ownerHeaders, "cf-access-authenticated-user-email": "alice-gameplay-observer.invalid" }],
           ...(operation === "stop" ? [["alice-session", ownerHeaders] as const] : []),

@@ -810,15 +810,48 @@ async function selectNativeGame(
   };
 }
 
-const catalogAction: Action = {
+export const catalogAction: Action = {
   name: "FIVE55_GAMES_CATALOG",
   similes: ["LIST_FIVE55_GAMES", "FIVE55_GAME_CATALOG", "LIST_GAMES"],
   description:
     "Returns the current Five55 game catalog for the active session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, _message, _state, options) => {
     try {
       assertFive55Capability(CAPABILITY_POLICY, "games.observe");
+      if (isAliceNativeStreamRuntime()) {
+        const service = runtime.getService("stream555") as unknown as
+          | {
+              getNativeGameCatalog?: (
+                includeBeta: boolean,
+                sessionId?: string,
+              ) => Promise<unknown>;
+            }
+          | undefined;
+        if (typeof service?.getNativeGameCatalog !== "function") {
+          throw new Error("Native Stream game catalog is unavailable");
+        }
+        const includeBeta = readParam(
+          options as HandlerOptions | undefined,
+          "includeBeta",
+        );
+        const data = await service.getNativeGameCatalog(
+          includeBeta ? includeBeta.trim().toLowerCase() !== "false" : true,
+          readParam(options as HandlerOptions | undefined, "sessionId"),
+        );
+        return {
+          success: true,
+          text: JSON.stringify({
+            ok: true,
+            code: "OK",
+            module: "five55.games",
+            action: "FIVE55_GAMES_CATALOG",
+            status: 200,
+            message: "game catalog resolved",
+            data,
+          }),
+        };
+      }
       const dialect = resolveGamesDialect();
       const base = resolveGamesBase(dialect);
       const sessionId = await resolveSessionId(

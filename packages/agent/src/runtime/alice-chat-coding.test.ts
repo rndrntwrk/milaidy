@@ -232,10 +232,14 @@ test("full-gated registration preserves reviewed native Stream and game handlers
   const canonicalActions = [
     streamStatusAction as unknown as Action,
     ...createFive55GamesPlugin().actions!.filter((action) =>
-      ["FIVE55_GAMES_PLAY", "FIVE55_GAMES_SWITCH"].includes(action.name),
+      [
+        "FIVE55_GAMES_CATALOG",
+        "FIVE55_GAMES_PLAY",
+        "FIVE55_GAMES_SWITCH",
+      ].includes(action.name),
     ),
   ];
-  expect(canonicalActions).toHaveLength(3);
+  expect(canonicalActions).toHaveLength(4);
   const runtime = {
     actions: canonicalActions.map((action) => ({
       ...action,
@@ -264,7 +268,11 @@ test("full-gated native action admission rejects same-name replacement handlers"
   const canonicalActions = [
     streamStatusAction as unknown as Action,
     ...createFive55GamesPlugin().actions!.filter((action) =>
-      ["FIVE55_GAMES_PLAY", "FIVE55_GAMES_SWITCH"].includes(action.name),
+      [
+        "FIVE55_GAMES_CATALOG",
+        "FIVE55_GAMES_PLAY",
+        "FIVE55_GAMES_SWITCH",
+      ].includes(action.name),
     ),
   ];
   for (const action of canonicalActions) {

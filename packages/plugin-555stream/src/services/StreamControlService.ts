@@ -837,6 +837,44 @@ export class StreamControlService implements Service {
       gameConfig: selected.gameConfig as Record<string, unknown> | undefined };
   }
 
+  /** Read only the deployed public registry through the configured native grant. */
+  async getNativeGameCatalog(includeBeta = true, sessionId?: string): Promise<{
+    sessionId: string;
+    games: Array<{ id: string; name: string; inputType: 'keyboard' | 'mouse';
+      beta?: boolean; description?: string; path?: string }>;
+  }> {
+    if (!isAliceNativeStreamRuntime()) throw new Error('Native game catalog requires the native Stream runtime');
+    if (typeof includeBeta !== 'boolean') throw new Error('Native game catalog beta visibility must be boolean');
+    const connection = await this.nativeConnection(sessionId);
+    const response = await connection.client.get<unknown>(
+      `/api/sources/games${includeBeta ? '?beta=true' : ''}`,
+      { headers: { 'X-Session-Id': connection.sessionId } },
+    );
+    if (!response.success || !Array.isArray(response.data))
+      throw new Error('Native game catalog is unavailable or invalid');
+    const games = response.data.map(value => {
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw new Error('Native game catalog entry is invalid');
+      const game = value as Record<string, unknown>;
+      if (typeof game.id !== 'string' || !/^[a-z0-9-]{1,128}$/.test(game.id) ||
+          typeof game.name !== 'string' || !game.name.trim() || game.name.length > 256 ||
+          (game.inputType !== 'keyboard' && game.inputType !== 'mouse') ||
+          (game.beta !== undefined && typeof game.beta !== 'boolean') ||
+          (game.description !== undefined && (typeof game.description !== 'string' || game.description.length > 4096)) ||
+          (game.path !== undefined && (typeof game.path !== 'string' || game.path.length > 512 ||
+            !/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(game.path) ||
+            game.path.split('/').some(part => part === '.' || part === '..'))))
+        throw new Error('Native game catalog public metadata is invalid');
+      return {
+        id: game.id, name: game.name, inputType: game.inputType as 'keyboard' | 'mouse',
+        ...(typeof game.beta === 'boolean' ? { beta: game.beta } : {}),
+        ...(typeof game.description === 'string' ? { description: game.description } : {}),
+        ...(typeof game.path === 'string' ? { path: game.path } : {}),
+      };
+    });
+    return { sessionId: connection.sessionId, games };
+  }
+
   /** Read saved selection only; no game runtime registration, playback or input claim. */
   async getNativeGameState(sessionId?: string): Promise<{
     sessionId: string; sourceId: string; gameId: string; playMode: 'solo' | 'agent'; compositionRevision: number;

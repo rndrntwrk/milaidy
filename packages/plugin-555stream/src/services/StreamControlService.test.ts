@@ -140,6 +140,59 @@ describe("StreamControlService", () => {
     } finally { globalThis.fetch = originalFetch; await service.stop(); }
   });
 
+  it("reads the deployed native game catalog with the existing grant and public metadata", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    const grant = nativeGrant();
+    setEnv("STREAM555_AGENT_TOKEN", grant);
+    const game = { id: '555drive', name: '555 Drive', inputType: 'keyboard',
+      description: 'Racing game', beta: true, path: 'beta/555drive/public' };
+    const calls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      assert.equal(init?.method, 'GET');
+      assert.equal(init?.body, undefined);
+      assert.equal(new Headers(init?.headers).get('Authorization'), `Bearer ${grant}`);
+      assert.equal(new Headers(init?.headers).get('X-Session-Id'), 'alice-session');
+      calls.push(String(input));
+      return Response.json([{ ...game, privateToken: 'must-not-be-returned' }]);
+    };
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      assert.deepEqual(await service.getNativeGameCatalog(), { sessionId: 'alice-session', games: [game] });
+      assert.deepEqual(await service.getNativeGameCatalog(false, 'alice-session'), { sessionId: 'alice-session', games: [game] });
+      assert.deepEqual(calls, [
+        'https://stream.rndrntwrk.com/api/sources/games?beta=true',
+        'https://stream.rndrntwrk.com/api/sources/games',
+      ]);
+      assert.equal(service.getBoundSessionId(), null);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("rejects malformed native catalogs and foreign sessions without a legacy fallback", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant());
+    const originalFetch = globalThis.fetch;
+    let payload: unknown = { games: [] };
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return Response.json(payload); };
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      await assert.rejects(service.getNativeGameCatalog(), /native game catalog/i);
+      payload = [{ id: '555drive', name: '555 Drive', inputType: 'keyboard', path: '../private' }];
+      await assert.rejects(service.getNativeGameCatalog(), /native game catalog/i);
+      payload = [{ id: '555drive', name: '555 Drive', inputType: 'unsupported' }];
+      await assert.rejects(service.getNativeGameCatalog(), /native game catalog/i);
+      await assert.rejects(service.getNativeGameCatalog(true, 'other-session'), /configured native session/);
+      assert.equal(calls, 3);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
   it("renews native credentials while idle and finishes persistence before stopping", async () => {
     setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
     setEnv("ALICE_RUNTIME_PROFILE", "full-gated");

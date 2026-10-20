@@ -1,6 +1,10 @@
 import type { Action, AgentRuntime, Content } from "@elizaos/core";
 import { streamStatusAction } from "@rndrntwrk/plugin-555stream";
-import { playAction, switchAction } from "../plugins/five55-games/index.js";
+import {
+  catalogAction,
+  playAction,
+  switchAction,
+} from "../plugins/five55-games/index.js";
 import { aliceChatCodingAction } from "./alice-chat-coding.js";
 
 import {
@@ -61,7 +65,7 @@ export function enforceAliceActionExecutionBoundary<T extends Action>(
   // Plugin registration copies actions to add contexts. Keep the reviewed
   // handler and validation identities; names alone cannot admit a substitute.
   if (
-    [streamStatusAction, playAction, switchAction].some(
+    [streamStatusAction, catalogAction, playAction, switchAction].some(
       (native) =>
         action.name === native.name &&
         action.handler === native.handler &&

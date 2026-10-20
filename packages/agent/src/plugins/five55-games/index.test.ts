@@ -237,6 +237,40 @@ describe("five55-games plugin", () => {
     process.env.STREAM555_AGENT_TOKEN = "static-token";
   });
 
+  it("lists the deployed native catalog through the existing Stream service without session setup", async () => {
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("Legacy requests are forbidden"));
+    const catalog = {
+      sessionId: "session-1",
+      games: [{ id: "555drive", name: "555 Drive", inputType: "keyboard" }],
+    };
+    const getNativeGameCatalog = vi.fn(async () => catalog);
+    const runtime = {
+      ...buildRuntime(),
+      getService: vi.fn(() => ({ getNativeGameCatalog })),
+    } as unknown as IAgentRuntime;
+    const action = createFive55GamesPlugin().actions?.find(
+      (entry) => entry.name === "FIVE55_GAMES_CATALOG",
+    );
+    const result = await action?.handler?.(
+      runtime,
+      buildMessage(),
+      undefined,
+      { parameters: { includeBeta: "false", sessionId: "session-1" } },
+      undefined,
+    );
+    expect(result?.success).toBe(true);
+    expect(actionResultText(result as { text: string })).toMatchObject({
+      message: "game catalog resolved",
+      data: catalog,
+    });
+    expect(getNativeGameCatalog).toHaveBeenCalledExactlyOnceWith(false, "session-1");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("selects native games through the existing Stream service without legacy session setup", async () => {
     process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
     process.env.ALICE_RUNTIME_PROFILE = "full-gated";
