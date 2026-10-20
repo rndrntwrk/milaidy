@@ -545,6 +545,7 @@ describe("Alice Access gateway", () => {
       "/broadcast/alice-cam",
       "/assets/main.js",
       "/animations/idle.glb.gz",
+      "/animations/mixamo/Gangnam%20Style.fbx.gz",
       "/animations/emotes/talk.glb.gz",
       "/animations/greetings/greeting9.fbx.gz",
     ]) {
@@ -595,6 +596,7 @@ describe("Alice Access gateway", () => {
       "/broadcast/alice-cam",
       "/assets/main.js",
       "/animations/idle.glb.gz",
+      "/animations/mixamo/Gangnam%20Style.fbx.gz",
       "/animations/emotes/talk.glb.gz",
       "/animations/greetings/greeting9.fbx.gz",
     ]);
@@ -794,6 +796,8 @@ describe("Alice Access gateway", () => {
       ["GET", "/api/sandbox/browser"],
       ["GET", "/api/unreviewed/read"],
       ["POST", "/animations/idle.glb.gz"],
+      ["GET", "/animations/mixamo/Gangnam%2fStyle.fbx.gz"],
+      ["GET", "/animations/mixamo/Gangnam%2520Style.fbx.gz"],
       ["POST", "/api/stream/start"],
       ["POST", "/api/stream/settings"],
       ["POST", "/api/streaming/destinations"],

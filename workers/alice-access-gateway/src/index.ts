@@ -1,3 +1,4 @@
+import { isAliceAnimationAssetPath } from "../../../packages/agent/src/api/alice-production-guard";
 import { verifyAccessJwt } from "../../alice-production-control/src/access";
 import { jsonResponse } from "../../alice-production-control/src/http";
 import {
@@ -1216,6 +1217,7 @@ function isFullRuntimeUiPath(pathname: string): boolean {
   ) {
     return true;
   }
+  if (isAliceAnimationAssetPath(pathname)) return true;
   if (pathname.includes("%") || pathname.split("/").includes("..")) return false;
   return (
     /^\/(?:assets|animations|vrms|models|fonts|icons|images|sounds|audio)\/[a-zA-Z0-9._/-]+$/.test(
