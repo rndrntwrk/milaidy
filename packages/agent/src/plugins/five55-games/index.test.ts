@@ -237,6 +237,46 @@ describe("five55-games plugin", () => {
     process.env.STREAM555_AGENT_TOKEN = "static-token";
   });
 
+  it("selects native games through the existing Stream service without legacy session setup", async () => {
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("Legacy requests are forbidden"));
+    const selection = {
+      sessionId: "session-1",
+      sourceId: "game-1",
+      gameId: "ninja",
+      compositionRevision: 23,
+    };
+    const selectNativeGame = vi.fn(async () => selection);
+    const runtime = {
+      ...buildRuntime(),
+      getService: vi.fn(() => ({ selectNativeGame })),
+    } as unknown as IAgentRuntime;
+    const plugin = createFive55GamesPlugin();
+    for (const name of ["FIVE55_GAMES_PLAY", "FIVE55_GAMES_SWITCH"]) {
+      const action = plugin.actions?.find((entry) => entry.name === name);
+      const result = await action?.handler?.(
+        runtime,
+        buildMessage(),
+        { values: { trustedAdmin: true } } as unknown as State,
+        { parameters: { gameId: "ninja", sessionId: "session-1" } },
+        undefined,
+      );
+      expect(result?.success).toBe(true);
+      expect(actionResultText(result as { text: string })).toMatchObject({
+        message: "game selection saved",
+        data: selection,
+      });
+    }
+    expect(selectNativeGame.mock.calls).toEqual([
+      ["ninja", "agent", "session-1"],
+      ["ninja", "agent", "session-1"],
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("defaults play mode to agent and resolves a game id from catalog", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
@@ -622,6 +662,9 @@ describe("five55-games plugin", () => {
   });
 
   it("rejects play actions when the caller is not trusted", async () => {
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+    const fetchMock = vi.spyOn(globalThis, "fetch");
     const plugin = createFive55GamesPlugin();
     const action = plugin.actions?.find(
       (entry) => entry.name === "FIVE55_GAMES_PLAY",
@@ -636,5 +679,6 @@ describe("five55-games plugin", () => {
 
     expect(result?.success).toBe(false);
     expect(actionResultText(result as { text: string }).status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

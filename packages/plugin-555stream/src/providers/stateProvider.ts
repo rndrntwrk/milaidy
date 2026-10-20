@@ -1,12 +1,12 @@
 /**
  * STREAM555_STATE Provider
  *
- * Provides current cached session state for LLM context.
+ * Provides current native status or legacy cached session state for LLM context.
  */
 
-import type { Provider, IAgentRuntime, Memory, State } from '../types/index.js';
-import { StreamControlService } from '../services/StreamControlService.js';
-import type { SessionState, ProductionState, PlatformStatus } from '../types/index.js';
+import type { Provider, ProviderResult, IAgentRuntime, Memory, State, SessionState, StreamStatus, PlatformStatus } from '../types/index.js';
+import type { StreamControlService } from '../services/StreamControlService.js';
+import { isAliceNativeStreamRuntime } from '../lib/agentAuth.js';
 
 export const stateProvider: Provider = {
   name: 'STREAM555_STATE',
@@ -16,26 +16,48 @@ export const stateProvider: Provider = {
     runtime: IAgentRuntime,
     _message: Memory,
     _state?: State
-  ): Promise<string> => {
+  ): Promise<ProviderResult> => {
+    const native = isAliceNativeStreamRuntime();
     try {
       const service = runtime.getService('stream555') as StreamControlService | undefined;
 
       if (!service) {
-        return formatNotInitialized();
+        return { text: native ? '## 555stream Status\nCurrent native Stream status is unavailable; the service is not initialized.' : formatNotInitialized() };
+      }
+
+      if (native) {
+        const sessionId = service.getConfig()?.defaultSessionId?.trim();
+        if (!sessionId) return { text: '## 555stream Status\nCurrent native Stream status is unavailable; no session is configured.' };
+        return { text: formatNativeStatus(await service.getStreamStatus(sessionId)) };
       }
 
       const sessionState = service.getState();
 
       if (!sessionState) {
-        return formatNoSession(service);
+        return { text: formatNoSession(service) };
       }
 
-      return formatStateForLLM(sessionState);
-    } catch (error) {
-      return `[555stream State Error] ${(error as Error).message}`;
+      return { text: formatStateForLLM(sessionState) };
+    } catch {
+      return { text: native ? '## 555stream Status\nCurrent native Stream status is unavailable. No live state has been verified.' : '[555stream State Error] Current session state is unavailable.' };
     }
   },
 };
+
+function formatNativeStatus(state: StreamStatus): string {
+  const lines = [
+    '## 555stream Native Status',
+    `**Session ID:** ${state.sessionId}`,
+    `**Capture State:** ${state.status ?? 'unavailable'}`,
+    `**Stream Active:** ${state.active ? 'YES - LIVE' : 'No'}`,
+  ];
+  if (state.jobId) lines.push(`**Dispatch ID:** ${state.jobId}`);
+  if (state.continuity) lines.push(`**Continuity:** ${state.continuity.publisher} (${state.continuity.status})`);
+  for (const [name, platform] of Object.entries(state.platforms)) {
+    lines.push(`- ${name}: ${platform.status}`);
+  }
+  return lines.join('\n');
+}
 
 function formatNotInitialized(): string {
   return `## 555stream Status

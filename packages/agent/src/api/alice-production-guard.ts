@@ -142,6 +142,15 @@ export function evaluateAliceProductionRequest(
   if (normalizedMethod === "OPTIONS") return { allowed: true };
 
   if (isAliceFullRuntimeProfile(env)) {
+    if (normalizedMethod === "GET" && [
+      "/vrm-decoders/draco/draco_wasm_wrapper.js",
+      "/vrm-decoders/draco/draco_decoder.wasm",
+      "/api/stream/settings",
+      "/api/streaming/destinations",
+      "/api/agent/events",
+    ].includes(pathname)) {
+      return { allowed: true };
+    }
     if (normalizedMethod === "PUT" &&
       (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname) ||
         /^\/api\/lifeops\/(?:definitions|goals)\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(pathname))) {

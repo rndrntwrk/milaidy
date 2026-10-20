@@ -1226,6 +1226,16 @@ function isFullRuntimeApiRead(pathname: string): boolean {
   return FULL_RUNTIME_API_READS.some((pattern) => pattern.test(pathname));
 }
 
+function isFullRuntimeCompanionGet(method: string, pathname: string): boolean {
+  return method.toUpperCase() === "GET" && [
+    "/vrm-decoders/draco/draco_wasm_wrapper.js",
+    "/vrm-decoders/draco/draco_decoder.wasm",
+    "/api/stream/settings",
+    "/api/streaming/destinations",
+    "/api/agent/events",
+  ].includes(pathname);
+}
+
 function isFullRuntimeProof(proof: unknown): boolean {
   return (
     isPlainObject(proof) &&
@@ -1236,6 +1246,7 @@ function isFullRuntimeProof(proof: unknown): boolean {
 
 function isFullRuntimeRequest(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
+  if (isFullRuntimeCompanionGet(method, pathname)) return true;
   if (normalized === "PUT" &&
     (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname) ||
       /^\/api\/lifeops\/(?:definitions|goals)\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(pathname))) return true;
@@ -1281,6 +1292,7 @@ function isFullRuntimeProductApi(method: string, pathname: string): boolean {
 
 function isAdmittedRuntimeRequest(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
+  if (isFullRuntimeCompanionGet(method, pathname)) return true;
   if (normalized === "POST" && pathname === "/v1/chat/completions") return true;
   if (normalized === "GET" || normalized === "HEAD") {
     if (isFullRuntimeUiPath(pathname)) return true;
@@ -1470,6 +1482,7 @@ export async function handleRequest(
         (normalizedMethod === "GET" || normalizedMethod === "HEAD") &&
         (isFullRuntimeUiPath(path) ||
           isFullRuntimeApiRead(path) ||
+          isFullRuntimeCompanionGet(request.method, path) ||
           fullRuntimeWebSocket)
       )
     ) {
@@ -1606,7 +1619,9 @@ export async function handleRequest(
       }
       if (
         fullRuntime &&
-        (isFullRuntimeUiPath(path) || isFullRuntimeProductApi(request.method, path))
+        (isFullRuntimeUiPath(path) ||
+          isFullRuntimeProductApi(request.method, path) ||
+          isFullRuntimeCompanionGet(request.method, path))
       ) {
         return sanitizedUpstreamResponse(upstreamResponse);
       }

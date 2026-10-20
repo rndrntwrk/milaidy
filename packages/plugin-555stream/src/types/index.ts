@@ -77,10 +77,14 @@ export interface Action {
   examples?: ActionExample[][];
 }
 
+export interface ProviderResult {
+  text: string;
+}
+
 export interface Provider {
   name: string;
   description: string;
-  get: (runtime: IAgentRuntime, message: Memory, state?: State) => Promise<string>;
+  get: (runtime: IAgentRuntime, message: Memory, state?: State) => Promise<ProviderResult>;
 }
 
 export interface Route {
