@@ -209,7 +209,7 @@ function continuityApi(calls, fixture = continuityFixture) {
   };
 }
 
-test("fetches and sanitizes the exact live Access, OTP, posture, AI, and route state", async () => {
+test("fetches required live Access, OTP, AI, and route state without global posture reads", async () => {
   const calls = [];
   const state = await fetchAliceCloudflareProviderState({
     fetchImpl: providerApi(calls),
@@ -248,7 +248,10 @@ test("fetches and sanitizes the exact live Access, OTP, posture, AI, and route s
     false,
   );
   assert.equal(JSON.stringify(state.sanitized).includes("provider-masked-value"), false);
-  assert.equal(calls.length, 12);
+  assert.deepEqual(state.accessPolicyReadback.postureRules, []);
+  assert.equal(calls.some((call) =>
+    new URL(call.url).pathname === `/client/v4/accounts/${accountId}/devices/posture`), false);
+  assert.equal(calls.length, 11);
   for (const call of calls) {
     assert.equal(call.options.method, "GET");
     assert.equal(call.options.headers.authorization, "Bearer read-only-token");
@@ -264,7 +267,7 @@ test("retries the same read once after an HTTP server error and validates its re
       ...fixtures.accessPolicyReadback, apiToken: "read-only-token", baseUrl,
       now: () => Date.parse(fixtures.accessPolicyReadback.observedAt),
       fetchImpl: async (url, options) => {
-        if (new URL(url).pathname.endsWith("/devices/posture")) {
+        if (new URL(url).pathname === `/client/v4/zones/${zoneId}/access/apps`) {
           reads.push({ url: String(url), options });
           if (reads.length === 1) return new Response("provider unavailable", { status });
         }
@@ -320,6 +323,8 @@ test("identifies Access, AI Gateway, and continuity configuration rejection stag
   for (const [stage, target] of [
     ["provider_state", `/zones/${zoneId}/access/apps`],
     ["access_configuration", `/zones/${zoneId}/access/apps/${fixtures.accessPolicyReadback.application.id}`],
+    ["access_configuration", `/zones/${zoneId}/access/apps/${fixtures.accessPolicyReadback.application.id}/policies`],
+    ["access_configuration", `/zones/${zoneId}/access/apps/${fixtures.accessPolicyReadback.deploymentApplication.id}/policies`],
     ["ai_gateway_configuration", `/accounts/${accountId}/ai-gateway/gateways/alice-production`],
   ]) {
     const baseFetch = providerApi([]);
@@ -331,6 +336,9 @@ test("identifies Access, AI Gateway, and continuity configuration rejection stag
         if (new URL(url).pathname.replace("/client/v4", "") !== target) return response;
         const body = await response.json();
         if (stage === "provider_state") body.result = [];
+        else if (target.endsWith("/policies")) body.result[0].require.push({
+          device_posture: { integration_uid: fixtures.accessPolicyReadback.postureRules[0].id },
+        });
         else if (stage === "access_configuration") body.result.aud = "wrong-audience";
         else body.result.cache_ttl = 1;
         return json(body);
