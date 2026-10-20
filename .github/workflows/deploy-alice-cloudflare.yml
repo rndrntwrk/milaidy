@@ -1359,6 +1359,8 @@ jobs:
 
       - name: Derive one release-bound runtime credential set
         env:
+          ALICE_GAMEPLAY_OBSERVER_TOKEN: ${{ secrets.ALICE_GAMEPLAY_OBSERVER_TOKEN }}
+          ALICE_GAMEPLAY_OBSERVER_SESSION_ID: ${{ vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID }}
           ALICE_WRANGLER_OUTPUT_DIR: ${{ runner.temp }}/alice-release/wrangler
           ALICE_PROGRAM_ADMISSION_EVIDENCE_PATH: ${{ runner.temp }}/alice-release/program-admission.json
           ALICE_RUNTIME_RELEASE_TOKEN_FILE: ${{ runner.temp }}/alice-release/.alice-runtime-release-token

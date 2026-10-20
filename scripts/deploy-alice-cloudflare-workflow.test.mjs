@@ -271,6 +271,18 @@ test("exact registry digest, runtime revision, and BOM propagate into the signed
   assert.doesNotMatch(materialize, /ALICE_UPSTREAM_ORIGIN/);
 });
 
+test("observer credentials reach both manifest materialization and admission", () => {
+  const steps = namedWorkflowSteps(workflow);
+  for (const name of [
+    "Materialize signed manifest and exact-byte Worker configs",
+    "Derive one release-bound runtime credential set",
+  ]) {
+    const block = steps.find(step => step.name === name)?.block ?? "";
+    assert.match(block, /ALICE_GAMEPLAY_OBSERVER_TOKEN: \$\{\{ secrets\.ALICE_GAMEPLAY_OBSERVER_TOKEN \}\}/);
+    assert.match(block, /ALICE_GAMEPLAY_OBSERVER_SESSION_ID: \$\{\{ vars\.ALICE_GAMEPLAY_OBSERVER_SESSION_ID \}\}/);
+  }
+});
+
 test("preimport evidence is exact-bound and fresh materialization matches before mutation", () => {
   const verify = workflow.match(
     /- name: Verify exact preimport evidence and bind immutable Cloudflare image[\s\S]*?(?=\n      - name:)/,

@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import {
   verifyAliceProtectedAdmissionSecretClosure,
   verifyAliceRouteSecretClosure,
 } from "./verify_alice_program_admission";
+import { materializeAliceWranglerConfig } from "./alice_cloudflare_config.mjs";
 
 const accessToken = "access-service-token-with-at-least-32-bytes";
 const aiToken = "ai-service-token-with-at-least-32-bytes----";
@@ -159,6 +161,39 @@ describe("Alice protected Program admission", () => {
     expect(() =>
       verifyAliceRouteSecretClosure(containerConfigs, containerSecrets, releaseDigest, true, true),
     ).toThrow("ALICE_RELEASE_SECRETS_INVALID");
+
+    const observerSecrets = { ...containerSecrets,
+      ALICE_GAMEPLAY_OBSERVER_TOKEN: "observer-token-with-at-least-32-distinct-bytes",
+      ALICE_GAMEPLAY_OBSERVER_SESSION_ID: "observer-session-test" };
+    const observerConfigs = { ...codingConfigs };
+    for (const [role, file] of [["access", "wrangler.jsonc"], ["runtimeHost", "wrangler.runtime-host.jsonc"]] as const) {
+      const source = JSON.parse(readFileSync(new URL(`../../workers/alice-access-gateway/${file}`, import.meta.url), "utf8"));
+      observerConfigs[role] = materializeAliceWranglerConfig(role, source, {
+        runtimeImage, accessIssuer: "https://rndrntwrk.cloudflareaccess.com",
+        accessAudience: "alice-access-audience", ownerEmailSha256: "A".repeat(43),
+        deploymentManifestSha256: `sha256:${"b".repeat(64)}`, deploymentManifestB64: "e30",
+        gameplayObserverSessionId: observerSecrets.ALICE_GAMEPLAY_OBSERVER_SESSION_ID,
+      });
+    }
+    expect(() => verifyAliceRouteSecretClosure(
+      observerConfigs, observerSecrets, releaseDigest, true, true,
+    )).not.toThrow();
+    for (const mutate of [
+      (input: any) => { delete input.secrets.ALICE_GAMEPLAY_OBSERVER_TOKEN; },
+      (input: any) => { delete input.secrets.ALICE_GAMEPLAY_OBSERVER_SESSION_ID; },
+      (input: any) => { input.configs.runtimeHost.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID = "other-session"; },
+      (input: any) => { delete input.configs.access.vars.ALICE_GAMEPLAY_OBSERVER_SESSION_ID; },
+      (input: any) => { input.configs.runtimeHost.secrets.required = input.configs.runtimeHost.secrets.required.filter(
+        (name: string) => name !== "ALICE_GAMEPLAY_OBSERVER_TOKEN"); },
+      (input: any) => { input.configs = codingConfigs; },
+      (input: any) => { input.secrets.ALICE_GAMEPLAY_OBSERVER_TOKEN = input.secrets.MILADY_API_TOKEN; },
+    ]) {
+      const input = structuredClone({ configs: observerConfigs, secrets: observerSecrets });
+      mutate(input);
+      expect(() => verifyAliceRouteSecretClosure(
+        input.configs, input.secrets, releaseDigest, true, true,
+      )).toThrow("ALICE_RELEASE_SECRETS_INVALID");
+    }
   });
 
   test("accepts only exact scoped token pairs and release-bound runtime bearer", () => {
@@ -222,6 +257,10 @@ describe("Alice protected Program admission", () => {
     expect(() =>
       verifyAliceProtectedAdmissionSecretClosure(protectedSecrets),
     ).not.toThrow();
+    expect(() => verifyAliceProtectedAdmissionSecretClosure({
+      ...protectedSecrets,
+      ALICE_GAMEPLAY_OBSERVER_TOKEN: protectedSecrets.ALICE_RUNTIME_RELEASE_TOKEN_ROOT,
+    })).toThrow("ALICE_RELEASE_SECRETS_INVALID");
     for (const ALICE_RUNTIME_RELEASE_TOKEN_ROOT of [
       protectedSecrets.MILADY_API_TOKEN,
       protectedSecrets.ALICE_ACCESS_PROXY_SECRET,

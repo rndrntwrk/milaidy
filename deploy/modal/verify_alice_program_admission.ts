@@ -10,6 +10,7 @@ import {
 } from "../../workers/alice-production-control/src/runtime-config";
 import {
   canonicalAliceJson,
+  resolveAliceGameplayObserverConfig,
   verifyAliceDeploymentManifestBinding,
 } from "../../workers/alice-effective-config.js";
 import { deriveAliceRuntimeReleaseCredential } from "./alice_modal_release.mjs";
@@ -32,6 +33,8 @@ type RouteSecretSource = {
   ALICE_DEPLOYMENT_PAUSE_TOKEN: string;
   ALICE_STATE_PLANE_SERVICE_TOKEN?: string;
   ALICE_CODING_PUBLISH_TOKEN?: string;
+  ALICE_GAMEPLAY_OBSERVER_TOKEN?: string;
+  ALICE_GAMEPLAY_OBSERVER_SESSION_ID?: string;
   ALICE_EVIDENCE_QUEUE_HMAC_KEY: string;
   MILADY_API_TOKEN: string;
   ELIZA_VAULT_PASSPHRASE: string;
@@ -105,6 +108,7 @@ export function verifyAliceProtectedAdmissionSecretClosure(
     secrets?.ALICE_DEPLOYMENT_PAUSE_TOKEN,
     secrets?.ALICE_STATE_PLANE_SERVICE_TOKEN,
     secrets?.ALICE_CODING_PUBLISH_TOKEN,
+    secrets?.ALICE_GAMEPLAY_OBSERVER_TOKEN,
     secrets?.MILADY_API_TOKEN,
     secrets?.ELIZA_VAULT_PASSPHRASE,
   ];
@@ -124,9 +128,21 @@ export function verifyAliceRouteSecretClosure(
   containerMode: boolean,
   codingMode = false,
 ): void {
+  let observerSessionId: string | undefined;
+  try {
+    observerSessionId = resolveAliceGameplayObserverConfig(secrets ?? {}).gameplayObserverSessionId;
+  } catch {
+    invalid("ALICE_RELEASE_SECRETS_INVALID");
+  }
+  if (configs?.access?.vars?.ALICE_GAMEPLAY_OBSERVER_SESSION_ID !== observerSessionId ||
+    configs?.runtimeHost?.vars?.ALICE_GAMEPLAY_OBSERVER_SESSION_ID !== observerSessionId ||
+    (observerSessionId && (!containerMode || !secureValue(secrets?.ALICE_GAMEPLAY_OBSERVER_TOKEN)))) {
+    invalid("ALICE_RELEASE_SECRETS_INVALID");
+  }
   const containerAccessSecrets = [
     "ALICE_ACCESS_CONTROL_SERVICE_TOKEN",
     "ALICE_ACCESS_PROXY_SECRET",
+    ...(observerSessionId ? ["ALICE_GAMEPLAY_OBSERVER_TOKEN"] : []),
   ];
   const containerRuntimeHostSecrets = [
     "ALICE_ACCESS_PROXY_SECRET",
@@ -144,6 +160,7 @@ export function verifyAliceRouteSecretClosure(
     "ALICE_RUNTIME_BUILD_MANIFEST_SHA256",
     "ALICE_ELIZA_COMMIT",
     "ALICE_RUNTIME_REVISION",
+    ...(observerSessionId ? ["ALICE_GAMEPLAY_OBSERVER_TOKEN"] : []),
     ...(codingMode
       ? ["ALICE_GITHUB_APP_ID", "ALICE_GITHUB_APP_PRIVATE_KEY_B64",
           "ALICE_CODING_PUBLISH_TOKEN"]
@@ -163,6 +180,7 @@ export function verifyAliceRouteSecretClosure(
     secrets.ELIZA_VAULT_PASSPHRASE,
     ...(containerMode ? [secrets.ALICE_STATE_PLANE_SERVICE_TOKEN] : []),
     ...(codingMode ? [secrets.ALICE_CODING_PUBLISH_TOKEN] : []),
+    ...(observerSessionId ? [secrets.ALICE_GAMEPLAY_OBSERVER_TOKEN] : []),
   ];
   if (
     !configs ||
