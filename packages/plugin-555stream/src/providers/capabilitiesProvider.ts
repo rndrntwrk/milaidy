@@ -67,6 +67,7 @@ const ACTION_CAPABILITIES: Record<string, ActionCategory> = {
 export const capabilitiesProvider: Provider = {
   name: 'STREAM555_CAPABILITIES',
   description: 'Available 555stream operations based on agent token scopes and approval settings',
+  alwaysInResponseState: isAliceNativeStreamRuntime(),
 
   get: async (
     runtime: IAgentRuntime,
@@ -89,6 +90,7 @@ export const capabilitiesProvider: Provider = {
         `**Status lookup:** ${isReady && config?.defaultSessionId?.trim() ? 'Configured' : 'Unavailable'}`,
         '- `STREAM555_STREAM_STATUS` - Read the configured session\'s current capture status and dispatch (read-only).',
         ...(isReady && config?.defaultSessionId?.trim() ? [
+          '- `FIVE55_GAMES_CATALOG` - Read the current Arcade game catalog when asked which games are available (read-only; does not change game selection or capture).',
           '- `FIVE55_GAMES_PLAY` / `FIVE55_GAMES_SWITCH` - Select an explicit game in the existing source; requires an authorized owner and Stream studio:write admission.',
           'Saving a game selection does not establish gameplay input or renderer delivery.',
         ] : []),

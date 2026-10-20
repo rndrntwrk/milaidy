@@ -7,6 +7,7 @@
 
 import type {
   Action,
+  ActionResult,
   IAgentRuntime,
   Memory,
   State,
@@ -60,7 +61,7 @@ export const streamStatusAction: Action = {
     _state?: State,
     options?: Record<string, unknown>,
     callback?: HandlerCallback
-  ): Promise<boolean> => {
+  ): Promise<ActionResult> => {
     try {
       const service = runtime.getService('stream555') as StreamControlService | undefined;
 
@@ -71,7 +72,7 @@ export const streamStatusAction: Action = {
             content: { success: false, error: 'Service not initialized' },
           });
         }
-        return false;
+        return { success: false, text: '555stream service is not initialized.', error: 'Service not initialized' };
       }
 
       const sessionId = resolveStatusSessionId(service, options);
@@ -85,7 +86,7 @@ export const streamStatusAction: Action = {
         });
       }
 
-      return true;
+      return { success: true, text: response, data: { ...status } };
     } catch (error) {
       const errorMessage = (error as Error).message;
 
@@ -96,7 +97,7 @@ export const streamStatusAction: Action = {
         });
       }
 
-      return false;
+      return { success: false, text: `Failed to get stream status: ${errorMessage}`, error: errorMessage };
     }
   },
 
@@ -191,7 +192,7 @@ function formatStatusResponse(status: StreamStatus): string {
     lines.push('**Platforms:**');
     for (const [platformId, platform] of Object.entries(status.platforms)) {
       const statusIcon = platform.enabled ? (platform.status === 'live' ? '' : '') : '';
-      const statusText = platform.enabled ? platform.status : 'disabled';
+      const statusText = platform.enabled === false ? 'disabled' : platform.status;
       let platformLine = `- ${platformId}: ${statusIcon} ${statusText}`;
       if (platform.error) {
         platformLine += ` (${platform.error})`;
