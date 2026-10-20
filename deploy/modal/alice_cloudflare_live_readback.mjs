@@ -572,10 +572,6 @@ export async function fetchAliceCloudflareProviderState({
         `/accounts/${accountId}/access/identity_providers`,
       ),
     );
-    const postureRules = await apiGetAllResults(
-      client,
-      `/accounts/${accountId}/devices/posture`,
-    );
     const serviceTokens = (
       await apiGetAllResults(
         client,
@@ -614,7 +610,8 @@ export async function fetchAliceCloudflareProviderState({
       deploymentPolicies,
       serviceTokens,
       identityProviders,
-      postureRules,
+      // The Access validator rejects owner and deployment posture requirements.
+      postureRules: [],
       ownerEmailSha256,
       accessAudience,
       releaseAccessAudience,
