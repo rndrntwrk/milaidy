@@ -5,6 +5,7 @@ import type {
   Memory,
   Plugin,
 } from "@elizaos/core";
+import { isAliceNativeStreamRuntime } from "@rndrntwrk/plugin-555stream/auth";
 import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
@@ -767,15 +768,90 @@ async function resolveSessionId(
   );
 }
 
-const catalogAction: Action = {
+async function selectNativeGame(
+  runtime: IAgentRuntime,
+  options: HandlerOptions | undefined,
+  action: string,
+): Promise<{ success: boolean; text: string }> {
+  const gameId = readParam(options, "gameId")?.trim().toLowerCase();
+  if (!gameId) throw new Error("Specify a game ID for native Stream selection");
+  const mode = normalizeMode(readParam(options, "mode"));
+  if (mode !== "agent" && mode !== "solo") {
+    throw new Error("Native Stream game selection supports agent or solo mode");
+  }
+  const service = runtime.getService("stream555") as unknown as
+    | {
+        selectNativeGame?: (
+          gameId: string,
+          mode: "agent" | "solo",
+          sessionId?: string,
+        ) => Promise<unknown>;
+      }
+    | undefined;
+  if (typeof service?.selectNativeGame !== "function") {
+    throw new Error("Native Stream game selection is unavailable");
+  }
+  const data = await service.selectNativeGame(
+    gameId,
+    mode,
+    readParam(options, "sessionId"),
+  );
+  return {
+    success: true,
+    text: JSON.stringify({
+      ok: true,
+      code: "OK",
+      module: "five55.games",
+      action,
+      status: 200,
+      message: "game selection saved",
+      data,
+    }),
+  };
+}
+
+export const catalogAction: Action = {
   name: "FIVE55_GAMES_CATALOG",
   similes: ["LIST_FIVE55_GAMES", "FIVE55_GAME_CATALOG", "LIST_GAMES"],
   description:
     "Returns the current Five55 game catalog for the active session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, _message, _state, options) => {
     try {
       assertFive55Capability(CAPABILITY_POLICY, "games.observe");
+      if (isAliceNativeStreamRuntime()) {
+        const service = runtime.getService("stream555") as unknown as
+          | {
+              getNativeGameCatalog?: (
+                includeBeta: boolean,
+                sessionId?: string,
+              ) => Promise<unknown>;
+            }
+          | undefined;
+        if (typeof service?.getNativeGameCatalog !== "function") {
+          throw new Error("Native Stream game catalog is unavailable");
+        }
+        const includeBeta = readParam(
+          options as HandlerOptions | undefined,
+          "includeBeta",
+        );
+        const data = await service.getNativeGameCatalog(
+          includeBeta ? includeBeta.trim().toLowerCase() !== "false" : true,
+          readParam(options as HandlerOptions | undefined, "sessionId"),
+        );
+        return {
+          success: true,
+          text: JSON.stringify({
+            ok: true,
+            code: "OK",
+            module: "five55.games",
+            action: "FIVE55_GAMES_CATALOG",
+            status: 200,
+            message: "game catalog resolved",
+            data,
+          }),
+        };
+      }
       const dialect = resolveGamesDialect();
       const base = resolveGamesBase(dialect);
       const sessionId = await resolveSessionId(
@@ -815,15 +891,23 @@ const catalogAction: Action = {
   ],
 };
 
-const playAction: Action = {
+export const playAction: Action = {
   name: "FIVE55_GAMES_PLAY",
   similes: ["PLAY_GAME", "START_FIVE55_GAME", "LAUNCH_FIVE55_GAME"],
-  description: "Launches a Five55 game for the active agent-v1 session.",
+  description:
+    "Selects a Five55 game for the current session without restarting native Stream capture.",
   validate: async () => true,
   handler: async (runtime, message, state, options) => {
     try {
       assertTrustedAdminForAction(runtime, message, state, "FIVE55_GAMES_PLAY");
       assertFive55Capability(CAPABILITY_POLICY, "games.play");
+      if (isAliceNativeStreamRuntime()) {
+        return await selectNativeGame(
+          runtime,
+          options as HandlerOptions | undefined,
+          "FIVE55_GAMES_PLAY",
+        );
+      }
       const dialect = resolveGamesDialect();
       const base = resolveGamesBase(dialect);
       const token = await resolveAgentBearer(base);
@@ -870,13 +954,14 @@ const playAction: Action = {
     {
       name: "gameId",
       description:
-        "Optional game identifier. The first playable game is used when omitted.",
+        "Game identifier. Required for native Stream; legacy sessions use the first playable game when omitted.",
       required: false,
       schema: { type: "string" as const },
     },
     {
       name: "mode",
-      description: "Session mode (defaults to agent).",
+      description:
+        "Session mode (defaults to agent). Native Stream supports agent or solo.",
       required: false,
       schema: { type: "string" as const },
     },
@@ -889,7 +974,7 @@ const playAction: Action = {
   ],
 };
 
-const switchAction: Action = {
+export const switchAction: Action = {
   name: "FIVE55_GAMES_SWITCH",
   similes: ["SWITCH_FIVE55_GAME", "CHANGE_FIVE55_GAME"],
   description: "Switches the active Five55 game inside the current session.",
@@ -903,6 +988,13 @@ const switchAction: Action = {
         "FIVE55_GAMES_SWITCH",
       );
       assertFive55Capability(CAPABILITY_POLICY, "games.play");
+      if (isAliceNativeStreamRuntime()) {
+        return await selectNativeGame(
+          runtime,
+          options as HandlerOptions | undefined,
+          "FIVE55_GAMES_SWITCH",
+        );
+      }
       const dialect = resolveGamesDialect();
       const base = resolveGamesBase(dialect);
       const token = await resolveAgentBearer(base);
@@ -948,7 +1040,7 @@ const switchAction: Action = {
   parameters: [
     {
       name: "gameId",
-      description: "Target game identifier.",
+      description: "Target game identifier, required for native Stream.",
       required: false,
       schema: { type: "string" as const },
     },

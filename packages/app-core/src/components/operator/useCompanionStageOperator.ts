@@ -315,7 +315,12 @@ export function useCompanionStageOperator() {
         setStreamCapabilityResolved(true);
         setStreamAvailable(true);
         setStreamError(null);
-        setStreamLive(Boolean(status.running && status.ffmpegAlive));
+        setStreamLive(
+          Boolean(
+            status.running &&
+              (status.nativeStatus === "live" || status.ffmpegAlive),
+          ),
+        );
         setUptime(status.uptime ?? 0);
         setFrameCount(status.frameCount ?? 0);
         setActiveDestination(status.destination ?? null);

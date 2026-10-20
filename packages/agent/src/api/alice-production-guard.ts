@@ -69,7 +69,7 @@ const FULL_PROFILE_ALLOWED_READ_PATHS = [
   /^\/api\/coding-agents\/coordinator\/threads\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
   /^\/api\/apps\/runs$/,
   /^\/music-player\/status$/,
-  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/state$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/state$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
@@ -77,10 +77,12 @@ const FULL_PROFILE_ALLOWED_WRITE_PATHS = [
   /^\/api\/alice\/gameplay-observation$/,
   /^\/internal\/v1\/coding\/model$/,
   /^\/api\/emote$/,
-  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/catalog$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/catalog$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/(?:play|switch)$/,
   /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
+  /^\/api\/conversations\/[^/]+\/operator-action$/,
   /^\/api\/companion\/stage$/,
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/subscription\/openai\/(?:start|exchange)$/,
@@ -142,6 +144,15 @@ export function evaluateAliceProductionRequest(
   if (normalizedMethod === "OPTIONS") return { allowed: true };
 
   if (isAliceFullRuntimeProfile(env)) {
+    if (normalizedMethod === "GET" && [
+      "/vrm-decoders/draco/draco_wasm_wrapper.js",
+      "/vrm-decoders/draco/draco_decoder.wasm",
+      "/api/stream/settings",
+      "/api/streaming/destinations",
+      "/api/agent/events",
+    ].includes(pathname)) {
+      return { allowed: true };
+    }
     if (normalizedMethod === "PUT" &&
       (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname) ||
         /^\/api\/lifeops\/(?:definitions|goals)\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(pathname))) {

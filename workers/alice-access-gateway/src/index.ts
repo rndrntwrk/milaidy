@@ -1181,16 +1181,18 @@ const FULL_RUNTIME_API_READS = [
   /^\/api\/coding-agents\/coordinator\/threads\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i,
   /^\/api\/apps\/runs$/,
   /^\/music-player\/status$/,
-  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/state$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/state$/,
   /^\/v1\/models(?:\/[^/]+)?$/,
 ];
 
 const FULL_RUNTIME_WRITES = [
   /^\/api\/emote$/,
-  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9-]+\/games\/catalog$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/catalog$/,
+  /^\/api\/agent\/v1\/sessions\/[a-zA-Z0-9_.:-]{1,128}\/games\/(?:play|switch)$/,
   /^\/api\/knowledge\/documents(?:\/bulk)?$/,
   /^\/v1\/(?:chat\/completions|messages)$/,
   /^\/api\/conversations(?:\/[^/]+(?:\/(?:messages(?:\/stream)?|greeting))?)?$/,
+  /^\/api\/conversations\/[^/]+\/operator-action$/,
   /^\/api\/companion\/stage$/,
   /^\/api\/avatar\/(?:vrm|background)$/,
   /^\/api\/subscription\/openai\/(?:start|exchange)$/,
@@ -1226,6 +1228,16 @@ function isFullRuntimeApiRead(pathname: string): boolean {
   return FULL_RUNTIME_API_READS.some((pattern) => pattern.test(pathname));
 }
 
+function isFullRuntimeCompanionGet(method: string, pathname: string): boolean {
+  return method.toUpperCase() === "GET" && [
+    "/vrm-decoders/draco/draco_wasm_wrapper.js",
+    "/vrm-decoders/draco/draco_decoder.wasm",
+    "/api/stream/settings",
+    "/api/streaming/destinations",
+    "/api/agent/events",
+  ].includes(pathname);
+}
+
 function isFullRuntimeProof(proof: unknown): boolean {
   return (
     isPlainObject(proof) &&
@@ -1236,6 +1248,7 @@ function isFullRuntimeProof(proof: unknown): boolean {
 
 function isFullRuntimeRequest(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
+  if (isFullRuntimeCompanionGet(method, pathname)) return true;
   if (normalized === "PUT" &&
     (pathname === "/api/config" || /^\/api\/plugins\/(?:telegram|discord)$/.test(pathname) ||
       /^\/api\/lifeops\/(?:definitions|goals)\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(pathname))) return true;
@@ -1281,6 +1294,7 @@ function isFullRuntimeProductApi(method: string, pathname: string): boolean {
 
 function isAdmittedRuntimeRequest(method: string, pathname: string): boolean {
   const normalized = method.toUpperCase();
+  if (isFullRuntimeCompanionGet(method, pathname)) return true;
   if (normalized === "POST" && pathname === "/v1/chat/completions") return true;
   if (normalized === "GET" || normalized === "HEAD") {
     if (isFullRuntimeUiPath(pathname)) return true;
@@ -1470,6 +1484,7 @@ export async function handleRequest(
         (normalizedMethod === "GET" || normalizedMethod === "HEAD") &&
         (isFullRuntimeUiPath(path) ||
           isFullRuntimeApiRead(path) ||
+          isFullRuntimeCompanionGet(request.method, path) ||
           fullRuntimeWebSocket)
       )
     ) {
@@ -1606,7 +1621,9 @@ export async function handleRequest(
       }
       if (
         fullRuntime &&
-        (isFullRuntimeUiPath(path) || isFullRuntimeProductApi(request.method, path))
+        (isFullRuntimeUiPath(path) ||
+          isFullRuntimeProductApi(request.method, path) ||
+          isFullRuntimeCompanionGet(request.method, path))
       ) {
         return sanitizedUpstreamResponse(upstreamResponse);
       }

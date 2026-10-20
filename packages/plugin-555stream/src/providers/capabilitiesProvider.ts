@@ -4,8 +4,9 @@
  * Returns available 555stream operations based on agent token scopes.
  */
 
-import type { Provider, IAgentRuntime, Memory, State } from '../types/index.js';
-import { StreamControlService } from '../services/StreamControlService.js';
+import type { Provider, ProviderResult, IAgentRuntime, Memory, State } from '../types/index.js';
+import type { StreamControlService } from '../services/StreamControlService.js';
+import { isAliceNativeStreamRuntime } from '../lib/agentAuth.js';
 
 // Action category type
 interface ActionCategory {
@@ -71,20 +72,31 @@ export const capabilitiesProvider: Provider = {
     runtime: IAgentRuntime,
     _message: Memory,
     _state?: State
-  ): Promise<string> => {
+  ): Promise<ProviderResult> => {
+    const native = isAliceNativeStreamRuntime();
     try {
       const service = runtime.getService('stream555') as StreamControlService | undefined;
 
       if (!service) {
-        return formatNotInitialized();
+        return { text: native ? '## 555stream Capabilities\nNative status lookup is unavailable; the service is not initialized.' : formatNotInitialized() };
       }
 
       const config = service.getConfig();
       const isReady = service.isReady();
 
-      return formatCapabilities(config?.requireApprovals ?? true, isReady);
-    } catch (error) {
-      return `[555stream Capabilities Error] ${(error as Error).message}`;
+      if (native) return { text: [
+        '## 555stream Native Capabilities',
+        `**Status lookup:** ${isReady && config?.defaultSessionId?.trim() ? 'Configured' : 'Unavailable'}`,
+        '- `STREAM555_STREAM_STATUS` - Read the configured session\'s current capture status and dispatch (read-only).',
+        ...(isReady && config?.defaultSessionId?.trim() ? [
+          '- `FIVE55_GAMES_PLAY` / `FIVE55_GAMES_SWITCH` - Select an explicit game in the existing source; requires an authorized owner and Stream studio:write admission.',
+          'Saving a game selection does not establish gameplay input or renderer delivery.',
+        ] : []),
+        'A configured status lookup does not establish that the stream or any output is live.',
+      ].join('\n') };
+      return { text: formatCapabilities(config?.requireApprovals ?? true, isReady) };
+    } catch {
+      return { text: '[555stream Capabilities Error] Stream capabilities are unavailable.' };
     }
   },
 };
@@ -113,6 +125,7 @@ function formatCapabilities(requireApprovals: boolean, isReady: boolean): string
   lines.push('These actions can be invoked now:');
   lines.push('- `STREAM555_HEALTHCHECK` - Verify connectivity and authentication');
   lines.push('- `STREAM555_BOOTSTRAP_SESSION` - Connect to a streaming session');
+  lines.push('- `STREAM555_STREAM_STATUS` - Read current stream status');
   lines.push('');
 
   // Future actions (Phase 2)

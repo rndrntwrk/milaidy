@@ -1,5 +1,5 @@
 import type http from "node:http";
-import { logger, type AgentRuntime } from "@elizaos/core";
+import { type AgentRuntime, logger } from "@elizaos/core";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
 import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
 
@@ -23,7 +23,14 @@ type StreamControlService = {
     topic: string,
     payload: unknown,
     sessionId?: string,
+    expectedDispatchId?: string,
   ) => Promise<unknown>;
+  getStreamStatus?: () => Promise<{
+    sessionId?: string;
+    jobId?: string;
+    active: boolean;
+    status?: string;
+  }>;
   getBoundSessionId?: () => string | null;
 };
 
@@ -72,7 +79,65 @@ export async function handleAliceEmoteRoutes(
   };
   broadcastWs?.({ type: "emote", ...emotePayload });
 
+  const streamControl =
+    (runtime?.getService?.("stream555") as StreamControlService | undefined) ??
+    undefined;
+
   if (isAliceFullRuntimeProfile()) {
+    // The native service resolves the saved grant and configured session. Pin
+    // the event to its current dispatch; never bind or start a legacy session.
+    if (streamControl?.getStreamStatus && streamControl.broadcastEvent) {
+      try {
+        const status = await streamControl.getStreamStatus();
+        if (
+          status.active &&
+          status.status === "live" &&
+          status.sessionId &&
+          status.jobId
+        ) {
+          const result = await streamControl.broadcastEvent(
+            "emote",
+            emotePayload,
+            status.sessionId,
+            status.jobId,
+          );
+          const sent = Boolean(
+            result &&
+              typeof result === "object" &&
+              "ok" in result &&
+              result.ok === true &&
+              "sent" in result &&
+              result.sent === true,
+          );
+          const broadcast: {
+            sent: boolean;
+            eventId?: string;
+            createdAt?: number;
+          } = { sent };
+          if (sent && result && typeof result === "object") {
+            if ("eventId" in result && typeof result.eventId === "string")
+              broadcast.eventId = result.eventId;
+            if (
+              "createdAt" in result &&
+              typeof result.createdAt === "number" &&
+              Number.isSafeInteger(result.createdAt)
+            )
+              broadcast.createdAt = result.createdAt;
+          }
+          json(res, { ok: true, broadcast });
+          return true;
+        }
+      } catch {
+        json(res, {
+          ok: true,
+          broadcast: {
+            sent: false,
+            reason: "Native Stream emote delivery is unavailable",
+          },
+        });
+        return true;
+      }
+    }
     json(res, {
       ok: true,
       broadcast: {
@@ -83,9 +148,6 @@ export async function handleAliceEmoteRoutes(
     return true;
   }
 
-  const streamControl =
-    (runtime?.getService?.("stream555") as StreamControlService | undefined) ??
-    undefined;
   const broadcast: Record<string, unknown> = {
     hasService: Boolean(streamControl),
     hasBroadcastEvent: typeof streamControl?.broadcastEvent === "function",

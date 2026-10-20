@@ -41,6 +41,71 @@ function context(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Alice emote routes", () => {
+  it("relays native emotes only to the current dispatch and honors the delivery receipt", async () => {
+    const previousMode = process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+    const previousProfile = process.env.ALICE_RUNTIME_PROFILE;
+    process.env.ALICE_RUNTIME_AUTHORITY_MODE = "proposer-only";
+    process.env.ALICE_RUNTIME_PROFILE = "full-gated";
+    try {
+      const calls: unknown[][] = [];
+      let sent = true;
+      const fixture = context({
+        runtime: {
+          getService: () => ({
+            getStreamStatus: async () => ({
+              sessionId: "native-session",
+              jobId: "current-dispatch",
+              active: true,
+              status: "live",
+            }),
+            broadcastEvent: async (...args: unknown[]) => {
+              calls.push(args);
+              return {
+                ok: true,
+                sent,
+                eventId: "accepted-event",
+                createdAt: 123456,
+              };
+            },
+          }),
+        },
+      });
+      expect(await handleAliceEmoteRoutes(fixture.value as never)).toBe(true);
+      expect(calls).toEqual([
+        [
+          "emote",
+          {
+            emoteId: "dance-happy",
+            path: "/animations/emotes/dance-happy.glb.gz",
+            duration: 4,
+            loop: false,
+          },
+          "native-session",
+          "current-dispatch",
+        ],
+      ]);
+      expect(fixture.responses[0]?.data).toMatchObject({
+        ok: true,
+        broadcast: { sent: true, eventId: "accepted-event", createdAt: 123456 },
+      });
+
+      sent = false;
+      await handleAliceEmoteRoutes(fixture.value as never);
+      expect(fixture.responses[1]?.data).toEqual({
+        ok: true,
+        broadcast: { sent: false },
+      });
+      expect(fixture.broadcasts).toHaveLength(2);
+    } finally {
+      if (previousMode === undefined)
+        delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+      else process.env.ALICE_RUNTIME_AUTHORITY_MODE = previousMode;
+      if (previousProfile === undefined)
+        delete process.env.ALICE_RUNTIME_PROFILE;
+      else process.env.ALICE_RUNTIME_PROFILE = previousProfile;
+    }
+  });
+
   it("keeps Alice full-gated Companion emotes on the local websocket", async () => {
     const previousMode = process.env.ALICE_RUNTIME_AUTHORITY_MODE;
     const previousProfile = process.env.ALICE_RUNTIME_PROFILE;
@@ -67,9 +132,11 @@ describe("Alice emote routes", () => {
         },
       });
     } finally {
-      if (previousMode === undefined) delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
+      if (previousMode === undefined)
+        delete process.env.ALICE_RUNTIME_AUTHORITY_MODE;
       else process.env.ALICE_RUNTIME_AUTHORITY_MODE = previousMode;
-      if (previousProfile === undefined) delete process.env.ALICE_RUNTIME_PROFILE;
+      if (previousProfile === undefined)
+        delete process.env.ALICE_RUNTIME_PROFILE;
       else process.env.ALICE_RUNTIME_PROFILE = previousProfile;
     }
   });

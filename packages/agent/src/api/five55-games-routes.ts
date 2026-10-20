@@ -1,6 +1,8 @@
 import type { RouteRequestContext } from "./route-helpers";
 import type { StreamRouteState } from "./stream-route-state";
+import type { StreamControlService } from "@rndrntwrk/plugin-555stream";
 import { isAliceFullRuntimeProfile } from "../runtime/alice-runtime-profile.js";
+import { isCloudflareAccessAuthenticated } from "./cloudflare-access-auth.js";
 import {
   createAgentRequestId,
   isAgentAuthConfigured,
@@ -330,15 +332,85 @@ export async function handleFive55GamesRoutes(
   }
 
   const operation = match[2] as GamesOperation | "state";
-  if (operation === "state") {
-    if (method !== "GET") {
+  if (isAliceFullRuntimeProfile()) {
+    if (!isCloudflareAccessAuthenticated(req) ||
+        req.headers["cf-access-authenticated-user-email"] !== "alice-owner-verified.invalid") {
+      error(res, "Verified owner access is required", 403);
+      return true;
+    }
+    const configuredSessionId = process.env.STREAM555_DEFAULT_SESSION_ID?.trim();
+    if (!configuredSessionId) {
+      error(res, "STREAM555_DEFAULT_SESSION_ID is not configured", 503);
+      return true;
+    }
+    if (sessionId !== configuredSessionId || match[1] !== configuredSessionId) {
+      error(res, "Session does not match the configured native session", 403);
+      return true;
+    }
+    if (operation === "stop") {
+      error(res, "Native game stop is not available", 403);
+      return true;
+    }
+    if (method !== (operation === "state" ? "GET" : "POST")) {
       error(res, "Method not allowed", 405);
       return true;
     }
-    if (isAliceFullRuntimeProfile()) {
-      // Upstream state reads can register a game runtime and write Redis.
-      // Connection inspection must not implicitly perform that registration.
-      error(res, "Arcade gameplay state requires a registered game runtime", 503);
+    const service = ctx.streamState?.runtime?.getService("stream555") as
+      Pick<StreamControlService, "getNativeGameCatalog" | "getNativeGameState" | "selectNativeGame"> | undefined;
+    if (!service || (operation === "catalog"
+      ? typeof service.getNativeGameCatalog !== "function"
+      : typeof service.getNativeGameState !== "function" || typeof service.selectNativeGame !== "function")) {
+      error(res, "Native Stream game selection is unavailable", 503);
+      return true;
+    }
+    if (operation === "catalog") {
+      const body = await readJsonBody<Record<string, unknown>>(req, res);
+      if (!body) return true;
+      if (Array.isArray(body) || Object.keys(body).some(key => key !== "includeBeta") ||
+          (body.includeBeta !== undefined && typeof body.includeBeta !== "boolean")) {
+        error(res, "Only a boolean includeBeta option is accepted", 400);
+        return true;
+      }
+      try {
+        const catalog = await service.getNativeGameCatalog(body.includeBeta !== false, sessionId);
+        json(res, { ok: true, sessionId: catalog.sessionId, games: catalog.games });
+      } catch {
+        error(res, "Native Arcade catalog is unavailable", 502);
+      }
+      return true;
+    }
+    if (operation === "state") {
+      try {
+        const selection = await service.getNativeGameState(sessionId);
+        json(res, {
+          ok: true, sessionId: selection.sessionId, activeGameId: selection.gameId,
+          activeGameLabel: selection.gameId, mode: selection.playMode, phase: "selected",
+          live: false, destination: null, selection,
+        });
+      } catch {
+        error(res, "Native game selection state is unavailable", 503);
+      }
+      return true;
+    }
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return true;
+    if (Array.isArray(body) || Object.keys(body).some(key => key !== "gameId" && key !== "mode") ||
+        typeof body.gameId !== "string" || !/^[a-z0-9-]{1,128}$/.test(body.gameId) ||
+        (body.mode !== "solo" && body.mode !== "agent")) {
+      error(res, "A canonical gameId and solo or agent mode are required", 400);
+      return true;
+    }
+    try {
+      const selection = await service.selectNativeGame(body.gameId, body.mode, sessionId);
+      json(res, { ok: true, message: "Game selected.", selection: { ...selection, playMode: body.mode } });
+    } catch {
+      error(res, "Game selection was not confirmed; read current selection before retrying", 502);
+    }
+    return true;
+  }
+  if (operation === "state") {
+    if (method !== "GET") {
+      error(res, "Method not allowed", 405);
       return true;
     }
     const upstream = await readUpstreamGameState(
@@ -365,31 +437,20 @@ export async function handleFive55GamesRoutes(
   }
 
   const requestId = createAgentRequestId(`api-five55-games-${operation}`);
-  const aliceCatalog = operation === "catalog" && isAliceFullRuntimeProfile();
-  let ensuredSessionId = sessionId;
-  if (aliceCatalog) {
-    // The upstream catalog is a read. Never bootstrap or reclaim a session
-    // merely because the owner opened Companion's game picker.
-    ensuredSessionId = process.env.STREAM555_DEFAULT_SESSION_ID?.trim() ?? "";
-    if (!ensuredSessionId) {
-      error(res, "STREAM555_DEFAULT_SESSION_ID is not configured", 503);
-      return true;
-    }
-  } else {
-    try {
-      ensuredSessionId = await ensureGamesAgentSessionId(
-        upstreamBase,
-        sessionId,
-        `${requestId}-bootstrap`,
-      );
-    } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Session bootstrap failed",
-        502,
-      );
-      return true;
-    }
+  let ensuredSessionId: string;
+  try {
+    ensuredSessionId = await ensureGamesAgentSessionId(
+      upstreamBase,
+      sessionId,
+      `${requestId}-bootstrap`,
+    );
+  } catch (err) {
+    error(
+      res,
+      err instanceof Error ? err.message : "Session bootstrap failed",
+      502,
+    );
+    return true;
   }
 
   const body = (await readJsonBody<Record<string, unknown>>(req, res)) ?? {};
@@ -409,14 +470,6 @@ export async function handleFive55GamesRoutes(
       `${message} [requestId: ${upstream.requestId}]`,
       upstream.status || 502,
     );
-    return true;
-  }
-
-  if (
-    aliceCatalog &&
-    (upstream.data?.sessionId !== ensuredSessionId || !Array.isArray(upstream.data?.games))
-  ) {
-    error(res, "Alice Arcade catalog is unavailable for the configured session", 502);
     return true;
   }
 

@@ -11,10 +11,8 @@
  */
 
 import type { Action, HandlerOptions, Memory } from "@elizaos/core";
+import { resolveApiToken, resolveServerOnlyPort } from "../config/runtime-env.js";
 import { AGENT_EMOTE_BY_ID, AGENT_EMOTE_CATALOG } from "../emotes/catalog.js";
-
-/** API port for posting emote requests. */
-const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
 
 export const emoteAction: Action = {
   name: "PLAY_EMOTE",
@@ -58,9 +56,15 @@ export const emoteAction: Action = {
 
     // POST to the local API server to trigger the emote.
     try {
-      const response = await fetch(`http://localhost:${API_PORT}/api/emote`, {
+      const port = resolveServerOnlyPort(process.env);
+      const apiToken = resolveApiToken(process.env);
+      const response = await fetch(`http://127.0.0.1:${port}/api/emote`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        redirect: "error",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+        },
         body: JSON.stringify({ emoteId: emote.id }),
       });
 

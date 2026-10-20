@@ -555,6 +555,8 @@ declare module "./client-base" {
     streamStatus(): Promise<{
       ok: boolean;
       running: boolean;
+      nativeStatus?: string;
+      sessionId?: string;
       ffmpegAlive: boolean;
       uptime: number;
       frameCount: number;

@@ -121,6 +121,30 @@ describe("useCompanionStageOperator stream health", () => {
     expect(status?.props["data-destination"]).toBe("Twitch");
   });
 
+  it("recognizes validated native capture readiness without claiming external delivery", async () => {
+    mockGetStreamingDestinations.mockResolvedValue({ destinations: [] });
+    mockStreamStatus.mockResolvedValue({
+      running: true,
+      nativeStatus: "live",
+      ffmpegAlive: false,
+      uptime: 12,
+      frameCount: 0,
+      destination: null,
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<Harness />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const status = tree?.root.findByProps({ "data-testid": "operator-stream" });
+    expect(status?.props["data-available"]).toBe("true");
+    expect(status?.props["data-live"]).toBe("true");
+    expect(status?.props["data-destination"]).toBe("");
+  });
+
   it("returns a partial result when camera launch starts but delivery is not yet live", async () => {
     const operatorRef: {
       current: ReturnType<typeof useCompanionStageOperator> | null;

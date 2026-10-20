@@ -140,6 +140,59 @@ describe("StreamControlService", () => {
     } finally { globalThis.fetch = originalFetch; await service.stop(); }
   });
 
+  it("reads the deployed native game catalog with the existing grant and public metadata", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    const grant = nativeGrant();
+    setEnv("STREAM555_AGENT_TOKEN", grant);
+    const game = { id: '555drive', name: '555 Drive', inputType: 'keyboard',
+      description: 'Racing game', beta: true, path: 'beta/555drive/public' };
+    const calls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      assert.equal(init?.method, 'GET');
+      assert.equal(init?.body, undefined);
+      assert.equal(new Headers(init?.headers).get('Authorization'), `Bearer ${grant}`);
+      assert.equal(new Headers(init?.headers).get('X-Session-Id'), 'alice-session');
+      calls.push(String(input));
+      return Response.json([{ ...game, privateToken: 'must-not-be-returned' }]);
+    };
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      assert.deepEqual(await service.getNativeGameCatalog(), { sessionId: 'alice-session', games: [game] });
+      assert.deepEqual(await service.getNativeGameCatalog(false, 'alice-session'), { sessionId: 'alice-session', games: [game] });
+      assert.deepEqual(calls, [
+        'https://stream.rndrntwrk.com/api/sources/games?beta=true',
+        'https://stream.rndrntwrk.com/api/sources/games',
+      ]);
+      assert.equal(service.getBoundSessionId(), null);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("rejects malformed native catalogs and foreign sessions without a legacy fallback", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant());
+    const originalFetch = globalThis.fetch;
+    let payload: unknown = { games: [] };
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return Response.json(payload); };
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      await assert.rejects(service.getNativeGameCatalog(), /native game catalog/i);
+      payload = [{ id: '555drive', name: '555 Drive', inputType: 'keyboard', path: '../private' }];
+      await assert.rejects(service.getNativeGameCatalog(), /native game catalog/i);
+      payload = [{ id: '555drive', name: '555 Drive', inputType: 'unsupported' }];
+      await assert.rejects(service.getNativeGameCatalog(), /native game catalog/i);
+      await assert.rejects(service.getNativeGameCatalog(true, 'other-session'), /configured native session/);
+      assert.equal(calls, 3);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
   it("renews native credentials while idle and finishes persistence before stopping", async () => {
     setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
     setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
@@ -238,6 +291,136 @@ describe("StreamControlService", () => {
         url: 'https://stream.rndrntwrk.com/api/agent/v1/sessions/other-session/livekit/broadcast-event',
         body: { topic: 'emote', payload: {} },
       }]);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("persists native game selection with one revision-checked write and preserves the full composition", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant());
+    const snapshot = {
+      schemaVersion: 1, revision: 7, updatedAt: 123456,
+      productionState: { activeLayout: 'pip', cameraOn: true, sources: [
+        { id: 'avatar-1', type: 'avatar', visible: true, avatarIndex: 3 },
+        { id: 'game-1', type: 'game', visible: true, gameId: 'old-game', agentId: 'alice',
+          gameConfig: { playMode: 'solo', difficulty: 3 }, position: { x: 5, y: 8 } },
+        { id: 'hidden-game', type: 'game', visible: false, gameId: 'unchanged' },
+      ], overlay: { enabled: true } },
+      scenes: [{ id: 'scene-1', sources: [{ id: 'preserve-scene-source' }] }],
+      activeSceneId: 'scene-1', sceneDslEnabled: false,
+      graphics: { global: [{ id: 'overlay-1' }], user: [{ id: 'user-graphic' }] },
+    };
+    const before = structuredClone(snapshot);
+    const calls: Array<{ url: string; method: string }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      calls.push({ url, method: String(init?.method) });
+      if (init?.method === 'HEAD') {
+        assert.equal(new Headers(init.headers).get('Authorization'), null);
+        assert.equal(new Headers(init.headers).get('Cookie'), null);
+        assert.equal(init.credentials, 'omit');
+        assert.equal(init.redirect, 'error');
+        assert.ok(init.signal);
+        return new Response(null, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      }
+      assert.equal(new Headers(init?.headers).get('X-Session-Id'), 'alice-session');
+      assert.match(new Headers(init?.headers).get('Authorization') || '', /^Bearer /);
+      if (init?.method === 'GET') return Response.json({ sessionId: 'alice-session', snapshot });
+      const expectedState = structuredClone(snapshot.productionState);
+      const selected = expectedState.sources[1];
+      selected.gameId = '555drive';
+      selected.gameConfig = { ...selected.gameConfig!, playMode: 'agent' };
+      assert.deepEqual(JSON.parse(String(init?.body)), {
+        sessionId: 'alice-session', schemaVersion: 1, expectedRevision: 7,
+        productionState: expectedState, scenes: snapshot.scenes,
+        activeSceneId: snapshot.activeSceneId, sceneDslEnabled: false, graphics: snapshot.graphics,
+      });
+      return Response.json({ sessionId: 'alice-session', snapshot: { ...snapshot,
+        revision: 8, updatedAt: 123457, productionState: expectedState } });
+    };
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      assert.deepEqual(await service.getNativeGameState(), {
+        sessionId: 'alice-session', sourceId: 'game-1', gameId: 'old-game',
+        playMode: 'solo', compositionRevision: 7,
+      });
+      await assert.rejects(service.getNativeGameState('foreign-session'), /configured native session/);
+      assert.deepEqual(calls, [
+        { method: 'GET', url: 'https://stream.rndrntwrk.com/api/session/composition' },
+      ]);
+      calls.length = 0;
+      assert.deepEqual(await service.selectNativeGame('555drive'), {
+        sessionId: 'alice-session', sourceId: 'game-1', gameId: '555drive', compositionRevision: 8,
+      });
+      assert.deepEqual(snapshot, before);
+      assert.deepEqual(calls, [
+        { method: 'GET', url: 'https://stream.rndrntwrk.com/api/session/composition' },
+        { method: 'HEAD', url: 'https://stream.rndrntwrk.com/game-embed/555drive/content' },
+        { method: 'PUT', url: 'https://stream.rndrntwrk.com/api/session/composition' },
+      ]);
+      assert.equal(service.getBoundSessionId(), null);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("does not replay native game selection after a revision conflict or authorization failure", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant());
+    const originalFetch = globalThis.fetch;
+    let writes = 0;
+    let status = 409;
+    globalThis.fetch = async (_input, init) => {
+      if (init?.method === 'HEAD') return new Response(null, { headers: { 'Content-Type': 'text/html' } });
+      if (init?.method === 'PUT') { writes++; return Response.json({ error: 'conflict or unauthorized' }, { status }); }
+      return Response.json({ sessionId: 'alice-session', snapshot: {
+        schemaVersion: 1, revision: 7, updatedAt: 123456,
+        productionState: { sources: [{ id: 'game-1', type: 'game', visible: true }] },
+        scenes: [], activeSceneId: null, sceneDslEnabled: false, graphics: { global: [], user: [] },
+      } });
+    };
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      await assert.rejects(service.selectNativeGame('555drive'), /read current composition before retrying/i);
+      assert.equal(writes, 1);
+      status = 401;
+      await assert.rejects(service.selectNativeGame('555drive'), /read current composition before retrying/i);
+      assert.equal(writes, 2);
+    } finally { globalThis.fetch = originalFetch; await service.stop(); }
+  });
+
+  it("rejects unsupported or undeployed native game selection without writing", async () => {
+    setEnv("ALICE_RUNTIME_AUTHORITY_MODE", "proposer-only");
+    setEnv("ALICE_RUNTIME_PROFILE", "full-gated");
+    setEnv("STREAM555_PUBLIC_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_DEFAULT_SESSION_ID", "alice-session");
+    setEnv("STREAM555_AGENT_TOKEN", nativeGrant());
+    const originalFetch = globalThis.fetch;
+    let sceneDslEnabled = true;
+    const methods: string[] = [];
+    globalThis.fetch = async (_input, init) => {
+      methods.push(String(init?.method));
+      if (init?.method === 'HEAD') return new Response(null, { status: 404 });
+      assert.equal(init?.method, 'GET');
+      return Response.json({ sessionId: 'alice-session', snapshot: {
+        schemaVersion: 1, revision: 7, updatedAt: 123456,
+        productionState: { sources: [{ id: 'game-1', type: 'game', visible: true }] },
+        scenes: [], activeSceneId: null, sceneDslEnabled, graphics: { global: [], user: [] },
+      } });
+    };
+    const service = await StreamControlService.start({ agentId: 'alice' } as IAgentRuntime);
+    try {
+      await assert.rejects(service.selectNativeGame('../invalid'), /game ID/i);
+      assert.deepEqual(methods, []);
+      await assert.rejects(service.selectNativeGame('555drive'), /SceneDSL/i);
+      assert.deepEqual(methods, ['GET']);
+      sceneDslEnabled = false;
+      await assert.rejects(service.selectNativeGame('missing-game'), /deployed game/i);
+      assert.deepEqual(methods, ['GET', 'GET', 'HEAD']);
     } finally { globalThis.fetch = originalFetch; await service.stop(); }
   });
 
