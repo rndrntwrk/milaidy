@@ -1,0 +1,57 @@
+name: Alice Container Application Probe Contract
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/alice-container-application-probe.yml"
+      - "deploy/modal/alice_container_application_probe.mjs"
+      - "deploy/modal/alice_container_application_probe.test.mjs"
+      - "deploy/modal/alice_container_application_probe_exhaustive.test.mjs"
+      - "deploy/modal/alice_cloudflare_release.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alice-container-application-probe-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  alice-container-application-probe:
+    name: alice-container-application-probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Set up exact Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Run exhaustive probe and production-normalizer contract tests
+        run: |
+          set -euo pipefail
+          node --check deploy/modal/alice_container_application_probe.mjs
+          node --test \
+            deploy/modal/alice_container_application_probe.test.mjs \
+            deploy/modal/alice_container_application_probe_exhaustive.test.mjs
+
+      - name: Retain exact probe source evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alice-container-application-probe-source-${{ github.sha }}
+          path: |
+            deploy/modal/alice_container_application_probe.mjs
+            deploy/modal/alice_container_application_probe.test.mjs
+            deploy/modal/alice_container_application_probe_exhaustive.test.mjs
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: false
+          include-hidden-files: false
