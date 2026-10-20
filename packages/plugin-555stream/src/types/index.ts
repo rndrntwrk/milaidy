@@ -60,6 +60,13 @@ export interface ActionParameter {
   schema?: ActionParameterSchema;
 }
 
+export interface ActionResult {
+  success: boolean;
+  text?: string;
+  data?: Record<string, unknown>;
+  error?: string;
+}
+
 export interface Action {
   name: string;
   description: string;
@@ -73,7 +80,7 @@ export interface Action {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     options?: Record<string, any>,
     callback?: HandlerCallback
-  ) => Promise<boolean>;
+  ) => Promise<boolean | ActionResult>;
   examples?: ActionExample[][];
 }
 
@@ -84,6 +91,7 @@ export interface ProviderResult {
 export interface Provider {
   name: string;
   description: string;
+  alwaysInResponseState?: boolean;
   get: (runtime: IAgentRuntime, message: Memory, state?: State) => Promise<ProviderResult>;
 }
 
