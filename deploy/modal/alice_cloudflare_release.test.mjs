@@ -672,12 +672,14 @@ test("materializes Container runtime secrets only for the separate runtime host"
     ALICE_ACCESS_PROXY_SECRET: process.env.ALICE_ACCESS_PROXY_SECRET,
     ALICE_STATE_PLANE_SERVICE_TOKEN:
       process.env.ALICE_STATE_PLANE_SERVICE_TOKEN,
+    ALICE_GAMEPLAY_OBSERVER_TOKEN: process.env.ALICE_GAMEPLAY_OBSERVER_TOKEN,
   };
   process.env.ALICE_ACCESS_PROXY_SECRET = "access-proxy-secret-0123456789";
   process.env.ALICE_STATE_PLANE_SERVICE_TOKEN =
     "state-plane-service-token-0123456789";
+  process.env.ALICE_GAMEPLAY_OBSERVER_TOKEN = "gameplay-observer-token-0123456789";
   const configs = {
-    access: { secrets: { required: ["ALICE_ACCESS_PROXY_SECRET"] } },
+    access: { secrets: { required: ["ALICE_ACCESS_PROXY_SECRET", "ALICE_GAMEPLAY_OBSERVER_TOKEN"] } },
     runtimeHost: {
       containers: [{
         image: admissionEvidence.runtimeImage,
@@ -687,6 +689,7 @@ test("materializes Container runtime secrets only for the separate runtime host"
           "ALICE_RUNTIME_API_TOKEN",
           "ALICE_RUNTIME_IMAGE",
           "ALICE_STATE_PLANE_SERVICE_TOKEN",
+          "ALICE_GAMEPLAY_OBSERVER_TOKEN",
         ],
       },
     },
@@ -742,7 +745,13 @@ test("materializes Container runtime secrets only for the separate runtime host"
     );
     assert.deepEqual(access, {
       ALICE_ACCESS_PROXY_SECRET: "access-proxy-secret-0123456789",
+      ALICE_GAMEPLAY_OBSERVER_TOKEN: process.env.ALICE_GAMEPLAY_OBSERVER_TOKEN,
     });
+    for (const [role, file] of Object.entries(result.paths)) {
+      const secrets = JSON.parse(fs.readFileSync(file, "utf8"));
+      assert.equal(secrets.ALICE_GAMEPLAY_OBSERVER_TOKEN,
+        ["access", "runtimeHost"].includes(role) ? process.env.ALICE_GAMEPLAY_OBSERVER_TOKEN : undefined);
+    }
     assert.equal(runtimeHost.ALICE_RUNTIME_API_TOKEN, secretOverrides.ALICE_RUNTIME_API_TOKEN);
     assert.equal(runtimeHost.ALICE_RUNTIME_IMAGE, secretOverrides.ALICE_RUNTIME_IMAGE);
     assert.equal(
