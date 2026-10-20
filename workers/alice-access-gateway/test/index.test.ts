@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { isCloudflareAccessAuthenticated } from "../../../packages/agent/src/api/cloudflare-access-auth";
 
 import { sha256Base64Url } from "../../alice-production-control/src/access";
 import {
@@ -2141,12 +2142,19 @@ test("private observation identity uses only exact POST route and strips owner/t
   );
   expect(response.status).toBe(200);
   expect(received).toHaveLength(1);
+  // The compatibility wrapper checks this predicate before API bearer auth.
+  const forwarded = { headers: Object.fromEntries(received[0].headers) };
+  const proxyEnv = { MILADY_TRUST_CLOUDFLARE_ACCESS: "1",
+    MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET: env.ALICE_ACCESS_PROXY_SECRET };
+  expect(isCloudflareAccessAuthenticated(forwarded, proxyEnv)).toBe(true);
+  expect(isCloudflareAccessAuthenticated({ headers: { ...forwarded.headers,
+    "x-milady-cloudflare-access-secret": "spoof" } }, proxyEnv)).toBe(false);
   expect(
     received[0].headers.get("cf-access-authenticated-user-email"),
-  ).toBeNull();
+  ).toBe("alice-gameplay-observer.invalid");
   expect(
     received[0].headers.get("x-milady-cloudflare-access-secret"),
-  ).toBeNull();
+  ).toBe(env.ALICE_ACCESS_PROXY_SECRET);
   expect(received[0].headers.get("x-alice-observer")).toBeNull();
   expect(received[0].headers.get("authorization")).toBe(
     `Bearer ${env.ALICE_GAMEPLAY_OBSERVER_TOKEN}`,

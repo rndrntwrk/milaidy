@@ -1412,6 +1412,8 @@ export async function handleRequest(
       const headers = new Headers({
         "content-type": "application/json",
         authorization: `Bearer ${secret}`,
+        "cf-access-authenticated-user-email": "alice-gameplay-observer.invalid",
+        "x-milady-cloudflare-access-secret": env.ALICE_ACCESS_PROXY_SECRET,
       });
       const response = await fetchAliceRuntimeContainer(
         env.ALICE_RUNTIME_CONTAINER,
