@@ -103,6 +103,10 @@ function matches(pathname: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(pathname));
 }
 
+export function isAliceAnimationAssetPath(pathname: string): boolean {
+  return /^\/animations\/mixamo\/[a-zA-Z0-9_-]+(?:%20[a-zA-Z0-9_-]+)*\.fbx\.gz$/.test(pathname);
+}
+
 export function shouldStartOptionalRuntimeSubsystems(
   env: AliceProductionGuardEnv = process.env,
 ): boolean {
@@ -159,7 +163,7 @@ export function evaluateAliceProductionRequest(
       return { allowed: true };
     }
     if (normalizedMethod === "GET" || normalizedMethod === "HEAD") {
-      return matches(pathname, FULL_PROFILE_ALLOWED_READ_PATHS)
+      return isAliceAnimationAssetPath(pathname) || matches(pathname, FULL_PROFILE_ALLOWED_READ_PATHS)
         ? { allowed: true }
         : { allowed: false, code: "ALICE_PRODUCTION_MUTATION_DENIED" };
     }
