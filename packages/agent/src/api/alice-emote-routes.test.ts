@@ -60,7 +60,12 @@ describe("Alice emote routes", () => {
             }),
             broadcastEvent: async (...args: unknown[]) => {
               calls.push(args);
-              return { ok: true, sent };
+              return {
+                ok: true,
+                sent,
+                eventId: "accepted-event",
+                createdAt: 123456,
+              };
             },
           }),
         },
@@ -81,12 +86,12 @@ describe("Alice emote routes", () => {
       ]);
       expect(fixture.responses[0]?.data).toMatchObject({
         ok: true,
-        broadcast: { sent: true },
+        broadcast: { sent: true, eventId: "accepted-event", createdAt: 123456 },
       });
 
       sent = false;
       await handleAliceEmoteRoutes(fixture.value as never);
-      expect(fixture.responses[1]?.data).toMatchObject({
+      expect(fixture.responses[1]?.data).toEqual({
         ok: true,
         broadcast: { sent: false },
       });

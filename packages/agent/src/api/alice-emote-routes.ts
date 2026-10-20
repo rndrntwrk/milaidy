@@ -109,7 +109,22 @@ export async function handleAliceEmoteRoutes(
               "sent" in result &&
               result.sent === true,
           );
-          json(res, { ok: true, broadcast: { sent } });
+          const broadcast: {
+            sent: boolean;
+            eventId?: string;
+            createdAt?: number;
+          } = { sent };
+          if (sent && result && typeof result === "object") {
+            if ("eventId" in result && typeof result.eventId === "string")
+              broadcast.eventId = result.eventId;
+            if (
+              "createdAt" in result &&
+              typeof result.createdAt === "number" &&
+              Number.isSafeInteger(result.createdAt)
+            )
+              broadcast.createdAt = result.createdAt;
+          }
+          json(res, { ok: true, broadcast });
           return true;
         }
       } catch {
