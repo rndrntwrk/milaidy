@@ -256,8 +256,8 @@ test("fetches and sanitizes the exact live Access, OTP, posture, AI, and route s
   }
 });
 
-test("retries the same read once after HTTP 500 or 530 and validates its result", async () => {
-  for (const status of [500, 530]) {
+test("retries the same read once after an HTTP server error and validates its result", async () => {
+  for (const status of [500, 504, 530]) {
     const reads = [];
     const baseFetch = providerApi([]);
     const state = await fetchAliceCloudflareProviderState({
@@ -283,6 +283,7 @@ test("reports safe terminal request failures without exposing forged errors", as
   const expectedPathHash = `sha256:${crypto.createHash("sha256")
     .update(`/zones/${zoneId}/access/apps`).digest("hex")}`;
   for (const [reply, expected] of [
+    [() => new Response(secret, { status: 504 }), { category: "http", status: 504, cfErrorCodes: [] }],
     [() => new Response(secret, { status: 530 }), { category: "http", status: 530, cfErrorCodes: [] }],
     [() => Response.json({ success: false, errors: [{ code: 10001, message: secret }] }, { status: 500 }),
       { category: "http", status: 500, cfErrorCodes: [10001] }],
@@ -307,7 +308,7 @@ test("reports safe terminal request failures without exposing forged errors", as
         { stage: "api_get", pathSha256: expectedPathHash, ...expected });
       return true;
     });
-    assert.equal(requests, [500, 530].includes(expected.status) ? 2 : 1);
+    assert.equal(requests, expected.status >= 500 ? 2 : 1);
   }
   await assert.rejects(() => fetchAliceCloudflareProviderState({
     apiToken: secret, baseUrl, fetchImpl: providerApi([]),

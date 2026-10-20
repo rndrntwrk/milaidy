@@ -103,7 +103,7 @@ async function apiGetJson({ fetchImpl, apiToken, baseUrl }, pathname, search = {
     if (!(response instanceof Response)) {
       readbackInvalid({ ...context, category: "response_type" });
     }
-    if (attempt === 0 && [500, 530].includes(response.status)) {
+    if (attempt === 0 && response.status >= 500 && response.status < 600) {
       await response.body?.cancel();
       await new Promise((resolve) => setTimeout(resolve, 1000));
       continue;
