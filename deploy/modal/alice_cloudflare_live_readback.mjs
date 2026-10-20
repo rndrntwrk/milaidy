@@ -87,20 +87,28 @@ async function apiGetJson({ fetchImpl, apiToken, baseUrl }, pathname, search = {
     url.searchParams.set(key, String(value));
   }
   let response;
-  try {
-    response = await fetchImpl(url, {
-      method: "GET",
-      headers: {
-        authorization: `Bearer ${apiToken}`,
-        accept: "application/json",
-        "cache-control": "no-cache",
-      },
-    });
-  } catch {
-    readbackInvalid({ ...context, category: "transport" });
-  }
-  if (!(response instanceof Response)) {
-    readbackInvalid({ ...context, category: "response_type" });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      response = await fetchImpl(url, {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${apiToken}`,
+          accept: "application/json",
+          "cache-control": "no-cache",
+        },
+      });
+    } catch {
+      readbackInvalid({ ...context, category: "transport" });
+    }
+    if (!(response instanceof Response)) {
+      readbackInvalid({ ...context, category: "response_type" });
+    }
+    if (attempt === 0 && [500, 530].includes(response.status)) {
+      await response.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      continue;
+    }
+    break;
   }
   let body;
   try {

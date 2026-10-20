@@ -256,11 +256,36 @@ test("fetches and sanitizes the exact live Access, OTP, posture, AI, and route s
   }
 });
 
-test("reports safe request failures without retrying or exposing forged errors", async () => {
+test("retries the same read once after HTTP 500 or 530 and validates its result", async () => {
+  for (const status of [500, 530]) {
+    const reads = [];
+    const baseFetch = providerApi([]);
+    const state = await fetchAliceCloudflareProviderState({
+      ...fixtures.accessPolicyReadback, apiToken: "read-only-token", baseUrl,
+      now: () => Date.parse(fixtures.accessPolicyReadback.observedAt),
+      fetchImpl: async (url, options) => {
+        if (new URL(url).pathname.endsWith("/devices/posture")) {
+          reads.push({ url: String(url), options });
+          if (reads.length === 1) return new Response("provider unavailable", { status });
+        }
+        return baseFetch(url, options);
+      },
+    });
+    assert.equal(state.accessPolicyReadback.application.domain, "alice.rndrntwrk.com");
+    assert.equal(reads.length, 2);
+    assert.deepEqual(reads[0], reads[1]);
+    assert.equal(reads[1].options.method, "GET");
+  }
+});
+
+test("reports safe terminal request failures without exposing forged errors", async () => {
   const secret = "DO-NOT-LOG-token-body-header-cause";
   const expectedPathHash = `sha256:${crypto.createHash("sha256")
     .update(`/zones/${zoneId}/access/apps`).digest("hex")}`;
   for (const [reply, expected] of [
+    [() => new Response(secret, { status: 530 }), { category: "http", status: 530, cfErrorCodes: [] }],
+    [() => Response.json({ success: false, errors: [{ code: 10001, message: secret }] }, { status: 500 }),
+      { category: "http", status: 500, cfErrorCodes: [10001] }],
     [() => new Response(secret, { status: 503 }), { category: "http", status: 503, cfErrorCodes: [] }],
     [() => Response.json({ success: false, errors:
       [10000, 10000, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, secret, Number.MAX_SAFE_INTEGER + 1]
@@ -282,7 +307,7 @@ test("reports safe request failures without retrying or exposing forged errors",
         { stage: "api_get", pathSha256: expectedPathHash, ...expected });
       return true;
     });
-    assert.equal(requests, 1);
+    assert.equal(requests, [500, 530].includes(expected.status) ? 2 : 1);
   }
   await assert.rejects(() => fetchAliceCloudflareProviderState({
     apiToken: secret, baseUrl, fetchImpl: providerApi([]),
